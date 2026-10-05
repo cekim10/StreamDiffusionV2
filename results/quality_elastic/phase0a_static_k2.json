@@ -1,0 +1,361 @@
+{
+  "k": 2,
+  "denoising_step_list": [
+    700,
+    500,
+    0
+  ],
+  "args": {
+    "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+    "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+    "prompt_file_path": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+    "video_path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+    "output_folder": "/home/ckim151/StreamDiffusionV2/results/quality_elastic",
+    "noise_scale": 0.8,
+    "height": 480,
+    "width": 832,
+    "fps": 16,
+    "step": 2,
+    "seed": 0,
+    "gpu_id": 0,
+    "model_type": "T2V-1.3B",
+    "fixed_noise_scale": false,
+    "t2v": false,
+    "profile": false,
+    "use_taehv": false,
+    "normalize_latents": false,
+    "use_tensorrt": false,
+    "fast": false,
+    "out_dir": "results/quality_elastic",
+    "warmup_chunks": 10,
+    "measured_chunks": 100,
+    "target_fps": 16.0,
+    "save_video": false,
+    "memory_snapshot": false
+  },
+  "config": {
+    "model_name": "wan",
+    "generator_name": "causal_wan",
+    "generator_ckpt": "ckpts/autoregressive_checkpoint/model.pt",
+    "generator_fsdp_wrap_strategy": "size",
+    "real_score_fsdp_wrap_strategy": "size",
+    "fake_score_fsdp_wrap_strategy": "size",
+    "text_encoder_fsdp_wrap_strategy": "size",
+    "generator_grad": {
+      "model": true
+    },
+    "real_score_grad": {
+      "model": false
+    },
+    "fake_score_grad": {
+      "model": true
+    },
+    "denoising_step_list": [
+      700,
+      500,
+      0
+    ],
+    "num_train_timestep": 1000,
+    "timestep_shift": 8.0,
+    "real_guidance_scale": 3.5,
+    "generator_task": "causal_video",
+    "real_task_type": "bidirectional_video",
+    "fake_task_type": "bidirectional_video",
+    "denoising_loss_type": "flow",
+    "mixed_precision": true,
+    "seed": 0,
+    "wandb_host": "WANDB_HOST",
+    "wandb_key": "WANDB_KEY",
+    "wandb_entity": "tyin",
+    "wandb_project": "causvid",
+    "wandb_name": "wan_causal_dmd",
+    "sharding_strategy": "hybrid_full",
+    "lr": 2e-06,
+    "beta1": 0.9,
+    "beta2": 0.999,
+    "data_path": "mixkit_latents_lmdb",
+    "batch_size": 1,
+    "log_iters": 200,
+    "dfake_gen_update_ratio": 5,
+    "image_or_video_shape": [
+      1,
+      21,
+      16,
+      60,
+      104
+    ],
+    "output_path": "/mnt/localssd/wan_causal_dmd",
+    "distillation_loss": "dmd",
+    "gradient_checkpointing": true,
+    "backward_simulation": false,
+    "num_frame_per_block": 1,
+    "num_kv_cache": 6,
+    "num_sink_tokens": 3,
+    "adapt_sink_threshold": 0.2,
+    "warp_denoising_step": false,
+    "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+    "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+    "prompt_file_path": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+    "video_path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+    "output_folder": "/home/ckim151/StreamDiffusionV2/results/quality_elastic",
+    "noise_scale": 0.8,
+    "height": 480,
+    "width": 832,
+    "fps": 16,
+    "step": 2,
+    "gpu_id": 0,
+    "model_type": "T2V-1.3B",
+    "fixed_noise_scale": false,
+    "t2v": false,
+    "profile": false,
+    "use_taehv": false,
+    "normalize_latents": false,
+    "use_tensorrt": false,
+    "fast": false,
+    "out_dir": "results/quality_elastic",
+    "warmup_chunks": 10,
+    "measured_chunks": 100,
+    "target_fps": 16.0,
+    "save_video": false,
+    "memory_snapshot": false
+  },
+  "git_commit": "e0c9d34badf6aca55a09bdbd778f5d8ee0409a38",
+  "git_status_short": "?? results/quality_elastic/phase0a_commands.txt\n?? results/quality_elastic/phase0a_dmon_k1.txt\n?? results/quality_elastic/phase0a_dmon_k2.txt\n?? results/quality_elastic/phase0a_environment.txt\n?? results/quality_elastic/phase0a_log_k1.txt\n?? results/quality_elastic/phase0a_log_k2.txt\n?? results/quality_elastic/phase0a_raw.csv\n?? results/quality_elastic/phase0a_static_k1.json",
+  "hostname": "elves-01",
+  "python": "3.10.22 (main, Oct  3 2026, 01:32:06) [Clang 22.1.3 ]",
+  "torch": "2.6.0+cu124",
+  "cuda": "12.4",
+  "cudnn": 90100,
+  "gpu_name": "NVIDIA L40S",
+  "gpu_capability": [
+    8,
+    9
+  ],
+  "nvidia_smi": "NVIDIA L40S, 575.51.03, 46068 MiB, 210 MHz, 9001 MHz, 350.00 W\nNVIDIA L40S, 575.51.03, 46068 MiB, 210 MHz, 405 MHz, 350.00 W",
+  "flash_attn_available": true,
+  "command": "tools/phase0a_quality_elastic.py --step 2 --gpu_id 0 --out_dir results/quality_elastic --warmup_chunks 10 --measured_chunks 100 --seed 0",
+  "memory_checkpoints": {
+    "after_cuda_init": {
+      "allocated_bytes": 0,
+      "reserved_bytes": 0,
+      "max_allocated_bytes": 0,
+      "max_reserved_bytes": 0,
+      "device_used_bytes": 467337216,
+      "device_free_bytes": 47199420416,
+      "device_total_bytes": 47666757632
+    },
+    "after_model_load": {
+      "allocated_bytes": 14458374144,
+      "reserved_bytes": 16399728640,
+      "max_allocated_bytes": 14458374144,
+      "max_reserved_bytes": 16399728640,
+      "device_used_bytes": 16938369024,
+      "device_free_bytes": 30728388608,
+      "device_total_bytes": 47666757632
+    },
+    "after_session_start": {
+      "allocated_bytes": 21068066816,
+      "reserved_bytes": 26029850624,
+      "max_allocated_bytes": 23224226304,
+      "max_reserved_bytes": 26029850624,
+      "device_used_bytes": 26591559680,
+      "device_free_bytes": 21075197952,
+      "device_total_bytes": 47666757632
+    },
+    "after_warmup": {
+      "allocated_bytes": 21074513920,
+      "reserved_bytes": 26801602560,
+      "max_allocated_bytes": 23392322048,
+      "max_reserved_bytes": 26801602560,
+      "device_used_bytes": 27365408768,
+      "device_free_bytes": 20301348864,
+      "device_total_bytes": 47666757632
+    },
+    "end": {
+      "allocated_bytes": 21082525696,
+      "reserved_bytes": 27573354496,
+      "max_allocated_bytes": 23401366016,
+      "max_reserved_bytes": 27573354496,
+      "device_used_bytes": 28137160704,
+      "device_free_bytes": 19529596928,
+      "device_total_bytes": 47666757632
+    }
+  },
+  "weights": {
+    "generator": {
+      "param_count": 1418996800,
+      "cuda_bytes": 2837993600,
+      "cpu_bytes": 0
+    },
+    "text_encoder": {
+      "param_count": 5680910336,
+      "cuda_bytes": 11361820672,
+      "cpu_bytes": 0
+    },
+    "vae": {
+      "param_count": 126892531,
+      "cuda_bytes": 253785062,
+      "cpu_bytes": 0
+    }
+  },
+  "model_geometry": {
+    "frame_seq_length": 1560,
+    "num_kv_cache": 6,
+    "kv_cache_length": 9360,
+    "num_sink_tokens": 3,
+    "num_transformer_blocks": 30,
+    "num_heads": 12,
+    "num_frame_per_block": 1,
+    "base_chunk_size": 4,
+    "t_refresh": 50
+  },
+  "input_video": {
+    "path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+    "source_frames": 81,
+    "needed_frames": 445,
+    "tiled": true
+  },
+  "prompt": "A dog walks on the grass, realistic",
+  "session_start_ms": 980.9929132461548,
+  "session_start_stage_ms": {
+    "vae_encode": 299.8795546591282,
+    "prepare_total": 369.96886879205704,
+    "vae_decode": 308.37374553084373
+  },
+  "inventory_after_session_start": {
+    "kv_cache": {
+      "logical_bytes": 3450470400,
+      "physical_bytes": 3450470400
+    },
+    "kv_cache_meta": {
+      "logical_bytes": 3840,
+      "physical_bytes": 3840
+    },
+    "crossattn_cache": {
+      "logical_bytes": 188743680,
+      "physical_bytes": 94371840
+    },
+    "hidden_state": {
+      "logical_bytes": 399360,
+      "physical_bytes": 399360
+    },
+    "index_tensors": {
+      "logical_bytes": 48,
+      "physical_bytes": 56
+    },
+    "prompt_embeds": {
+      "logical_bytes": 8388608,
+      "physical_bytes": 8388608
+    },
+    "vae_feat_cache": {
+      "logical_bytes": 3009976320,
+      "physical_bytes": 3009976320
+    },
+    "session_total": {
+      "logical_bytes": 6657982256,
+      "physical_bytes": 6563610424
+    },
+    "kv_row_shape": [
+      2,
+      9360,
+      12,
+      128
+    ],
+    "kv_stride0": 14376960,
+    "crossattn_shape": [
+      2,
+      512,
+      12,
+      128
+    ],
+    "crossattn_stride0": 0,
+    "evict_idx_rows_per_layer": [
+      [
+        1
+      ],
+      [
+        1
+      ]
+    ]
+  },
+  "inventory_after_warmup": {
+    "kv_cache": {
+      "logical_bytes": 3450470400,
+      "physical_bytes": 3450470400
+    },
+    "kv_cache_meta": {
+      "logical_bytes": 3840,
+      "physical_bytes": 3840
+    },
+    "crossattn_cache": {
+      "logical_bytes": 188743680,
+      "physical_bytes": 94371840
+    },
+    "hidden_state": {
+      "logical_bytes": 399360,
+      "physical_bytes": 399360
+    },
+    "index_tensors": {
+      "logical_bytes": 48,
+      "physical_bytes": 56
+    },
+    "prompt_embeds": {
+      "logical_bytes": 8388608,
+      "physical_bytes": 8388608
+    },
+    "vae_feat_cache": {
+      "logical_bytes": 3009976320,
+      "physical_bytes": 3009976320
+    },
+    "session_total": {
+      "logical_bytes": 6657982256,
+      "physical_bytes": 6563610424
+    },
+    "kv_row_shape": [
+      2,
+      9360,
+      12,
+      128
+    ],
+    "kv_stride0": 14376960,
+    "crossattn_shape": [
+      2,
+      512,
+      12,
+      128
+    ],
+    "crossattn_stride0": 0,
+    "evict_idx_rows_per_layer": [
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ]
+    ]
+  },
+  "memory_stats_end": {
+    "active.all.current": 1553,
+    "active.all.peak": 1583,
+    "active_bytes.all.current": 21082525696,
+    "active_bytes.all.peak": 23401366016,
+    "allocated_bytes.all.current": 21082525696,
+    "allocated_bytes.all.peak": 23401366016,
+    "allocation.all.current": 1553,
+    "allocation.all.peak": 1583,
+    "inactive_split.all.current": 109,
+    "inactive_split.all.peak": 116,
+    "inactive_split_bytes.all.current": 1371680768,
+    "inactive_split_bytes.all.peak": 3138760704,
+    "requested_bytes.all.current": 21054741214,
+    "requested_bytes.all.peak": 23371990830,
+    "reserved_bytes.all.current": 27573354496,
+    "reserved_bytes.all.peak": 27573354496,
+    "segment.all.current": 375,
+    "segment.all.peak": 375
+  },
+  "num_steps_runtime": 2,
+  "chunk_size": 4
+}
