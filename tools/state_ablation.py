@@ -144,6 +144,8 @@ def parse_config(name: str) -> dict:
     """Return {'drop': [...], 'delay': [(component, d)], 'restart': bool}."""
     if name in ("repeat", "baseline"):
         return {"drop": [], "delay": [], "restart": False}
+    if name == "seed_shift":
+        return {"drop": [], "delay": [], "restart": False, "seed_offset": 7919}
     if name == "cold_restart":
         return {"drop": [], "delay": [], "restart": True}
     if name.startswith("drop_"):
@@ -159,6 +161,7 @@ def parse_config(name: str) -> dict:
 
 DEFAULT_CONFIGS = [
     "repeat",
+    "seed_shift",
     "drop_inflight",
     "drop_kv_recent",
     "drop_kv_sink",
@@ -202,20 +205,34 @@ class Runner:
         self.device = device
         self.chunk = pm.base_chunk_size * self.pl.num_frame_per_block
         self.first = 1 + self.chunk
+        self.seed_offset = 0
 
     def frames_for_call(self, c: int) -> torch.Tensor:
         lo = self.first + c * self.chunk
         return self.video[:, :, lo:lo + self.chunk].to(self.device, non_blocking=True)
 
-    def start(self):
+    def reset_attention_eviction_state(self):
+        """`reset_stream_state` re-allocates the KV cache but leaves each layer's ring-buffer
+        eviction queue (`self_attn.evict_idx`) from the previous session in place
+        (`models/wan/causal_model.py:194,309-313`; nothing in streamv2v resets it). A second
+        session would therefore evict slots in a different order than the first. Clear it so
+        every run starts from the same state."""
+        for block in getattr(self.pl.generator.model, "blocks", []):
+            sa = getattr(block, "self_attn", None)
+            if sa is not None and hasattr(sa, "evict_idx"):
+                sa.evict_idx = None
+
+    def start(self, seed_offset: int = 0):
         set_seed(self.args.seed)
-        torch.manual_seed(self.args.seed)
+        torch.manual_seed(self.args.seed + seed_offset)
+        self.seed_offset = seed_offset
+        self.reset_attention_eviction_state()
         images = self.video[:, :, :self.first].to(self.device)
         session, _ = self.pm.start_stream_session(self.prompt, images, self.args.noise_scale)
         return session
 
     def step(self, session, c: int):
-        torch.manual_seed(self.args.seed * 100003 + c + 1)  # identical noise per call in every run
+        torch.manual_seed(self.args.seed * 100003 + c + 1 + getattr(self, "seed_offset", 0))  # identical noise per call in every run
         images = self.frames_for_call(c)
         outs = self.pm.run_stream_batch(session, images)
         if not outs:
@@ -239,7 +256,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
     cfg = parse_config(name)
     pl = runner.pl
     sink, n = pl.num_sink_tokens, pl.num_kv_cache
-    session = runner.start()
+    session = runner.start(seed_offset=cfg.get("seed_offset", 0))
     rows: list[dict] = []
     info = {"config": name, "bytes_withheld": 0, "events": []}
     pending: list[tuple[int, str, dict]] = []  # (call to restore at, component, snapshot)
@@ -334,6 +351,7 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
         return sum(int(r["missing"]) for r in rows)
 
     floor = mean_psnr(by_cfg.get("repeat", []), 0, args.post_chunks - 1)
+    valid_div = mean_psnr(by_cfg.get("seed_shift", []), 0, args.post_chunks - 1)
     summary = {}
     for name, rows in by_cfg.items():
         per_call = {}
@@ -361,7 +379,9 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
     L = [f"# State ablation at migration chunk M={args.migration_chunk}, {args.post_chunks} chunks after, k={static['k']}\n",
          f"Generated {time.strftime('%Y-%m-%d %H:%M:%S %Z')}; GPU {static['gpu_name']}; commit {static['git_commit']}; "
          f"video {args.video_path}; seed {args.seed}. Scores are per-frame vs the uninterrupted baseline with identical per-chunk seeds.\n",
-         f"Determinism floor (`repeat` mean PSNR over M..M+{args.post_chunks - 1}): **{floor:.2f} dB**. Recovery = first call whose mean PSNR >= floor - 1 dB.\n",
+         f"Determinism floor (`repeat` mean PSNR over M..M+{args.post_chunks - 1}): **{floor:.2f} dB** (99 = bit-exact). "
+         f"Valid-but-different reference (`seed_shift`, same state, different noise): **{valid_div:.2f} dB**; an ablation at or above this level diverged no more than an equally valid stream would. "
+         f"Recovery = first call whose mean PSNR >= floor - 1 dB.\n",
          "| config | bytes withheld (MB) | PSNR M+0 | PSNR M+0..3 | PSNR M+4..15 | PSNR M+16.. | SSIM M+0..3 | SSIM M+16.. | missing frames | recovery call |",
          "|---|---|---|---|---|---|---|---|---|---|"]
     order = [n for n in DEFAULT_CONFIGS if n in summary] + [n for n in summary if n not in DEFAULT_CONFIGS]
@@ -375,7 +395,7 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
     L.append("\nGates (state_map.md section 4) are applied by the reader, not by this script; the numbers above are the record.\n")
     (out_dir / "ablation_summary.md").write_text("\n".join(L) + "\n")
     with open(out_dir / "ablation_summary.json", "w") as fh:
-        json.dump({"floor_psnr": floor, "per_config": summary}, fh, indent=2, default=str)
+        json.dump({"floor_psnr": floor, "seed_shift_psnr": valid_div, "per_config": summary}, fh, indent=2, default=str)
     return summary
 
 
@@ -413,6 +433,8 @@ def parse_args():
 def main():
     args = parse_args()
     torch.set_grad_enabled(False)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     if not torch.cuda.is_available():
         raise SystemExit("CUDA required; local runs are not evidence.")
     if args.gpu_id is not None:
