@@ -158,6 +158,11 @@ def parse_config(name: str) -> dict:
         return {"drop": [], "delay": [], "restart": False, "seed_offset": 7919}
     if name == "cold_restart":
         return {"drop": [], "delay": [], "restart": True}
+    if name.startswith("replay_"):
+        parts = name.split("_")
+        w = int(parts[1])
+        sink0 = len(parts) > 2 and parts[2] == "sink0"
+        return {"drop": [], "delay": [], "restart": False, "replay": w, "sink0": sink0}
     no_refresh = name.endswith("_nr")
     base = name[:-3] if no_refresh else name
     if base.startswith("drop_"):
@@ -170,6 +175,19 @@ def parse_config(name: str) -> dict:
         return {"drop": [], "delay": [(comp, int(d))], "restart": False, "no_refresh": no_refresh}
     raise ValueError(f"unknown config {name}")
 
+
+RECONSTRUCT_CONFIGS = [
+    "repeat",
+    "seed_shift",
+    "cold_restart",
+    "replay_1",
+    "replay_3",
+    "replay_6",
+    "replay_0_sink0",
+    "replay_1_sink0",
+    "replay_3_sink0",
+    "replay_6_sink0",
+]
 
 DEFAULT_CONFIGS = [
     "repeat",
@@ -274,6 +292,45 @@ class Runner:
             return None
         return to_uint8(np.concatenate(outs, axis=0))
 
+    def replay_restart(self, c: int, w: int, sink0: bool):
+        """Seed-and-replay reconstruction at migration call c.
+        sink0=False: new session from [frame before chunk c-w, chunk c-w], then replay chunks c-w+1..c-1.
+        sink0=True : new session from the ORIGINAL first batch (frames 0..4) so the sink slots are rebuilt
+                     exactly by deterministic replay, then replay the last w chunks c-w..c-1.
+        Replayed outputs are discarded (the source already displayed them). Returns
+        (session, replay_ms, seed_bytes_uint8, replayed_calls)."""
+        torch.cuda.synchronize(self.device)
+        t0 = time.perf_counter()
+        frame_bytes = 3 * self.args.height * self.args.width  # uint8 camera frame
+        if sink0:
+            self.reset_attention_eviction_state()
+            self.pl.denoising_step_list = self._canonical_steps.clone()
+            set_seed(self.args.seed)
+            torch.manual_seed(self.args.seed)
+            images0 = self.video[:, :, :self.first].to(self.device)
+            session, _ = self.pm.start_stream_session(self.prompt, images0, self.args.noise_scale)
+            seed_bytes = self.first * frame_bytes
+            first_replay = c - w
+        else:
+            if w < 1:
+                raise ValueError("replay_W without sink0 needs W >= 1 (W=0 is cold_restart)")
+            self.reset_attention_eviction_state()
+            self.pl.denoising_step_list = self._canonical_steps.clone()
+            start_chunk = c - w
+            lo = self.first + start_chunk * self.chunk
+            torch.manual_seed(self.args.seed * 100003 + start_chunk + 1)
+            images0 = self.video[:, :, lo - 1: lo + self.chunk].to(self.device)
+            session, _ = self.pm.start_stream_session(self.prompt, images0, self.args.noise_scale)
+            seed_bytes = (1 + self.chunk) * frame_bytes
+            first_replay = start_chunk + 1
+        replayed = 0
+        for cc in range(first_replay, c):
+            self.step(session, cc)
+            seed_bytes += self.chunk * frame_bytes
+            replayed += 1
+        torch.cuda.synchronize(self.device)
+        return session, (time.perf_counter() - t0) * 1e3, seed_bytes, replayed
+
     def restart_at(self, session, c: int):
         """Official prompt-switch path: new session seeded with [last_image, chunk c]."""
         torch.manual_seed(self.args.seed * 100003 + c + 1)
@@ -302,7 +359,14 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
         if c == M:
             inv = inventory_bytes(pl)
             info["inventory_at_M"] = inv
-            if cfg["restart"]:
+            if cfg.get("replay") is not None:
+                session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"])
+                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
+                info["seed_bytes"] = seed_bytes
+                info["replay_ms"] = ms
+                info["events"].append({"call": c, "replay_ms": ms, "seed_bytes": seed_bytes, "replayed_calls": replayed, "sink0": cfg["sink0"]})
+                # fall through: chunk M itself has not been consumed yet
+            elif cfg["restart"]:
                 session, frames, ms = runner.restart_at(session, c)
                 info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
                 info["events"].append({"call": c, "restart_ms": ms})
@@ -457,6 +521,8 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
             "ssim_in_M0_3": mean_ssim_in(rows, 0, 3),
             "ssim_in_M16_end": mean_ssim_in(rows, 16, 10**6),
             "first_call_psnr_below_60": first_call_below(rows, 60.0),
+            "seed_mb": infos[name].get("seed_bytes", 0) / MB,
+            "replay_ms": infos[name].get("replay_ms"),
             "missing_frames": missing(rows),
             "recovery_rel_call": recovery,
             "events": infos[name]["events"],
@@ -470,16 +536,32 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
          f"Recovery = first call whose mean PSNR >= floor - 1 dB.\n",
          f"Absolute reference: baseline SSIM vs INPUT video over M.. = **{static.get('baseline_ssim_vs_input_M_on')}**; the `SSIM-in` columns are the same metric for each config (quality proxy that does not depend on which valid stream the baseline is).\n",
          f"Drift onset: first call where `repeat` falls below 60 dB vs baseline = {summary_drift(by_cfg.get('repeat', []))}.\n",
-         "| config | bytes withheld (MB) | PSNR M+0 | PSNR M+0..3 | PSNR M+4..15 | PSNR M+16.. | SSIM M+0..3 | SSIM M+16.. | SSIM-in M+0..3 | SSIM-in M+16.. | missing frames | recovery call |",
-         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+         "| config | bytes withheld (MB) | seed (MB) | replay ms | PSNR M+0 | PSNR M+0..3 | PSNR M+4..15 | PSNR M+16.. | SSIM M+0..3 | SSIM M+16.. | SSIM-in M+0..3 | SSIM-in M+16.. | missing frames | recovery call |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     order = [n for n in DEFAULT_CONFIGS if n in summary] + [n for n in summary if n not in DEFAULT_CONFIGS]
     for name in order:
         s = summary[name]
-        L.append(f"| {name} | {s['bytes_withheld_mb']:,.1f} | {s['psnr_M0']:.1f} | {s['psnr_M0_3']:.1f} | {s['psnr_M4_15']:.1f} | {s['psnr_M16_end']:.1f} | "
+        rp = f"{s['replay_ms']:.0f}" if s.get("replay_ms") is not None else "-"
+        L.append(f"| {name} | {s['bytes_withheld_mb']:,.1f} | {s['seed_mb']:.1f} | {rp} | {s['psnr_M0']:.1f} | {s['psnr_M0_3']:.1f} | {s['psnr_M4_15']:.1f} | {s['psnr_M16_end']:.1f} | "
                  f"{s['ssim_M0_3']:.3f} | {s['ssim_M16_end']:.3f} | {s['ssim_in_M0_3']:.3f} | {s['ssim_in_M16_end']:.3f} | {s['missing_frames']} | {s['recovery_rel_call']} |")
     inv = infos[next(iter(infos))].get("inventory_at_M", {})
     L.append("\nInventory at M (bytes): " + ", ".join(f"{k2} {v / MB:,.0f} MB" for k2, v in inv.items()))
     L.append("\nDelay restores: " + "; ".join(f"{n}: {[e for e in summary[n]['events'] if 'restored' in e]}" for n in summary if n.startswith("delay_")))
+    # Transfer-vs-replay crossover (analytic, from measured bytes and replay time)
+    replay_cfgs = [n for n in order if summary[n].get("replay_ms") is not None]
+    if replay_cfgs:
+        full_bytes = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
+        rtt_ms = 10.0
+        bws = [0.1, 1.0, 10.0, 100.0]  # Gbps
+        L.append(f"\n## Transfer vs seed+replay (analytic; full state {full_bytes / MB:,.0f} MB, RTT {rtt_ms:.0f} ms, no decompression/serialization cost)\n")
+        L.append("| config | seed MB | replay ms | " + " | ".join(f"T_move @{bw:g} Gbps" for bw in bws) + " | " + " | ".join(f"T_recon @{bw:g} Gbps" for bw in bws) + " |")
+        L.append("|---|---|---|" + "---|" * (2 * len(bws)))
+        for n in replay_cfgs:
+            s2 = summary[n]
+            t_move = [rtt_ms + full_bytes * 8 / (bw * 1e9) * 1e3 for bw in bws]
+            t_rec = [rtt_ms + s2["seed_mb"] * MB * 8 / (bw * 1e9) * 1e3 + s2["replay_ms"] for bw in bws]
+            L.append(f"| {n} | {s2['seed_mb']:.1f} | {s2['replay_ms']:.0f} | " + " | ".join(f"{t:,.0f}" for t in t_move) + " | " + " | ".join(f"{t:,.0f}" for t in t_rec) + " |")
+        L.append("\nContinuity of each replay config is in the main table (compare with `repeat`, the full-state-transfer equivalent).")
     L.append("\nGates (state_map.md section 4) are applied by the reader, not by this script; the numbers above are the record.\n")
     (out_dir / "ablation_summary.md").write_text("\n".join(L) + "\n")
     with open(out_dir / "ablation_summary.json", "w") as fh:
@@ -513,7 +595,8 @@ def parse_args():
     p.add_argument("--out_dir", type=str, default=str(REPO_ROOT / "results/state_migration"))
     p.add_argument("--migration_chunk", type=int, default=30)
     p.add_argument("--post_chunks", type=int, default=40)
-    p.add_argument("--configs", type=str, default=",".join(DEFAULT_CONFIGS))
+    p.add_argument("--configs", type=str, default=None, help="comma list; overrides --preset")
+    p.add_argument("--preset", type=str, choices=["ablation", "reconstruct"], default="ablation")
     p.add_argument("--save_video", action="store_true", default=False)
     return p.parse_args()
 
@@ -591,7 +674,8 @@ def main():
     log(f"[ablation] baseline SSIM vs input (M on): {static['baseline_ssim_vs_input_M_on']}")
     static["inventory_baseline_end"] = inventory_bytes(pl)
 
-    configs = [c.strip() for c in args.configs.split(",") if c.strip()]
+    preset = DEFAULT_CONFIGS if args.preset == "ablation" else RECONSTRUCT_CONFIGS
+    configs = [c.strip() for c in args.configs.split(",") if c.strip()] if args.configs else list(preset)
     all_rows: list[dict] = []
     infos: dict[str, dict] = {}
     csv_path = out_dir / "ablation_raw.csv"
