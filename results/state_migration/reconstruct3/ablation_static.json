@@ -1,0 +1,378 @@
+{
+  "k": 2,
+  "denoising_step_list": [
+    700,
+    500
+  ],
+  "args": {
+    "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+    "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+    "prompt_file_path": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+    "video_path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+    "output_folder": "/home/ckim151/StreamDiffusionV2/results/state_migration",
+    "noise_scale": 0.8,
+    "height": 480,
+    "width": 832,
+    "fps": 16,
+    "step": 2,
+    "seed": 0,
+    "gpu_id": 0,
+    "model_type": "T2V-1.3B",
+    "fixed_noise_scale": false,
+    "t2v": false,
+    "profile": false,
+    "use_taehv": false,
+    "normalize_latents": false,
+    "use_tensorrt": false,
+    "fast": false,
+    "out_dir": "results/state_migration/reconstruct3",
+    "migration_chunk": 30,
+    "post_chunks": 40,
+    "configs": "repeat,replay_full,replay_0_sink0,replay_3_sink0,replay_3_sinkhist,replay_6_sinkhist,cold_restart",
+    "preset": "ablation",
+    "save_video": false
+  },
+  "git_commit": "b8278ae5f280afc1706fe140727c04d6cc0a135f",
+  "gpu_name": "NVIDIA L40S",
+  "torch": "2.6.0+cu124",
+  "hostname": "elves-01",
+  "source_frames": 81,
+  "needed_frames": 285,
+  "chunk": 4,
+  "sink_refresh_calls": [
+    4,
+    48
+  ],
+  "sink_pos_at_M_baseline": [
+    0,
+    1,
+    6
+  ],
+  "baseline_ssim_vs_input_M_on": 0.4161317920312285,
+  "inventory_baseline_end": {
+    "kv_sink_bytes": 1725235200,
+    "kv_recent_bytes": 1725235200,
+    "kv_all_bytes": 3450470400,
+    "vae_enc_bytes": 1121402880,
+    "vae_dec_bytes": 1888573440,
+    "inflight_bytes": 199680,
+    "crossattn_bytes": 94371840,
+    "prompt_embeds_bytes": 8388608
+  },
+  "infos": {
+    "repeat": {
+      "config": "repeat",
+      "bytes_withheld": 0,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "run_s": 51.62525712326169
+    },
+    "replay_full": {
+      "config": "replay_full",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 17191.826798021793,
+          "seed_bytes": 149760000,
+          "replayed_calls": 30,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": "full",
+            "sink0": true
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "seed_bytes": 149760000,
+      "replay_ms": 17191.826798021793,
+      "run_s": 68.7883157171309
+    },
+    "replay_0_sink0": {
+      "config": "replay_0_sink0",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 1059.9603056907654,
+          "seed_bytes": 10782720,
+          "replayed_calls": 1,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 0,
+            "sink0": true,
+            "sinkhist": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "seed_bytes": 10782720,
+      "replay_ms": 1059.9603056907654,
+      "run_s": 52.578692339360714
+    },
+    "replay_3_sink0": {
+      "config": "replay_3_sink0",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 2723.662279546261,
+          "seed_bytes": 25159680,
+          "replayed_calls": 4,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 3,
+            "sink0": true,
+            "sinkhist": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "seed_bytes": 25159680,
+      "replay_ms": 2723.662279546261,
+      "run_s": 54.1378529779613
+    },
+    "replay_3_sinkhist": {
+      "config": "replay_3_sinkhist",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 4951.893143355846,
+          "seed_bytes": 44328960,
+          "replayed_calls": 8,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 3,
+            "sink0": true,
+            "sinkhist": true
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "seed_bytes": 44328960,
+      "replay_ms": 4951.893143355846,
+      "run_s": 56.276943519711494
+    },
+    "replay_6_sinkhist": {
+      "config": "replay_6_sinkhist",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 6617.179341614246,
+          "seed_bytes": 58705920,
+          "replayed_calls": 11,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 6,
+            "sink0": true,
+            "sinkhist": true
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "seed_bytes": 58705920,
+      "replay_ms": 6617.179341614246,
+      "run_s": 57.79386193305254
+    },
+    "cold_restart": {
+      "config": "cold_restart",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "restart_ms": 777.7207605540752
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          0,
+          1,
+          6
+        ],
+        "recent_slot_pos": [
+          31,
+          29,
+          30
+        ]
+      },
+      "run_s": 50.92646714672446
+    }
+  }
+}

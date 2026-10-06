@@ -1,0 +1,46 @@
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 48]; last before M: 4
+[ablation] baseline done in 38 s; 69 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4161317920312285
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 99.0
+  repeat: call 31 (M+1) psnr 99.0
+  repeat: call 34 (M+4) psnr 99.0
+  repeat: call 46 (M+16) psnr 99.0
+[ablation] config replay_full
+  replay_full: call 30 (M+0) psnr 99.0
+  replay_full: call 31 (M+1) psnr 99.0
+  replay_full: call 34 (M+4) psnr 99.0
+  replay_full: call 46 (M+16) psnr 99.0
+[ablation] config replay_0_sink0
+  replay_0_sink0: call 30 (M+0) psnr 14.7
+  replay_0_sink0: call 31 (M+1) psnr 17.6
+  replay_0_sink0: call 34 (M+4) psnr 23.6
+  replay_0_sink0: call 46 (M+16) psnr 26.9
+[ablation] config replay_3_sink0
+  replay_3_sink0: call 30 (M+0) psnr 22.3
+  replay_3_sink0: call 31 (M+1) psnr 24.6
+  replay_3_sink0: call 34 (M+4) psnr 26.5
+  replay_3_sink0: call 46 (M+16) psnr 27.5
+[ablation] config replay_3_sinkhist
+  replay_3_sinkhist: call 30 (M+0) psnr 25.7
+  replay_3_sinkhist: call 31 (M+1) psnr 26.3
+  replay_3_sinkhist: call 34 (M+4) psnr 28.5
+  replay_3_sinkhist: call 46 (M+16) psnr 29.4
+[ablation] config replay_6_sinkhist
+  replay_6_sinkhist: call 30 (M+0) psnr 28.0
+  replay_6_sinkhist: call 31 (M+1) psnr 28.0
+  replay_6_sinkhist: call 34 (M+4) psnr 29.7
+  replay_6_sinkhist: call 46 (M+16) psnr 28.7
+[ablation] config cold_restart
+  cold_restart: call 31 (M+1) psnr 16.2
+  cold_restart: call 34 (M+4) psnr 19.5
+  cold_restart: call 46 (M+16) psnr 21.1
+[ablation] done -> results/state_migration/reconstruct3/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  replay_full            withheld    9542 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  replay_0_sink0         withheld    9542 MB  PSNR M+0..3  18.8  M+16..  26.9  recovery -29
+  replay_3_sink0         withheld    9542 MB  PSNR M+0..3  24.4  M+16..  26.7  recovery -29
+  replay_3_sinkhist      withheld    9542 MB  PSNR M+0..3  26.2  M+16..  28.0  recovery -29
+  replay_6_sinkhist      withheld    9542 MB  PSNR M+0..3  28.2  M+16..  28.6  recovery -29
+  cold_restart           withheld    9542 MB  PSNR M+0..3  17.3  M+16..  21.5  recovery -29
