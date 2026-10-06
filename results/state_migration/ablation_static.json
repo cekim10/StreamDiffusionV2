@@ -1,0 +1,559 @@
+{
+  "k": 2,
+  "denoising_step_list": [
+    700,
+    500
+  ],
+  "args": {
+    "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+    "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+    "prompt_file_path": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+    "video_path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+    "output_folder": "/home/ckim151/StreamDiffusionV2/results/state_migration",
+    "noise_scale": 0.8,
+    "height": 480,
+    "width": 832,
+    "fps": 16,
+    "step": 2,
+    "seed": 0,
+    "gpu_id": 0,
+    "model_type": "T2V-1.3B",
+    "fixed_noise_scale": false,
+    "t2v": false,
+    "profile": false,
+    "use_taehv": false,
+    "normalize_latents": false,
+    "use_tensorrt": false,
+    "fast": false,
+    "out_dir": "/home/ckim151/StreamDiffusionV2/results/state_migration",
+    "migration_chunk": 30,
+    "post_chunks": 40,
+    "configs": "repeat,seed_shift,drop_inflight,drop_kv_recent,drop_kv_sink,drop_kv_all,drop_vae_enc,drop_vae_dec,drop_vae_all,drop_all,cold_restart,delay_kv_recent_1,delay_kv_recent_2,delay_kv_sink_1,delay_kv_sink_4,delay_kv_sink_16,delay_kv_all_1",
+    "save_video": true
+  },
+  "git_commit": "eb5a718f50826be9effcdca1d6c00bf88570f16c",
+  "gpu_name": "NVIDIA L40S",
+  "torch": "2.6.0+cu124",
+  "hostname": "elves-01",
+  "source_frames": 81,
+  "needed_frames": 285,
+  "chunk": 4,
+  "inventory_baseline_end": {
+    "kv_sink_bytes": 1725235200,
+    "kv_recent_bytes": 1725235200,
+    "kv_all_bytes": 3450470400,
+    "vae_enc_bytes": 1121402880,
+    "vae_dec_bytes": 1888573440,
+    "inflight_bytes": 199680,
+    "crossattn_bytes": 94371840,
+    "prompt_embeds_bytes": 8388608
+  },
+  "infos": {
+    "repeat": {
+      "config": "repeat",
+      "bytes_withheld": 0,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.46688100323081
+    },
+    "seed_shift": {
+      "config": "seed_shift",
+      "bytes_withheld": 0,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "seed_offset": 7919
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.601511627435684
+    },
+    "drop_inflight": {
+      "config": "drop_inflight",
+      "bytes_withheld": 199680,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "inflight"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.537279054522514
+    },
+    "drop_kv_recent": {
+      "config": "drop_kv_recent",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_recent"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.54071256145835
+    },
+    "drop_kv_sink": {
+      "config": "drop_kv_sink",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_sink"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.50682534649968
+    },
+    "drop_kv_all": {
+      "config": "drop_kv_all",
+      "bytes_withheld": 3450470400,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_all"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.56839922443032
+    },
+    "drop_vae_enc": {
+      "config": "drop_vae_enc",
+      "bytes_withheld": 1121402880,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "vae_enc"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.54714608192444
+    },
+    "drop_vae_dec": {
+      "config": "drop_vae_dec",
+      "bytes_withheld": 1888573440,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "vae_dec"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.43971752375364
+    },
+    "drop_vae_all": {
+      "config": "drop_vae_all",
+      "bytes_withheld": 3009976320,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "vae_all"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.47768207266927
+    },
+    "drop_all": {
+      "config": "drop_all",
+      "bytes_withheld": 6460646400,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_all",
+              "vae_all",
+              "inflight"
+            ],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.51264555007219
+    },
+    "cold_restart": {
+      "config": "cold_restart",
+      "bytes_withheld": 10005488640,
+      "events": [
+        {
+          "call": 30,
+          "restart_ms": 738.9132902026176
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.23894078284502
+    },
+    "delay_kv_recent_1": {
+      "config": "delay_kv_recent_1",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_recent",
+                1
+              ]
+            ],
+            "restart": false
+          }
+        },
+        {
+          "call": 31,
+          "restored": "kv_recent",
+          "slots_restored": 120,
+          "slots_expired": 60
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.536149367690086
+    },
+    "delay_kv_recent_2": {
+      "config": "delay_kv_recent_2",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_recent",
+                2
+              ]
+            ],
+            "restart": false
+          }
+        },
+        {
+          "call": 32,
+          "restored": "kv_recent",
+          "slots_restored": 60,
+          "slots_expired": 120
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.425091810524464
+    },
+    "delay_kv_sink_1": {
+      "config": "delay_kv_sink_1",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                1
+              ]
+            ],
+            "restart": false
+          }
+        },
+        {
+          "call": 31,
+          "restored": "kv_sink",
+          "slots_restored": 120,
+          "slots_expired": 60
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.37103811278939
+    },
+    "delay_kv_sink_4": {
+      "config": "delay_kv_sink_4",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                4
+              ]
+            ],
+            "restart": false
+          }
+        },
+        {
+          "call": 34,
+          "restored": "kv_sink",
+          "slots_restored": 0,
+          "slots_expired": 180
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.434287555515766
+    },
+    "delay_kv_sink_16": {
+      "config": "delay_kv_sink_16",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                16
+              ]
+            ],
+            "restart": false
+          }
+        },
+        {
+          "call": 46,
+          "restored": "kv_sink",
+          "slots_restored": 0,
+          "slots_expired": 180
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.46061425283551
+    },
+    "delay_kv_all_1": {
+      "config": "delay_kv_all_1",
+      "bytes_withheld": 3450470400,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_all",
+                1
+              ]
+            ],
+            "restart": false
+          }
+        },
+        {
+          "call": 31,
+          "restored": "kv_all",
+          "slots_restored": 300,
+          "slots_expired": 60
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 43.42389791086316
+    }
+  }
+}

@@ -1,0 +1,202 @@
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] baseline done in 37 s; 69 calls with output
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 31.1
+  repeat: call 31 (M+1) psnr 29.7
+  repeat: call 34 (M+4) psnr 31.4
+  repeat: call 46 (M+16) psnr 28.5
+[ablation] config drop_inflight
+  drop_inflight: call 30 (M+0) psnr 27.9
+  drop_inflight: call 31 (M+1) psnr 27.8
+  drop_inflight: call 34 (M+4) psnr 25.0
+  drop_inflight: call 46 (M+16) psnr 26.8
+[ablation] config drop_kv_recent
+  drop_kv_recent: call 30 (M+0) psnr 25.1
+  drop_kv_recent: call 31 (M+1) psnr 23.0
+  drop_kv_recent: call 34 (M+4) psnr 25.3
+  drop_kv_recent: call 46 (M+16) psnr 28.9
+[ablation] config drop_kv_sink
+  drop_kv_sink: call 30 (M+0) psnr 27.4
+  drop_kv_sink: call 31 (M+1) psnr 24.1
+  drop_kv_sink: call 34 (M+4) psnr 21.6
+  drop_kv_sink: call 46 (M+16) psnr 19.3
+[ablation] config drop_kv_all
+  drop_kv_all: call 30 (M+0) psnr 20.7
+  drop_kv_all: call 31 (M+1) psnr 16.7
+  drop_kv_all: call 34 (M+4) psnr 17.0
+  drop_kv_all: call 46 (M+16) psnr 18.5
+[ablation] config drop_vae_enc
+  drop_vae_enc: call 30 (M+0) psnr 30.3
+  drop_vae_enc: call 31 (M+1) psnr 27.1
+  drop_vae_enc: call 34 (M+4) psnr 26.0
+  drop_vae_enc: call 46 (M+16) psnr 28.0
+[ablation] config drop_vae_dec
+  drop_vae_dec: call 30 (M+0) psnr 18.7
+  drop_vae_dec: call 31 (M+1) psnr 24.4
+  drop_vae_dec: call 34 (M+4) psnr 29.3
+  drop_vae_dec: call 46 (M+16) psnr 28.9
+[ablation] config drop_vae_all
+  drop_vae_all: call 30 (M+0) psnr 19.5
+  drop_vae_all: call 31 (M+1) psnr 24.6
+  drop_vae_all: call 34 (M+4) psnr 26.6
+  drop_vae_all: call 46 (M+16) psnr 28.2
+[ablation] config drop_all
+  drop_all: call 30 (M+0) psnr 16.4
+  drop_all: call 31 (M+1) psnr 16.2
+  drop_all: call 34 (M+4) psnr 16.9
+  drop_all: call 46 (M+16) psnr 18.3
+[ablation] config cold_restart
+  cold_restart: call 31 (M+1) no output
+  cold_restart: call 34 (M+4) psnr 19.5
+  cold_restart: call 46 (M+16) psnr 21.1
+[ablation] config delay_kv_recent_1
+  delay_kv_recent_1: call 30 (M+0) psnr 25.2
+  delay_kv_recent_1: call 31 (M+1) psnr 24.2
+  delay_kv_recent_1: call 34 (M+4) psnr 26.6
+  delay_kv_recent_1: call 46 (M+16) psnr 28.4
+[ablation] config delay_kv_recent_2
+  delay_kv_recent_2: call 30 (M+0) psnr 24.7
+  delay_kv_recent_2: call 31 (M+1) psnr 23.2
+  delay_kv_recent_2: call 34 (M+4) psnr 25.4
+  delay_kv_recent_2: call 46 (M+16) psnr 29.9
+[ablation] config delay_kv_sink_1
+  delay_kv_sink_1: call 30 (M+0) psnr 27.3
+  delay_kv_sink_1: call 31 (M+1) psnr 25.8
+  delay_kv_sink_1: call 34 (M+4) psnr 25.4
+  delay_kv_sink_1: call 46 (M+16) psnr 23.8
+[ablation] config delay_kv_sink_4
+  delay_kv_sink_4: call 30 (M+0) psnr 27.6
+  delay_kv_sink_4: call 31 (M+1) psnr 24.0
+  delay_kv_sink_4: call 34 (M+4) psnr 21.4
+  delay_kv_sink_4: call 46 (M+16) psnr 19.3
+[ablation] config delay_kv_sink_16
+  delay_kv_sink_16: call 30 (M+0) psnr 26.9
+  delay_kv_sink_16: call 31 (M+1) psnr 24.0
+  delay_kv_sink_16: call 34 (M+4) psnr 21.5
+  delay_kv_sink_16: call 46 (M+16) psnr 19.4
+[ablation] config delay_kv_all_1
+  delay_kv_all_1: call 30 (M+0) psnr 20.5
+  delay_kv_all_1: call 31 (M+1) psnr 21.0
+  delay_kv_all_1: call 34 (M+4) psnr 25.6
+  delay_kv_all_1: call 46 (M+16) psnr 24.9
+[ablation] done -> /home/ckim151/StreamDiffusionV2/results/state_migration/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  30.2  M+16..  29.1  recovery 0
+  drop_inflight          withheld       0 MB  PSNR M+0..3  28.0  M+16..  27.5  recovery 3
+  drop_kv_recent         withheld    1645 MB  PSNR M+0..3  23.6  M+16..  28.1  recovery 11
+  drop_kv_sink           withheld    1645 MB  PSNR M+0..3  24.0  M+16..  20.0  recovery None
+  drop_kv_all            withheld    3291 MB  PSNR M+0..3  17.7  M+16..  18.4  recovery None
+  drop_vae_enc           withheld    1069 MB  PSNR M+0..3  27.1  M+16..  28.3  recovery 0
+  drop_vae_dec           withheld    1801 MB  PSNR M+0..3  24.4  M+16..  28.3  recovery 3
+  drop_vae_all           withheld    2871 MB  PSNR M+0..3  23.0  M+16..  28.2  recovery 8
+  drop_all               withheld    6161 MB  PSNR M+0..3  16.1  M+16..  18.7  recovery None
+  cold_restart           withheld    9542 MB  PSNR M+0..3  17.0  M+16..  21.2  recovery None
+  delay_kv_recent_1      withheld    1645 MB  PSNR M+0..3  24.2  M+16..  28.2  recovery 9
+  delay_kv_recent_2      withheld    1645 MB  PSNR M+0..3  23.3  M+16..  28.1  recovery 7
+  delay_kv_sink_1        withheld    1645 MB  PSNR M+0..3  25.8  M+16..  24.4  recovery None
+  delay_kv_sink_4        withheld    1645 MB  PSNR M+0..3  24.0  M+16..  20.0  recovery None
+  delay_kv_sink_16       withheld    1645 MB  PSNR M+0..3  23.9  M+16..  20.1  recovery None
+  delay_kv_all_1         withheld    3291 MB  PSNR M+0..3  22.3  M+16..  24.6  recovery None
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] baseline done in 37 s; 69 calls with output
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 34.1
+  repeat: call 31 (M+1) psnr 34.2
+  repeat: call 34 (M+4) psnr 34.0
+  repeat: call 46 (M+16) psnr 31.7
+[ablation] config seed_shift
+  seed_shift: call 30 (M+0) psnr 23.9
+  seed_shift: call 31 (M+1) psnr 22.7
+  seed_shift: call 34 (M+4) psnr 23.2
+  seed_shift: call 46 (M+16) psnr 22.2
+[ablation] config drop_inflight
+  drop_inflight: call 30 (M+0) psnr 34.1
+  drop_inflight: call 31 (M+1) psnr 34.2
+  drop_inflight: call 34 (M+4) psnr 34.0
+  drop_inflight: call 46 (M+16) psnr 31.7
+[ablation] config drop_kv_recent
+  drop_kv_recent: call 30 (M+0) psnr 25.4
+  drop_kv_recent: call 31 (M+1) psnr 23.1
+  drop_kv_recent: call 34 (M+4) psnr 25.8
+  drop_kv_recent: call 46 (M+16) psnr 31.8
+[ablation] config drop_kv_sink
+  drop_kv_sink: call 30 (M+0) psnr 27.8
+  drop_kv_sink: call 31 (M+1) psnr 24.2
+  drop_kv_sink: call 34 (M+4) psnr 21.3
+  drop_kv_sink: call 46 (M+16) psnr 19.2
+[ablation] config drop_kv_all
+  drop_kv_all: call 30 (M+0) psnr 20.9
+  drop_kv_all: call 31 (M+1) psnr 16.8
+  drop_kv_all: call 34 (M+4) psnr 17.0
+  drop_kv_all: call 46 (M+16) psnr 18.0
+[ablation] config drop_vae_enc
+  drop_vae_enc: call 30 (M+0) psnr 34.1
+  drop_vae_enc: call 31 (M+1) psnr 27.9
+  drop_vae_enc: call 34 (M+4) psnr 30.1
+  drop_vae_enc: call 46 (M+16) psnr 31.9
+[ablation] config drop_vae_dec
+  drop_vae_dec: call 30 (M+0) psnr 19.6
+  drop_vae_dec: call 31 (M+1) psnr 26.9
+  drop_vae_dec: call 34 (M+4) psnr 32.2
+  drop_vae_dec: call 46 (M+16) psnr 31.7
+[ablation] config drop_vae_all
+  drop_vae_all: call 30 (M+0) psnr 19.6
+  drop_vae_all: call 31 (M+1) psnr 24.4
+  drop_vae_all: call 34 (M+4) psnr 29.8
+  drop_vae_all: call 46 (M+16) psnr 31.9
+[ablation] config drop_all
+  drop_all: call 30 (M+0) psnr 16.5
+  drop_all: call 31 (M+1) psnr 16.2
+  drop_all: call 34 (M+4) psnr 16.9
+  drop_all: call 46 (M+16) psnr 18.4
+[ablation] config cold_restart
+  cold_restart: call 31 (M+1) no output
+  cold_restart: call 34 (M+4) psnr 19.5
+  cold_restart: call 46 (M+16) psnr 21.1
+[ablation] config delay_kv_recent_1
+  delay_kv_recent_1: call 30 (M+0) psnr 25.4
+  delay_kv_recent_1: call 31 (M+1) psnr 24.1
+  delay_kv_recent_1: call 34 (M+4) psnr 28.5
+  delay_kv_recent_1: call 46 (M+16) psnr 31.8
+[ablation] config delay_kv_recent_2
+  delay_kv_recent_2: call 30 (M+0) psnr 25.4
+  delay_kv_recent_2: call 31 (M+1) psnr 23.1
+  delay_kv_recent_2: call 34 (M+4) psnr 25.8
+  delay_kv_recent_2: call 46 (M+16) psnr 31.8
+[ablation] config delay_kv_sink_1
+  delay_kv_sink_1: call 30 (M+0) psnr 27.8
+  delay_kv_sink_1: call 31 (M+1) psnr 26.2
+  delay_kv_sink_1: call 34 (M+4) psnr 25.4
+  delay_kv_sink_1: call 46 (M+16) psnr 24.4
+[ablation] config delay_kv_sink_4
+  delay_kv_sink_4: call 30 (M+0) psnr 27.8
+  delay_kv_sink_4: call 31 (M+1) psnr 24.2
+  delay_kv_sink_4: call 34 (M+4) psnr 21.3
+  delay_kv_sink_4: call 46 (M+16) psnr 19.2
+[ablation] config delay_kv_sink_16
+  delay_kv_sink_16: call 30 (M+0) psnr 27.8
+  delay_kv_sink_16: call 31 (M+1) psnr 24.2
+  delay_kv_sink_16: call 34 (M+4) psnr 21.3
+  delay_kv_sink_16: call 46 (M+16) psnr 19.2
+[ablation] config delay_kv_all_1
+  delay_kv_all_1: call 30 (M+0) psnr 20.9
+  delay_kv_all_1: call 31 (M+1) psnr 21.4
+  delay_kv_all_1: call 34 (M+4) psnr 26.2
+  delay_kv_all_1: call 46 (M+16) psnr 25.3
+[ablation] done -> /home/ckim151/StreamDiffusionV2/results/state_migration/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  34.0  M+16..  31.7  recovery 0
+  seed_shift             withheld       0 MB  PSNR M+0..3  22.7  M+16..  22.6  recovery None
+  drop_inflight          withheld       0 MB  PSNR M+0..3  34.0  M+16..  31.7  recovery 0
+  drop_kv_recent         withheld    1645 MB  PSNR M+0..3  23.7  M+16..  31.7  recovery 7
+  drop_kv_sink           withheld    1645 MB  PSNR M+0..3  24.1  M+16..  20.3  recovery None
+  drop_kv_all            withheld    3291 MB  PSNR M+0..3  17.8  M+16..  18.7  recovery None
+  drop_vae_enc           withheld    1069 MB  PSNR M+0..3  28.6  M+16..  32.0  recovery 0
+  drop_vae_dec           withheld    1801 MB  PSNR M+0..3  26.7  M+16..  31.7  recovery 3
+  drop_vae_all           withheld    2871 MB  PSNR M+0..3  23.1  M+16..  32.0  recovery 6
+  drop_all               withheld    6161 MB  PSNR M+0..3  16.1  M+16..  18.8  recovery None
+  cold_restart           withheld    9542 MB  PSNR M+0..3  17.0  M+16..  21.5  recovery None
+  delay_kv_recent_1      withheld    1645 MB  PSNR M+0..3  25.0  M+16..  31.7  recovery 6
+  delay_kv_recent_2      withheld    1645 MB  PSNR M+0..3  23.7  M+16..  31.7  recovery 7
+  delay_kv_sink_1        withheld    1645 MB  PSNR M+0..3  26.1  M+16..  24.8  recovery None
+  delay_kv_sink_4        withheld    1645 MB  PSNR M+0..3  24.1  M+16..  20.3  recovery None
+  delay_kv_sink_16       withheld    1645 MB  PSNR M+0..3  24.1  M+16..  20.3  recovery None
+  delay_kv_all_1         withheld    3291 MB  PSNR M+0..3  22.8  M+16..  25.4  recovery None
