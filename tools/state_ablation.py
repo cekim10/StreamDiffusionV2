@@ -130,6 +130,14 @@ def zero_inflight(pl) -> int:
     return nbytes
 
 
+def slot_positions(pl) -> dict:
+    """RoPE frame position held by each ring-buffer slot at this moment (layer 0, row 0).
+    Sink slots still at 0..2 => no adaptive refresh has fired yet."""
+    pos = pl.kv_cache1[0]["pos"][0].tolist()
+    sink = pl.num_sink_tokens
+    return {"sink_slot_pos": pos[:sink], "recent_slot_pos": pos[sink:]}
+
+
 def inventory_bytes(pl) -> dict:
     fsl = pl.frame_seq_length
     sink = pl.num_sink_tokens
@@ -158,6 +166,8 @@ def parse_config(name: str) -> dict:
         return {"drop": [], "delay": [], "restart": False, "seed_offset": 7919}
     if name == "cold_restart":
         return {"drop": [], "delay": [], "restart": True}
+    if name == "replay_full":
+        return {"drop": [], "delay": [], "restart": False, "replay": "full", "sink0": True}
     if name.startswith("replay_"):
         parts = name.split("_")
         w = int(parts[1])
@@ -187,6 +197,7 @@ RECONSTRUCT_CONFIGS = [
     "replay_1_sink0",
     "replay_3_sink0",
     "replay_6_sink0",
+    "replay_full",
 ]
 
 DEFAULT_CONFIGS = [
@@ -310,7 +321,16 @@ class Runner:
             images0 = self.video[:, :, :self.first].to(self.device)
             session, _ = self.pm.start_stream_session(self.prompt, images0, self.args.noise_scale)
             seed_bytes = self.first * frame_bytes
-            first_replay = c - w
+            # prepare() wrote 2 latent frames (slots 0,1); the remaining sink slots are filled by the next
+            # chunks of the ORIGINAL session (chunk 1 for sink_size=3), so replay those too for an exact sink.
+            prepare_latents = 1 + self.chunk // self.pm.base_chunk_size
+            sink_fill_end = 1 + max(0, self.pl.num_sink_tokens - prepare_latents)
+            for cc in range(1, sink_fill_end):
+                self.step(session, cc)
+                seed_bytes += self.chunk * frame_bytes
+            first_replay = c if w == "full" else max(c - w, sink_fill_end)
+            if w == "full":
+                first_replay = sink_fill_end
         else:
             if w < 1:
                 raise ValueError("replay_W without sink0 needs W >= 1 (W=0 is cold_restart)")
@@ -324,6 +344,8 @@ class Runner:
             seed_bytes = (1 + self.chunk) * frame_bytes
             first_replay = start_chunk + 1
         replayed = 0
+        if sink0:
+            replayed += max(0, sink_fill_end - 1)
         for cc in range(first_replay, c):
             self.step(session, cc)
             seed_bytes += self.chunk * frame_bytes
@@ -359,6 +381,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
         if c == M:
             inv = inventory_bytes(pl)
             info["inventory_at_M"] = inv
+            info["slot_pos_at_M"] = slot_positions(pl)
             if cfg.get("replay") is not None:
                 session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"])
                 info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
@@ -547,6 +570,9 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
     inv = infos[next(iter(infos))].get("inventory_at_M", {})
     L.append("\nInventory at M (bytes): " + ", ".join(f"{k2} {v / MB:,.0f} MB" for k2, v in inv.items()))
     L.append("\nDelay restores: " + "; ".join(f"{n}: {[e for e in summary[n]['events'] if 'restored' in e]}" for n in summary if n.startswith("delay_")))
+    first_info = infos[next(iter(infos))]
+    if "slot_pos_at_M" in first_info:
+        L.append(f"\nRing-buffer slot positions at M (layer 0): {first_info['slot_pos_at_M']} (sink slots at 0..{max(0, len(first_info['slot_pos_at_M']['sink_slot_pos']) - 1)} means no adaptive sink refresh fired before M).")
     # Transfer-vs-replay crossover (analytic, from measured bytes and replay time)
     replay_cfgs = [n for n in order if summary[n].get("replay_ms") is not None]
     if replay_cfgs:
