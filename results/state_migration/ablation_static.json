@@ -28,16 +28,17 @@
     "out_dir": "/home/ckim151/StreamDiffusionV2/results/state_migration",
     "migration_chunk": 30,
     "post_chunks": 40,
-    "configs": "repeat,seed_shift,drop_inflight,drop_kv_recent,drop_kv_sink,drop_kv_all,drop_vae_enc,drop_vae_dec,drop_vae_all,drop_all,cold_restart,delay_kv_recent_1,delay_kv_recent_2,delay_kv_sink_1,delay_kv_sink_4,delay_kv_sink_16,delay_kv_all_1",
+    "configs": "repeat,seed_shift,drop_inflight,drop_kv_recent,drop_kv_sink,drop_kv_all,drop_vae_enc,drop_vae_dec,drop_vae_all,drop_all,cold_restart,delay_kv_recent_1,delay_kv_recent_2,delay_kv_sink_1,delay_kv_sink_4,delay_kv_sink_16,delay_kv_all_1,drop_kv_sink_nr,delay_kv_sink_1_nr,delay_kv_sink_4_nr,delay_kv_sink_16_nr",
     "save_video": true
   },
-  "git_commit": "eb5a718f50826be9effcdca1d6c00bf88570f16c",
+  "git_commit": "28a685add333894b89d33bb5f7303636df6949f6",
   "gpu_name": "NVIDIA L40S",
   "torch": "2.6.0+cu124",
   "hostname": "elves-01",
   "source_frames": 81,
   "needed_frames": 285,
   "chunk": 4,
+  "baseline_ssim_vs_input_M_on": 0.4161317920312285,
   "inventory_baseline_end": {
     "kv_sink_bytes": 1725235200,
     "kv_recent_bytes": 1725235200,
@@ -72,7 +73,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.46688100323081
+      "run_s": 51.57974198460579
     },
     "seed_shift": {
       "config": "seed_shift",
@@ -98,7 +99,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.601511627435684
+      "run_s": 51.737254336476326
     },
     "drop_inflight": {
       "config": "drop_inflight",
@@ -111,7 +112,8 @@
               "inflight"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -125,7 +127,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.537279054522514
+      "run_s": 51.740541100502014
     },
     "drop_kv_recent": {
       "config": "drop_kv_recent",
@@ -138,7 +140,8 @@
               "kv_recent"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -152,7 +155,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.54071256145835
+      "run_s": 51.71113698557019
     },
     "drop_kv_sink": {
       "config": "drop_kv_sink",
@@ -165,7 +168,8 @@
               "kv_sink"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -179,7 +183,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.50682534649968
+      "run_s": 51.76559238880873
     },
     "drop_kv_all": {
       "config": "drop_kv_all",
@@ -192,7 +196,8 @@
               "kv_all"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -206,7 +211,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.56839922443032
+      "run_s": 51.59936457872391
     },
     "drop_vae_enc": {
       "config": "drop_vae_enc",
@@ -219,7 +224,8 @@
               "vae_enc"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -233,7 +239,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.54714608192444
+      "run_s": 51.77047072350979
     },
     "drop_vae_dec": {
       "config": "drop_vae_dec",
@@ -246,7 +252,8 @@
               "vae_dec"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -260,7 +267,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.43971752375364
+      "run_s": 51.56395737081766
     },
     "drop_vae_all": {
       "config": "drop_vae_all",
@@ -273,7 +280,8 @@
               "vae_all"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -287,7 +295,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.47768207266927
+      "run_s": 51.68963347747922
     },
     "drop_all": {
       "config": "drop_all",
@@ -302,7 +310,8 @@
               "inflight"
             ],
             "delay": [],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         }
       ],
@@ -316,7 +325,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.51264555007219
+      "run_s": 51.582640547305346
     },
     "cold_restart": {
       "config": "cold_restart",
@@ -324,7 +333,7 @@
       "events": [
         {
           "call": 30,
-          "restart_ms": 738.9132902026176
+          "restart_ms": 778.3663384616375
         }
       ],
       "inventory_at_M": {
@@ -337,7 +346,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.23894078284502
+      "run_s": 51.218163814395666
     },
     "delay_kv_recent_1": {
       "config": "delay_kv_recent_1",
@@ -353,7 +362,8 @@
                 1
               ]
             ],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         },
         {
@@ -373,7 +383,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.536149367690086
+      "run_s": 51.5379933565855
     },
     "delay_kv_recent_2": {
       "config": "delay_kv_recent_2",
@@ -389,7 +399,8 @@
                 2
               ]
             ],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         },
         {
@@ -409,7 +420,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.425091810524464
+      "run_s": 51.741278268396854
     },
     "delay_kv_sink_1": {
       "config": "delay_kv_sink_1",
@@ -425,7 +436,8 @@
                 1
               ]
             ],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         },
         {
@@ -445,7 +457,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.37103811278939
+      "run_s": 51.6109818816185
     },
     "delay_kv_sink_4": {
       "config": "delay_kv_sink_4",
@@ -461,7 +473,8 @@
                 4
               ]
             ],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         },
         {
@@ -481,7 +494,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.434287555515766
+      "run_s": 51.648261554539204
     },
     "delay_kv_sink_16": {
       "config": "delay_kv_sink_16",
@@ -497,7 +510,8 @@
                 16
               ]
             ],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         },
         {
@@ -517,7 +531,7 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.46061425283551
+      "run_s": 51.506102953106165
     },
     "delay_kv_all_1": {
       "config": "delay_kv_all_1",
@@ -533,7 +547,8 @@
                 1
               ]
             ],
-            "restart": false
+            "restart": false,
+            "no_refresh": false
           }
         },
         {
@@ -553,7 +568,162 @@
         "crossattn_bytes": 94371840,
         "prompt_embeds_bytes": 8388608
       },
-      "run_s": 43.42389791086316
+      "run_s": 51.54691060632467
+    },
+    "drop_kv_sink_nr": {
+      "config": "drop_kv_sink_nr",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "adaptive_sink_refresh": "disabled"
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_sink"
+            ],
+            "delay": [],
+            "restart": false,
+            "no_refresh": true
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 50.74532041326165
+    },
+    "delay_kv_sink_1_nr": {
+      "config": "delay_kv_sink_1_nr",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "adaptive_sink_refresh": "disabled"
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                1
+              ]
+            ],
+            "restart": false,
+            "no_refresh": true
+          }
+        },
+        {
+          "call": 31,
+          "restored": "kv_sink",
+          "slots_restored": 180,
+          "slots_expired": 0
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 51.047172747552395
+    },
+    "delay_kv_sink_4_nr": {
+      "config": "delay_kv_sink_4_nr",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "adaptive_sink_refresh": "disabled"
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                4
+              ]
+            ],
+            "restart": false,
+            "no_refresh": true
+          }
+        },
+        {
+          "call": 34,
+          "restored": "kv_sink",
+          "slots_restored": 180,
+          "slots_expired": 0
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 50.83243506029248
+    },
+    "delay_kv_sink_16_nr": {
+      "config": "delay_kv_sink_16_nr",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "adaptive_sink_refresh": "disabled"
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                16
+              ]
+            ],
+            "restart": false,
+            "no_refresh": true
+          }
+        },
+        {
+          "call": 46,
+          "restored": "kv_sink",
+          "slots_restored": 180,
+          "slots_expired": 0
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "run_s": 51.05369729921222
     }
   }
 }
