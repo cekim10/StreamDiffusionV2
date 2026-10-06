@@ -20,6 +20,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import platform
 import subprocess
 import sys
@@ -110,11 +111,20 @@ def zero_vae_cache(pl, which: str) -> int:
     return nbytes
 
 
-def zero_inflight(pl) -> int:
+def inflight_view(pl):
+    """Rows holding chunks still being denoised. `inference_stream` shifts rows down before each call
+    (`causal_stream_inference.py:269-270`) and re-noises rows 0..k-2 after it (`:292-298`); the last
+    row is the finished chunk of two calls ago, already decoded. So the live state is rows [:k-1]."""
     hs = pl.hidden_states
     if hs is None or hs.shape[0] < 2:
+        return None
+    return hs[:-1]
+
+
+def zero_inflight(pl) -> int:
+    view = inflight_view(pl)
+    if view is None:
         return 0
-    view = hs[1:]
     nbytes = view.numel() * view.element_size()
     view.zero_()
     return nbytes
@@ -133,7 +143,7 @@ def inventory_bytes(pl) -> dict:
         "kv_all_bytes": kv_row * n,
         "vae_enc_bytes": sum(t.numel() * t.element_size() for t in vae_cache_tensors(pl, "enc")),
         "vae_dec_bytes": sum(t.numel() * t.element_size() for t in vae_cache_tensors(pl, "dec")),
-        "inflight_bytes": (pl.hidden_states[1:].numel() * pl.hidden_states.element_size()) if pl.hidden_states is not None and pl.hidden_states.shape[0] > 1 else 0,
+        "inflight_bytes": (inflight_view(pl).numel() * pl.hidden_states.element_size()) if inflight_view(pl) is not None else 0,
         "crossattn_bytes": sum(e["k"].untyped_storage().nbytes() + e["v"].untyped_storage().nbytes() for e in pl.crossattn_cache),
         "prompt_embeds_bytes": pl.conditional_dict["prompt_embeds"].numel() * pl.conditional_dict["prompt_embeds"].element_size(),
     }
@@ -148,14 +158,16 @@ def parse_config(name: str) -> dict:
         return {"drop": [], "delay": [], "restart": False, "seed_offset": 7919}
     if name == "cold_restart":
         return {"drop": [], "delay": [], "restart": True}
-    if name.startswith("drop_"):
-        comp = name[len("drop_"):]
+    no_refresh = name.endswith("_nr")
+    base = name[:-3] if no_refresh else name
+    if base.startswith("drop_"):
+        comp = base[len("drop_"):]
         comps = ["kv_all", "vae_all", "inflight"] if comp == "all" else [comp]
-        return {"drop": comps, "delay": [], "restart": False}
-    if name.startswith("delay_"):
-        body = name[len("delay_"):]
+        return {"drop": comps, "delay": [], "restart": False, "no_refresh": no_refresh}
+    if base.startswith("delay_"):
+        body = base[len("delay_"):]
         comp, d = body.rsplit("_", 1)
-        return {"drop": [], "delay": [(comp, int(d))], "restart": False}
+        return {"drop": [], "delay": [(comp, int(d))], "restart": False, "no_refresh": no_refresh}
     raise ValueError(f"unknown config {name}")
 
 
@@ -177,6 +189,10 @@ DEFAULT_CONFIGS = [
     "delay_kv_sink_4",
     "delay_kv_sink_16",
     "delay_kv_all_1",
+    "drop_kv_sink_nr",
+    "delay_kv_sink_1_nr",
+    "delay_kv_sink_4_nr",
+    "delay_kv_sink_16_nr",
 ]
 
 
@@ -222,6 +238,17 @@ class Runner:
             if sa is not None and hasattr(sa, "evict_idx"):
                 sa.evict_idx = None
 
+    def input_frames_for_output_call(self, c: int) -> np.ndarray | None:
+        """Output at call c is input chunk c-(k-1) (Stream-Batch lag); return it as uint8 HWC."""
+        lag = len(self.pl.denoising_step_list) - 1
+        ci = c - lag
+        if ci < 0:
+            return None
+        lo = self.first + ci * self.chunk
+        x = self.video[0, :, lo:lo + self.chunk].float()  # [C,T,H,W] in [-1,1]
+        x = (x.permute(1, 2, 3, 0) * 0.5 + 0.5).clamp(0, 1).numpy()
+        return to_uint8(x)
+
     def start(self, seed_offset: int = 0):
         set_seed(self.args.seed)
         torch.manual_seed(self.args.seed + seed_offset)
@@ -261,6 +288,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
     info = {"config": name, "bytes_withheld": 0, "events": []}
     pending: list[tuple[int, str, dict]] = []  # (call to restore at, component, snapshot)
     frames_out: list[np.ndarray] = []
+    restart_frames = None
 
     for c in range(M + N):
         if c == M:
@@ -270,9 +298,18 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
                 session, frames, ms = runner.restart_at(session, c)
                 info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
                 info["events"].append({"call": c, "restart_ms": ms})
+                # The restart denoises chunk M synchronously; the baseline emits chunk M at call M+(k-1).
+                # Score it there and record the k-1 missing calls as the bubble.
+                lag = len(pl.denoising_step_list) - 1
+                for gap in range(lag):
+                    rows.extend(score(name, c + gap, M, None, baseline, runner))
                 frames_out.append(frames)
-                rows.extend(score(name, c, M, frames, baseline))
+                restart_frames = (c + lag, frames)
                 continue
+            if cfg.get("no_refresh"):
+                for block in pl.generator.model.blocks:
+                    block.self_attn.adapt_sink_thr = -1  # restored by the next prepare() via _initialize_kv_cache
+                info["events"].append({"call": c, "adaptive_sink_refresh": "disabled"})
             for comp in cfg["drop"]:
                 info["bytes_withheld"] += apply_drop(pl, comp, sink, n)
             for comp, d in cfg["delay"]:
@@ -292,9 +329,14 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
         pending = still_pending
 
         frames = runner.step(session, c)
+        if restart_frames is not None and c == restart_frames[0]:
+            # pipeline is still refilling: the baseline-aligned frames for this call are the restart's own output
+            assert frames is None
+            frames = restart_frames[1]
+            restart_frames = None
+        rows.extend(score(name, c, M, frames, baseline, runner))
         if c >= M:
             frames_out.append(frames if frames is not None else None)
-            rows.extend(score(name, c, M, frames, baseline))
         if c == M or (c > M and (c - M) in (1, 4, 16)):
             vals = [float(r["psnr"]) for r in rows if r["call"] == c and r["psnr"] != ""]
             log(f"  {name}: call {c} (M{c - M:+d}) " + (f"psnr {np.mean(vals):.1f}" if vals else "no output"))
@@ -316,24 +358,43 @@ def apply_drop(pl, comp: str, sink: int, n: int) -> int:
     raise ValueError(comp)
 
 
-def score(name: str, c: int, M: int, frames, baseline: dict) -> list[dict]:
+def score(name: str, c: int, M: int, frames, baseline: dict, runner=None) -> list[dict]:
+    """PSNR vs baseline for every call; SSIM vs baseline and SSIM vs the INPUT frame (absolute fidelity,
+    independent of which valid stream the baseline happened to be) only from M on (SSIM is slow)."""
     ref = baseline.get(c)
     rows = []
     if ref is None:
         return rows
     if frames is None:
         for f in range(ref.shape[0]):
-            rows.append({"config": name, "call": c, "rel_call": c - M, "frame": f, "psnr": "", "ssim": "", "missing": 1})
+            rows.append({"config": name, "call": c, "rel_call": c - M, "frame": f, "psnr": "", "ssim": "", "ssim_in": "", "missing": 1})
         return rows
     nf = min(ref.shape[0], frames.shape[0])
+    inp = runner.input_frames_for_output_call(c) if (runner is not None and c >= M) else None
     for f in range(nf):
         a = ref[f].astype(np.float32) / 255.0
         b = frames[f].astype(np.float32) / 255.0
-        rows.append({"config": name, "call": c, "rel_call": c - M, "frame": f, "psnr": f"{psnr(a, b):.3f}", "ssim": f"{ssim(a, b):.4f}", "missing": 0})
+        row = {"config": name, "call": c, "rel_call": c - M, "frame": f, "psnr": f"{psnr(a, b):.3f}", "ssim": "", "ssim_in": "", "missing": 0}
+        if c >= M:
+            row["ssim"] = f"{ssim(a, b):.4f}"
+            if inp is not None and f < inp.shape[0]:
+                row["ssim_in"] = f"{ssim(inp[f].astype(np.float32) / 255.0, b):.4f}"
+        rows.append(row)
     return rows
 
 
 # --------------------------------------------------------------------------- summary
+def summary_drift(rows):
+    per = {}
+    for r in rows:
+        if r["psnr"] != "":
+            per.setdefault(int(r["call"]), []).append(float(r["psnr"]))
+    for c in sorted(per):
+        if np.mean(per[c]) < 60.0:
+            return c
+    return "never (bit-exact)" if per else "n/a"
+
+
 def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: dict):
     by_cfg: dict[str, list[dict]] = {}
     for r in all_rows:
@@ -349,6 +410,20 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
 
     def missing(rows):
         return sum(int(r["missing"]) for r in rows)
+
+    def mean_ssim_in(rows, lo, hi):
+        vals = [float(r["ssim_in"]) for r in rows if lo <= r["rel_call"] <= hi and r.get("ssim_in")]
+        return float(np.mean(vals)) if vals else float("nan")
+
+    def first_call_below(rows, thr):
+        per = {}
+        for r in rows:
+            if r["psnr"] != "":
+                per.setdefault(int(r["call"]), []).append(float(r["psnr"]))
+        for c in sorted(per):
+            if np.mean(per[c]) < thr:
+                return c
+        return None
 
     floor = mean_psnr(by_cfg.get("repeat", []), 0, args.post_chunks - 1)
     valid_div = mean_psnr(by_cfg.get("seed_shift", []), 0, args.post_chunks - 1)
@@ -371,6 +446,9 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
             "psnr_M16_end": mean_psnr(rows, 16, 10**6),
             "ssim_M0_3": mean_ssim(rows, 0, 3),
             "ssim_M16_end": mean_ssim(rows, 16, 10**6),
+            "ssim_in_M0_3": mean_ssim_in(rows, 0, 3),
+            "ssim_in_M16_end": mean_ssim_in(rows, 16, 10**6),
+            "first_call_psnr_below_60": first_call_below(rows, 60.0),
             "missing_frames": missing(rows),
             "recovery_rel_call": recovery,
             "events": infos[name]["events"],
@@ -382,13 +460,15 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
          f"Determinism floor (`repeat` mean PSNR over M..M+{args.post_chunks - 1}): **{floor:.2f} dB** (99 = bit-exact). "
          f"Valid-but-different reference (`seed_shift`, same state, different noise): **{valid_div:.2f} dB**; an ablation at or above this level diverged no more than an equally valid stream would. "
          f"Recovery = first call whose mean PSNR >= floor - 1 dB.\n",
-         "| config | bytes withheld (MB) | PSNR M+0 | PSNR M+0..3 | PSNR M+4..15 | PSNR M+16.. | SSIM M+0..3 | SSIM M+16.. | missing frames | recovery call |",
-         "|---|---|---|---|---|---|---|---|---|---|"]
+         f"Absolute reference: baseline SSIM vs INPUT video over M.. = **{static.get('baseline_ssim_vs_input_M_on')}**; the `SSIM-in` columns are the same metric for each config (quality proxy that does not depend on which valid stream the baseline is).\n",
+         f"Drift onset: first call where `repeat` falls below 60 dB vs baseline = {summary_drift(by_cfg.get('repeat', []))}.\n",
+         "| config | bytes withheld (MB) | PSNR M+0 | PSNR M+0..3 | PSNR M+4..15 | PSNR M+16.. | SSIM M+0..3 | SSIM M+16.. | SSIM-in M+0..3 | SSIM-in M+16.. | missing frames | recovery call |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     order = [n for n in DEFAULT_CONFIGS if n in summary] + [n for n in summary if n not in DEFAULT_CONFIGS]
     for name in order:
         s = summary[name]
-        L.append(f"| {name} | {s['bytes_withheld_mb']:,.0f} | {s['psnr_M0']:.1f} | {s['psnr_M0_3']:.1f} | {s['psnr_M4_15']:.1f} | {s['psnr_M16_end']:.1f} | "
-                 f"{s['ssim_M0_3']:.3f} | {s['ssim_M16_end']:.3f} | {s['missing_frames']} | {s['recovery_rel_call']} |")
+        L.append(f"| {name} | {s['bytes_withheld_mb']:,.1f} | {s['psnr_M0']:.1f} | {s['psnr_M0_3']:.1f} | {s['psnr_M4_15']:.1f} | {s['psnr_M16_end']:.1f} | "
+                 f"{s['ssim_M0_3']:.3f} | {s['ssim_M16_end']:.3f} | {s['ssim_in_M0_3']:.3f} | {s['ssim_in_M16_end']:.3f} | {s['missing_frames']} | {s['recovery_rel_call']} |")
     inv = infos[next(iter(infos))].get("inventory_at_M", {})
     L.append("\nInventory at M (bytes): " + ", ".join(f"{k2} {v / MB:,.0f} MB" for k2, v in inv.items()))
     L.append("\nDelay restores: " + "; ".join(f"{n}: {[e for e in summary[n]['events'] if 'restored' in e]}" for n in summary if n.startswith("delay_")))
@@ -435,6 +515,11 @@ def main():
     torch.set_grad_enabled(False)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[ablation] use_deterministic_algorithms unavailable: {exc}")
     if not torch.cuda.is_available():
         raise SystemExit("CUDA required; local runs are not evidence.")
     if args.gpu_id is not None:
@@ -488,6 +573,14 @@ def main():
         if frames is not None:
             baseline[c] = frames
     log(f"[ablation] baseline done in {time.perf_counter() - t0:.0f} s; {len(baseline)} calls with output")
+    baseline_in_ssim = {}
+    for c in sorted(baseline):
+        if c >= args.migration_chunk:
+            inp = runner.input_frames_for_output_call(c)
+            if inp is not None:
+                baseline_in_ssim[c] = float(np.mean([ssim(inp[f].astype(np.float32) / 255.0, baseline[c][f].astype(np.float32) / 255.0) for f in range(min(inp.shape[0], baseline[c].shape[0]))]))
+    static["baseline_ssim_vs_input_M_on"] = float(np.mean(list(baseline_in_ssim.values()))) if baseline_in_ssim else None
+    log(f"[ablation] baseline SSIM vs input (M on): {static['baseline_ssim_vs_input_M_on']}")
     static["inventory_baseline_end"] = inventory_bytes(pl)
 
     configs = [c.strip() for c in args.configs.split(",") if c.strip()]
@@ -495,7 +588,7 @@ def main():
     infos: dict[str, dict] = {}
     csv_path = out_dir / "ablation_raw.csv"
     with open(csv_path, "w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=["config", "call", "rel_call", "frame", "psnr", "ssim", "missing"])
+        writer = csv.DictWriter(fh, fieldnames=["config", "call", "rel_call", "frame", "psnr", "ssim", "ssim_in", "missing"])
         writer.writeheader()
         for name in configs:
             if name == "drop_inflight" and k < 2:
