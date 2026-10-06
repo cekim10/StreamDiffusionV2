@@ -1,0 +1,40 @@
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] baseline done in 39 s; 69 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4161317920312285
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 99.0
+  repeat: call 31 (M+1) psnr 99.0
+  repeat: call 34 (M+4) psnr 99.0
+  repeat: call 46 (M+16) psnr 99.0
+[ablation] config replay_0_sink0
+  replay_0_sink0: call 30 (M+0) psnr 15.0
+  replay_0_sink0: call 31 (M+1) psnr 18.0
+  replay_0_sink0: call 34 (M+4) psnr 23.7
+  replay_0_sink0: call 46 (M+16) psnr 26.8
+[ablation] config replay_1_sink0
+  replay_1_sink0: call 30 (M+0) psnr 17.7
+  replay_1_sink0: call 31 (M+1) psnr 20.8
+  replay_1_sink0: call 34 (M+4) psnr 24.4
+  replay_1_sink0: call 46 (M+16) psnr 27.3
+[ablation] config replay_3_sink0
+  replay_3_sink0: call 30 (M+0) psnr 22.9
+  replay_3_sink0: call 31 (M+1) psnr 24.9
+  replay_3_sink0: call 34 (M+4) psnr 26.3
+  replay_3_sink0: call 46 (M+16) psnr 27.2
+[ablation] config replay_6_sink0
+  replay_6_sink0: call 30 (M+0) psnr 26.6
+  replay_6_sink0: call 31 (M+1) psnr 26.3
+  replay_6_sink0: call 34 (M+4) psnr 26.9
+  replay_6_sink0: call 46 (M+16) psnr 26.6
+[ablation] config replay_full
+  replay_full: call 30 (M+0) psnr 31.7
+  replay_full: call 31 (M+1) psnr 30.8
+  replay_full: call 34 (M+4) psnr 31.0
+  replay_full: call 46 (M+16) psnr 29.1
+[ablation] done -> results/state_migration/reconstruct2/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  replay_0_sink0         withheld    9542 MB  PSNR M+0..3  19.2  M+16..  26.9  recovery -29
+  replay_1_sink0         withheld    9542 MB  PSNR M+0..3  21.3  M+16..  27.2  recovery -29
+  replay_3_sink0         withheld    9542 MB  PSNR M+0..3  24.7  M+16..  26.7  recovery -29
+  replay_6_sink0         withheld    9542 MB  PSNR M+0..3  26.3  M+16..  27.0  recovery -29
+  replay_full            withheld    9542 MB  PSNR M+0..3  31.3  M+16..  30.6  recovery -29
