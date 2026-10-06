@@ -70,6 +70,18 @@ def snapshot_kv(pl, slot_lo: int, slot_hi: int) -> dict:
     return snap
 
 
+def force_copy_kv(pl, snap: dict) -> int:
+    """Overwrite slots [lo,hi) with the snapshot (k, v, pos) regardless of current contents."""
+    fsl = pl.frame_seq_length
+    n = 0
+    for li, layer in enumerate(kv_layers(pl)):
+        layer["k"][:, snap["lo"] * fsl: snap["hi"] * fsl] = snap["k"][li]
+        layer["v"][:, snap["lo"] * fsl: snap["hi"] * fsl] = snap["v"][li]
+        layer["pos"][:, snap["lo"]:snap["hi"]] = snap["pos"][li]
+        n += snap["k"][li].numel() * snap["k"][li].element_size() * 2
+    return n
+
+
 def restore_kv(pl, snap: dict) -> dict:
     """Copy snapshotted slots back only where the slot still holds the same frame position
     (a delayed delivery of a slot that was overwritten in the meantime is useless)."""
@@ -171,9 +183,13 @@ def parse_config(name: str) -> dict:
     if name.startswith("replay_"):
         parts = name.split("_")
         w = int(parts[1])
-        sink0 = len(parts) > 2 and parts[2] in ("sink0", "sinkhist")
-        sinkhist = len(parts) > 2 and parts[2] == "sinkhist"
-        return {"drop": [], "delay": [], "restart": False, "replay": w, "sink0": sink0, "sinkhist": sinkhist}
+        toks = set(parts[2:])
+        unknown = toks - {"sink0", "sinkhist", "sinkxfer", "pos"}
+        if unknown:
+            raise ValueError(f"unknown replay tokens {unknown} in {name}")
+        return {"drop": [], "delay": [], "restart": False, "replay": w,
+                "sink0": bool(toks & {"sink0", "sinkhist"}), "sinkhist": "sinkhist" in toks,
+                "sinkxfer": "sinkxfer" in toks, "pos": "pos" in toks}
     no_refresh = name.endswith("_nr")
     base = name[:-3] if no_refresh else name
     if base.startswith("drop_"):
@@ -255,6 +271,7 @@ class Runner:
         self.first = 1 + self.chunk
         self.seed_offset = 0
         self.last_refresh_call = -1  # set after the baseline run from sink-slot position changes
+        self.noise_hist = {}  # baseline session.noise_scale after each call
 
     def frames_for_call(self, c: int) -> torch.Tensor:
         lo = self.first + c * self.chunk
@@ -307,7 +324,25 @@ class Runner:
             return None
         return to_uint8(np.concatenate(outs, axis=0))
 
-    def replay_restart(self, c: int, w, sink0: bool, sinkhist: bool = False):
+    def jump_metadata(self, session, chunk_idx: int):
+        """Make the replay session look like the original session right before `chunk_idx`:
+        RoPE/stream positions (`current_start/_end`), the motion-adaptive noise-scale EMA and
+        `last_image` are tiny per-session metadata that a destination would receive verbatim."""
+        fsl = self.pl.frame_seq_length
+        latents_in_first = 1 + self.chunk // self.pm.base_chunk_size
+        start_frame = latents_in_first + chunk_idx
+        # reproduce the t_refresh rewind the original session applies (streamv2v/inference.py:234-236)
+        if start_frame >= self.pm.t_refresh:
+            rewinds = (start_frame - self.pm.t_refresh) // (self.pm.t_refresh - (self.pl.num_kv_cache - 1)) + 1
+            raise RuntimeError(f"pos-faithful jump across a t_refresh rewind (chunk {chunk_idx}, {rewinds} rewinds) is not implemented; use M < {self.pm.t_refresh - latents_in_first}")
+        session.current_start = start_frame * fsl
+        session.current_end = session.current_start + fsl
+        if chunk_idx - 1 in self.noise_hist:
+            session.noise_scale = float(self.noise_hist[chunk_idx - 1])
+        lo = self.first + chunk_idx * self.chunk
+        session.last_image = self.video[:, :, lo - 1: lo].to(self.device)
+
+    def replay_restart(self, c: int, w, sink0: bool, sinkhist: bool = False, pos_faithful: bool = False):
         """Seed-and-replay reconstruction at migration call c.
         sink0=False: new session from [frame before chunk c-w, chunk c-w], then replay chunks c-w+1..c-1.
         sink0=True : new session from the ORIGINAL first batch (frames 0..4) so the sink slots are rebuilt
@@ -353,6 +388,8 @@ class Runner:
         replayed = 0
         if sink0:
             replayed += sink_fill_end
+        if pos_faithful:
+            self.jump_metadata(session, first_replay)
         for cc in range(first_replay, c):
             self.step(session, cc)
             seed_bytes += self.chunk * frame_bytes
@@ -390,8 +427,14 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
             info["inventory_at_M"] = inv
             info["slot_pos_at_M"] = slot_positions(pl)
             if cfg.get("replay") is not None:
-                session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"], cfg.get("sinkhist", False))
+                sink_snap = snapshot_kv(pl, 0, sink) if cfg.get("sinkxfer") else None
+                session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"], cfg.get("sinkhist", False), cfg.get("pos", False))
                 info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
+                if sink_snap is not None:
+                    moved = force_copy_kv(pl, sink_snap)
+                    info["bytes_withheld"] -= moved
+                    info["sink_transfer_bytes"] = moved
+                    info["events"].append({"call": c, "sink_transferred_bytes": moved})
                 info["seed_bytes"] = seed_bytes
                 info["replay_ms"] = ms
                 info["events"].append({"call": c, "replay_ms": ms, "seed_bytes": seed_bytes, "replayed_calls": replayed, "sink0": cfg["sink0"]})
@@ -552,6 +595,7 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
             "ssim_in_M16_end": mean_ssim_in(rows, 16, 10**6),
             "first_call_psnr_below_60": first_call_below(rows, 60.0),
             "seed_mb": infos[name].get("seed_bytes", 0) / MB,
+            "sink_transfer_mb": infos[name].get("sink_transfer_bytes", 0) / MB,
             "replay_ms": infos[name].get("replay_ms"),
             "missing_frames": missing(rows),
             "recovery_rel_call": recovery,
@@ -587,13 +631,13 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
         rtt_ms = 10.0
         bws = [0.1, 1.0, 10.0, 100.0]  # Gbps
         L.append(f"\n## Transfer vs seed+replay (analytic; full state {full_bytes / MB:,.0f} MB, RTT {rtt_ms:.0f} ms, no decompression/serialization cost)\n")
-        L.append("| config | seed MB | replay ms | " + " | ".join(f"T_move @{bw:g} Gbps" for bw in bws) + " | " + " | ".join(f"T_recon @{bw:g} Gbps" for bw in bws) + " |")
-        L.append("|---|---|---|" + "---|" * (2 * len(bws)))
+        L.append("| config | seed MB | sink xfer MB | replay ms | " + " | ".join(f"T_move @{bw:g} Gbps" for bw in bws) + " | " + " | ".join(f"T_recon @{bw:g} Gbps" for bw in bws) + " |")
+        L.append("|---|---|---|---|" + "---|" * (2 * len(bws)))
         for n in replay_cfgs:
             s2 = summary[n]
             t_move = [rtt_ms + full_bytes * 8 / (bw * 1e9) * 1e3 for bw in bws]
-            t_rec = [rtt_ms + s2["seed_mb"] * MB * 8 / (bw * 1e9) * 1e3 + s2["replay_ms"] for bw in bws]
-            L.append(f"| {n} | {s2['seed_mb']:.1f} | {s2['replay_ms']:.0f} | " + " | ".join(f"{t:,.0f}" for t in t_move) + " | " + " | ".join(f"{t:,.0f}" for t in t_rec) + " |")
+            t_rec = [rtt_ms + (s2["seed_mb"] + s2.get("sink_transfer_mb", 0)) * MB * 8 / (bw * 1e9) * 1e3 + s2["replay_ms"] for bw in bws]
+            L.append(f"| {n} | {s2['seed_mb']:.1f} | {s2.get('sink_transfer_mb', 0):.0f} | {s2['replay_ms']:.0f} | " + " | ".join(f"{t:,.0f}" for t in t_move) + " | " + " | ".join(f"{t:,.0f}" for t in t_rec) + " |")
         L.append("\nContinuity of each replay config is in the main table (compare with `repeat`, the full-state-transfer equivalent).")
     L.append("\nGates (state_map.md section 4) are applied by the reader, not by this script; the numbers above are the record.\n")
     (out_dir / "ablation_summary.md").write_text("\n".join(L) + "\n")
@@ -698,6 +742,7 @@ def main():
         if frames is not None:
             baseline[c] = frames
         sink_pos_hist[c] = slot_positions(pl)["sink_slot_pos"]
+        runner.noise_hist[c] = float(session.noise_scale)
     refresh_calls = [c for c in range(1, total_calls) if sink_pos_hist[c] != sink_pos_hist[c - 1]]
     pre_M_refresh = [c for c in refresh_calls if c < args.migration_chunk]
     runner.last_refresh_call = pre_M_refresh[-1] if pre_M_refresh else -1
