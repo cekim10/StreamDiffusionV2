@@ -254,6 +254,14 @@ class Runner:
         torch.manual_seed(self.args.seed + seed_offset)
         self.seed_offset = seed_offset
         self.reset_attention_eviction_state()
+        # `prepare()` aliases `self.timestep = self.denoising_step_list` and `inference_stream` writes the
+        # motion-adaptive step into `timestep[0]` (`causal_stream_inference.py:256,279`), so after one
+        # session the schedule itself has drifted (e.g. 700 -> 626). Restore the canonical schedule so
+        # every session starts from the configured steps (the demo does the same via
+        # `_canonical_denoising_step_list`).
+        if not hasattr(self, "_canonical_steps"):
+            self._canonical_steps = self.pl.denoising_step_list.detach().clone()
+        self.pl.denoising_step_list = self._canonical_steps.clone()
         images = self.video[:, :, :self.first].to(self.device)
         session, _ = self.pm.start_stream_session(self.prompt, images, self.args.noise_scale)
         return session
