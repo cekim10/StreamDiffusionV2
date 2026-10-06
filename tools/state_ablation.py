@@ -171,8 +171,9 @@ def parse_config(name: str) -> dict:
     if name.startswith("replay_"):
         parts = name.split("_")
         w = int(parts[1])
-        sink0 = len(parts) > 2 and parts[2] == "sink0"
-        return {"drop": [], "delay": [], "restart": False, "replay": w, "sink0": sink0}
+        sink0 = len(parts) > 2 and parts[2] in ("sink0", "sinkhist")
+        sinkhist = len(parts) > 2 and parts[2] == "sinkhist"
+        return {"drop": [], "delay": [], "restart": False, "replay": w, "sink0": sink0, "sinkhist": sinkhist}
     no_refresh = name.endswith("_nr")
     base = name[:-3] if no_refresh else name
     if base.startswith("drop_"):
@@ -197,6 +198,8 @@ RECONSTRUCT_CONFIGS = [
     "replay_1_sink0",
     "replay_3_sink0",
     "replay_6_sink0",
+    "replay_3_sinkhist",
+    "replay_6_sinkhist",
     "replay_full",
 ]
 
@@ -251,6 +254,7 @@ class Runner:
         self.chunk = pm.base_chunk_size * self.pl.num_frame_per_block
         self.first = 1 + self.chunk
         self.seed_offset = 0
+        self.last_refresh_call = -1  # set after the baseline run from sink-slot position changes
 
     def frames_for_call(self, c: int) -> torch.Tensor:
         lo = self.first + c * self.chunk
@@ -303,7 +307,7 @@ class Runner:
             return None
         return to_uint8(np.concatenate(outs, axis=0))
 
-    def replay_restart(self, c: int, w: int, sink0: bool):
+    def replay_restart(self, c: int, w, sink0: bool, sinkhist: bool = False):
         """Seed-and-replay reconstruction at migration call c.
         sink0=False: new session from [frame before chunk c-w, chunk c-w], then replay chunks c-w+1..c-1.
         sink0=True : new session from the ORIGINAL first batch (frames 0..4) so the sink slots are rebuilt
@@ -323,14 +327,17 @@ class Runner:
             seed_bytes = self.first * frame_bytes
             # prepare() wrote 2 latent frames (slots 0,1); the remaining sink slots are filled by the next
             # chunks of the ORIGINAL session (chunk 1 for sink_size=3), so replay those too for an exact sink.
+            # prepare() wrote `prepare_latents` latent frames into slots 0..; harness chunk 0 (frames 5..8)
+            # writes the next slot. Replay chunks 0..sink_fill_end-1 to fill all sink slots exactly.
             prepare_latents = 1 + self.chunk // self.pm.base_chunk_size
-            sink_fill_end = 1 + max(0, self.pl.num_sink_tokens - prepare_latents)
-            for cc in range(1, sink_fill_end):
+            sink_fill_end = max(0, self.pl.num_sink_tokens - prepare_latents)
+            if sinkhist:
+                # also replay through the last adaptive sink refresh observed in the baseline run
+                sink_fill_end = max(sink_fill_end, self.last_refresh_call + 1)
+            for cc in range(0, sink_fill_end):
                 self.step(session, cc)
                 seed_bytes += self.chunk * frame_bytes
-            first_replay = c if w == "full" else max(c - w, sink_fill_end)
-            if w == "full":
-                first_replay = sink_fill_end
+            first_replay = sink_fill_end if w == "full" else max(c - w, sink_fill_end)
         else:
             if w < 1:
                 raise ValueError("replay_W without sink0 needs W >= 1 (W=0 is cold_restart)")
@@ -345,7 +352,7 @@ class Runner:
             first_replay = start_chunk + 1
         replayed = 0
         if sink0:
-            replayed += max(0, sink_fill_end - 1)
+            replayed += sink_fill_end
         for cc in range(first_replay, c):
             self.step(session, cc)
             seed_bytes += self.chunk * frame_bytes
@@ -383,7 +390,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
             info["inventory_at_M"] = inv
             info["slot_pos_at_M"] = slot_positions(pl)
             if cfg.get("replay") is not None:
-                session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"])
+                session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"], cfg.get("sinkhist", False))
                 info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
                 info["seed_bytes"] = seed_bytes
                 info["replay_ms"] = ms
@@ -572,7 +579,7 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
     L.append("\nDelay restores: " + "; ".join(f"{n}: {[e for e in summary[n]['events'] if 'restored' in e]}" for n in summary if n.startswith("delay_")))
     first_info = infos[next(iter(infos))]
     if "slot_pos_at_M" in first_info:
-        L.append(f"\nRing-buffer slot positions at M (layer 0): {first_info['slot_pos_at_M']} (sink slots at 0..{max(0, len(first_info['slot_pos_at_M']['sink_slot_pos']) - 1)} means no adaptive sink refresh fired before M).")
+        L.append(f"\nRing-buffer slot positions at M (layer 0): {first_info['slot_pos_at_M']}; adaptive sink refresh fired at baseline calls {static.get('sink_refresh_calls')} (sinkhist configs replay through the last one before M).")
     # Transfer-vs-replay crossover (analytic, from measured bytes and replay time)
     replay_cfgs = [n for n in order if summary[n].get("replay_ms") is not None]
     if replay_cfgs:
@@ -685,10 +692,18 @@ def main():
     session = runner.start()
     baseline: dict[int, np.ndarray] = {}
     t0 = time.perf_counter()
+    sink_pos_hist = {}
     for c in range(total_calls):
         frames = runner.step(session, c)
         if frames is not None:
             baseline[c] = frames
+        sink_pos_hist[c] = slot_positions(pl)["sink_slot_pos"]
+    refresh_calls = [c for c in range(1, total_calls) if sink_pos_hist[c] != sink_pos_hist[c - 1]]
+    pre_M_refresh = [c for c in refresh_calls if c < args.migration_chunk]
+    runner.last_refresh_call = pre_M_refresh[-1] if pre_M_refresh else -1
+    static["sink_refresh_calls"] = refresh_calls
+    static["sink_pos_at_M_baseline"] = sink_pos_hist.get(args.migration_chunk - 1)
+    log(f"[ablation] adaptive sink refresh fired at calls {refresh_calls}; last before M: {runner.last_refresh_call}")
     log(f"[ablation] baseline done in {time.perf_counter() - t0:.0f} s; {len(baseline)} calls with output")
     baseline_in_ssim = {}
     for c in sorted(baseline):
