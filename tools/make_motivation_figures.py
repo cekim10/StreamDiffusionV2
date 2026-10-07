@@ -107,37 +107,48 @@ STATES = [("drop_inflight", "In-flight row", 0.2, "Immediate", C["inflight"]),
 
 def fig2(out: Path):
     raw = ROOT / "results/state_migration/gen/original_s0_k2/ablation_raw.csv"
-    cv = curves(raw, [s[0] for s in STATES])
-    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.2, 2.75), gridspec_kw={"width_ratios": [1.5, 1.0]})
+    cv = curves(raw, [s_[0] for s_ in STATES])
+    fig = plt.figure(figsize=(7.6, 2.8))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.3, 1.0], wspace=0.55)
+    ax = fig.add_subplot(gs[0, 0]); hx = fig.add_subplot(gs[0, 1])
     for cfg, label, mb, sem, col in STATES:
         x, y = cv[cfg]
         size = f"{mb:.1f} MB" if mb < 1 else f"{mb / 1024:.1f} GB"
-        ax.plot(x, y, color=col, lw=1.6, label=f"No {label[0].lower() + label[1:]} ({size})")
+        ax.plot(x, y, color=col, lw=1.6, label=f"No {label if label.isupper() or label.startswith('VAE') else label[0].lower() + label[1:]} ({size})")
     ax.axhline(CAP, color="k", lw=0.6, ls=":")
     ax.text(39.5, CAP + 0.6, "identical to uninterrupted run", ha="right", va="bottom", fontsize=7)
     ax.set_xlabel("Chunks after migration"); ax.set_ylabel("PSNR to uninterrupted execution (dB)")
     ax.set_xlim(0, 39); ax.set_ylim(8, 54)
     ax.legend(loc="lower right", frameon=False)
-    ax.set_title("(a) Continuity after losing one state component", loc="left")
-    # (b) size vs. continuity impact
-    for cfg, label, mb, sem, col in STATES:
-        early = window(cv, cfg, 0, 3); late = window(cv, cfg, 16, 10**6)
-        bx.plot([mb, mb], [early, late], color=col, lw=1.2, alpha=0.6)
-        bx.scatter([mb], [early], s=34, facecolor="white", edgecolor=col, lw=1.4, zorder=3)
-        bx.scatter([mb], [late], s=42, color=col, zorder=4)
-        off = {"drop_inflight": (1.7, 1.0), "drop_kv_recent": (0.09, -2.0), "drop_vae_all": (1.5, 1.2), "ph_localrefresh": (0.09, -2.5)}[cfg]
-        bx.annotate(label, (mb, late), xytext=(mb * off[0], late + off[1]), fontsize=7, color=col,
-                    ha="left" if off[0] > 1 else "right")
-    bx.set_xscale("log"); bx.set_xlim(0.08, 20000)
-    bx.set_xticks([0.1, 1, 10, 100, 1000, 10000]); bx.set_xticklabels(["0.1 MB", "1", "10", "100", "1 GB", "10 GB"])
-    bx.set_ylim(8, 54); bx.axhline(CAP, color="k", lw=0.6, ls=":")
-    bx.set_xlabel("Size of the lost state"); bx.set_ylabel("PSNR to uninterrupted (dB)")
-    bx.scatter([], [], s=34, facecolor="white", edgecolor="k", lw=1.2, label="first 4 chunks")
-    bx.scatter([], [], s=42, color="k", label="chunks 16+")
-    bx.legend(loc="lower left", frameon=False, handletextpad=0.3)
-    bx.set_title("(b) Size ≠ importance", loc="left")
-    fig.tight_layout()
-    fig.savefig(out / "fig2_state_semantics.pdf"); fig.savefig(out / "fig2_state_semantics.png"); plt.close(fig)
+    ax.set_title("(a) Continuity after losing one component", loc="left")
+    # (b) temporal-semantics heatmap: rows = lost component (sorted by size), columns = chunks, color = PSNR
+    order = [("drop_inflight", "In-flight row", 0.2, "Immediate"), ("drop_kv_recent", "Recent KV", 1645, "Ephemeral"),
+             ("ph_localrefresh", "Sink KV", 1645, "Durable"), ("drop_vae_all", "VAE caches", 2871, "Ephemeral")]
+    ncol = 40
+    import numpy as np
+
+    M = np.full((len(order), ncol), np.nan)
+    for i, (cfg, *_rest) in enumerate(order):
+        x, y = cv[cfg]
+        for k, v in zip(x, y):
+            if k < ncol:
+                M[i, k] = v
+    im = hx.imshow(M, aspect="auto", cmap="RdYlGn", vmin=15, vmax=CAP, interpolation="nearest")
+    hx.set_yticks(range(len(order)))
+    hx.set_yticklabels([f"{name}\n{(f'{mb:.1f} MB' if mb < 1 else f'{mb / 1024:.1f} GB')}" for _, name, mb, _ in order], fontsize=7.5)
+    for i, (_, _, _, sem) in enumerate(order):
+        hx.text(ncol + 0.6, i, sem, ha="left", va="center", fontsize=7.5, color=SEM[sem], weight="bold", clip_on=False)
+    for i in range(1, len(order)):
+        hx.axhline(i - 0.5, color="white", lw=1.5)
+    hx.set_xlabel("Chunks after migration"); hx.set_xticks([0, 10, 20, 30, 39])
+    hx.set_title("(b) Temporal semantics of each state", loc="left")
+    hx.tick_params(axis="y", length=0)
+    for sp in hx.spines.values():
+        sp.set_visible(False)
+    cb = fig.colorbar(im, ax=hx, orientation="horizontal", fraction=0.07, pad=0.28, aspect=35)
+    cb.set_label("PSNR to uninterrupted execution (dB)", fontsize=7.5); cb.ax.tick_params(labelsize=7)
+    cb.set_ticks([15, 25, 35, 45, 50]); cb.set_ticklabels(["15", "25", "35", "45", "≡"])
+    fig.savefig(out / "fig2_state_semantics.pdf", bbox_inches="tight"); fig.savefig(out / "fig2_state_semantics.png", bbox_inches="tight"); plt.close(fig)
 
 
 def fig2_appendix(out: Path):
