@@ -104,6 +104,119 @@ def restore_kv(pl, snap: dict) -> dict:
     return {"slots_restored": restored, "slots_expired": expired}
 
 
+def serialize_state(pl, pm, session) -> dict:
+    """Deep-copy everything a destination would need to continue this session exactly."""
+    snap = {"kv": [], "ring": [], "evict": [], "vae": {}, "session": {}, "pipeline": {}}
+    for layer in kv_layers(pl):
+        snap["kv"].append({"k": layer["k"].detach().clone(), "v": layer["v"].detach().clone()})
+        snap["ring"].append({"global_end_index": layer["global_end_index"].detach().clone(),
+                             "local_end_index": layer["local_end_index"].detach().clone(),
+                             "pos": layer["pos"].detach().clone(),
+                             "total_steps": layer.get("total_steps"), "current_step": layer.get("current_step")})
+    for block in pl.generator.model.blocks:
+        ev = getattr(block.self_attn, "evict_idx", None)
+        snap["evict"].append([list(r) for r in ev] if isinstance(ev, list) else None)
+    snap["crossattn"] = [{"k": e["k"].detach().clone(), "v": e["v"].detach().clone(), "is_init": e.get("is_init", False)} for e in pl.crossattn_cache]
+    vm = pl.vae.model
+    for attr in ("_enc_feat_map", "_feat_map"):
+        fm = getattr(vm, attr, None)
+        snap["vae"][attr] = [t.detach().clone() if isinstance(t, torch.Tensor) else t for t in fm] if isinstance(fm, list) else None
+    for attr in ("_enc_conv_idx", "_conv_idx", "first_encode", "first_decode", "first_batch"):
+        snap["vae"][attr] = getattr(vm, attr, None)
+        if isinstance(snap["vae"][attr], list):
+            snap["vae"][attr] = list(snap["vae"][attr])
+    snap["pipeline"] = {"hidden_states": pl.hidden_states.detach().clone(),
+                        "kv_cache_starts": pl.kv_cache_starts.detach().clone(),
+                        "kv_cache_ends": pl.kv_cache_ends.detach().clone(),
+                        "timestep": pl.timestep.detach().clone(),
+                        "denoising_step_list": pl.denoising_step_list.detach().clone(),
+                        "pm_processed": pm.processed}
+    snap["session"] = {"current_start": session.current_start, "current_end": session.current_end,
+                       "noise_scale": session.noise_scale, "init_noise_scale": session.init_noise_scale,
+                       "last_image": session.last_image.detach().clone(), "processed": session.processed,
+                       "chunk_size": session.chunk_size}
+    return snap
+
+
+STATE_COMPONENTS = ("sink", "recent", "meta", "vae", "inflight")
+
+
+def restore_state(pl, pm, session, snap: dict, comps: set) -> dict:
+    """Overwrite a freshly allocated destination with the selected components of `snap`.
+    Everything not selected is left EMPTY (zeros / fresh), never the dummy-prepare contents."""
+    fsl = pl.frame_seq_length
+    sink = pl.num_sink_tokens
+    moved = {c: 0 for c in STATE_COMPONENTS}
+    for li, layer in enumerate(kv_layers(pl)):
+        layer["k"].zero_(); layer["v"].zero_()
+        if "sink" in comps:
+            layer["k"][:, :sink * fsl] = snap["kv"][li]["k"][:, :sink * fsl]
+            layer["v"][:, :sink * fsl] = snap["kv"][li]["v"][:, :sink * fsl]
+            moved["sink"] += 2 * snap["kv"][li]["k"][:, :sink * fsl].numel() * snap["kv"][li]["k"].element_size()
+        if "recent" in comps:
+            layer["k"][:, sink * fsl:] = snap["kv"][li]["k"][:, sink * fsl:]
+            layer["v"][:, sink * fsl:] = snap["kv"][li]["v"][:, sink * fsl:]
+            moved["recent"] += 2 * snap["kv"][li]["k"][:, sink * fsl:].numel() * snap["kv"][li]["k"].element_size()
+        if "meta" in comps:
+            r = snap["ring"][li]
+            layer["global_end_index"].copy_(r["global_end_index"]); layer["local_end_index"].copy_(r["local_end_index"])
+            layer["pos"].copy_(r["pos"])
+            if r["total_steps"] is not None:
+                layer["total_steps"] = r["total_steps"]; layer["current_step"] = r["current_step"]
+            moved["meta"] += r["pos"].numel() * 8 + 16
+    if "meta" in comps:
+        for block, ev in zip(pl.generator.model.blocks, snap["evict"]):
+            block.self_attn.evict_idx = [list(r) for r in ev] if ev is not None else None
+        for e, se in zip(pl.crossattn_cache, snap["crossattn"]):
+            e["k"] = se["k"]; e["v"] = se["v"]; e["is_init"] = se["is_init"]
+        pl.kv_cache_starts.copy_(snap["pipeline"]["kv_cache_starts"]); pl.kv_cache_ends.copy_(snap["pipeline"]["kv_cache_ends"])
+        pl.timestep.copy_(snap["pipeline"]["timestep"])
+        pm.processed = snap["pipeline"]["pm_processed"]
+        for key in ("current_start", "current_end", "noise_scale", "init_noise_scale", "processed", "chunk_size"):
+            setattr(session, key, snap["session"][key])
+        session.last_image = snap["session"]["last_image"].clone()
+        moved["meta"] += snap["session"]["last_image"].numel() * snap["session"]["last_image"].element_size()
+    vm = pl.vae.model
+    for attr in ("_enc_feat_map", "_feat_map"):
+        fm = getattr(vm, attr, None)
+        src = snap["vae"].get(attr)
+        if not isinstance(fm, list) or src is None:
+            continue
+        for i, t in enumerate(fm):
+            if isinstance(t, torch.Tensor):
+                if "vae" in comps and isinstance(src[i], torch.Tensor):
+                    t.copy_(src[i]); moved["vae"] += t.numel() * t.element_size()
+                else:
+                    t.zero_()
+    if "vae" in comps:
+        for attr in ("_enc_conv_idx", "_conv_idx", "first_encode", "first_decode", "first_batch"):
+            if snap["vae"].get(attr) is not None:
+                setattr(vm, attr, list(snap["vae"][attr]) if isinstance(snap["vae"][attr], list) else snap["vae"][attr])
+    hs = pl.hidden_states
+    if "inflight" in comps:
+        hs.copy_(snap["pipeline"]["hidden_states"]); moved["inflight"] += hs[:-1].numel() * hs.element_size()
+    else:
+        hs[:-1].zero_()
+    return moved
+
+
+def make_placeholder_sink(pl) -> int:
+    """Destination-local temporary sink: copy the most recent slots' K/V and positions into the sink
+    slots (the model then anchors on what it has, instead of attending to zero keys)."""
+    fsl = pl.frame_seq_length
+    sink = pl.num_sink_tokens
+    n = pl.num_kv_cache
+    nbytes = 0
+    for layer in kv_layers(pl):
+        for si in range(sink):
+            src_slot = n - sink + si  # the last `sink` slots
+            layer["k"][:, si * fsl:(si + 1) * fsl] = layer["k"][:, src_slot * fsl:(src_slot + 1) * fsl]
+            layer["v"][:, si * fsl:(si + 1) * fsl] = layer["v"][:, src_slot * fsl:(src_slot + 1) * fsl]
+            layer["pos"][:, si] = layer["pos"][:, src_slot]
+            nbytes += 2 * fsl * layer["k"].shape[0] * layer["k"].shape[2] * layer["k"].shape[3] * layer["k"].element_size()
+    return nbytes
+
+
 def vae_cache_tensors(pl, which: str):
     vm = pl.vae.model
     attrs = {"enc": ["_enc_feat_map"], "dec": ["_feat_map"], "all": ["_enc_feat_map", "_feat_map"]}[which]
@@ -178,6 +291,23 @@ def parse_config(name: str) -> dict:
         return {"drop": [], "delay": [], "restart": False, "seed_offset": 7919}
     if name == "cold_restart":
         return {"drop": [], "delay": [], "restart": True}
+    if name.startswith("xfer_"):
+        comps = set(STATE_COMPONENTS) if name == "xfer_all" else set(name[len("xfer_"):].split("+"))
+        unknown = comps - set(STATE_COMPONENTS)
+        if unknown:
+            raise ValueError(f"unknown xfer components {unknown} in {name}")
+        return {"drop": [], "delay": [], "restart": False, "xfer": comps}
+    if name.startswith("ph_"):
+        # ph_zero_D : zero sink, refresh off, true sink swapped in at M+D
+        # ph_local_D: local placeholder sink (copy of recent slots), refresh off, true sink swapped in at M+D
+        # ph_local_noswap / ph_zero_noswap: placeholder only, never swapped
+        # ph_localrefresh: zero sink, adaptive refresh ON, never swapped (== drop_kv_sink)
+        if name == "ph_localrefresh":
+            return {"drop": ["kv_sink"], "delay": [], "restart": False, "ph": "refresh"}
+        parts = name.split("_")
+        kind = parts[1]
+        arrival = None if parts[2] == "noswap" else int(parts[2])
+        return {"drop": [], "delay": [], "restart": False, "ph": kind, "arrival": arrival, "no_refresh": True}
     if name == "replay_full":
         return {"drop": [], "delay": [], "restart": False, "replay": "full", "sink0": True}
     if name.startswith("replay_"):
@@ -202,6 +332,22 @@ def parse_config(name: str) -> dict:
         return {"drop": [], "delay": [(comp, int(d))], "restart": False, "no_refresh": no_refresh}
     raise ValueError(f"unknown config {name}")
 
+
+MECHANISM_CONFIGS = [
+    "repeat",
+    "xfer_all",
+    "xfer_sink+meta",
+    "xfer_sink+meta+vae",
+    "xfer_sink+meta+vae+inflight",
+    "xfer_meta",
+    "xfer_meta+vae+inflight",
+    "replay_3_sinkhist_pos",
+    "ph_localrefresh",
+    "ph_zero_noswap",
+    "ph_local_noswap",
+    "ph_zero_1", "ph_zero_4", "ph_zero_8", "ph_zero_16",
+    "ph_local_1", "ph_local_4", "ph_local_8", "ph_local_16",
+]
 
 RECONSTRUCT_CONFIGS = [
     "repeat",
@@ -324,6 +470,17 @@ class Runner:
             return None
         return to_uint8(np.concatenate(outs, axis=0))
 
+    def fresh_destination(self):
+        """Allocate a brand-new session's buffers (dummy prepare on the first batch; harness overhead,
+        not counted). restore_state() then overwrites or zeroes every buffer."""
+        self.reset_attention_eviction_state()
+        self.pl.denoising_step_list = self._canonical_steps.clone()
+        set_seed(self.args.seed)
+        torch.manual_seed(self.args.seed)
+        images0 = self.video[:, :, :self.first].to(self.device)
+        session, _ = self.pm.start_stream_session(self.prompt, images0, self.args.noise_scale)
+        return session
+
     def jump_metadata(self, session, chunk_idx: int):
         """Make the replay session look like the original session right before `chunk_idx`:
         RoPE/stream positions (`current_start/_end`), the motion-adaptive noise-scale EMA and
@@ -426,7 +583,25 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
             inv = inventory_bytes(pl)
             info["inventory_at_M"] = inv
             info["slot_pos_at_M"] = slot_positions(pl)
-            if cfg.get("replay") is not None:
+            if cfg.get("xfer") is not None:
+                snap = serialize_state(pl, runner.pm, session)
+                session = runner.fresh_destination()
+                moved = restore_state(pl, runner.pm, session, snap, cfg["xfer"])
+                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes") - sum(moved.values())
+                info["bytes_moved"] = moved
+                info["events"].append({"call": c, "xfer": sorted(cfg["xfer"]), "moved_mb": {k2: round(v / MB, 1) for k2, v in moved.items()}})
+                del snap
+            elif cfg.get("ph") is not None and cfg["ph"] != "refresh":
+                true_sink = snapshot_kv(pl, 0, sink)
+                for block in pl.generator.model.blocks:
+                    block.self_attn.adapt_sink_thr = -1
+                info["bytes_withheld"] = zero_kv_slots(pl, 0, sink)
+                if cfg["ph"] == "local":
+                    info["placeholder_bytes"] = make_placeholder_sink(pl)
+                if cfg.get("arrival") is not None:
+                    pending.append((c + cfg["arrival"], "true_sink_swap", true_sink))
+                info["events"].append({"call": c, "placeholder": cfg["ph"], "arrival": cfg.get("arrival")})
+            elif cfg.get("replay") is not None:
                 sink_snap = snapshot_kv(pl, 0, sink) if cfg.get("sinkxfer") else None
                 session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"], cfg.get("sinkhist", False), cfg.get("pos", False))
                 info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
@@ -467,7 +642,10 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
         still_pending = []
         for due, comp, snap in pending:
             if c == due:
-                res = restore_kv(pl, snap)
+                if comp == "true_sink_swap":
+                    res = {"swapped_bytes": force_copy_kv(pl, snap)}
+                else:
+                    res = restore_kv(pl, snap)
                 info["events"].append({"call": c, "restored": comp, **res})
             else:
                 still_pending.append((due, comp, snap))
@@ -595,6 +773,8 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
             "ssim_in_M16_end": mean_ssim_in(rows, 16, 10**6),
             "first_call_psnr_below_60": first_call_below(rows, 60.0),
             "seed_mb": infos[name].get("seed_bytes", 0) / MB,
+            "arrival": next((e.get("arrival") for e in infos[name]["events"] if "placeholder" in e), None),
+            "psnr_M0_7": mean_psnr(rows, 0, 7),
             "sink_transfer_mb": infos[name].get("sink_transfer_bytes", 0) / MB,
             "replay_ms": infos[name].get("replay_ms"),
             "missing_frames": missing(rows),
@@ -640,6 +820,38 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
             L.append(f"| {n} | {s2['seed_mb']:.1f} | {s2.get('sink_transfer_mb', 0):.0f} | {s2['replay_ms']:.0f} | " + " | ".join(f"{t:,.0f}" for t in t_move) + " | " + " | ".join(f"{t:,.0f}" for t in t_rec) + " |")
         L.append("\nContinuity of each replay config is in the main table (compare with `repeat`, the full-state-transfer equivalent).")
     L.append("\nGates (state_map.md section 4) are applied by the reader, not by this script; the numbers above are the record.\n")
+    ph_cfgs = [n for n in order if summary[n].get("arrival") is not None or n.startswith("ph_")]
+    if ph_cfgs:
+        L.append("\n## Placeholder: gap quality vs rejoin after the true sink arrives (tau = 30 dB)\n")
+        L.append("| config | arrival D | PSNR gap M..M+D-1 | SSIM gap | rejoin (calls after arrival to >= 30 dB) | PSNR M+D+8.. | SSIM M+D+8.. |")
+        L.append("|---|---|---|---|---|---|---|")
+        for n in ph_cfgs:
+            rws = by_cfg[n]
+            D = summary[n].get("arrival")
+            per = {}
+            for r in rws:
+                if r["psnr"] != "":
+                    per.setdefault(r["rel_call"], []).append(float(r["psnr"]))
+            if D is None:
+                gap_lo, gap_hi, rejoin, tail = 0, args.post_chunks - 1, "n/a (never swapped)", float("nan")
+                L.append(f"| {n} | - | {mean_psnr(rws, 0, 7):.1f} (M+0..7) | {mean_ssim(rws, 0, 7):.3f} | {rejoin} | {mean_psnr(rws, 16, 10**6):.1f} (M+16..) | {mean_ssim(rws, 16, 10**6):.3f} |")
+                continue
+            rejoin = None
+            for rc in sorted(per):
+                if rc >= D and np.mean(per[rc]) >= 30.0:
+                    rejoin = rc - D
+                    break
+            L.append(f"| {n} | {D} | {mean_psnr(rws, 0, max(D - 1, 0)):.1f} | {mean_ssim(rws, 0, max(D - 1, 0)):.3f} | {rejoin} | {mean_psnr(rws, D + 8, 10**6):.1f} | {mean_ssim(rws, D + 8, 10**6):.3f} |")
+    xf = [n for n in order if n.startswith("xfer_") or n.startswith("replay_")]
+    if xf:
+        L.append("\n## Natural refill vs replay: early continuity (M+0..7)\n")
+        L.append("| config | PSNR M+0 | PSNR M+0..7 | SSIM M+0..3 | PSNR M+16.. | moved / seed |")
+        L.append("|---|---|---|---|---|---|")
+        for n in xf:
+            s2 = summary[n]
+            mv = infos[n].get("bytes_moved")
+            mv_s = ", ".join(f"{k2} {v / MB:,.0f} MB" for k2, v in mv.items() if v) if mv else f"seed {s2['seed_mb']:.0f} MB, replay {s2.get('replay_ms') or 0:.0f} ms"
+            L.append(f"| {n} | {s2['psnr_M0']:.1f} | {s2['psnr_M0_7']:.1f} | {s2['ssim_M0_3']:.3f} | {s2['psnr_M16_end']:.1f} | {mv_s} |")
     (out_dir / "ablation_summary.md").write_text("\n".join(L) + "\n")
     with open(out_dir / "ablation_summary.json", "w") as fh:
         json.dump({"floor_psnr": floor, "seed_shift_psnr": valid_div, "per_config": summary}, fh, indent=2, default=str)
@@ -673,7 +885,7 @@ def parse_args():
     p.add_argument("--migration_chunk", type=int, default=30)
     p.add_argument("--post_chunks", type=int, default=40)
     p.add_argument("--configs", type=str, default=None, help="comma list; overrides --preset")
-    p.add_argument("--preset", type=str, choices=["ablation", "reconstruct"], default="ablation")
+    p.add_argument("--preset", type=str, choices=["ablation", "reconstruct", "mechanism"], default="ablation")
     p.add_argument("--save_video", action="store_true", default=False)
     return p.parse_args()
 
@@ -760,7 +972,7 @@ def main():
     log(f"[ablation] baseline SSIM vs input (M on): {static['baseline_ssim_vs_input_M_on']}")
     static["inventory_baseline_end"] = inventory_bytes(pl)
 
-    preset = DEFAULT_CONFIGS if args.preset == "ablation" else RECONSTRUCT_CONFIGS
+    preset = {"ablation": DEFAULT_CONFIGS, "reconstruct": RECONSTRUCT_CONFIGS, "mechanism": MECHANISM_CONFIGS}[args.preset]
     configs = [c.strip() for c in args.configs.split(",") if c.strip()] if args.configs else list(preset)
     all_rows: list[dict] = []
     infos: dict[str, dict] = {}
