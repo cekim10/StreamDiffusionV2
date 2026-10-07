@@ -11,13 +11,14 @@ OUT_DIR="${OUT_DIR:-results/state_migration/mobility}"
 POLICIES="${POLICIES:-restart relay relay_pipe split direct}"
 TMS="${TMS:-2}"
 HOPS="${HOPS:-3}"
+INGRESS="${INGRESS:-u}"        # shared receive capacity per edge: k (k x link) or u (unlimited); space-separated list
 BW="${BW:-1000}"
 M="${M:-30}"; POST="${POST:-130}"; EXTRA="${EXTRA:-}"
 if [ -z "${SWEEP:-}" ]; then
   SWEEP=""
-  for pol in $POLICIES; do for tm in $TMS; do for h in $HOPS; do SWEEP="${SWEEP:+$SWEEP,}$pol:$tm:$h"; done; done; done
+  for ing in $INGRESS; do for pol in $POLICIES; do for tm in $TMS; do for h in $HOPS; do SWEEP="${SWEEP:+$SWEEP,}$pol:$tm:$h:$ing"; done; done; done; done
   # regime boundary: A->B->C with T_m beyond the sink time (rho < 1) for the three single-destination policies
-  for tm in ${BOUNDARY_TMS:-24 32}; do for pol in restart relay direct; do SWEEP="$SWEEP,$pol:$tm:2"; done; done
+  for tm in ${BOUNDARY_TMS:-}; do for pol in restart relay direct; do SWEEP="$SWEEP,$pol:$tm:2"; done; done
 fi
 echo "[mobility] sweep: $SWEEP @ $BW Mbps"
 mkdir -p "$OUT_DIR"

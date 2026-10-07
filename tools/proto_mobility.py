@@ -63,10 +63,13 @@ def unpack_sink_layer(header: dict, payload, device) -> dict:
 
 
 def parse_sweep(s: str):
+    """policy:T_m[:hops[:ingress]] ; ingress = k (shared receive capacity k x link) or 'u' (unlimited, default)."""
     out = []
     for item in s.split(","):
         parts = item.split(":")
-        out.append((parts[0], float(parts[1]), int(parts[2]) if len(parts) > 2 else 2))
+        hops = int(parts[2]) if len(parts) > 2 else 2
+        ing = None if len(parts) < 4 or parts[3] in ("u", "unlim", "") else float(parts[3])
+        out.append((parts[0], float(parts[1]), hops, ing))
     return out
 
 
@@ -123,7 +126,7 @@ def run_source(args):
             break
         policy, tm, hops, bw = hdr["policy"], float(hdr["t_m"]), int(hdr["hops"]), float(hdr["bw_mbps"])
         final_edge = EDGE_NAMES[hops]
-        print(f"[A] {policy} T_m={tm:g}s hops={hops} @ {bw:g} Mbps: running to M={M}", flush=True)
+        print(f"[A] {policy} T_m={tm:g}s hops={hops} ingress={hdr.get('ingress')} @ {bw:g} Mbps: running to M={M}", flush=True)
         session = runner.start()
         for c in range(M):
             runner.step(session, c)
@@ -226,19 +229,19 @@ def run_dest(args):
     sock = socket.create_connection((args.host, args.port))
     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     results = []
-    for policy, tm, hops in parse_sweep(args.sweep):
+    for policy, tm, hops, ingress in parse_sweep(args.sweep):
         bw = args.bw_mbps
         edges = [EDGE_NAMES[i] for i in range(1, hops + 1)]  # B, C, ...
         final_edge = edges[-1]
-        print(f"[dest] === {policy} T_m={tm:g}s hops={hops} ({'->'.join(['A'] + edges)}) @ {bw:g} Mbps ===", flush=True)
-        send_msg(sock, "PREP", {"policy": policy, "bw_mbps": bw, "t_m": tm, "hops": hops}, b"", None)
+        print(f"[dest] === {policy} T_m={tm:g}s hops={hops} ingress={ingress or 'unlimited'} ({'->'.join(['A'] + edges)}) @ {bw:g} Mbps ===", flush=True)
+        send_msg(sock, "PREP", {"policy": policy, "bw_mbps": bw, "t_m": tm, "hops": hops, "ingress": ingress}, b"", None)
         hdr, _ = recv_msg(sock); assert hdr["kind"] == "PREPARED"
         session = runner.fresh_destination()
         snap = sa.serialize_state(pl, pm, session)
         snap["have"] = set()
         torch.cuda.synchronize(device)
 
-        rec = {"policy": policy, "t_m": tm, "hops": hops, "bw_mbps": bw, "service_s": service_s, "edges": edges,
+        rec = {"policy": policy, "t_m": tm, "hops": hops, "ingress_mult": ingress, "bw_mbps": bw, "service_s": service_s, "edges": edges,
                "events": [], "calls": [], "bytes": {"fast": 0}, "ready": {}, "moves": []}
         seg: dict[int, dict] = {}  # segment -> tensors (content identical wherever it is held)
         state = {"end": None}
@@ -246,7 +249,7 @@ def run_dest(args):
         t_mig = time.time()
         # validated routing model (tools/test_sink_router.py); forwarders sleep the emulated link time per segment
         seg_estimate = len(pl.denoising_step_list) * sink * fsl * pl.num_heads * 128 * 2 * 2  # k+v, bf16, all rows
-        router = SinkRouter(policy, edges, L, seg_estimate, bw * 1e6)
+        router = SinkRouter(policy, edges, L, seg_estimate, bw * 1e6, ingress_mult=ingress)
         send_msg(sock, "READY", {}, b"", None)
         while True:
             hdr, payload = recv_msg(sock)
@@ -267,6 +270,9 @@ def run_dest(args):
                 if k == "END":
                     state["end"] = hdr; break
                 if k == "SINK":
+                    # shared ingress: pace the source's flow through the target edge's capacity before it counts
+                    # as delivered (the kernel buffer fills and TCP backpressure slows the sender accordingly)
+                    router.source_take(hdr["dest"], len(payload))
                     seg[hdr["layer"]] = unpack_sink_layer(hdr, payload, device)
                     router.seg_bytes = len(payload)
                     router.deliver(hdr["dest"], hdr["layer"], len(payload))
@@ -321,7 +327,7 @@ def run_dest(args):
                     "source_log": state["end"],
                     "lag_mean": float(np.mean([x["lag"] for x in rec["calls"]])), "lag_max": int(max(x["lag"] for x in rec["calls"]))})
         results.append(rec)
-        with open(out_dir / f"mob_{policy}_tm{tm:g}_h{hops}.json", "w") as fh:
+        with open(out_dir / f"mob_{policy}_tm{tm:g}_h{hops}_i{ingress or 'u'}.json", "w") as fh:
             json.dump(rec, fh, indent=1)
         print(f"[dest] {policy} T_m={tm:g} hops={hops}: ready {rec['ready']}, bytes {{{', '.join(f'{k2} {v / MB:.0f}' for k2, v in rec['bytes'].items())}}} MB, "
               f"wasted {rec['wasted_mb']:.0f} MB, lag mean {rec['lag_mean']:.2f} max {rec['lag_max']}", flush=True)
@@ -339,7 +345,7 @@ def parse_args():
     p.add_argument("--role", choices=["source", "dest"], required=True)
     p.add_argument("--host", type=str, default="127.0.0.1")
     p.add_argument("--port", type=int, default=29778)
-    p.add_argument("--sweep", type=str, default="restart:2:3,relay:2:3,relay_pipe:2:3,split:2:3,direct:2:3", help="policy:T_m[:hops],...")
+    p.add_argument("--sweep", type=str, default="restart:2:3,relay:2:3,relay_pipe:2:3,split:2:3,direct:2:3", help="policy:T_m[:hops[:ingress]],... (ingress k = k x link shared receive capacity, u = unlimited)")
     p.add_argument("--bw_mbps", type=float, default=1000.0)
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))
     p.add_argument("--checkpoint_folder", type=str, default=str(REPO_ROOT / "ckpts/wan_causal_dmd_v2v"))
