@@ -264,16 +264,20 @@ def run_dest(args):
         def add_bytes(link, n):
             rec["bytes"][link] = rec["bytes"].get(link, 0) + n
 
+        claimed = {}  # target edge -> set of segments some forwarder is already delivering there
+
         def forward_target(holder):
             """relay / relay_pipe: naive chain, forward to the edge execution moved to FROM this holder;
-            split: forward to wherever execution is now."""
+            split: only the edge execution just left forwards, to wherever execution is now."""
             hi = edges.index(holder)
+            if state["idx"] <= hi:
+                return None
             if policy == "split":
-                return state["node"] if state["idx"] > hi else None
-            return edges[hi + 1] if state["idx"] > hi else None
+                return state["node"] if hi == state["idx"] - 1 else None
+            return edges[hi + 1]
 
         def forwarder(holder):
-            """Edge `holder` forwards segments it holds over one emulated link at `bw` (runs until the run ends)."""
+            """Edge `holder` forwards (copies) segments it holds over one emulated link at `bw`; runs until the run ends."""
             while not state["stop"]:
                 tgt = forward_target(holder)
                 with lock:
@@ -282,13 +286,15 @@ def run_dest(args):
                     else:
                         complete = len(holders[holder]) == L
                         allowed = policy in ("relay_pipe", "split") or (policy == "relay" and complete)
-                        todo = sorted(holders[holder] - holders[tgt]) if allowed else []
+                        todo = sorted(holders[holder] - holders[tgt] - claimed.setdefault(tgt, set())) if allowed else []
+                    if todo:
+                        li = todo[0]; claimed[tgt].add(li)
                 if not todo:
                     time.sleep(0.01); continue
-                li = todo[0]
                 time.sleep(meta["layer_bytes"] * 8 / (bw * 1e6))  # emulated link time for one segment
                 with lock:
-                    holders[tgt].add(li); holders[holder].discard(li)  # the copy moves with the forward
+                    holders[tgt].add(li)  # a copy: the holder keeps its own
+                    claimed[tgt].discard(li)
                 add_bytes(f"{holder}->{tgt}", meta["layer_bytes"])
 
         def receiver():
@@ -363,7 +369,8 @@ def run_dest(args):
         if policy == "restart":
             wasted = sum(v for k2, v in rec["bytes"].items() if k2.startswith("A->") and k2[3:] in obsolete)  # delivered to edges that were then abandoned
         else:
-            wasted = sum(len(held[e]) for e in obsolete) * (meta["layer_bytes"] or 0)  # segments stranded on edges execution left
+            forwarded_from = {k2.split("->")[0] for k2 in rec["bytes"] if "->" in k2 and not k2.startswith("A->")}
+            wasted = sum(len(held[e]) for e in obsolete if e not in forwarded_from) * (meta["layer_bytes"] or 0)  # copies that never served anyone
         rec.update({"t_ready_final": rec["ready"].get(final_edge), "bound_call": bound, "held_at_end": {e: len(v) for e, v in held.items()},
                     "wasted_mb": wasted / MB, "total_mb": sum(rec["bytes"].values()) / MB, "source_log": state["end"],
                     "lag_mean": float(np.mean([x["lag"] for x in rec["calls"]])), "lag_max": int(max(x["lag"] for x in rec["calls"]))})
