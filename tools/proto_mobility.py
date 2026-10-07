@@ -61,7 +61,7 @@ def run_source(args):
 
     sa, runner, pm, pl, device = build_runtime(args)
     sink, fsl = pl.num_sink_tokens, pl.frame_seq_length
-    L = len(pl.kv_cache1)
+    L = int(pl.num_transformer_blocks)  # kv_cache1 is allocated lazily by prepare()
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind((args.host, args.port)); srv.listen(1)
@@ -178,7 +178,7 @@ def run_dest(args):
 
     sa, runner, pm, pl, device = build_runtime(args)
     sink, fsl = pl.num_sink_tokens, pl.frame_seq_length
-    L = len(pl.kv_cache1)
+    L = int(pl.num_transformer_blocks)  # kv_cache1 is allocated lazily by prepare()
     M, N = args.migration_chunk, args.post_chunks
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     cfg_thr = float(getattr(pm.config, "adapt_sink_threshold", -1))
