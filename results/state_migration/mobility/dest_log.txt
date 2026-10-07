@@ -1,29 +1,31 @@
-2026-10-07 10:55:13,452 - SingleGPUInference - INFO - Single GPU inference pipeline manager initialized
-2026-10-07 10:55:16,864 - SingleGPUInference - INFO - Loading checkpoint from /home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v/model.pt
+2026-10-07 12:28:02,958 - SingleGPUInference - INFO - Single GPU inference pipeline manager initialized
+2026-10-07 12:28:06,036 - SingleGPUInference - INFO - Loading checkpoint from /home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v/model.pt
 /home/ckim151/StreamDiffusionV2/.venv/lib/python3.10/site-packages/torchvision/io/video.py:197: UserWarning: The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.
   warnings.warn("The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.")
 [dest] baseline run
-[dest] baseline done; S = 547 ms
-[dest] === restart T_m=2s hops=3 (A->B->C->D) @ 1000 Mbps ===
-[dest] restart T_m=2 hops=3: ready {'D': 23.793533086776733}, bytes {fast 8, A->B 384, A->C 165, A->D 1645} MB, wasted 548 MB, lag mean 0.76 max 3
-[dest] === relay T_m=2s hops=3 (A->B->C->D) @ 1000 Mbps ===
-[dest] relay T_m=2 hops=3: ready {'D': 45.864147663116455}, bytes {fast 8, A->B 1645, B->C 1645, C->D 1645} MB, wasted 0 MB, lag mean 1.73 max 3
-[dest] === relay_pipe T_m=2s hops=3 (A->B->C->D) @ 1000 Mbps ===
-[dest] relay_pipe T_m=2 hops=3: ready {'D': 19.325206995010376}, bytes {fast 8, A->B 1645, B->C 1645, C->D 1645} MB, wasted 0 MB, lag mean 0.60 max 3
-[dest] === split T_m=2s hops=3 (A->B->C->D) @ 1000 Mbps ===
-[dest] split T_m=2 hops=3: ready {'D': 17.734166145324707}, bytes {fast 8, A->B 384, B->C 219, A->C 165, C->D 274, B->D 274, A->D 1097} MB, wasted 0 MB, lag mean 0.53 max 3
-[dest] === direct T_m=2s hops=3 (A->B->C->D) @ 1000 Mbps ===
-[dest] direct T_m=2 hops=3: ready {'D': 17.666760683059692}, bytes {fast 8, A->D 1645} MB, wasted 0 MB, lag mean 0.53 max 3
-[dest] === restart T_m=24s hops=2 (A->B->C) @ 1000 Mbps ===
-[dest] restart T_m=24 hops=2: ready {'B': 18.1796772480011, 'C': 43.21948313713074}, bytes {fast 5, A->B 1645, A->C 1645} MB, wasted 1645 MB, lag mean 0.46 max 1
-[dest] === relay T_m=24s hops=2 (A->B->C) @ 1000 Mbps ===
-[dest] relay T_m=24 hops=2: ready {'B': 18.170773029327393, 'C': 39.169203996658325}, bytes {fast 5, A->B 1645, B->C 1645} MB, wasted 0 MB, lag mean 0.43 max 1
-[dest] === direct T_m=24s hops=2 (A->B->C) @ 1000 Mbps ===
-[dest] direct T_m=24 hops=2: ready {'C': 24.908787727355957}, bytes {fast 5, A->C 1645} MB, wasted 0 MB, lag mean 0.32 max 1
-[dest] === restart T_m=32s hops=2 (A->B->C) @ 1000 Mbps ===
-[dest] restart T_m=32 hops=2: ready {'B': 18.161742687225342, 'C': 51.414759397506714}, bytes {fast 5, A->B 1645, A->C 1645} MB, wasted 1645 MB, lag mean 0.46 max 1
-[dest] === relay T_m=32s hops=2 (A->B->C) @ 1000 Mbps ===
-[dest] relay T_m=32 hops=2: ready {'B': 18.176708459854126, 'C': 46.89905786514282}, bytes {fast 5, A->B 1645, B->C 1645} MB, wasted 0 MB, lag mean 0.43 max 1
-[dest] === direct T_m=32s hops=2 (A->B->C) @ 1000 Mbps ===
-[dest] direct T_m=32 hops=2: ready {'C': 33.03457450866699}, bytes {fast 5, A->C 1645} MB, wasted 0 MB, lag mean 0.43 max 1
+[dest] baseline done; S = 548 ms
+[dest] === split T_m=2s hops=3 ingress=1.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] split T_m=2 hops=3: ready {'D': 33.3142671585083}, bytes {fast 8, A->B 219, B->C 219, A->C 110, C->D 219, B->D 110, A->D 1316} MB, wasted 0 MB, lag mean 1.19 max 3
+[dest] === restart T_m=2s hops=3 ingress=1.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] restart T_m=2 hops=3: ready {'D': 40.18381905555725}, bytes {fast 8, A->B 219, A->C 110, A->D 1645} MB, wasted 329 MB, lag mean 1.47 max 3
+[dest] === relay_pipe T_m=2s hops=3 ingress=1.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] relay_pipe T_m=2 hops=3: ready {'D': 34.38820743560791}, bytes {fast 8, A->B 1645, B->C 1645, C->D 1645} MB, wasted 0 MB, lag mean 1.24 max 3
+[dest] === direct T_m=2s hops=3 ingress=1.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] direct T_m=2 hops=3: ready {'D': 32.8295476436615}, bytes {fast 8, A->D 1645} MB, wasted 0 MB, lag mean 1.17 max 3
+[dest] === split T_m=2s hops=3 ingress=2.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] split T_m=2 hops=3: ready {'D': 33.31974267959595}, bytes {fast 8, A->B 219, B->C 219, A->C 110, B->D 110, C->D 219, A->D 1316} MB, wasted 0 MB, lag mean 1.19 max 3
+[dest] === restart T_m=2s hops=3 ingress=2.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] restart T_m=2 hops=3: ready {'D': 40.18280243873596}, bytes {fast 8, A->B 219, A->C 110, A->D 1645} MB, wasted 329 MB, lag mean 1.47 max 3
+[dest] === relay_pipe T_m=2s hops=3 ingress=2.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] relay_pipe T_m=2 hops=3: ready {'D': 34.25986576080322}, bytes {fast 8, A->B 1645, B->C 1645, C->D 1645} MB, wasted 0 MB, lag mean 1.24 max 3
+[dest] === direct T_m=2s hops=3 ingress=2.0 (A->B->C->D) @ 1000 Mbps ===
+[dest] direct T_m=2 hops=3: ready {'D': 33.14402627944946}, bytes {fast 8, A->D 1645} MB, wasted 0 MB, lag mean 1.19 max 3
+[dest] === split T_m=2s hops=3 ingress=unlimited (A->B->C->D) @ 1000 Mbps ===
+[dest] split T_m=2 hops=3: ready {'D': 33.16105341911316}, bytes {fast 8, A->B 219, B->C 219, A->C 110, C->D 219, B->D 110, A->D 1316} MB, wasted 0 MB, lag mean 1.19 max 3
+[dest] === restart T_m=2s hops=3 ingress=unlimited (A->B->C->D) @ 1000 Mbps ===
+[dest] restart T_m=2 hops=3: ready {'D': 40.049580812454224}, bytes {fast 8, A->B 219, A->C 110, A->D 1645} MB, wasted 329 MB, lag mean 1.47 max 3
+[dest] === relay_pipe T_m=2s hops=3 ingress=unlimited (A->B->C->D) @ 1000 Mbps ===
+[dest] relay_pipe T_m=2 hops=3: ready {'D': 34.21874737739563}, bytes {fast 8, A->B 1645, B->C 1645, C->D 1645} MB, wasted 0 MB, lag mean 1.24 max 3
+[dest] === direct T_m=2s hops=3 ingress=unlimited (A->B->C->D) @ 1000 Mbps ===
+[dest] direct T_m=2 hops=3: ready {'D': 33.13424468040466}, bytes {fast 8, A->D 1645} MB, wasted 0 MB, lag mean 1.19 max 3
 [dest] done -> results/state_migration/mobility
