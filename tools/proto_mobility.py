@@ -268,11 +268,11 @@ def run_dest(args):
                 hdr, payload = recv_msg(sock)
                 k = hdr["kind"]
                 if k == "END":
-                    state["end"] = hdr; break
+                    router.source_done(); state["end"] = hdr; break
                 if k == "SINK":
                     # shared ingress: pace the source's flow through the target edge's capacity before it counts
                     # as delivered (the kernel buffer fills and TCP backpressure slows the sender accordingly)
-                    router.source_take(hdr["dest"], len(payload))
+                    router.source_take(hdr["dest"], len(payload), already_paced=True)
                     seg[hdr["layer"]] = unpack_sink_layer(hdr, payload, device)
                     router.seg_bytes = len(payload)
                     router.deliver(hdr["dest"], hdr["layer"], len(payload))

@@ -25,28 +25,38 @@ POLICIES = ("restart", "relay", "relay_pipe", "split", "direct")
 
 class Ingress:
     """Shared receive capacity of one edge: concurrent incoming flows get processor-sharing of `cap_bps`,
-    each also bounded by its own link rate. cap_bps=None means every link is independent (unlimited ingress)."""
+    each also bounded by its own link rate. cap_bps=None means every link is independent (unlimited ingress).
+    A flow that is already paced by its sender's link (the real TCP stream from the source) only pays the
+    EXTRA delay caused by sharing; emulated flows pay the full link time."""
 
     def __init__(self, cap_bps, link_bps: float, sleep):
         self.cap, self.link, self.sleep = cap_bps, link_bps, sleep
         self.lock = threading.Lock()
         self.active: set = set()
 
-    def take(self, flow: str, nbytes: int, chunk: int = 16 << 20):
-        remaining = nbytes
+    def set_active(self, flow: str, on: bool):
         with self.lock:
-            self.active.add(flow)
+            (self.active.add if on else self.active.discard)(flow)
+
+    def rate(self) -> float:
+        with self.lock:
+            share = max(1, len(self.active))
+        return self.link if self.cap is None else min(self.link, self.cap / share)
+
+    def take(self, flow: str, nbytes: int, already_paced: bool = False, chunk: int = 16 << 20):
+        remaining = nbytes
+        self.set_active(flow, True)
         try:
             while remaining > 0:
                 n = min(chunk, remaining)
-                with self.lock:
-                    share = len(self.active)
-                rate = self.link if self.cap is None else min(self.link, self.cap / max(1, share))
-                self.sleep(n * 8 / rate)
+                r = self.rate()
+                t = n * 8 / r - (n * 8 / self.link if already_paced else 0.0)
+                if t > 0:
+                    self.sleep(t)
                 remaining -= n
         finally:
-            with self.lock:
-                self.active.discard(flow)
+            if not already_paced:
+                self.set_active(flow, False)  # a sender-paced flow stays active until the caller says otherwise
 
 
 class SinkRouter:
@@ -85,10 +95,19 @@ class SinkRouter:
                 self.holders[old] = set()
             return old, self.node
 
-    def source_take(self, dest: str, nbytes: int):
-        """Pace the source's flow into `dest` through that edge's shared ingress (sleeps)."""
+    def source_take(self, dest: str, nbytes: int, already_paced: bool = False):
+        """Pace the source's flow into `dest` through that edge's shared ingress (sleeps). With
+        already_paced=True only the sharing penalty is applied and the flow stays marked active at `dest`
+        until source_done()/source_switch() is called."""
+        for e, ing in self.ingress.items():
+            if e != dest:
+                ing.set_active("A->" + e, False)
         if dest in self.ingress:
-            self.ingress[dest].take("A->" + dest, nbytes)
+            self.ingress[dest].take("A->" + dest, nbytes, already_paced=already_paced)
+
+    def source_done(self):
+        for e, ing in self.ingress.items():
+            ing.set_active("A->" + e, False)
 
     def deliver(self, dest: str, seg: int, nbytes: int):
         """A segment arrived from the source at `dest`."""
