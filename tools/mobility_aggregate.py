@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Summarize A->B->C mobility runs: continuity-ready time at C, wasted and total traffic, continuity windows."""
+"""Summarize repeated-mobility runs: continuity-ready time at the final edge, wasted and total traffic,
+execution-state lag, continuity windows."""
 
 from __future__ import annotations
 
@@ -16,7 +17,9 @@ def mean(xs):
 
 
 def f(v, nd=1):
-    return "-" if v is None or (isinstance(v, float) and v != v) else (f"{v:.{nd}f}" if isinstance(v, float) else str(v))
+    if v is None or (isinstance(v, float) and v != v):
+        return "-"
+    return f"{v:.{nd}f}" if isinstance(v, float) else str(v)
 
 
 def main():
@@ -27,28 +30,30 @@ def main():
     res = json.load(open(path))
     S = res[0]["service_s"]
     bw = res[0]["bw_mbps"]
-    sink_mb = max(max(r["bytes"]["AB"], r["bytes"]["AC"]) for r in res) / (1024 * 1024)
-    t_s = sink_mb * 1024 * 1024 * 8 / (bw * 1e6)
-    L = [f"# A -> B -> C mobility: sink policy x mobility interval ({bw:g} Mbps, sink {sink_mb:.0f} MB, link time T_s = {t_s:.1f} s, S = {S * 1e3:.0f} ms/chunk)\n",
-         "Times in seconds after the A->B handoff. ready_C = true sink bound at C (continuity restored at the final edge); "
-         "ready_after_move = ready_C minus the B->C move time. wasted = sink bytes delivered to an edge that execution had already left (restart). "
-         "PSNR vs the uninterrupted baseline: B phase (before the move), C gap (move -> bind), C after bind+8, last 8 calls.\n",
-         "| policy | T_m (s) | rho = T_s/T_m | moved at | ready_B | ready_C | ready_after_move | A->B MB | A->C MB | B->C MB | wasted MB | total MB | PSNR B phase | PSNR C gap | PSNR C bind+8.. | PSNR last 8 |",
-         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for r in sorted(res, key=lambda r: (r["t_m"], r["policy"])):
+    sink_mb = max(sum(v for k, v in r["bytes"].items() if k.startswith("A->")) for r in res) / 2**20
+    t_s = sink_mb * 2**20 * 8 / (bw * 1e6)
+    L = [f"# Repeated mobility: sink routing policy x mobility interval x hops ({bw:g} Mbps per link, sink <= {sink_mb:.0f} MB, link time T_s = {t_s:.1f} s, S = {S * 1e3:.0f} ms/chunk)\n",
+         "Times in seconds after the A->B handoff. moves = when execution left each edge. ready = when the true sink bound at each edge. "
+         "ready_final_after_last_move = readiness at the final edge minus the last move time. "
+         "wasted = segments stranded on edges execution had already left. total = all link traffic (A->edge real, edge->edge emulated at the same per-link bandwidth; "
+         "split gives the new edge two independent ingress links). lag = hops between the execution edge and the last edge with a bound sink, averaged over calls.\n",
+         "| policy | hops | T_m | rho | moves at | ready | ready_final | after last move | traffic by link (MB) | wasted MB | total MB | lag mean / max | PSNR before final bind | PSNR final bind+8.. | PSNR last 8 |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in sorted(res, key=lambda r: (r["hops"], r["t_m"], r["policy"])):
         calls = r["calls"]
-        tm, tmv = r["t_m"], r["t_move"]
-        rc = r["t_ready_C"]
-        bC = r["bound_call"].get("C") if isinstance(r["bound_call"], dict) else None
-        mv_call = next((e["call"] for e in r["events"] if e.get("moved") == "C"), None)
-        pB = mean([x["psnr"] for x in calls if x["node"] == "B"])
-        pgap = mean([x["psnr"] for x in calls if x["node"] == "C" and (bC is None or x["call"] < bC)])
-        pafter = mean([x["psnr"] for x in calls if bC is not None and x["call"] >= bC + 8])
-        plast = mean([x["psnr"] for x in calls[-8:]])
-        b = r["bytes"]
-        L.append(f"| {r['policy']} | {tm:g} | {t_s / tm:.1f} | {f(tmv)} | {f(r['t_ready_B'])} | {f(rc)} | {f((rc - tmv) if (rc is not None and tmv is not None) else None)} | "
-                 f"{b['AB'] / 2**20:.0f} | {b['AC'] / 2**20:.0f} | {b['BC'] / 2**20:.0f} | {r['wasted_mb']:.0f} | {r['total_mb']:.0f} | {f(pB)} | {f(pgap)} | {f(pafter)} | {f(plast)} |")
-    L.append("\nReading guide: rho < 1 means the sink can reach B before execution leaves; rho > 1 means execution outruns its continuity state and the single-destination policies diverge: restart wastes what reached B, relay delays C by a second hop, direct (oracle) needs to know C in advance.")
+        final = r["edges"][-1]
+        bF = r["bound_call"].get(final)
+        moves = ", ".join(f"{m['from']}->{m['to']} {m['t']:.1f}" for m in r["moves"])
+        ready = ", ".join(f"{e} {t:.1f}" for e, t in r["ready"].items()) or "-"
+        last_move = r["moves"][-1]["t"] if r["moves"] else 0.0
+        rf = r.get("t_ready_final")
+        pre = mean([x["psnr"] for x in calls if bF is None or x["call"] < bF])
+        post = mean([x["psnr"] for x in calls if bF is not None and x["call"] >= bF + 8])
+        last = mean([x["psnr"] for x in calls[-8:]])
+        links = ", ".join(f"{k} {v / 2**20:.0f}" for k, v in r["bytes"].items() if k != "fast")
+        L.append(f"| {r['policy']} | {r['hops']} | {r['t_m']:g} | {t_s / r['t_m']:.1f} | {moves} | {ready} | {f(rf)} | {f((rf - last_move) if rf is not None else None)} | {links} | "
+                 f"{r['wasted_mb']:.0f} | {r['total_mb']:.0f} | {r['lag_mean']:.2f} / {r['lag_max']} | {f(pre)} | {f(post)} | {f(last)} |")
+    L.append("\nReading guide: rho = T_s / T_m. rho < 1: the sink reaches an edge before execution leaves it and the policies should converge. rho > 1: restart wastes what reached obsolete edges and resets the clock at each move; relay accumulates one link time per hop; split keeps delivered segments moving and uses the direct link for the remainder; direct is the oracle.")
     out = path.with_name("mobility_summary.md")
     out.write_text("\n".join(L) + "\n")
     print("\n".join(L)); print(f"\n-> {out}")
