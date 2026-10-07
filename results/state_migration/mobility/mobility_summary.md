@@ -1,23 +1,19 @@
-# A -> B -> C mobility: sink policy x mobility interval (1000 Mbps, sink 1645 MB, link time T_s = 13.8 s, S = 547 ms/chunk)
+# Repeated mobility: sink routing policy x mobility interval x hops (1000 Mbps per link, sink <= 3291 MB, link time T_s = 27.6 s, S = 545 ms/chunk)
 
-Times in seconds after the A->B handoff. ready_C = true sink bound at C (continuity restored at the final edge); ready_after_move = ready_C minus the B->C move time. wasted = sink bytes delivered to an edge that execution had already left (restart). PSNR vs the uninterrupted baseline: B phase (before the move), C gap (move -> bind), C after bind+8, last 8 calls.
+Times in seconds after the A->B handoff. moves = when execution left each edge. ready = when the true sink bound at each edge. ready_final_after_last_move = readiness at the final edge minus the last move time. wasted = segments stranded on edges execution had already left. total = all link traffic (A->edge real, edge->edge emulated at the same per-link bandwidth; split gives the new edge two independent ingress links). lag = hops between the execution edge and the last edge with a bound sink, averaged over calls.
 
-| policy | T_m (s) | rho = T_s/T_m | moved at | ready_B | ready_C | ready_after_move | A->B MB | A->C MB | B->C MB | wasted MB | total MB | PSNR B phase | PSNR C gap | PSNR C bind+8.. | PSNR last 8 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| direct | 1 | 13.8 | 2.3 | - | 18.2 | 15.9 | 0 | 1645 | 0 | 0 | 1650 | 16.3 | 16.5 | 43.7 | 44.6 |
-| relay | 1 | 13.8 | 2.2 | - | 32.0 | 29.8 | 1645 | 0 | 1645 | 0 | 3296 | 16.3 | 16.7 | 39.9 | 40.4 |
-| restart | 1 | 13.8 | 2.3 | - | 21.0 | 18.8 | 274 | 1645 | 0 | 274 | 1925 | 16.3 | 16.6 | 42.7 | 43.7 |
-| direct | 2 | 6.9 | 3.5 | - | 18.0 | 14.5 | 0 | 1645 | 0 | 0 | 1650 | 16.1 | 16.7 | 43.7 | 44.5 |
-| relay | 2 | 6.9 | 3.5 | - | 32.1 | 28.6 | 1645 | 0 | 1645 | 0 | 3296 | 16.1 | 16.7 | 40.0 | 40.4 |
-| restart | 2 | 6.9 | 3.5 | - | 22.3 | 18.8 | 384 | 1645 | 0 | 384 | 2034 | 16.1 | 16.7 | 41.2 | 41.4 |
-| direct | 4 | 3.5 | 5.3 | - | 18.0 | 12.7 | 0 | 1645 | 0 | 0 | 1650 | 16.4 | 16.6 | 43.7 | 44.5 |
-| relay | 4 | 3.5 | 5.2 | - | 32.0 | 26.7 | 1645 | 0 | 1645 | 0 | 3296 | 16.4 | 16.7 | 39.9 | 40.4 |
-| restart | 4 | 3.5 | 5.3 | - | 24.1 | 18.8 | 548 | 1645 | 0 | 548 | 2199 | 16.4 | 16.7 | 42.7 | 43.7 |
-| direct | 8 | 1.7 | 9.5 | - | 18.1 | 8.5 | 0 | 1645 | 0 | 0 | 1650 | 16.6 | 16.5 | 43.7 | 44.7 |
-| relay | 8 | 1.7 | 9.5 | - | 32.0 | 22.5 | 1645 | 0 | 1645 | 0 | 3296 | 16.6 | 16.7 | 39.9 | 40.4 |
-| restart | 8 | 1.7 | 9.5 | - | 28.3 | 18.8 | 932 | 1645 | 0 | 932 | 2583 | 16.6 | 16.6 | 42.9 | 43.7 |
-| direct | 16 | 0.9 | 17.5 | - | 18.1 | 0.6 | 0 | 1645 | 0 | 0 | 1650 | 16.7 | 14.7 | 41.2 | 42.2 |
-| relay | 16 | 0.9 | 17.4 | - | 32.0 | 14.6 | 1645 | 0 | 1645 | 0 | 3296 | 16.7 | 16.7 | 39.9 | 40.4 |
-| restart | 16 | 0.9 | 17.4 | - | 36.1 | 18.7 | 1645 | 1645 | 0 | 1645 | 3296 | 16.7 | 16.7 | 39.9 | 40.4 |
+| policy | hops | T_m | rho | moves at | ready | ready_final | after last move | traffic by link (MB) | wasted MB | total MB | lag mean / max | PSNR before final bind | PSNR final bind+8.. | PSNR last 8 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| direct | 2 | 24 | 1.2 | B->C 24.8 | C 24.8 | 24.8 | 0.0 | A->C 1645 | 0 | 1650 | 0.32 / 1 | 16.7 | 42.5 | 42.2 |
+| relay | 2 | 24 | 1.2 | B->C 25.0 | B 18.1 | - | - | A->B 1645 | 1645 | 1650 | 0.92 / 1 | 18.1 | - | 16.8 |
+| restart | 2 | 24 | 1.2 | B->C 25.0 | B 18.1, C 43.1 | 43.1 | 18.1 | A->B 1645, A->C 1645 | 1645 | 3296 | 0.46 / 1 | 19.2 | 40.6 | 40.8 |
+| direct | 2 | 32 | 0.9 | B->C 33.0 | C 33.0 | 33.0 | 0.0 | A->C 1645 | 0 | 1650 | 0.43 / 1 | 16.7 | 40.1 | 41.1 |
+| relay | 2 | 32 | 0.9 | B->C 33.3 | B 18.1 | - | - | A->B 1645 | 1645 | 1650 | 0.80 / 1 | 21.2 | - | 16.8 |
+| restart | 2 | 32 | 0.9 | B->C 32.8 | B 18.2, C 50.9 | 50.9 | 18.1 | A->B 1645, A->C 1645 | 1645 | 3296 | 0.46 / 1 | 23.2 | 39.6 | 39.4 |
+| direct | 3 | 2 | 13.8 | B->C 3.5, C->D 5.1 | D 17.8 | 17.8 | 12.7 | A->D 1645 | 0 | 1653 | 0.53 / 3 | 16.5 | 43.9 | 43.3 |
+| relay | 3 | 2 | 13.8 | B->C 3.5, C->D 5.1 | - | - | - | A->B 1645 | 1645 | 1653 | 2.93 / 3 | 16.7 | - | 16.8 |
+| relay_pipe | 3 | 2 | 13.8 | B->C 3.5, C->D 5.1 | - | - | - | A->B 1645, B->C 1590, C->D 1536 | 110 | 4779 | 2.93 / 3 | 16.7 | - | 16.8 |
+| restart | 3 | 2 | 13.8 | B->C 3.5, C->D 5.0 | D 23.7 | 23.7 | 18.7 | A->B 384, A->C 165, A->D 1645 | 548 | 2201 | 0.76 / 3 | 16.6 | 41.3 | 40.2 |
+| split | 3 | 2 | 13.8 | B->C 3.5, C->D 5.1 | D 17.7 | 17.7 | 12.7 | A->B 384, B->C 219, A->C 165, C->D 384, B->D 165, A->D 1097 | 0 | 2421 | 0.53 / 3 | 16.5 | 43.9 | 43.3 |
 
-Reading guide: rho < 1 means the sink can reach B before execution leaves; rho > 1 means execution outruns its continuity state and the single-destination policies diverge: restart wastes what reached B, relay delays C by a second hop, direct (oracle) needs to know C in advance.
+Reading guide: rho = T_s / T_m. rho < 1: the sink reaches an edge before execution leaves it and the policies should converge. rho > 1: restart wastes what reached obsolete edges and resets the clock at each move; relay accumulates one link time per hop; split keeps delivered segments moving and uses the direct link for the remainder; direct is the oracle.
