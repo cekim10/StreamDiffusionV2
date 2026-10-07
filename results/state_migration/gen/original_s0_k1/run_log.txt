@@ -1,0 +1,64 @@
+2026-10-06 18:20:36,095 - SingleGPUInference - INFO - Single GPU inference pipeline manager initialized
+2026-10-06 18:20:39,151 - SingleGPUInference - INFO - Loading checkpoint from /home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v/model.pt
+/home/ckim151/StreamDiffusionV2/.venv/lib/python3.10/site-packages/torchvision/io/video.py:197: UserWarning: The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.
+  warnings.warn("The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.")
+[ablation] baseline: 70 calls, M=30, k=1
+[ablation] adaptive sink refresh fired at calls [4, 48]; last before M: 4
+[ablation] baseline done in 35 s; 70 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4576043102890253
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 99.0
+  repeat: call 31 (M+1) psnr 99.0
+  repeat: call 34 (M+4) psnr 99.0
+  repeat: call 46 (M+16) psnr 99.0
+[ablation] config xfer_sink+meta+inflight
+  xfer_sink+meta+inflight: call 30 (M+0) psnr 16.8
+  xfer_sink+meta+inflight: call 31 (M+1) psnr 20.5
+  xfer_sink+meta+inflight: call 34 (M+4) psnr 29.9
+  xfer_sink+meta+inflight: call 46 (M+16) psnr 49.1
+[ablation] config xfer_sink+meta
+  xfer_sink+meta: call 30 (M+0) psnr 16.8
+  xfer_sink+meta: call 31 (M+1) psnr 20.5
+  xfer_sink+meta: call 34 (M+4) psnr 29.9
+  xfer_sink+meta: call 46 (M+16) psnr 49.1
+[ablation] config xfer_meta+inflight
+  xfer_meta+inflight: call 30 (M+0) psnr 14.7
+  xfer_meta+inflight: call 31 (M+1) psnr 17.6
+  xfer_meta+inflight: call 34 (M+4) psnr 19.9
+  xfer_meta+inflight: call 46 (M+16) psnr 21.7
+[ablation] skip drop_inflight: k=1 has no in-flight rows
+[ablation] config drop_kv_recent
+  drop_kv_recent: call 30 (M+0) psnr 21.4
+  drop_kv_recent: call 31 (M+1) psnr 22.5
+  drop_kv_recent: call 34 (M+4) psnr 32.1
+  drop_kv_recent: call 46 (M+16) psnr 50.3
+[ablation] config drop_vae_all
+  drop_vae_all: call 30 (M+0) psnr 18.4
+  drop_vae_all: call 31 (M+1) psnr 23.3
+  drop_vae_all: call 34 (M+4) psnr 34.0
+  drop_vae_all: call 46 (M+16) psnr 49.0
+[ablation] config ph_zero_8
+  ph_zero_8: call 30 (M+0) psnr 27.5
+  ph_zero_8: call 31 (M+1) psnr 24.3
+  ph_zero_8: call 34 (M+4) psnr 19.1
+  ph_zero_8: call 46 (M+16) psnr 47.2
+[ablation] config ph_local_8
+  ph_local_8: call 30 (M+0) psnr 28.4
+  ph_local_8: call 31 (M+1) psnr 25.1
+  ph_local_8: call 34 (M+4) psnr 25.3
+  ph_local_8: call 46 (M+16) psnr 48.5
+[ablation] config ph_localrefresh
+  ph_localrefresh: call 30 (M+0) psnr 28.3
+  ph_localrefresh: call 31 (M+1) psnr 25.2
+  ph_localrefresh: call 34 (M+4) psnr 25.0
+  ph_localrefresh: call 46 (M+16) psnr 22.5
+[ablation] done -> results/state_migration/gen/original_s0_k1/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -30
+  xfer_sink+meta+inflight withheld    5426 MB  PSNR M+0..3  21.9  M+16..  49.0  recovery -30
+  xfer_sink+meta         withheld    5426 MB  PSNR M+0..3  21.9  M+16..  49.0  recovery -30
+  xfer_meta+inflight     withheld    6249 MB  PSNR M+0..3  17.6  M+16..  21.3  recovery -30
+  drop_kv_recent         withheld     823 MB  PSNR M+0..3  24.6  M+16..  50.2  recovery -30
+  drop_vae_all           withheld    2871 MB  PSNR M+0..3  24.2  M+16..  49.0  recovery -30
+  ph_zero_8              withheld     823 MB  PSNR M+0..3  23.4  M+16..  46.6  recovery -30
+  ph_local_8             withheld     823 MB  PSNR M+0..3  25.7  M+16..  46.7  recovery -30
+  ph_localrefresh        withheld     823 MB  PSNR M+0..3  25.8  M+16..  23.6  recovery -30

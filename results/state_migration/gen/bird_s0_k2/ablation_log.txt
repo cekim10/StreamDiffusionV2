@@ -1,0 +1,65 @@
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 20, 48]; last before M: 20
+[ablation] baseline done in 39 s; 69 calls with output
+[ablation] baseline SSIM vs input (M on): 0.7164226230233908
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 99.0
+  repeat: call 31 (M+1) psnr 99.0
+  repeat: call 34 (M+4) psnr 99.0
+  repeat: call 46 (M+16) psnr 99.0
+[ablation] config xfer_sink+meta+inflight
+  xfer_sink+meta+inflight: call 30 (M+0) psnr 15.5
+  xfer_sink+meta+inflight: call 31 (M+1) psnr 19.2
+  xfer_sink+meta+inflight: call 34 (M+4) psnr 23.3
+  xfer_sink+meta+inflight: call 46 (M+16) psnr 27.7
+[ablation] config xfer_sink+meta
+  xfer_sink+meta: call 30 (M+0) psnr 13.7
+  xfer_sink+meta: call 31 (M+1) psnr 19.0
+  xfer_sink+meta: call 34 (M+4) psnr 22.7
+  xfer_sink+meta: call 46 (M+16) psnr 25.4
+[ablation] config xfer_meta+inflight
+  xfer_meta+inflight: call 30 (M+0) psnr 14.6
+  xfer_meta+inflight: call 31 (M+1) psnr 15.0
+  xfer_meta+inflight: call 34 (M+4) psnr 18.6
+  xfer_meta+inflight: call 46 (M+16) psnr 17.9
+[ablation] config drop_inflight
+  drop_inflight: call 30 (M+0) psnr 14.6
+  drop_inflight: call 31 (M+1) psnr 21.1
+  drop_inflight: call 34 (M+4) psnr 27.5
+  drop_inflight: call 46 (M+16) psnr 33.5
+[ablation] config drop_kv_recent
+  drop_kv_recent: call 30 (M+0) psnr 21.0
+  drop_kv_recent: call 31 (M+1) psnr 20.5
+  drop_kv_recent: call 34 (M+4) psnr 23.8
+  drop_kv_recent: call 46 (M+16) psnr 42.6
+[ablation] config drop_vae_all
+  drop_vae_all: call 30 (M+0) psnr 16.0
+  drop_vae_all: call 31 (M+1) psnr 21.4
+  drop_vae_all: call 34 (M+4) psnr 27.9
+  drop_vae_all: call 46 (M+16) psnr 36.4
+[ablation] config ph_zero_8
+  ph_zero_8: call 30 (M+0) psnr 24.4
+  ph_zero_8: call 31 (M+1) psnr 19.7
+  ph_zero_8: call 34 (M+4) psnr 18.9
+  ph_zero_8: call 46 (M+16) psnr 29.2
+[ablation] config ph_local_8
+  ph_local_8: call 30 (M+0) psnr 25.2
+  ph_local_8: call 31 (M+1) psnr 20.7
+  ph_local_8: call 34 (M+4) psnr 20.3
+  ph_local_8: call 46 (M+16) psnr 31.3
+[ablation] config ph_localrefresh
+  ph_localrefresh: call 30 (M+0) psnr 25.2
+  ph_localrefresh: call 31 (M+1) psnr 21.1
+  ph_localrefresh: call 34 (M+4) psnr 20.1
+  ph_localrefresh: call 46 (M+16) psnr 17.9
+[ablation] done -> results/state_migration/gen/bird_s0_k2/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  xfer_sink+meta+inflight withheld    7894 MB  PSNR M+0..3  19.1  M+16..  30.4  recovery -29
+  xfer_sink+meta         withheld    7894 MB  PSNR M+0..3  18.6  M+16..  27.3  recovery -29
+  xfer_meta+inflight     withheld    9539 MB  PSNR M+0..3  16.1  M+16..  18.1  recovery -29
+  drop_inflight          withheld       0 MB  PSNR M+0..3  21.5  M+16..  32.3  recovery -29
+  drop_kv_recent         withheld    1645 MB  PSNR M+0..3  21.5  M+16..  43.7  recovery -29
+  drop_vae_all           withheld    2871 MB  PSNR M+0..3  21.5  M+16..  38.7  recovery -29
+  ph_zero_8              withheld    1645 MB  PSNR M+0..3  20.5  M+16..  33.8  recovery -29
+  ph_local_8             withheld    1645 MB  PSNR M+0..3  21.4  M+16..  33.9  recovery -29
+  ph_localrefresh        withheld    1645 MB  PSNR M+0..3  21.6  M+16..  18.3  recovery -29
