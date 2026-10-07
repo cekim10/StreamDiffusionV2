@@ -45,7 +45,7 @@ def main():
         n = len(calls)
         L.append(f"| {r['policy']} | {r['bw_mbps']:g} | {r['bytes_fg_mb']:.1f} | {r['bytes_bg_mb']:.0f} | {tf if tf is not None else float('nan'):.2f} | {stall:.2f} | {missed} | "
                  f"{r['t_sink_arrived'] if r['t_sink_arrived'] is not None else float('nan'):.2f} | {bc} | {p(0, 7):.1f} | {gap:.1f} | {after:.1f} | {p(16, 10**6):.1f} | {p(n - 8, 10**6):.1f} |")
-    L.append("\nHeadline check: for `ours`, first-output time should be independent of bandwidth (fast path only), while `full` first-output time scales with 9.5 GB / BW; `ours` should rejoin the baseline (PSNR after bind+8 >= 35) once the sink binds, `cold` should stay near 20 dB.")
+    L.append("\nHeadline check: for `ours`, first-output time should be independent of bandwidth (fast path only), while `full` first-output time scales with 6.2 GB / BW; `ours` should rejoin the baseline (PSNR after bind+8 >= 35) once the sink binds, `cold` should stay near 20 dB.")
     out = path.with_name("proto_summary.md")
     out.write_text("\n".join(L) + "\n")
     print("\n".join(L))

@@ -30,4 +30,4 @@ Destination steady-state service time S = 547 ms/chunk (4 frames). Times are sec
 | ours_refresh | 10000 | 2.7 | 1645 | 1.38 | 0.83 | 0 | 2.73 | 34 | 19.6 | 16.1 | 45.4 | 45.6 | 46.4 |
 | replay | 10000 | 42.3 | 0 | 5.69 | 5.14 | 0 | nan | None | 27.6 | nan | nan | 30.1 | 30.0 |
 
-Headline check: for `ours`, first-output time should be independent of bandwidth (fast path only), while `full` first-output time scales with 9.5 GB / BW; `ours` should rejoin the baseline (PSNR after bind+8 >= 35) once the sink binds, `cold` should stay near 20 dB.
+Headline check: for `ours`, first-output time should be independent of bandwidth (fast path only), while `full` first-output time scales with 6.2 GB / BW; `ours` should rejoin the baseline (PSNR after bind+8 >= 35) once the sink binds, `cold` should stay near 20 dB.
