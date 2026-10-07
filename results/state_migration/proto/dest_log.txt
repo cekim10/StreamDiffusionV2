@@ -1,47 +1,57 @@
-2026-10-06 20:50:50,839 - SingleGPUInference - INFO - Single GPU inference pipeline manager initialized
-2026-10-06 20:50:53,954 - SingleGPUInference - INFO - Loading checkpoint from /home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v/model.pt
+2026-10-06 21:53:53,734 - SingleGPUInference - INFO - Single GPU inference pipeline manager initialized
+2026-10-06 21:53:56,966 - SingleGPUInference - INFO - Loading checkpoint from /home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v/model.pt
 /home/ckim151/StreamDiffusionV2/.venv/lib/python3.10/site-packages/torchvision/io/video.py:197: UserWarning: The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.
   warnings.warn("The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.")
 [dest] baseline run
-[dest] baseline done; service time 547 ms/chunk; refresh calls [4, 48]
+[dest] baseline done; service time 547 ms/chunk; refresh calls [4, 48, 93]
 [dest] === ours @ 500 Mbps ===
-[dest] ours @ 500 Mbps: first output 17.92 s (stall ~17.37 s), fg 2.7 MB, bg 1645 MB, bound at call None, PSNR M+16.. 16.8 dB
+[dest] ours @ 500 Mbps: first output 1.43 s (stall ~0.88 s), fg 2.7 MB, bg 1645 MB, bound at call 82, PSNR M+16.. 25.5 dB
+[dest] === ours_refresh @ 500 Mbps ===
+[dest] ours_refresh @ 500 Mbps: first output 1.54 s (stall ~0.99 s), fg 2.7 MB, bg 1645 MB, bound at call 81, PSNR M+16.. 23.6 dB
 [dest] === cold @ 500 Mbps ===
-[dest] cold @ 500 Mbps: first output 18.15 s (stall ~17.60 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
+[dest] cold @ 500 Mbps: first output 1.07 s (stall ~0.52 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
 [dest] === replay @ 500 Mbps ===
-[dest] replay @ 500 Mbps: first output 23.48 s (stall ~22.93 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
+[dest] replay @ 500 Mbps: first output 6.35 s (stall ~5.81 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
 [dest] === full @ 500 Mbps ===
-[dest] full @ 500 Mbps: first output 138.85 s (stall ~138.30 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
+[dest] full @ 500 Mbps: first output 109.69 s (stall ~109.14 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
 [dest] === ours @ 1000 Mbps ===
-[dest] ours @ 1000 Mbps: first output 17.97 s (stall ~17.42 s), fg 2.7 MB, bg 1645 MB, bound at call 66, PSNR M+16.. 23.5 dB
+[dest] ours @ 1000 Mbps: first output 1.56 s (stall ~1.01 s), fg 2.7 MB, bg 1645 MB, bound at call 57, PSNR M+16.. 37.0 dB
+[dest] === ours_refresh @ 1000 Mbps ===
+[dest] ours_refresh @ 1000 Mbps: first output 1.42 s (stall ~0.88 s), fg 2.7 MB, bg 1645 MB, bound at call 56, PSNR M+16.. 27.9 dB
 [dest] === cold @ 1000 Mbps ===
-[dest] cold @ 1000 Mbps: first output 18.16 s (stall ~17.62 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
+[dest] cold @ 1000 Mbps: first output 1.06 s (stall ~0.51 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
 [dest] === replay @ 1000 Mbps ===
-[dest] replay @ 1000 Mbps: first output 23.14 s (stall ~22.59 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
+[dest] replay @ 1000 Mbps: first output 5.96 s (stall ~5.41 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
 [dest] === full @ 1000 Mbps ===
-[dest] full @ 1000 Mbps: first output 86.68 s (stall ~86.13 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
+[dest] full @ 1000 Mbps: first output 57.18 s (stall ~56.63 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
 [dest] === ours @ 2000 Mbps ===
-[dest] ours @ 2000 Mbps: first output 18.12 s (stall ~17.58 s), fg 2.7 MB, bg 1645 MB, bound at call 51, PSNR M+16.. 28.3 dB
+[dest] ours @ 2000 Mbps: first output 1.54 s (stall ~0.99 s), fg 2.7 MB, bg 1645 MB, bound at call 44, PSNR M+16.. 42.4 dB
+[dest] === ours_refresh @ 2000 Mbps ===
+[dest] ours_refresh @ 2000 Mbps: first output 1.45 s (stall ~0.90 s), fg 2.7 MB, bg 1645 MB, bound at call 44, PSNR M+16.. 42.7 dB
 [dest] === cold @ 2000 Mbps ===
-[dest] cold @ 2000 Mbps: first output 18.25 s (stall ~17.70 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
+[dest] cold @ 2000 Mbps: first output 1.06 s (stall ~0.52 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
 [dest] === replay @ 2000 Mbps ===
-[dest] replay @ 2000 Mbps: first output 23.03 s (stall ~22.48 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
+[dest] replay @ 2000 Mbps: first output 5.90 s (stall ~5.35 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
 [dest] === full @ 2000 Mbps ===
-[dest] full @ 2000 Mbps: first output 59.73 s (stall ~59.18 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
+[dest] full @ 2000 Mbps: first output 31.28 s (stall ~30.73 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
 [dest] === ours @ 5000 Mbps ===
-[dest] ours @ 5000 Mbps: first output 18.01 s (stall ~17.46 s), fg 2.7 MB, bg 1645 MB, bound at call 42, PSNR M+16.. 42.8 dB
+[dest] ours @ 5000 Mbps: first output 1.51 s (stall ~0.96 s), fg 2.7 MB, bg 1645 MB, bound at call 36, PSNR M+16.. 44.0 dB
+[dest] === ours_refresh @ 5000 Mbps ===
+[dest] ours_refresh @ 5000 Mbps: first output 1.44 s (stall ~0.89 s), fg 2.7 MB, bg 1645 MB, bound at call 36, PSNR M+16.. 43.9 dB
 [dest] === cold @ 5000 Mbps ===
-[dest] cold @ 5000 Mbps: first output 18.25 s (stall ~17.70 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
+[dest] cold @ 5000 Mbps: first output 1.06 s (stall ~0.51 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
 [dest] === replay @ 5000 Mbps ===
-[dest] replay @ 5000 Mbps: first output 22.87 s (stall ~22.32 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
+[dest] replay @ 5000 Mbps: first output 5.71 s (stall ~5.16 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
 [dest] === full @ 5000 Mbps ===
-[dest] full @ 5000 Mbps: first output 44.56 s (stall ~44.01 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
+[dest] full @ 5000 Mbps: first output 15.57 s (stall ~15.02 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
 [dest] === ours @ 10000 Mbps ===
-[dest] ours @ 10000 Mbps: first output 18.02 s (stall ~17.47 s), fg 2.7 MB, bg 1645 MB, bound at call 39, PSNR M+16.. 43.7 dB
+[dest] ours @ 10000 Mbps: first output 1.44 s (stall ~0.90 s), fg 2.7 MB, bg 1645 MB, bound at call 34, PSNR M+16.. 45.5 dB
+[dest] === ours_refresh @ 10000 Mbps ===
+[dest] ours_refresh @ 10000 Mbps: first output 1.38 s (stall ~0.83 s), fg 2.7 MB, bg 1645 MB, bound at call 34, PSNR M+16.. 45.6 dB
 [dest] === cold @ 10000 Mbps ===
-[dest] cold @ 10000 Mbps: first output 18.24 s (stall ~17.69 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
+[dest] cold @ 10000 Mbps: first output 1.07 s (stall ~0.52 s), fg 0.0 MB, bg 0 MB, bound at call None, PSNR M+16.. 21.9 dB
 [dest] === replay @ 10000 Mbps ===
-[dest] replay @ 10000 Mbps: first output 22.86 s (stall ~22.31 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
+[dest] replay @ 10000 Mbps: first output 5.69 s (stall ~5.14 s), fg 42.3 MB, bg 0 MB, bound at call None, PSNR M+16.. 30.1 dB
 [dest] === full @ 10000 Mbps ===
-[dest] full @ 10000 Mbps: first output 38.97 s (stall ~38.42 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
+[dest] full @ 10000 Mbps: first output 10.40 s (stall ~9.85 s), fg 6163.8 MB, bg 0 MB, bound at call None, PSNR M+16.. 99.0 dB
 [dest] done -> results/state_migration/proto
