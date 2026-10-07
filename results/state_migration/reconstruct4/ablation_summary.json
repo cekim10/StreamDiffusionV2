@@ -1,0 +1,455 @@
+{
+  "floor_psnr": 99.0,
+  "seed_shift_psnr": NaN,
+  "per_config": {
+    "repeat": {
+      "bytes_withheld_mb": 0.0,
+      "psnr_M0": 99.0,
+      "psnr_M0_3": 99.0,
+      "psnr_M4_15": 99.0,
+      "psnr_M16_end": 99.0,
+      "ssim_M0_3": 1.0,
+      "ssim_M16_end": 1.0,
+      "ssim_in_M0_3": 0.4062375,
+      "ssim_in_M16_end": 0.4177177083333334,
+      "first_call_psnr_below_60": null,
+      "seed_mb": 0.0,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false
+          }
+        }
+      ]
+    },
+    "drop_inflight": {
+      "bytes_withheld_mb": 0.1904296875,
+      "psnr_M0": 10.373,
+      "psnr_M0_3": 21.47,
+      "psnr_M4_15": 36.8531875,
+      "psnr_M16_end": 36.424656250000005,
+      "ssim_M0_3": 0.698625,
+      "ssim_M16_end": 0.9751395833333333,
+      "ssim_in_M0_3": 0.35749375,
+      "ssim_in_M16_end": 0.41725625000000005,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "inflight"
+            ],
+            "delay": [],
+            "restart": false,
+            "no_refresh": false
+          }
+        }
+      ]
+    },
+    "drop_kv_recent": {
+      "bytes_withheld_mb": 1645.3125,
+      "psnr_M0": 25.74225,
+      "psnr_M0_3": 23.563812499999997,
+      "psnr_M4_15": 39.675354166666665,
+      "psnr_M16_end": 47.68090625,
+      "ssim_M0_3": 0.8330500000000001,
+      "ssim_M16_end": 0.9968,
+      "ssim_in_M0_3": 0.40894375,
+      "ssim_in_M16_end": 0.4177510416666667,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_recent"
+            ],
+            "delay": [],
+            "restart": false,
+            "no_refresh": false
+          }
+        }
+      ]
+    },
+    "drop_vae_all": {
+      "bytes_withheld_mb": 2870.537109375,
+      "psnr_M0": 19.60925,
+      "psnr_M0_3": 23.1906875,
+      "psnr_M4_15": 39.666000000000004,
+      "psnr_M16_end": 46.47234374999999,
+      "ssim_M0_3": 0.7927875,
+      "ssim_M16_end": 0.9963322916666666,
+      "ssim_in_M0_3": 0.39894375,
+      "ssim_in_M16_end": 0.41775,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "vae_all"
+            ],
+            "delay": [],
+            "restart": false,
+            "no_refresh": false
+          }
+        }
+      ]
+    },
+    "delay_kv_sink_4_nr": {
+      "bytes_withheld_mb": 1645.3125,
+      "psnr_M0": 27.95825,
+      "psnr_M0_3": 22.9903125,
+      "psnr_M4_15": 34.34125,
+      "psnr_M16_end": 43.775416666666665,
+      "ssim_M0_3": 0.7998999999999999,
+      "ssim_M16_end": 0.9937729166666666,
+      "ssim_in_M0_3": 0.39938125,
+      "ssim_in_M16_end": 0.41755312499999997,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "adaptive_sink_refresh": "disabled"
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                4
+              ]
+            ],
+            "restart": false,
+            "no_refresh": true
+          }
+        },
+        {
+          "call": 34,
+          "restored": "kv_sink",
+          "slots_restored": 180,
+          "slots_expired": 0
+        }
+      ]
+    },
+    "delay_kv_sink_16_nr": {
+      "bytes_withheld_mb": 1645.3125,
+      "psnr_M0": 27.95825,
+      "psnr_M0_3": 22.9903125,
+      "psnr_M4_15": 17.03575,
+      "psnr_M16_end": 38.12365625,
+      "ssim_M0_3": 0.7998999999999999,
+      "ssim_M16_end": 0.9640927083333333,
+      "ssim_in_M0_3": 0.39938125,
+      "ssim_in_M16_end": 0.41916875000000003,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "adaptive_sink_refresh": "disabled"
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [
+              [
+                "kv_sink",
+                16
+              ]
+            ],
+            "restart": false,
+            "no_refresh": true
+          }
+        },
+        {
+          "call": 46,
+          "restored": "kv_sink",
+          "slots_restored": 180,
+          "slots_expired": 0
+        }
+      ]
+    },
+    "replay_3_sinkhist": {
+      "bytes_withheld_mb": 9541.9775390625,
+      "psnr_M0": 25.66825,
+      "psnr_M0_3": 26.24375,
+      "psnr_M4_15": 28.21377083333333,
+      "psnr_M16_end": 27.965979166666667,
+      "ssim_M0_3": 0.86776875,
+      "ssim_M16_end": 0.9075375000000001,
+      "ssim_in_M0_3": 0.40461250000000004,
+      "ssim_in_M16_end": 0.41900833333333337,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 42.275390625,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": 4982.957389205694,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 4982.957389205694,
+          "seed_bytes": 44328960,
+          "replayed_calls": 8,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 3,
+            "sink0": true,
+            "sinkhist": true,
+            "sinkxfer": false,
+            "pos": false
+          }
+        }
+      ]
+    },
+    "replay_3_sinkhist_pos": {
+      "bytes_withheld_mb": 9541.9775390625,
+      "psnr_M0": 23.9585,
+      "psnr_M0_3": 26.4246875,
+      "psnr_M4_15": 29.616812499999998,
+      "psnr_M16_end": 29.279197916666664,
+      "ssim_M0_3": 0.8724125,
+      "ssim_M16_end": 0.9459895833333333,
+      "ssim_in_M0_3": 0.396925,
+      "ssim_in_M16_end": 0.4174635416666666,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 42.275390625,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": 4966.562818735838,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 4966.562818735838,
+          "seed_bytes": 44328960,
+          "replayed_calls": 8,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 3,
+            "sink0": true,
+            "sinkhist": true,
+            "sinkxfer": false,
+            "pos": true
+          }
+        }
+      ]
+    },
+    "replay_6_sinkhist_pos": {
+      "bytes_withheld_mb": 9541.9775390625,
+      "psnr_M0": 31.776249999999997,
+      "psnr_M0_3": 31.90625,
+      "psnr_M4_15": 35.4385,
+      "psnr_M16_end": 34.41759375,
+      "ssim_M0_3": 0.9479625,
+      "ssim_M16_end": 0.9729895833333334,
+      "ssim_in_M0_3": 0.40774374999999996,
+      "ssim_in_M16_end": 0.4175645833333333,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 55.986328125,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": 6614.428896456957,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "replay_ms": 6614.428896456957,
+          "seed_bytes": 58705920,
+          "replayed_calls": 11,
+          "sink0": true
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 6,
+            "sink0": true,
+            "sinkhist": true,
+            "sinkxfer": false,
+            "pos": true
+          }
+        }
+      ]
+    },
+    "replay_3_sinkxfer": {
+      "bytes_withheld_mb": 7896.6650390625,
+      "psnr_M0": 20.68375,
+      "psnr_M0_3": 22.6136875,
+      "psnr_M4_15": 26.584500000000002,
+      "psnr_M16_end": 27.108781249999996,
+      "ssim_M0_3": 0.80338125,
+      "ssim_M16_end": 0.8989729166666667,
+      "ssim_in_M0_3": 0.40279374999999995,
+      "ssim_in_M16_end": 0.4158989583333333,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 14.853515625,
+      "sink_transfer_mb": 1645.3125,
+      "replay_ms": 1614.1733825206757,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "sink_transferred_bytes": 1725235200
+        },
+        {
+          "call": 30,
+          "replay_ms": 1614.1733825206757,
+          "seed_bytes": 15575040,
+          "replayed_calls": 2,
+          "sink0": false
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 3,
+            "sink0": false,
+            "sinkhist": false,
+            "sinkxfer": true,
+            "pos": false
+          }
+        }
+      ]
+    },
+    "replay_3_sinkxfer_pos": {
+      "bytes_withheld_mb": 7896.6650390625,
+      "psnr_M0": 22.365499999999997,
+      "psnr_M0_3": 20.3110625,
+      "psnr_M4_15": 20.118479166666663,
+      "psnr_M16_end": 20.513,
+      "ssim_M0_3": 0.70265,
+      "ssim_M16_end": 0.7580385416666667,
+      "ssim_in_M0_3": 0.41816875,
+      "ssim_in_M16_end": 0.42400312500000004,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 14.853515625,
+      "sink_transfer_mb": 1645.3125,
+      "replay_ms": 1619.3414069712162,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "sink_transferred_bytes": 1725235200
+        },
+        {
+          "call": 30,
+          "replay_ms": 1619.3414069712162,
+          "seed_bytes": 15575040,
+          "replayed_calls": 2,
+          "sink0": false
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 3,
+            "sink0": false,
+            "sinkhist": false,
+            "sinkxfer": true,
+            "pos": true
+          }
+        }
+      ]
+    },
+    "replay_6_sinkxfer_pos": {
+      "bytes_withheld_mb": 7896.6650390625,
+      "psnr_M0": 21.3995,
+      "psnr_M0_3": 19.760624999999997,
+      "psnr_M4_15": 20.1043125,
+      "psnr_M16_end": 20.513135416666668,
+      "ssim_M0_3": 0.6653687500000001,
+      "ssim_M16_end": 0.7553020833333334,
+      "ssim_in_M0_3": 0.41876875,
+      "ssim_in_M16_end": 0.42553645833333337,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 28.564453125,
+      "sink_transfer_mb": 1645.3125,
+      "replay_ms": 3284.868258982897,
+      "missing_frames": 0,
+      "recovery_rel_call": -29,
+      "events": [
+        {
+          "call": 30,
+          "sink_transferred_bytes": 1725235200
+        },
+        {
+          "call": 30,
+          "replay_ms": 3284.868258982897,
+          "seed_bytes": 29952000,
+          "replayed_calls": 5,
+          "sink0": false
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "replay": 6,
+            "sink0": false,
+            "sinkhist": false,
+            "sinkxfer": true,
+            "pos": true
+          }
+        }
+      ]
+    }
+  }
+}

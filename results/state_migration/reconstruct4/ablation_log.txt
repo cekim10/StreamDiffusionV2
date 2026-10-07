@@ -1,0 +1,77 @@
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 48]; last before M: 4
+[ablation] baseline done in 38 s; 69 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4161317920312285
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 99.0
+  repeat: call 31 (M+1) psnr 99.0
+  repeat: call 34 (M+4) psnr 99.0
+  repeat: call 46 (M+16) psnr 99.0
+[ablation] config drop_inflight
+  drop_inflight: call 30 (M+0) psnr 10.4
+  drop_inflight: call 31 (M+1) psnr 21.4
+  drop_inflight: call 34 (M+4) psnr 30.2
+  drop_inflight: call 46 (M+16) psnr 38.8
+[ablation] config drop_kv_recent
+  drop_kv_recent: call 30 (M+0) psnr 25.7
+  drop_kv_recent: call 31 (M+1) psnr 22.8
+  drop_kv_recent: call 34 (M+4) psnr 25.9
+  drop_kv_recent: call 46 (M+16) psnr 48.1
+[ablation] config drop_vae_all
+  drop_vae_all: call 30 (M+0) psnr 19.6
+  drop_vae_all: call 31 (M+1) psnr 24.5
+  drop_vae_all: call 34 (M+4) psnr 31.8
+  drop_vae_all: call 46 (M+16) psnr 46.3
+[ablation] config delay_kv_sink_4_nr
+  delay_kv_sink_4_nr: call 30 (M+0) psnr 28.0
+  delay_kv_sink_4_nr: call 31 (M+1) psnr 23.8
+  delay_kv_sink_4_nr: call 34 (M+4) psnr 18.6
+  delay_kv_sink_4_nr: call 46 (M+16) psnr 44.5
+[ablation] config delay_kv_sink_16_nr
+  delay_kv_sink_16_nr: call 30 (M+0) psnr 28.0
+  delay_kv_sink_16_nr: call 31 (M+1) psnr 23.8
+  delay_kv_sink_16_nr: call 34 (M+4) psnr 17.5
+  delay_kv_sink_16_nr: call 46 (M+16) psnr 20.4
+[ablation] config replay_3_sinkhist
+  replay_3_sinkhist: call 30 (M+0) psnr 25.7
+  replay_3_sinkhist: call 31 (M+1) psnr 26.3
+  replay_3_sinkhist: call 34 (M+4) psnr 28.5
+  replay_3_sinkhist: call 46 (M+16) psnr 29.4
+[ablation] config replay_3_sinkhist_pos
+  replay_3_sinkhist_pos: call 30 (M+0) psnr 24.0
+  replay_3_sinkhist_pos: call 31 (M+1) psnr 26.5
+  replay_3_sinkhist_pos: call 34 (M+4) psnr 28.4
+  replay_3_sinkhist_pos: call 46 (M+16) psnr 30.2
+[ablation] config replay_6_sinkhist_pos
+  replay_6_sinkhist_pos: call 30 (M+0) psnr 31.8
+  replay_6_sinkhist_pos: call 31 (M+1) psnr 31.9
+  replay_6_sinkhist_pos: call 34 (M+4) psnr 33.1
+  replay_6_sinkhist_pos: call 46 (M+16) psnr 35.0
+[ablation] config replay_3_sinkxfer
+  replay_3_sinkxfer: call 30 (M+0) psnr 20.7
+  replay_3_sinkxfer: call 31 (M+1) psnr 23.2
+  replay_3_sinkxfer: call 34 (M+4) psnr 25.7
+  replay_3_sinkxfer: call 46 (M+16) psnr 27.5
+[ablation] config replay_3_sinkxfer_pos
+  replay_3_sinkxfer_pos: call 30 (M+0) psnr 22.4
+  replay_3_sinkxfer_pos: call 31 (M+1) psnr 19.7
+  replay_3_sinkxfer_pos: call 34 (M+4) psnr 18.8
+  replay_3_sinkxfer_pos: call 46 (M+16) psnr 22.6
+[ablation] config replay_6_sinkxfer_pos
+  replay_6_sinkxfer_pos: call 30 (M+0) psnr 21.4
+  replay_6_sinkxfer_pos: call 31 (M+1) psnr 18.6
+  replay_6_sinkxfer_pos: call 34 (M+4) psnr 18.7
+  replay_6_sinkxfer_pos: call 46 (M+16) psnr 22.8
+[ablation] done -> results/state_migration/reconstruct4/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  drop_inflight          withheld       0 MB  PSNR M+0..3  21.5  M+16..  36.4  recovery -29
+  drop_kv_recent         withheld    1645 MB  PSNR M+0..3  23.6  M+16..  47.7  recovery -29
+  drop_vae_all           withheld    2871 MB  PSNR M+0..3  23.2  M+16..  46.5  recovery -29
+  delay_kv_sink_4_nr     withheld    1645 MB  PSNR M+0..3  23.0  M+16..  43.8  recovery -29
+  delay_kv_sink_16_nr    withheld    1645 MB  PSNR M+0..3  23.0  M+16..  38.1  recovery -29
+  replay_3_sinkhist      withheld    9542 MB  PSNR M+0..3  26.2  M+16..  28.0  recovery -29
+  replay_3_sinkhist_pos  withheld    9542 MB  PSNR M+0..3  26.4  M+16..  29.3  recovery -29
+  replay_6_sinkhist_pos  withheld    9542 MB  PSNR M+0..3  31.9  M+16..  34.4  recovery -29
+  replay_3_sinkxfer      withheld    7897 MB  PSNR M+0..3  22.6  M+16..  27.1  recovery -29
+  replay_3_sinkxfer_pos  withheld    7897 MB  PSNR M+0..3  20.3  M+16..  20.5  recovery -29
+  replay_6_sinkxfer_pos  withheld    7897 MB  PSNR M+0..3  19.8  M+16..  20.5  recovery -29
