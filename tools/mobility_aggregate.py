@@ -30,7 +30,7 @@ def main():
     res = json.load(open(path))
     S = res[0]["service_s"]
     bw = res[0]["bw_mbps"]
-    sink_mb = max(sum(v for k, v in r["bytes"].items() if k.startswith("A->")) for r in res) / 2**20
+    sink_mb = max(v for r in res for k, v in r["bytes"].items() if k.startswith("A->")) / 2**20  # one full copy on one link
     t_s = sink_mb * 2**20 * 8 / (bw * 1e6)
     L = [f"# Repeated mobility: sink routing policy x mobility interval x hops ({bw:g} Mbps per link, sink <= {sink_mb:.0f} MB, link time T_s = {t_s:.1f} s, S = {S * 1e3:.0f} ms/chunk)\n",
          "Times in seconds after the A->B handoff. moves = when execution left each edge. ready = when the true sink bound at each edge. "

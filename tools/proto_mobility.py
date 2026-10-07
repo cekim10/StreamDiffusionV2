@@ -245,7 +245,7 @@ def run_dest(args):
         seg = {}  # layer -> tensors (content identical wherever it is held)
         holders = {e: set() for e in edges}  # edge -> set of layers it holds
         meta = {"layer_bytes": None}
-        state = {"node": "B", "idx": 0, "end": None}
+        state = {"node": "B", "idx": 0, "end": None, "stop": False}
         lock = threading.Lock()
         bound = {}
         t_mig = time.time()
@@ -273,8 +273,8 @@ def run_dest(args):
             return edges[hi + 1] if state["idx"] > hi else None
 
         def forwarder(holder):
-            """Edge `holder` forwards segments it holds over one emulated link at `bw`."""
-            while state["end"] is None:
+            """Edge `holder` forwards segments it holds over one emulated link at `bw` (runs until the run ends)."""
+            while not state["stop"]:
                 tgt = forward_target(holder)
                 with lock:
                     if tgt is None or meta["layer_bytes"] is None:
@@ -356,6 +356,7 @@ def run_dest(args):
             if state["end"] is not None:
                 break
             time.sleep(0.1)
+        state["stop"] = True
         with lock:
             held = {e: sorted(holders[e]) for e in edges}
         obsolete = [e for e in edges if e != final_edge]
