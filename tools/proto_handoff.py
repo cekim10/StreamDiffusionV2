@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
-"""Two-process late-binding handoff prototype (source GPU -> destination GPU over a TCP socket).
+"""Two-process late-binding handoff (source GPU -> destination GPU over MSS-capped TCP), evaluation-grade.
 
-Question answered: can generation move before its bulk continuity state moves?
+Question: can execution handoff be decoupled from bulk continuity-state transfer?
 
-    source (GPU a)                                  destination (GPU b)
-      run session to chunk M                          allocate buffers (provisioning, not timed)
-      serialize state                                 send READY  ---------------------------> t_mig
-      policy ours : fast msg (in-flight + meta) ----> restore, freeze sink refresh, resume at M
-                    sink (1.6 GB) in background ----> receiver thread; atomic bind at a chunk boundary
-      policy full : everything ---------------------> restore all, then resume (stall = transfer)
-      policy cold : GO ------------------------------> fresh start at chunk M (official restart path)
-      policy replay: seed frames -------------------> local replay (sinkhist, pos-faithful), resume
+    source (edge A)                                     destination (edge B)
+      PREP -> run session to chunk M, serialize            provision buffers (not timed)
+      PREPARED <------------------------------------       READY = migration start (t_mig)
+      policy ours   : fast msg (in-flight + meta) ------>  restore, freeze sink refresh, resume at M
+                      sink (durable) in background ----->  receiver thread; atomic bind at a chunk boundary
+      policy full   : everything ---------------------->   restore all, then resume (stall = transfer)
+      policy cold   : GO -------------------------------->  fresh start at chunk M (official restart path)
+      policy replay : seed frames ---------------------->   local replay (sinkhist, pos-faithful), resume
+      policy repeat : nothing moves; destination runs the same session again (determinism check)
 
-All bytes go through one TCP connection with a sender-side token bucket (--bw_mbps). Both
-processes read the same input video (the camera stream is local to each edge); only state crosses
-the link. Continuity is scored at the destination against its own bit-exact baseline run.
+Transport (identical for every policy): plain TCP, TCP_MAXSEG capped (--mss), TCP_NODELAY, sender-side token
+bucket for bandwidth below native (--bw <= 0 means native). Clocks: NTP-style ping-pong at connect; source
+timestamps are mapped into the destination clock. Every (policy, bandwidth, rep) is one run directory under
+results/evaluation/<experiment>/ with config.json, events.csv, metrics.csv, network.csv, summary.json,
+host_info.json, git_commit.txt and stdout.log.
 
-Usage (same host, two GPUs):
-    python tools/proto_handoff.py --role dest   --gpu_id 1 --sweep ours:1000,full:1000,cold:1000 --out_dir results/state_migration/proto
-    python tools/proto_handoff.py --role source --gpu_id 0 --sweep ours:1000,full:1000,cold:1000
-(tools/run_proto.sh launches both.)
+Usage (physical): tools/eval/run_single_handoff.sh. Same host: tools/run_proto.sh.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import socket
 import struct
@@ -34,38 +35,28 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-for p in (REPO_ROOT, REPO_ROOT / "tools"):
+for p in (REPO_ROOT, REPO_ROOT / "tools", REPO_ROOT / "tools" / "eval"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
 import numpy as np  # noqa: E402
 
+from common import (DEFAULT_MSS, MSS_WARNINGS, CsvLog, EventLog, ResourceSampler, Throttle, clock_sync_client, clock_sync_server,  # noqa: E402
+                    effective_mss, host_info, run_dir, tcp_accept, tcp_connect, tcp_listen, write_json)
+
 MB = 1024.0 * 1024.0
+POLICIES = {
+    # name: (components sent before the destination may resume, components sent in the background)
+    "ours": ({"inflight", "meta"}, {"sink"}),            # refresh frozen until the true sink binds
+    "ours_refresh": ({"inflight", "meta"}, {"sink"}),    # adaptive refresh left on; true sink overwrites at bind
+    "full": ({"sink", "recent", "meta", "vae", "inflight"}, set()),
+    "cold": (set(), set()),
+    "replay": ({"seeds"}, set()),
+    "repeat": (set(), set()),
+}
 
 
-# ----------------------------------------------------------------------------- framing + throttle
-class Throttle:
-    """Sender-side token bucket: bytes are released at `bw_bps` with a small burst."""
-
-    def __init__(self, bw_bps: float, burst_bytes: int = 1 << 20):
-        self.rate = float(bw_bps) / 8.0  # bytes/s
-        self.burst = burst_bytes
-        self.tokens = float(burst_bytes)
-        self.t = time.perf_counter()
-
-    def take(self, n: int):
-        if self.rate <= 0:
-            return
-        while True:
-            now = time.perf_counter()
-            self.tokens = min(self.burst, self.tokens + (now - self.t) * self.rate)
-            self.t = now
-            if self.tokens >= n:
-                self.tokens -= n
-                return
-            time.sleep(min(0.01, (n - self.tokens) / self.rate))
-
-
+# ----------------------------------------------------------------------------- framing
 def send_msg(sock: socket.socket, kind: str, header: dict, payload, throttle: Throttle | None, chunk: int = 1 << 20):
     """payload: bytes-like or a list of bytes-like buffers (sent back to back, no concatenation copy)."""
     parts = payload if isinstance(payload, list) else [payload]
@@ -100,9 +91,18 @@ def recv_msg(sock: socket.socket):
     lens = recv_exact(sock, 16)
     hl, pl = struct.unpack("!QQ", bytes(lens))
     hdr = json.loads(bytes(recv_exact(sock, hl)).decode())
+    t0 = time.time()
     payload = recv_exact(sock, pl) if pl else bytearray()
+    hdr["t_recv_start"] = t0
     hdr["t_recv"] = time.time()
     return hdr, payload
+
+
+def sha256_parts(parts) -> str:
+    h = hashlib.sha256()
+    for b in parts:
+        h.update(memoryview(b).cast("B"))
+    return h.hexdigest()
 
 
 # ----------------------------------------------------------------------------- state packing
@@ -136,8 +136,11 @@ def bytes_to_tensor(meta: dict, raw: memoryview, device):
     return t.to(device)
 
 
-def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, list]:
-    """Serialize one component of a serialize_state() snapshot into (header, [buffers])."""
+def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: bool = True) -> tuple[dict, list]:
+    """Serialize one component of a serialize_state() snapshot into (header, [buffers]). D2H happens here."""
+    import torch
+
+    t0 = time.perf_counter()
     parts: list[tuple[str, dict, np.ndarray]] = []
     if comp in ("sink", "recent"):
         lo, hi = (0, sink * fsl) if comp == "sink" else (sink * fsl, None)
@@ -164,7 +167,9 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, li
                     m, b = tensor_to_bytes(t); parts.append((f"vae/{attr}/{i}", m, b))
     else:
         raise ValueError(comp)
-    header = {"comp": comp, "tensors": [], "scalars": {}}
+    torch.cuda.synchronize()
+    d2h_s = time.perf_counter() - t0
+    header = {"comp": comp, "tensors": [], "scalars": {}, "d2h_s": d2h_s}
     buffers = []
     off = 0
     for name, m, b in parts:
@@ -172,6 +177,9 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, li
         header["tensors"].append({"name": name, "offset": off, "nbytes": n, **m})
         buffers.append(b)
         off += n
+    header["nbytes"] = off
+    if checksum:
+        header["sha256"] = sha256_parts(buffers)
     if comp == "meta":
         header["scalars"] = {
             "ring": [{"total_steps": r["total_steps"], "current_step": r["current_step"]} for r in snap["ring"]],
@@ -184,11 +192,17 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, li
 
 
 def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, fsl: int) -> dict:
-    """Merge a received component into a destination-side snapshot dict understood by restore_state()."""
+    """Merge a received component into a destination-side snapshot dict understood by restore_state().
+    Verifies the checksum when present (records header['checksum_ok']) and times the H2D copies."""
     import torch
 
+    if "sha256" in header:
+        header["checksum_ok"] = sha256_parts([payload]) == header["sha256"]
+    t0 = time.perf_counter()
     view = memoryview(payload)
     tensors = {t["name"]: bytes_to_tensor(t, view[t["offset"]:t["offset"] + t["nbytes"]], device) for t in header["tensors"]}
+    torch.cuda.synchronize(device)
+    header["h2d_s"] = time.perf_counter() - t0
     comp = header["comp"]
     if comp in ("sink", "recent"):
         for li in range(len(snap["kv"])):
@@ -229,22 +243,12 @@ def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, f
     return snap
 
 
-# ----------------------------------------------------------------------------- roles
-POLICIES = {
-    # name: (messages sent before the destination may resume, messages sent in the background)
-    "ours": ({"inflight", "meta"}, {"sink"}),            # refresh frozen until the true sink binds
-    "ours_refresh": ({"inflight", "meta"}, {"sink"}),    # adaptive refresh left on; true sink overwrites at bind
-    "full": ({"sink", "recent", "meta", "vae", "inflight"}, set()),
-    "cold": (set(), set()),
-    "replay": ({"seeds"}, set()),
-}
-
-
+# ----------------------------------------------------------------------------- runtime
 def parse_sweep(s: str) -> list[tuple[str, float]]:
     out = []
     for item in s.split(","):
         pol, bw = item.split(":")
-        out.append((pol, float(bw)))
+        out.append((pol, 0.0 if bw in ("native", "0", "inf") else float(bw)))
     return out
 
 
@@ -285,18 +289,18 @@ def build_runtime(args):
     return sa, runner, pm, pl, device
 
 
+# ----------------------------------------------------------------------------- source (edge A)
 def run_source(args):
     import torch
 
     sa, runner, pm, pl, device = build_runtime(args)
     sink, fsl = pl.num_sink_tokens, pl.frame_seq_length
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind((args.host, args.port))
-    srv.listen(1)
-    print(f"[source] listening on {args.host}:{args.port}", flush=True)
-    conn, _ = srv.accept()
-    conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    srv = tcp_listen(args.bind, args.port, args.mss)
+    print(f"[source] listening on {args.bind}:{args.port} mss={args.mss}", flush=True)
+    conn = tcp_accept(srv, args.mss)
+    clock_sync_server(conn)
+    send_msg(conn, "HELLO", {"host_info": host_info(args.gpu_id), "mss_effective": effective_mss(conn), "mss_warnings": list(MSS_WARNINGS),
+                             "args": vars(args)}, b"", None)
     M = args.migration_chunk
     while True:
         hdr, _ = recv_msg(conn)
@@ -304,36 +308,73 @@ def run_source(args):
             break
         assert hdr["kind"] == "PREP", hdr["kind"]
         policy, bw = hdr["policy"], float(hdr["bw_mbps"])
-        print(f"[source] {policy} @ {bw:g} Mbps: running to M={M}", flush=True)
+        print(f"[source] {policy} @ {bw or 'native'} Mbps rep {hdr.get('rep')}: running to M={M}", flush=True)
         session = runner.start()
+        t_run0 = time.time()
         for c in range(M):
             runner.step(session, c)
         torch.cuda.synchronize(device)
-        snap = sa.serialize_state(pl, pm, session)
-        send_msg(conn, "PREPARED", {}, b"", None)
+        t_ser0 = time.time()
+        snap = sa.serialize_state(pl, pm, session)  # device-side clone of the live state
+        torch.cuda.synchronize(device)
+        t_ser1 = time.time()
+        send_msg(conn, "PREPARED", {"t_run_to_M_s": t_ser0 - t_run0, "t_serialize_start": t_ser0, "t_serialize_end": t_ser1,
+                                    "gpu_mem_alloc_mb": torch.cuda.memory_allocated(device) / MB}, b"", None)
         hdr, _ = recv_msg(conn)
         assert hdr["kind"] == "READY", hdr["kind"]
-        throttle = Throttle(bw * 1e6)
+        throttle = Throttle(bw * 1e6) if bw > 0 else None
         fg, bg = POLICIES[policy]
-        t0 = time.time()
+        log = {"policy": policy, "bytes_by_comp": {}, "d2h_by_comp": {}, "t_send_by_comp": {}}
         if policy == "replay":
             hist_end = max(1, hdr.get("last_refresh_call", -1) + 1)
             idx = list(range(0, runner.first)) + [runner.first + cc * runner.chunk + f for cc in list(range(0, hist_end)) + list(range(M - 3, M)) for f in range(runner.chunk)]
             frames = ((runner.video[0, :, idx].float().permute(1, 2, 3, 0) * 0.5 + 0.5).clamp(0, 1) * 255).to(torch.uint8).contiguous().numpy()
-            send_msg(conn, "SEEDS", {"n_frames": int(frames.shape[0]), "hist_end": hist_end}, frames, throttle)
+            t0 = time.time()
+            send_msg(conn, "SEEDS", {"n_frames": int(frames.shape[0]), "hist_end": hist_end, "sha256": sha256_parts([frames])}, frames, throttle)
+            log["bytes_by_comp"]["seeds"] = frames.nbytes; log["t_send_by_comp"]["seeds"] = [t0, time.time()]
         else:
             for comp in sorted(fg):
                 h, b = pack_component(snap, comp, sink, fsl)
+                t0 = time.time()
                 send_msg(conn, "STATE", {"fg": True, **h}, b, throttle)
+                log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, time.time()]
         send_msg(conn, "GO", {"policy": policy, "t_go": time.time()}, b"", None)
         for comp in sorted(bg):
             h, b = pack_component(snap, comp, sink, fsl)
+            t0 = time.time()
             send_msg(conn, "STATE", {"fg": False, **h}, b, throttle)
-        send_msg(conn, "END", {"t_end": time.time(), "elapsed_s": time.time() - t0}, b"", None)
+            log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, time.time()]
+        send_msg(conn, "END", {"t_end": time.time(), **log}, b"", None)
         del snap
         torch.cuda.empty_cache()
     conn.close()
     srv.close()
+
+
+# ----------------------------------------------------------------------------- destination (edge B)
+def bind_sink_into_live(pl, snap, sink, fsl, device, cfg_thr, refresh_was_frozen: bool) -> int:
+    """Atomic bind of the transferred sink into the live ring buffer. With refresh frozen, slot positions can
+    only have moved by a t_refresh realign, so transferred keys are re-rotated by the per-slot delta."""
+    from models.wan.causal_model import _shift_temporal_rope
+
+    freqs = pl.generator.model.freqs.to(device)
+    shifted = 0
+    for li, layer in enumerate(pl.kv_cache1):
+        k_x = snap["kv"][li]["k"][:, :sink * fsl]; v_x = snap["kv"][li]["v"][:, :sink * fsl]; pos_x = snap["sink_pos"][li]
+        for b in range(k_x.shape[0]):
+            for sidx in range(sink):
+                lo, hi = sidx * fsl, (sidx + 1) * fsl
+                kk = k_x[b, lo:hi]
+                if refresh_was_frozen:
+                    delta = int(layer["pos"][b, sidx].item() - pos_x[b, sidx].item())
+                    if delta != 0:
+                        kk = _shift_temporal_rope(kk, freqs, delta); shifted += 1
+                else:
+                    layer["pos"][b, sidx] = pos_x[b, sidx]
+                layer["k"][b, lo:hi] = kk; layer["v"][b, lo:hi] = v_x[b, lo:hi]
+    for block in pl.generator.model.blocks:
+        block.self_attn.adapt_sink_thr = cfg_thr
+    return shifted
 
 
 def run_dest(args):
@@ -342,8 +383,10 @@ def run_dest(args):
     sa, runner, pm, pl, device = build_runtime(args)
     sink, fsl = pl.num_sink_tokens, pl.frame_seq_length
     M, N = args.migration_chunk, args.post_chunks
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    me = socket.gethostname()
+    cfg_thr = float(getattr(pm.config, "adapt_sink_threshold", -1))
+    workload = Path(args.video_path).stem
+    k_steps = len(pl.denoising_step_list)
 
     # 1. bit-exact baseline on this GPU (same seeds -> same frames as the source would have produced)
     print("[dest] baseline run", flush=True)
@@ -364,164 +407,216 @@ def run_dest(args):
     runner.last_refresh_call = pre[-1] if pre else -1
     print(f"[dest] baseline done; service time {service_s * 1e3:.0f} ms/chunk; refresh calls {refresh}", flush=True)
 
-    sock = socket.create_connection((args.host, args.port))
-    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    sock = tcp_connect(args.host, args.port, args.mss)
+    sync = clock_sync_client(sock)
+    hello, _ = recv_msg(sock)
+    assert hello["kind"] == "HELLO"
+    off = sync["offset_s"]  # source_wall ~= dest_wall + off
+
+    def to_dest(t):
+        return None if t is None else t - off
+
+    print(f"[dest] connected to {args.host}; clock offset {off * 1e3:+.2f} ms, rtt_min {sync['rtt_min_s'] * 1e3:.2f} ms, "
+          f"mss {effective_mss(sock)} (source {hello.get('mss_effective')})", flush=True)
+
     results = []
-    for policy, bw in parse_sweep(args.sweep):
-        print(f"[dest] === {policy} @ {bw:g} Mbps ===", flush=True)
-        send_msg(sock, "PREP", {"policy": policy, "bw_mbps": bw}, b"", None)
-        hdr, _ = recv_msg(sock)
-        assert hdr["kind"] == "PREPARED", hdr["kind"]
-        # provisioning: allocate buffers on this GPU (not part of the handoff time)
-        session = runner.fresh_destination()
-        snap = sa.serialize_state(pl, pm, session)  # template with the right shapes; contents are overwritten
-        for layer in snap["kv"]:
-            layer["k"].zero_(); layer["v"].zero_()
-        snap["have"] = set()
-        torch.cuda.synchronize(device)
-        bytes_fg = bytes_bg = 0
-        rec = {"policy": policy, "bw_mbps": bw, "service_s": service_s, "events": [], "calls": []}
-        t_mig = time.time()
-        send_msg(sock, "READY", {"policy": policy, "bw_mbps": bw, "last_refresh_call": runner.last_refresh_call}, b"", None)
+    for rep in range(1, args.reps + 1):
+        for policy, bw in parse_sweep(args.sweep):
+            bw_tag = "native" if bw <= 0 else f"{bw:g}"
+            rd = run_dir(args.experiment, policy=policy, bw=bw_tag, rep=rep, workload=workload, seed=args.seed, k=k_steps, mss=args.mss or 0)
+            out_log = open(rd / "stdout.log", "a")
 
-        # foreground messages until GO
-        seeds = None
-        while True:
-            hdr, payload = recv_msg(sock)
-            if hdr["kind"] == "GO":
-                break
-            if hdr["kind"] == "SEEDS":
-                seeds = (hdr, payload)
-            else:
-                unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-            bytes_fg += len(payload)
-            rec["events"].append({"t": time.time() - t_mig, "recv": hdr.get("comp", hdr["kind"]), "mb": len(payload) / MB})
-        t_go = time.time()
+            def log(msg):
+                print(msg, flush=True); out_log.write(msg + "\n"); out_log.flush()
 
-        # apply the policy
-        bound_call = None
-        cfg_thr = float(getattr(pm.config, "adapt_sink_threshold", -1))
-        if policy == "full":
-            sa.restore_state(pl, pm, session, snap, set(sa.STATE_COMPONENTS))
-        elif policy in ("ours", "ours_refresh"):
-            sa.restore_state(pl, pm, session, snap, {"meta", "inflight"})
-            if policy == "ours":
-                for block in pl.generator.model.blocks:
-                    block.self_attn.adapt_sink_thr = -1  # freeze promotions until the true sink binds
-        elif policy == "cold":
-            pass
-        elif policy == "replay":
-            session, ms, seed_bytes, replayed = runner.replay_restart(M, 3, True, True, True)
-            rec["events"].append({"t": time.time() - t_mig, "replay_ms": ms, "replayed_calls": replayed})
-        torch.cuda.synchronize(device)
-        t_resume = time.time()
+            log(f"[dest] === {policy} @ {bw_tag} Mbps rep {rep} -> {rd.name} ===")
+            write_json(rd / "config.json", {"experiment": args.experiment, "policy": policy, "bw_mbps": bw, "rep": rep, "workload": workload, "video_path": args.video_path,
+                                            "seed": args.seed, "k": k_steps, "migration_chunk": M, "post_chunks": N, "mss": args.mss, "transport": "tcp+tcp_maxseg+token-bucket",
+                                            "shaper": "sender token bucket" if bw > 0 else "none (native)", "args": vars(args), "service_s": service_s, "refresh_calls_baseline": refresh})
+            write_json(rd / "host_info.json", {"dest": host_info(args.gpu_id), "source": hello.get("host_info"), "clock_sync": sync,
+                                               "mss_dest": effective_mss(sock), "mss_source": hello.get("mss_effective"), "mss_warnings_dest": list(MSS_WARNINGS), "mss_warnings_source": hello.get("mss_warnings")})
+            ev = EventLog(rd / "events.csv", me)
+            metrics = CsvLog(rd / "metrics.csv", ["call", "rel", "t_out_rel", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "gpu_mem_alloc_mb", "sink_slot_pos"])
+            sampler = ResourceSampler(rd / "network.csv", me, args.gpu_id, args.iface); sampler.start()
 
-        # background receiver (END always arrives; sink only for ours)
-        bg = {"sink": None, "end": None, "bytes": 0}
+            send_msg(sock, "PREP", {"policy": policy, "bw_mbps": bw, "rep": rep, "last_refresh_call": runner.last_refresh_call}, b"", None)
+            prep, _ = recv_msg(sock)
+            assert prep["kind"] == "PREPARED"
+            # provisioning: allocate buffers on this GPU (not part of the handoff time)
+            session = runner.fresh_destination()
+            snap = sa.serialize_state(pl, pm, session)
+            for layer in snap["kv"]:
+                layer["k"].zero_(); layer["v"].zero_()
+            snap["have"] = set()
+            torch.cuda.synchronize(device)
+            t_mig = time.time()
+            ev.set_ref(t_mig)
+            ev.log("migration_start", t_mig, policy=policy, bw_mbps=bw)
+            ev.log("source_serialize", to_dest(prep["t_serialize_start"]), end=to_dest(prep["t_serialize_end"]),
+                   seconds=prep["t_serialize_end"] - prep["t_serialize_start"], source_gpu_mem_mb=prep.get("gpu_mem_alloc_mb"))
+            send_msg(sock, "READY", {"policy": policy, "bw_mbps": bw, "last_refresh_call": runner.last_refresh_call}, b"", None)
 
-        def receiver():
+            bytes_cat, checksum_ok = {}, {}
+            h2d_total = 0.0
             while True:
                 hdr, payload = recv_msg(sock)
-                if hdr["kind"] == "END":
-                    bg["end"] = time.time(); break
-                unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-                bg["bytes"] += len(payload)
-                bg["sink"] = time.time()
+                if hdr["kind"] == "GO":
+                    ev.log("go", to_dest(hdr["t_go"])); break
+                if hdr["kind"] == "SEEDS":
+                    bytes_cat["seeds"] = len(payload); checksum_ok["seeds"] = sha256_parts([payload]) == hdr["sha256"]
+                    ev.log("fg_recv", hdr["t_recv"], comp="seeds", bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), checksum_ok=checksum_ok["seeds"])
+                else:
+                    unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
+                    bytes_cat[hdr["comp"]] = len(payload); checksum_ok[hdr["comp"]] = hdr.get("checksum_ok"); h2d_total += hdr.get("h2d_s", 0.0)
+                    ev.log("fg_recv", hdr["t_recv"], comp=hdr["comp"], bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), d2h_s=hdr.get("d2h_s"), h2d_s=hdr.get("h2d_s"), checksum_ok=hdr.get("checksum_ok"))
 
-        th = threading.Thread(target=receiver, daemon=True)
-        th.start()
-
-        # generate M..M+N-1, binding the sink at the first chunk boundary after it arrives
-        if policy == "cold":
-            session, frames0, ms = runner.restart_at(session, M)
-            rec["events"].append({"t": time.time() - t_mig, "restart_ms": ms})
-            lag = len(pl.denoising_step_list) - 1
-            pending_cold = (M + lag, frames0)
-        else:
-            pending_cold = None
-        frames_out = {}
-        for c in range(M, M + N):
-            if policy in ("ours", "ours_refresh") and bound_call is None and bg["sink"] is not None:
-                # Atomic bind. The destination may have rewound/realigned RoPE positions since M
-                # (t_refresh at call 48): re-rotate the transferred keys by the per-slot position delta.
-                from models.wan.causal_model import _shift_temporal_rope
-
-                freqs = pl.generator.model.freqs.to(device)
-                shifted = 0
-                for li, layer in enumerate(pl.kv_cache1):
-                    k_x = snap["kv"][li]["k"][:, :sink * fsl]
-                    v_x = snap["kv"][li]["v"][:, :sink * fsl]
-                    pos_x = snap["sink_pos"][li]
-                    for b in range(k_x.shape[0]):
-                        for sidx in range(sink):
-                            lo, hi = sidx * fsl, (sidx + 1) * fsl
-                            kk = k_x[b, lo:hi]
-                            if policy == "ours":
-                                # frozen refresh: slot positions only moved by a t_refresh realign; follow it
-                                delta = int(layer["pos"][b, sidx].item() - pos_x[b, sidx].item())
-                                if delta != 0:
-                                    kk = _shift_temporal_rope(kk, freqs, delta); shifted += 1
-                            else:
-                                # refresh was on: the slot may hold a promoted frame; take the true sink's
-                                # position back verbatim (exact only if no realign happened since M)
-                                layer["pos"][b, sidx] = pos_x[b, sidx]
-                            layer["k"][b, lo:hi] = kk
-                            layer["v"][b, lo:hi] = v_x[b, lo:hi]
-                for block in pl.generator.model.blocks:
-                    block.self_attn.adapt_sink_thr = cfg_thr
-                bound_call = c
-                rec["events"].append({"t": time.time() - t_mig, "bound_at_call": c, "slots_rerotated": shifted})
-            if pending_cold is not None and c == M:
-                fr = None
-            else:
-                fr = runner.step(session, c)
-            if pending_cold is not None and c == pending_cold[0]:
-                fr = pending_cold[1]
+            bound_call = None
+            if policy == "full":
+                sa.restore_state(pl, pm, session, snap, set(sa.STATE_COMPONENTS))
+            elif policy in ("ours", "ours_refresh"):
+                sa.restore_state(pl, pm, session, snap, {"meta", "inflight"})
+                if policy == "ours":
+                    for block in pl.generator.model.blocks:
+                        block.self_attn.adapt_sink_thr = -1  # freeze promotions until the true sink binds
+                    ev.log("refresh_frozen")
+            elif policy == "replay":
+                session, ms, seed_bytes, replayed = runner.replay_restart(M, 3, True, True, True)
+                ev.log("replay_done", replay_ms=ms, replayed_calls=replayed)
+            elif policy == "repeat":
+                session = runner.start()
+                for c in range(M):
+                    runner.step(session, c)
             torch.cuda.synchronize(device)
-            t_out = time.time()
-            ref = baseline.get(c)
-            ps = None
-            if fr is not None and ref is not None:
-                ps = float(np.mean([sa.psnr(ref[f].astype(np.float32) / 255.0, fr[f].astype(np.float32) / 255.0) for f in range(min(ref.shape[0], fr.shape[0]))]))
-            rec["calls"].append({"call": c, "rel": c - M, "t_out": t_out - t_mig, "psnr": ps, "missing": fr is None})
-            frames_out[c] = fr
-        th.join(timeout=600)
-        rec.update({
-            "t_go": t_go - t_mig, "t_resume": t_resume - t_mig,
-            "t_first_out": next((x["t_out"] for x in rec["calls"] if not x["missing"]), None),
-            "bytes_fg_mb": bytes_fg / MB, "bytes_bg_mb": bg["bytes"] / MB,
-            "t_sink_arrived": (bg["sink"] - t_mig) if bg["sink"] else None,
-            "bound_call": bound_call, "t_end": (bg["end"] - t_mig) if bg["end"] else None,
-            "refresh_calls_baseline": refresh,
-        })
-        results.append(rec)
-        with open(out_dir / f"proto_{policy}_{int(bw)}mbps.json", "w") as fh:
-            json.dump(rec, fh, indent=1)
-        tf = rec["t_first_out"] if rec["t_first_out"] is not None else float("nan")
-        stall = tf - service_s
-        late = [x["psnr"] for x in rec["calls"] if x["rel"] >= 16 and x["psnr"] is not None]
-        print(f"[dest] {policy} @ {bw:g} Mbps: first output {tf:.2f} s (stall ~{stall:.2f} s), fg {bytes_fg / MB:.1f} MB, bg {bg['bytes'] / MB:.0f} MB, "
-              f"bound at call {bound_call}, PSNR M+16.. {np.mean(late) if late else float('nan'):.1f} dB", flush=True)
-        del snap
-        torch.cuda.empty_cache()
+            t_resume = ev.log("resume", gpu_mem_alloc_mb=torch.cuda.memory_allocated(device) / MB)
+
+            bg = {"sink_t_first": None, "sink_t_end": None, "bytes": 0, "end": None, "h2d_s": 0.0, "checksum_ok": None, "t_send_src": None}
+
+            def receiver():
+                while True:
+                    hdr, payload = recv_msg(sock)
+                    if hdr["kind"] == "END":
+                        bg["end"] = hdr; break
+                    if bg["sink_t_first"] is None:
+                        bg["sink_t_first"] = hdr["t_recv_start"]; bg["t_send_src"] = to_dest(hdr["t_send"])
+                        ev.log("sink_recv_start", hdr["t_recv_start"], t_send_src=bg["t_send_src"])
+                    unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
+                    bg["bytes"] += len(payload); bg["h2d_s"] += hdr.get("h2d_s", 0.0); bg["checksum_ok"] = hdr.get("checksum_ok")
+                    bg["sink_t_end"] = time.time()
+                    ev.log("sink_ready", bg["sink_t_end"], bytes=len(payload), h2d_s=hdr.get("h2d_s"), checksum_ok=hdr.get("checksum_ok"), d2h_s=hdr.get("d2h_s"))
+
+            th = threading.Thread(target=receiver, daemon=True); th.start()
+
+            pending_cold = None
+            if policy == "cold":
+                session, frames0, ms = runner.restart_at(session, M)
+                ev.log("cold_restart_done", restart_ms=ms)
+                pending_cold = (M + k_steps - 1, frames0)
+            first_out = None
+            rows = []
+            last_pos = sink_pos_hist.get(M - 1)
+            for c in range(M, M + N):
+                if policy in ("ours", "ours_refresh") and bound_call is None and bg["sink_t_end"] is not None:
+                    shifted = bind_sink_into_live(pl, snap, sink, fsl, device, cfg_thr, refresh_was_frozen=(policy == "ours"))
+                    bound_call = c
+                    ev.log("sink_bind", call=c, slots_rerotated=shifted, checksum_ok=bg["checksum_ok"])
+                t0 = time.perf_counter()
+                fr = None if (pending_cold is not None and c == M) else runner.step(session, c)
+                if pending_cold is not None and c == pending_cold[0]:
+                    fr = pending_cold[1]
+                torch.cuda.synchronize(device)
+                chunk_s = time.perf_counter() - t0
+                t_out = time.time()
+                ref = baseline.get(c)
+                ps = ss = None
+                if fr is not None and ref is not None:
+                    ps = float(np.mean([sa.psnr(ref[f].astype(np.float32) / 255.0, fr[f].astype(np.float32) / 255.0) for f in range(min(ref.shape[0], fr.shape[0]))]))
+                    ss = float(sa.ssim(ref[-1].astype(np.float32) / 255.0, fr[-1].astype(np.float32) / 255.0))
+                if fr is not None and first_out is None:
+                    first_out = t_out; ev.log("first_output", t_out, call=c)
+                pos_now = sa.slot_positions(pl)["sink_slot_pos"]
+                if last_pos is not None and pos_now != last_pos:
+                    ev.log("adaptive_refresh_or_realign", t_out, call=c, sink_slot_pos=pos_now)
+                last_pos = pos_now
+                row = {"call": c, "rel": c - M, "t_out_rel": t_out - t_mig, "chunk_s": chunk_s, "psnr": ps, "ssim": ss, "missing": fr is None,
+                       "sink_bound": bound_call is not None and c >= bound_call, "gpu_mem_alloc_mb": torch.cuda.memory_allocated(device) / MB, "sink_slot_pos": pos_now}
+                rows.append(row)
+                metrics.row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
+            th.join(timeout=900)
+            sampler.finish(); metrics.close()
+            end = bg["end"] or {}
+            if end:
+                ev.log("source_end", to_dest(end.get("t_end")), bytes_by_comp=end.get("bytes_by_comp"), d2h_by_comp=end.get("d2h_by_comp"))
+
+            def win(lo, hi, key="psnr"):
+                v = [r[key] for r in rows if lo <= r["rel"] <= hi and r[key] is not None]
+                return float(np.mean(v)) if v else None
+
+            rejoin = None
+            if bound_call is not None:
+                for r in rows:
+                    if r["call"] >= bound_call and r["psnr"] is not None and r["psnr"] >= 35.0:
+                        rejoin = r["call"] - bound_call; break
+            after_bind = [r["psnr"] for r in rows if bound_call is not None and r["call"] >= bound_call + 8 and r["psnr"] is not None]
+            outs = [r for r in rows if not r["missing"]]
+            cont_ready = None
+            if bound_call is not None:
+                cont_ready = next((r["t_out_rel"] for r in rows if r["call"] == bound_call), None)
+            elif policy in ("full", "repeat") and first_out:
+                cont_ready = first_out - t_mig
+            summary = {
+                "policy": policy, "bw_mbps": bw, "rep": rep, "run_dir": str(rd), "service_s": service_s, "k": k_steps, "workload": workload, "seed": args.seed,
+                "first_output_latency_s": (first_out - t_mig) if first_out else None, "resume_latency_s": t_resume - t_mig,
+                "sink_recv_start_rel_s": (bg["sink_t_first"] - t_mig) if bg["sink_t_first"] else None,
+                "sink_ready_rel_s": (bg["sink_t_end"] - t_mig) if bg["sink_t_end"] else None,
+                "continuity_ready_rel_s": cont_ready, "bound_call": bound_call, "rejoin_calls_after_bind": rejoin,
+                "bytes_fg_by_comp": bytes_cat, "bytes_bg_sink": bg["bytes"], "total_bytes": sum(bytes_cat.values()) + bg["bytes"],
+                "checksum_ok": {**checksum_ok, "sink": bg["checksum_ok"]},
+                "serialize_s": prep["t_serialize_end"] - prep["t_serialize_start"], "d2h_by_comp": end.get("d2h_by_comp"), "h2d_fg_s": h2d_total, "h2d_sink_s": bg["h2d_s"],
+                "psnr_M0": win(0, 0), "psnr_M0_7": win(0, 7), "psnr_M16_end": win(16, 10**6), "ssim_M0_7": win(0, 7, "ssim"), "ssim_M16_end": win(16, 10**6, "ssim"),
+                "psnr_after_bind_8": float(np.mean(after_bind)) if after_bind else None,
+                "missing_chunks": sum(1 for r in rows if r["missing"]),
+                "hiccup_chunks": sum(1 for a_, b_ in zip(outs, outs[1:]) if (b_["t_out_rel"] - a_["t_out_rel"]) > 2 * service_s),
+                "gpu_mem_alloc_mb_max": max(r["gpu_mem_alloc_mb"] for r in rows),
+                "clock_offset_s": off, "rtt_min_s": sync["rtt_min_s"], "mss_dest": effective_mss(sock), "mss_source": hello.get("mss_effective"),
+                "validation": {
+                    "full_identical": (all((r["psnr"] or 0) >= 99 for r in outs)) if policy == "full" else None,
+                    "repeat_identical": (all((r["psnr"] or 0) >= 99 for r in outs)) if policy == "repeat" else None,
+                    "checksums_all_ok": all(v for v in list(checksum_ok.values()) + ([bg["checksum_ok"]] if bg["bytes"] else []) if v is not None),
+                },
+            }
+            write_json(rd / "summary.json", summary)
+            results.append(summary)
+            tf = summary["first_output_latency_s"]
+            log(f"[dest] {policy} @ {bw_tag}: first output {tf if tf is None else round(tf, 2)} s, continuity-ready {cont_ready if cont_ready is None else round(cont_ready, 2)} s, "
+                f"bytes fg {sum(bytes_cat.values()) / MB:.1f} MB bg {bg['bytes'] / MB:.0f} MB, PSNR M+16.. {summary['psnr_M16_end'] if summary['psnr_M16_end'] is None else round(summary['psnr_M16_end'], 1)} dB, "
+                f"checksums {summary['validation']['checksums_all_ok']}")
+            out_log.close()
+            del snap
+            torch.cuda.empty_cache()
     send_msg(sock, "DONE", {}, b"", None)
     sock.close()
-    with open(out_dir / "proto_results.json", "w") as fh:
-        json.dump(results, fh, indent=1)
-    print(f"[dest] done -> {out_dir}")
+    if args.out_dir:
+        Path(args.out_dir).mkdir(parents=True, exist_ok=True)
+        write_json(Path(args.out_dir) / "proto_results.json", results)
+    print(f"[dest] done; {len(results)} runs under results/evaluation/{args.experiment}/")
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--role", choices=["source", "dest"], required=True)
-    p.add_argument("--host", type=str, default="127.0.0.1")
+    p.add_argument("--host", type=str, default="127.0.0.1", help="dest: source host to connect to")
+    p.add_argument("--bind", type=str, default="0.0.0.0", help="source: address to listen on")
     p.add_argument("--port", type=int, default=29777)
-    p.add_argument("--sweep", type=str, default="ours:1000,ours_refresh:1000,full:1000,cold:1000,replay:1000", help="policy:bw_mbps,...")
+    p.add_argument("--mss", type=int, default=DEFAULT_MSS, help="TCP_MAXSEG cap on every socket (0 = kernel default)")
+    p.add_argument("--iface", type=str, default=None, help="NIC to sample in network.csv (default: all non-loopback)")
+    p.add_argument("--experiment", type=str, default="single_handoff")
+    p.add_argument("--reps", type=int, default=1)
+    p.add_argument("--sweep", type=str, default="ours:1000,full:1000,cold:1000,replay:1000", help="policy:bw_mbps,... (bw native/0 = unshaped)")
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))
     p.add_argument("--checkpoint_folder", type=str, default=str(REPO_ROOT / "ckpts/wan_causal_dmd_v2v"))
     p.add_argument("--prompt_file_path", type=str, default=str(REPO_ROOT / "examples/prompt.txt"))
     p.add_argument("--video_path", type=str, default=str(REPO_ROOT / "examples/original.mp4"))
-    p.add_argument("--output_folder", type=str, default=str(REPO_ROOT / "results/state_migration/proto"))
+    p.add_argument("--output_folder", type=str, default=str(REPO_ROOT / "results/evaluation"))
     p.add_argument("--noise_scale", type=float, default=0.8)
     p.add_argument("--height", type=int, default=480)
     p.add_argument("--width", type=int, default=832)
@@ -539,8 +634,10 @@ def parse_args():
     p.add_argument("--fast", action="store_true", default=False)
     p.add_argument("--migration_chunk", type=int, default=30)
     p.add_argument("--post_chunks", type=int, default=80)
-    p.add_argument("--out_dir", type=str, default=str(REPO_ROOT / "results/state_migration/proto"))
-    return p.parse_args()
+    p.add_argument("--out_dir", type=str, default=None, help="optional: also write a combined proto_results.json here")
+    a = p.parse_args()
+    a.mss = a.mss or None
+    return a
 
 
 if __name__ == "__main__":
