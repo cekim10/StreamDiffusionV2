@@ -1,0 +1,119 @@
+[ablation] baseline: 70 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 48]; last before M: 4
+[ablation] baseline done in 38 s; 69 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4161317920312285
+[ablation] config repeat
+  repeat: call 30 (M+0) psnr 99.0
+  repeat: call 31 (M+1) psnr 99.0
+  repeat: call 34 (M+4) psnr 99.0
+  repeat: call 46 (M+16) psnr 99.0
+[ablation] config xfer_all
+  xfer_all: call 30 (M+0) psnr 99.0
+  xfer_all: call 31 (M+1) psnr 99.0
+  xfer_all: call 34 (M+4) psnr 99.0
+  xfer_all: call 46 (M+16) psnr 99.0
+[ablation] config xfer_sink+meta
+  xfer_sink+meta: call 30 (M+0) psnr 10.2
+  xfer_sink+meta: call 31 (M+1) psnr 16.3
+  xfer_sink+meta: call 34 (M+4) psnr 23.8
+  xfer_sink+meta: call 46 (M+16) psnr 37.9
+[ablation] config xfer_sink+meta+vae
+  xfer_sink+meta+vae: call 30 (M+0) psnr 9.2
+  xfer_sink+meta+vae: call 31 (M+1) psnr 17.4
+  xfer_sink+meta+vae: call 34 (M+4) psnr 24.3
+  xfer_sink+meta+vae: call 46 (M+16) psnr 38.2
+[ablation] config xfer_sink+meta+vae+inflight
+  xfer_sink+meta+vae+inflight: call 30 (M+0) psnr 25.7
+  xfer_sink+meta+vae+inflight: call 31 (M+1) psnr 22.8
+  xfer_sink+meta+vae+inflight: call 34 (M+4) psnr 25.9
+  xfer_sink+meta+vae+inflight: call 46 (M+16) psnr 48.1
+[ablation] config xfer_meta
+  xfer_meta: call 30 (M+0) psnr 10.4
+  xfer_meta: call 31 (M+1) psnr 15.3
+  xfer_meta: call 34 (M+4) psnr 17.6
+  xfer_meta: call 46 (M+16) psnr 19.0
+[ablation] config xfer_meta+vae+inflight
+  xfer_meta+vae+inflight: call 30 (M+0) psnr 21.1
+  xfer_meta+vae+inflight: call 31 (M+1) psnr 16.8
+  xfer_meta+vae+inflight: call 34 (M+4) psnr 17.0
+  xfer_meta+vae+inflight: call 46 (M+16) psnr 18.0
+[ablation] config replay_3_sinkhist_pos
+  replay_3_sinkhist_pos: call 30 (M+0) psnr 24.0
+  replay_3_sinkhist_pos: call 31 (M+1) psnr 26.5
+  replay_3_sinkhist_pos: call 34 (M+4) psnr 28.4
+  replay_3_sinkhist_pos: call 46 (M+16) psnr 30.2
+[ablation] config ph_localrefresh
+  ph_localrefresh: call 30 (M+0) psnr 28.6
+  ph_localrefresh: call 31 (M+1) psnr 24.4
+  ph_localrefresh: call 34 (M+4) psnr 21.3
+  ph_localrefresh: call 46 (M+16) psnr 19.3
+[ablation] config ph_zero_noswap
+  ph_zero_noswap: call 30 (M+0) psnr 28.0
+  ph_zero_noswap: call 31 (M+1) psnr 23.8
+  ph_zero_noswap: call 34 (M+4) psnr 17.5
+  ph_zero_noswap: call 46 (M+16) psnr 16.7
+[ablation] config ph_local_noswap
+  ph_local_noswap: call 30 (M+0) psnr 28.9
+  ph_local_noswap: call 31 (M+1) psnr 24.0
+  ph_local_noswap: call 34 (M+4) psnr 21.4
+  ph_local_noswap: call 46 (M+16) psnr 20.3
+[ablation] config ph_zero_1
+  ph_zero_1: call 30 (M+0) psnr 28.0
+  ph_zero_1: call 31 (M+1) psnr 28.4
+  ph_zero_1: call 34 (M+4) psnr 33.0
+  ph_zero_1: call 46 (M+16) psnr 44.9
+[ablation] config ph_zero_4
+  ph_zero_4: call 30 (M+0) psnr 28.0
+  ph_zero_4: call 31 (M+1) psnr 23.8
+  ph_zero_4: call 34 (M+4) psnr 18.6
+  ph_zero_4: call 46 (M+16) psnr 44.5
+[ablation] config ph_zero_8
+  ph_zero_8: call 30 (M+0) psnr 28.0
+  ph_zero_8: call 31 (M+1) psnr 23.8
+  ph_zero_8: call 34 (M+4) psnr 17.5
+  ph_zero_8: call 46 (M+16) psnr 37.9
+[ablation] config ph_zero_16
+  ph_zero_16: call 30 (M+0) psnr 28.0
+  ph_zero_16: call 31 (M+1) psnr 23.8
+  ph_zero_16: call 34 (M+4) psnr 17.5
+  ph_zero_16: call 46 (M+16) psnr 20.4
+[ablation] config ph_local_1
+  ph_local_1: call 30 (M+0) psnr 28.9
+  ph_local_1: call 31 (M+1) psnr 28.4
+  ph_local_1: call 34 (M+4) psnr 34.0
+  ph_local_1: call 46 (M+16) psnr 44.3
+[ablation] config ph_local_4
+  ph_local_4: call 30 (M+0) psnr 28.9
+  ph_local_4: call 31 (M+1) psnr 24.0
+  ph_local_4: call 34 (M+4) psnr 23.9
+  ph_local_4: call 46 (M+16) psnr 45.1
+[ablation] config ph_local_8
+  ph_local_8: call 30 (M+0) psnr 28.9
+  ph_local_8: call 31 (M+1) psnr 24.0
+  ph_local_8: call 34 (M+4) psnr 21.4
+  ph_local_8: call 46 (M+16) psnr 40.1
+[ablation] config ph_local_16
+  ph_local_16: call 30 (M+0) psnr 28.9
+  ph_local_16: call 31 (M+1) psnr 24.0
+  ph_local_16: call 34 (M+4) psnr 21.4
+  ph_local_16: call 46 (M+16) psnr 21.7
+[ablation] done -> results/state_migration/mechanism/ablation_summary.md
+  repeat                 withheld       0 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  xfer_all               withheld    3378 MB  PSNR M+0..3  99.0  M+16..  99.0  recovery -29
+  xfer_sink+meta         withheld    7894 MB  PSNR M+0..3  16.7  M+16..  35.2  recovery -29
+  xfer_sink+meta+vae     withheld    5024 MB  PSNR M+0..3  17.1  M+16..  35.8  recovery -29
+  xfer_sink+meta+vae+inflight withheld    5024 MB  PSNR M+0..3  23.6  M+16..  47.7  recovery -29
+  xfer_meta              withheld    9540 MB  PSNR M+0..3  14.9  M+16..  19.1  recovery -29
+  xfer_meta+vae+inflight withheld    6669 MB  PSNR M+0..3  17.8  M+16..  18.7  recovery -29
+  replay_3_sinkhist_pos  withheld    9542 MB  PSNR M+0..3  26.4  M+16..  29.3  recovery -29
+  ph_localrefresh        withheld    1645 MB  PSNR M+0..3  24.4  M+16..  20.3  recovery -29
+  ph_zero_noswap         withheld    1645 MB  PSNR M+0..3  23.0  M+16..  16.7  recovery -29
+  ph_local_noswap        withheld    1645 MB  PSNR M+0..3  24.1  M+16..  20.7  recovery -29
+  ph_zero_1              withheld    1645 MB  PSNR M+0..3  29.3  M+16..  43.8  recovery -29
+  ph_zero_4              withheld    1645 MB  PSNR M+0..3  23.0  M+16..  43.8  recovery -29
+  ph_zero_8              withheld    1645 MB  PSNR M+0..3  23.0  M+16..  43.0  recovery -29
+  ph_zero_16             withheld    1645 MB  PSNR M+0..3  23.0  M+16..  38.1  recovery -29
+  ph_local_1             withheld    1645 MB  PSNR M+0..3  29.1  M+16..  43.8  recovery -29
+  ph_local_4             withheld    1645 MB  PSNR M+0..3  24.1  M+16..  43.9  recovery -29
+  ph_local_8             withheld    1645 MB  PSNR M+0..3  24.1  M+16..  43.4  recovery -29
+  ph_local_16            withheld    1645 MB  PSNR M+0..3  24.1  M+16..  38.8  recovery -29
