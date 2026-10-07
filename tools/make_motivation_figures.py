@@ -215,29 +215,100 @@ def mobility_points(pol: str):
     return pts
 
 
+EDGE_COL = {"A": "#bbbbbb", "B": "#4c72b0", "C": "#dd8452", "D": "#55a868"}
+
+
+def restart_timeline(path: Path):
+    """Measured timeline of the naive 'restart' policy: execution location, sink transfer attempts, bind times."""
+    r = json.load(open(path))
+    edges = r.get("edges", ["B", "C"])
+    moves = [(m["from"], m["to"], m["t"]) for m in r.get("moves", [])] if r.get("moves") else [("B", "C", r["t_move"])]
+    ready = r.get("ready") or {k: v for k, v in {"B": r.get("t_ready_B"), "C": r.get("t_ready_C")}.items() if v is not None}
+    bytes_ = r["bytes"]
+    # execution blocks
+    cuts = [0.0] + [t for _, _, t in moves]
+    exec_blocks = [(edges[i], cuts[i], cuts[i + 1] if i + 1 < len(cuts) else None) for i in range(len(cuts))]
+    # transfer attempts: one per destination edge, start = when execution arrived there (or 0 for B)
+    attempts = []
+    for i, e in enumerate(edges):
+        start = cuts[i]
+        nbytes = bytes_.get(f"A->{e}", bytes_.get("A" + e, 0)) / 2**20
+        if e in ready:
+            attempts.append((e, start, ready[e], True, nbytes))
+        else:
+            end = cuts[i + 1] if i + 1 < len(cuts) else None
+            attempts.append((e, start, end, False, nbytes))
+    return exec_blocks, attempts, ready, moves
+
+
+def gantt(ax, exec_blocks, attempts, ready, moves, t_end, title, show_brackets):
+    ax.set_xlim(0, t_end); ax.set_ylim(0.3, 3.3)
+    ax.set_yticks([0.6, 1.6, 2.6]); ax.set_yticklabels(["continuity", "sink transfer", "execution"], fontsize=7.5)
+    ax.tick_params(axis="y", length=0); ax.spines["left"].set_visible(False)
+    # execution row
+    for e, a, b in exec_blocks:
+        b = t_end if b is None else min(b, t_end)
+        ax.barh(2.6, b - a, left=a, height=0.5, color=EDGE_COL[e], edgecolor="white", lw=0.5)
+        if b - a > 4:
+            ax.text((a + b) / 2, 2.6, f"at {e}", ha="center", va="center", fontsize=7, color="white", weight="bold")
+        elif b - a > 1.2:
+            ax.text((a + b) / 2, 2.6, e, ha="center", va="center", fontsize=6.5, color="white", weight="bold")
+    for _, to, t in moves:
+        ax.axvline(t, color="k", lw=0.6, ls=":")
+    # sink transfer row
+    wasted = []
+    for e, a, b, ok, mb in attempts:
+        b = t_end if b is None else min(b, t_end)
+        if ok:
+            ax.barh(1.6, b - a, left=a, height=0.5, color=EDGE_COL[e], alpha=0.85, edgecolor="white", lw=0.5)
+            ax.text(b + 0.3, 1.6, "✓ bind", ha="left", va="center", fontsize=7, color="#2ca02c", weight="bold")
+            if b - a > 4:
+                ax.text((a + b) / 2, 1.6, f"A→{e}  1.6 GB", ha="center", va="center", fontsize=6.8, color="white", weight="bold")
+        else:
+            ax.barh(1.6, b - a, left=a, height=0.5, facecolor="white", edgecolor=C["restart"], hatch="////", lw=0.8)
+            wasted.append((b, mb))
+    if wasted:
+        xw = max(b for b, _ in wasted)
+        ax.text(xw + 0.4, 1.22, "✗ " + " + ".join(f"{mb:.0f}" for _, mb in wasted) + " MB wasted", ha="left", va="center", fontsize=6.5, color=C["restart"])
+    # continuity row: bound sink available at the edge where execution is?
+    segs = []
+    for i, (e, a, b) in enumerate(exec_blocks):
+        b = t_end if b is None else min(b, t_end)
+        rb = ready.get(e)
+        if rb is None or rb >= b:
+            segs.append((a, b, False))
+        else:
+            segs.append((a, max(a, rb), False)); segs.append((max(a, rb), b, True))
+    for a, b, ok in segs:
+        if b > a:
+            ax.barh(0.6, b - a, left=a, height=0.35, color="#2ca02c" if ok else "#d62728", alpha=0.75 if ok else 0.45)
+    if show_brackets:
+        # T_s bracket under the first completed transfer, T_m bracket above the execution row
+        e, a, b, ok, _ = attempts[0]
+        if ok:
+            ax.annotate("", xy=(a, 1.22), xytext=(b, 1.22), arrowprops=dict(arrowstyle="<->", lw=0.8))
+            ax.text((a + b) / 2, 1.17, r"$T_s$ (sink transfer)", ha="center", va="top", fontsize=7.5)
+        if moves:
+            t1 = moves[0][2]
+            ax.annotate("", xy=(0, 3.0), xytext=(t1, 3.0), arrowprops=dict(arrowstyle="<->", lw=0.8))
+            ax.text(t1 / 2, 3.04, r"$T_m$ (mobility interval)", ha="center", va="bottom", fontsize=7.5)
+    ax.set_title(title, loc="left", fontsize=8.5, pad=14 if show_brackets else 4)
+
+
 def fig4(out: Path, t_s: float = 16.6):
-    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(7.2, 2.8), gridspec_kw={"width_ratios": [1.15, 1.0]})
-    ax0.axis("off"); ax0.set_xlim(-1.2, 10); ax0.set_ylim(0, 6)
-
-    def lane(y, label):
-        ax0.text(-0.2, y, label, ha="right", va="center", fontsize=7.5)
-
-    def harrow(x0, x1, y, color, lw=1.3):
-        arrow(ax0, (x0, y), (x1, y), color=color, lw=lw, ms=7)
-
-    ax0.text(0.0, 5.6, r"$\rho = T_s/T_m < 1$: continuity state keeps up", fontsize=8, weight="bold")
-    lane(4.9, "execution"); lane(4.1, "sink")
-    for x0, x1, n in [(0, 3.6, "A→B"), (3.9, 7.5, "B→C")]:
-        harrow(x0, x1, 4.9, "#333333"); ax0.text((x0 + x1) / 2, 5.1, n, ha="center", fontsize=6.5)
-    harrow(0, 2.4, 4.1, C["sink"], lw=2.2); ax0.text(2.5, 4.1, "✓ bound at B", color="#2ca02c", va="center", fontsize=7)
-    harrow(3.9, 6.3, 4.1, C["sink"], lw=2.2); ax0.text(6.4, 4.1, "✓ bound at C", color="#2ca02c", va="center", fontsize=7)
-    ax0.text(0.0, 2.9, r"$\rho > 1$: execution outruns its continuity state", fontsize=8, weight="bold")
-    lane(2.2, "execution"); lane(1.4, "sink")
-    for x0, x1, n in [(0, 1.6, "A→B"), (1.9, 3.5, "B→C"), (3.8, 5.4, "C→D")]:
-        harrow(x0, x1, 2.2, "#333333"); ax0.text((x0 + x1) / 2, 2.4, n, ha="center", fontsize=6.5)
-    harrow(0, 4.6, 1.4, C["sink"], lw=2.2); ax0.text(4.75, 1.4, "✗ B already left", color=C["restart"], va="center", fontsize=7)
-    ax0.text(0.0, 0.5, "restart: discard delivered progress   |   relay: keep progress, but also the stale route", fontsize=6.8, color="#444444")
-    ax0.set_title("(a) Mobility interval $T_m$ vs. transfer time $T_s$", loc="left")
+    fig = plt.figure(figsize=(7.6, 3.3))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.3, 1.0], height_ratios=[1.12, 1.0], hspace=0.55, wspace=0.6)
+    axA = fig.add_subplot(gs[0, 0]); axB = fig.add_subplot(gs[1, 0], sharex=axA); ax1 = fig.add_subplot(gs[:, 1])
+    d = ROOT / "results/state_migration/mobility"
+    t_end = 46.0
+    gantt(axA, *restart_timeline(d / "mob_restart_tm24_h2.json"), t_end,
+          r"(a) Naive restart, measured.  $\rho<1$ ($T_m$ = 24 s): sink keeps up", True)
+    gantt(axB, *restart_timeline(d / "mob_restart_tm2_h3_iu.json"), t_end,
+          r"$\rho>1$ ($T_m$ = 2 s): execution outruns the sink", False)
+    axA.tick_params(labelbottom=False); axB.set_xlabel("Time after the first handoff (s)")
+    for ax in (axA, axB):
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    # (b) measured latency vs rho
     for pol, label, col, mk in [("restart", "Restart", C["restart"], "s"), ("relay", "Relay", C["relay"], "^"), ("direct", "Oracle direct", C["direct"], "o")]:
         pts = [(tm, y, w) for tm, y, w in mobility_points(pol) if y is not None]
         xs = [t_s / tm for tm, _, _ in pts]; ys = [y for _, y, _ in pts]
@@ -253,9 +324,8 @@ def fig4(out: Path, t_s: float = 16.6):
     ax1.set_xlabel(r"$\rho = T_s / T_m$"); ax1.set_ylabel("Continuity-ready latency\nafter the final move (s)")
     ax1.set_ylim(-1, 38)
     ax1.legend(loc="upper left", frameon=False, bbox_to_anchor=(0.0, 1.02))
-    ax1.set_title("(b) Measured, A→B→C at 1 Gbps", loc="left")
-    fig.tight_layout()
-    fig.savefig(out / "fig4_mobility.pdf"); fig.savefig(out / "fig4_mobility.png"); plt.close(fig)
+    ax1.set_title("(b) A→B→C at 1 Gbps", loc="left")
+    fig.savefig(out / "fig4_mobility.pdf", bbox_inches="tight"); fig.savefig(out / "fig4_mobility.png", bbox_inches="tight"); plt.close(fig)
 
 
 def main():
