@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Background & Motivation figures from the raw experiment records.
+"""Background & Motivation figures (all matplotlib) from the raw experiment records.
 
-Fig. 2  State is temporally heterogeneous      <- results/state_migration/gen/original_s0_k2/ablation_raw.csv
-Fig. 3  Continuity can be late-bound           <- results/state_migration/mechanism/ablation_raw.csv
-Fig. 4  Mobility outruns continuity transfer   <- results/state_migration/mobility/mob_{restart,relay,direct}_tm*.json
+Fig. 1  Streaming diffusion is stateful (schematic with measured sizes)       <- Phase 0A inventory (k=2)
+Fig. 2  State is temporally heterogeneous                                     <- gen/original_s0_k2/ablation_raw.csv
+Fig. 3  Continuity can be late-bound                                          <- mechanism/ablation_raw.csv
+Fig. 4  Mobility outruns continuity transfer                                  <- mobility/mob_{restart,relay,direct}_tm*.json
+Fig. A1 Obs. 1 across videos / k                                              <- gen/*/ablation_raw.csv
 Usage: python tools/make_motivation_figures.py [--out results/state_migration/figures]
 """
 
@@ -19,16 +21,19 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.patches import FancyArrowPatch  # noqa: E402
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-C = {"inflight": "#d62728", "recent": "#1f77b4", "vae": "#2ca02c", "sink": "#7f7f7f", "d1": "#1f77b4", "d4": "#ff7f0e", "d16": "#9467bd",
+CAP = 50.0  # PSNR above this is visually identical; bit-exact runs report 99
+SEM = {"Immediate": "#d62728", "Durable": "#6a6a6a", "Ephemeral": "#1f77b4"}
+C = {"inflight": SEM["Immediate"], "recent": "#1f77b4", "vae": "#2ca02c", "sink": SEM["Durable"],
+     "d1": "#1f77b4", "d4": "#ff7f0e", "d8": "#2ca02c", "d16": "#9467bd",
      "restart": "#d62728", "relay": "#ff7f0e", "direct": "#2ca02c"}
-plt.rcParams.update({"font.size": 9, "axes.titlesize": 9.5, "axes.labelsize": 9, "legend.fontsize": 8, "figure.dpi": 150,
-                     "axes.spines.top": False, "axes.spines.right": False})
+plt.rcParams.update({"font.size": 9, "axes.titlesize": 9.5, "axes.labelsize": 9, "legend.fontsize": 8, "figure.dpi": 160,
+                     "axes.spines.top": False, "axes.spines.right": False, "pdf.fonttype": 42})
 
 
-def curves(raw: Path, cfgs: list[str], cap: float = 50.0) -> dict[str, tuple[list[int], list[float]]]:
+def curves(raw: Path, cfgs: list[str], cap: float = CAP):
     by: dict[str, dict[int, list[float]]] = {c: {} for c in cfgs}
     with open(raw) as fh:
         for r in csv.DictReader(fh):
@@ -37,62 +42,157 @@ def curves(raw: Path, cfgs: list[str], cap: float = 50.0) -> dict[str, tuple[lis
     return {c: (sorted(d), [st.mean(d[k]) for k in sorted(d)]) for c, d in by.items()}
 
 
+def window(cv, cfg, lo, hi):
+    x, y = cv[cfg]
+    vals = [v for k, v in zip(x, y) if lo <= k <= hi]
+    return st.mean(vals) if vals else float("nan")
+
+
+def box(ax, x, y, w, h, text, fc, ec="#333333", fs=7.5, bold=False, tc="black", r=0.02):
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle=f"round,pad=0,rounding_size={r}", fc=fc, ec=ec, lw=0.8))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=fs, weight="bold" if bold else "normal", color=tc)
+
+
+def arrow(ax, p0, p1, color="#333333", lw=1.0, ls="-", ms=8):
+    ax.add_patch(FancyArrowPatch(p0, p1, arrowstyle="-|>", mutation_scale=ms, lw=lw, color=color, linestyle=ls, shrinkA=0, shrinkB=0))
+
+
+# ----------------------------------------------------------------------------- Fig. 1 schematic
+def fig1(out: Path):
+    fig, ax = plt.subplots(figsize=(7.2, 2.6))
+    ax.axis("off"); ax.set_xlim(0, 100); ax.set_ylim(0, 40)
+    # pipeline boxes
+    box(ax, 1, 15, 11, 10, "camera\nframes", "#f7f7f7")
+    box(ax, 17, 15, 14, 10, "streaming VAE\nencoder", "#eef6ee")
+    box(ax, 36, 9, 30, 22, "", "#f3f3f3", ec="#999999")
+    ax.text(51, 29, "causal video DiT (Stream-Batch)", ha="center", va="center", fontsize=8, weight="bold")
+    box(ax, 71, 15, 14, 10, "streaming VAE\ndecoder", "#eef6ee")
+    box(ax, 90, 15, 9, 10, "output\nframes", "#f7f7f7")
+    for x0, x1 in [(12, 17), (31, 36), (66, 71), (85, 90)]:
+        arrow(ax, (x0, 20), (x1, 20))
+    # state inside the DiT: rolling KV ring (sink slots + recent slots), in-flight rows, metadata
+    for i in range(6):
+        fc = SEM["Durable"] if i < 3 else SEM["Ephemeral"]
+        box(ax, 38 + i * 4.3, 17, 3.8, 5, "", fc, ec="white", fs=6, r=0.0)
+    ax.text(44.3, 15.2, "sink slots (1.6 GB)", ha="center", va="top", fontsize=6.5, color=SEM["Durable"])
+    ax.text(57.3, 15.2, "recent slots (1.6 GB)", ha="center", va="top", fontsize=6.5, color=SEM["Ephemeral"])
+    ax.text(51, 24.2, "rolling KV cache (ring, 6 latent frames x 30 layers)", ha="center", va="bottom", fontsize=6.5)
+    box(ax, 38, 10.5, 12, 3.2, "in-flight rows", SEM["Immediate"], ec="white", fs=6, tc="white", r=0.0)
+    box(ax, 51.5, 10.5, 12.5, 3.2, "positions, EMA, ...", "#f0b0b0", ec="white", fs=6, r=0.0)
+    # caches under the VAEs
+    box(ax, 17, 9.5, 14, 3.6, "conv feature cache", SEM["Ephemeral"], ec="white", fs=6, tc="white", r=0.0)
+    box(ax, 71, 9.5, 14, 3.6, "conv feature cache", SEM["Ephemeral"], ec="white", fs=6, tc="white", r=0.0)
+    # size annotations
+    ax.text(24, 8.2, "1.1 GB", ha="center", va="top", fontsize=6.5)
+    ax.text(78, 8.2, "1.8 GB", ha="center", va="top", fontsize=6.5)
+    ax.text(44, 7.4, "0.2 MB", ha="center", va="top", fontsize=6.5)
+    ax.text(57.75, 7.4, "~2 MB", ha="center", va="top", fontsize=6.5)
+    # per-session total + legend
+    ax.text(50, 37.5, "per-session execution state: 6.2 GB (1.3B model, 480x832, 2 denoising steps), rewritten every 250 ms chunk",
+            ha="center", va="center", fontsize=7.5)
+    for i, (name, col) in enumerate([("immediate (must move now)", SEM["Immediate"]), ("durable (anchors continuity)", SEM["Durable"]),
+                                     ("ephemeral (regenerates)", SEM["Ephemeral"])]):
+        ax.add_patch(FancyBboxPatch((2 + i * 33, 1.2), 2.2, 2.2, boxstyle="square,pad=0", fc=col, ec="none"))
+        ax.text(5 + i * 33, 2.3, name, va="center", fontsize=6.8)
+    fig.tight_layout(pad=0.2)
+    fig.savefig(out / "fig1_stateful_streaming.pdf"); fig.savefig(out / "fig1_stateful_streaming.png"); plt.close(fig)
+
+
 # ----------------------------------------------------------------------------- Fig. 2
+STATES = [("drop_inflight", "In-flight row", 0.2, "Immediate", C["inflight"]),
+          ("drop_kv_recent", "Recent KV", 1645, "Ephemeral", C["recent"]),
+          ("drop_vae_all", "VAE caches", 2871, "Ephemeral", C["vae"]),
+          ("ph_localrefresh", "Sink KV", 1645, "Durable", C["sink"])]
+
+
 def fig2(out: Path):
     raw = ROOT / "results/state_migration/gen/original_s0_k2/ablation_raw.csv"
-    cv = curves(raw, ["drop_inflight", "drop_kv_recent", "drop_vae_all", "ph_localrefresh"])
-    fig, (ax, tx) = plt.subplots(1, 2, figsize=(7.0, 2.7), gridspec_kw={"width_ratios": [1.55, 1.0]})
-    spec = [("drop_kv_recent", "No recent KV (1.6 GB)", C["recent"], "-"),
-            ("drop_vae_all", "No VAE caches (2.9 GB)", C["vae"], "-"),
-            ("drop_inflight", "No in-flight row (0.2 MB)", C["inflight"], "-"),
-            ("ph_localrefresh", "No sink KV (1.6 GB)", C["sink"], "-")]
-    for cfg, label, col, ls in spec:
+    cv = curves(raw, [s[0] for s in STATES])
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.2, 2.75), gridspec_kw={"width_ratios": [1.5, 1.0]})
+    for cfg, label, mb, sem, col in STATES:
         x, y = cv[cfg]
-        ax.plot(x, y, ls, color=col, lw=1.6, label=label)
-    ax.axhline(50, color="k", lw=0.6, ls=":")
-    ax.text(39.5, 50.6, "identical to uninterrupted run", ha="right", va="bottom", fontsize=7, color="k")
-    ax.set_xlabel("Chunks after migration")
-    ax.set_ylabel("PSNR to uninterrupted execution (dB)")
-    ax.set_xlim(0, 39); ax.set_ylim(8, 53)
+        size = f"{mb:.1f} MB" if mb < 1 else f"{mb / 1024:.1f} GB"
+        ax.plot(x, y, color=col, lw=1.6, label=f"No {label[0].lower() + label[1:]} ({size})")
+    ax.axhline(CAP, color="k", lw=0.6, ls=":")
+    ax.text(39.5, CAP + 0.6, "identical to uninterrupted run", ha="right", va="bottom", fontsize=7)
+    ax.set_xlabel("Chunks after migration"); ax.set_ylabel("PSNR to uninterrupted execution (dB)")
+    ax.set_xlim(0, 39); ax.set_ylim(8, 54)
     ax.legend(loc="lower right", frameon=False)
     ax.set_title("(a) Continuity after losing one state component", loc="left")
-    # (b) size vs semantics table
-    tx.axis("off")
-    rows = [("In-flight row", "0.2 MB", "Immediate"), ("Metadata", "~2 MB", "Immediate"), ("Sink KV", "1.6 GB", "Durable"),
-            ("Recent KV", "1.6 GB", "Ephemeral"), ("VAE caches", "2.9 GB", "Ephemeral")]
-    tbl = tx.table(cellText=[list(r) for r in rows], colLabels=["State", "Size (k=2)", "Semantics"], loc="center", cellLoc="left", colLoc="left")
-    tbl.auto_set_font_size(False); tbl.set_fontsize(8); tbl.scale(1.0, 1.25)
-    for (r, c), cell in tbl.get_celld().items():
-        cell.set_edgecolor("#bbbbbb")
-        if r == 0:
-            cell.set_text_props(weight="bold")
-        elif c == 2:
-            cell.set_text_props(color={"Immediate": C["inflight"], "Durable": C["sink"], "Ephemeral": C["recent"]}[rows[r - 1][2]])
-    tx.set_title("(b) Size ≠ importance", loc="left")
+    # (b) size vs. continuity impact
+    for cfg, label, mb, sem, col in STATES:
+        early = window(cv, cfg, 0, 3); late = window(cv, cfg, 16, 10**6)
+        bx.plot([mb, mb], [early, late], color=col, lw=1.2, alpha=0.6)
+        bx.scatter([mb], [early], s=34, facecolor="white", edgecolor=col, lw=1.4, zorder=3)
+        bx.scatter([mb], [late], s=42, color=col, zorder=4)
+        off = {"drop_inflight": (1.7, 1.0), "drop_kv_recent": (0.09, -2.0), "drop_vae_all": (1.5, 1.2), "ph_localrefresh": (0.09, -2.5)}[cfg]
+        bx.annotate(label, (mb, late), xytext=(mb * off[0], late + off[1]), fontsize=7, color=col,
+                    ha="left" if off[0] > 1 else "right")
+    bx.set_xscale("log"); bx.set_xlim(0.08, 20000)
+    bx.set_xticks([0.1, 1, 10, 100, 1000, 10000]); bx.set_xticklabels(["0.1 MB", "1", "10", "100", "1 GB", "10 GB"])
+    bx.set_ylim(8, 54); bx.axhline(CAP, color="k", lw=0.6, ls=":")
+    bx.set_xlabel("Size of the lost state"); bx.set_ylabel("PSNR to uninterrupted (dB)")
+    bx.scatter([], [], s=34, facecolor="white", edgecolor="k", lw=1.2, label="first 4 chunks")
+    bx.scatter([], [], s=42, color="k", label="chunks 16+")
+    bx.legend(loc="lower left", frameon=False, handletextpad=0.3)
+    bx.set_title("(b) Size ≠ importance", loc="left")
     fig.tight_layout()
     fig.savefig(out / "fig2_state_semantics.pdf"); fig.savefig(out / "fig2_state_semantics.png"); plt.close(fig)
 
 
+def fig2_appendix(out: Path):
+    runs = [("original_s0_k2", "original, k=2"), ("original_s0_k4", "original, k=4"), ("bird_s0_k2", "bird, k=2"), ("boxing_s0_k2", "boxing, k=2")]
+    fig, axes = plt.subplots(1, len(runs), figsize=(1.9 * len(runs), 2.3), sharey=True)
+    for ax, (run, title) in zip(axes, runs):
+        raw = ROOT / f"results/state_migration/gen/{run}/ablation_raw.csv"
+        if not raw.exists():
+            ax.set_visible(False); continue
+        cv = curves(raw, [s[0] for s in STATES])
+        for cfg, label, mb, sem, col in STATES:
+            if cfg in cv and cv[cfg][0]:
+                ax.plot(*cv[cfg], color=col, lw=1.3, label=f"no {label.lower()}")
+        ax.set_title(title, fontsize=8); ax.set_xlim(0, 39); ax.set_ylim(8, 54)
+        ax.set_xlabel("chunks after migration", fontsize=7.5)
+    axes[0].set_ylabel("PSNR (dB)")
+    axes[-1].legend(loc="lower right", frameon=False, fontsize=6.5)
+    fig.tight_layout()
+    fig.savefig(out / "figA1_semantics_generalization.pdf"); fig.savefig(out / "figA1_semantics_generalization.png"); plt.close(fig)
+
+
 # ----------------------------------------------------------------------------- Fig. 3
-def fig3(out: Path):
+def fig3(out: Path, tau: float = 35.0):
     raw = ROOT / "results/state_migration/mechanism/ablation_raw.csv"
-    cv = curves(raw, ["ph_zero_1", "ph_zero_4", "ph_zero_16", "ph_zero_noswap"])
-    fig, ax = plt.subplots(figsize=(4.6, 2.7))
-    for cfg, label, col, d in [("ph_zero_1", "Sink arrives after 1 chunk", C["d1"], 1), ("ph_zero_4", "Sink arrives after 4 chunks", C["d4"], 4),
-                               ("ph_zero_16", "Sink arrives after 16 chunks", C["d16"], 16)]:
-        x, y = cv[cfg]
-        ax.plot(x, y, color=col, lw=1.6, label=label)
-        ax.axvline(d, color=col, lw=0.8, ls="--", alpha=0.8)
+    delays = [(1, "d1"), (4, "d4"), (8, "d8"), (16, "d16")]
+    cv = curves(raw, [f"ph_zero_{d}" for d, _ in delays] + ["ph_zero_noswap", "repeat"])
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.2, 2.75), gridspec_kw={"width_ratios": [1.6, 1.0]})
+    for d, key in delays:
+        if d == 8:
+            continue  # keep (a) readable; 8 appears in (b)
+        x, y = cv[f"ph_zero_{d}"]
+        ax.plot(x, y, color=C[key], lw=1.6, label=f"sink arrives after {d} chunk{'s' if d > 1 else ''}")
+        ax.axvline(d, color=C[key], lw=0.8, ls="--", alpha=0.8)
     x, y = cv["ph_zero_noswap"]
-    ax.plot(x, y, color=C["sink"], lw=1.6, label="Sink never arrives")
-    ax.axhline(50, color="k", lw=0.6, ls=":")
-    ax.text(39.5, 50.6, "sink never lost: identical", ha="right", va="bottom", fontsize=7)
-    ax.annotate("execution resumes\nwithout the sink", xy=(0.4, 28.3), xytext=(10.5, 24.0), fontsize=7, ha="left",
-                arrowprops=dict(arrowstyle="->", lw=0.7))
+    ax.plot(x, y, color=C["sink"], lw=1.6, label="sink never arrives")
+    ax.axhline(CAP, color="k", lw=0.6, ls=":")
+    ax.text(39.5, CAP + 0.6, "sink never lost: identical", ha="right", va="bottom", fontsize=7)
+    ax.annotate("execution resumes\nwithout the sink", xy=(0.4, 28.3), xytext=(5.5, 10.0), fontsize=7, ha="left", arrowprops=dict(arrowstyle="->", lw=0.7))
     ax.set_xlabel("Chunks after migration"); ax.set_ylabel("PSNR to uninterrupted execution (dB)")
-    ax.set_xlim(0, 39); ax.set_ylim(8, 53)
+    ax.set_xlim(0, 39); ax.set_ylim(8, 54)
     ax.legend(loc="lower right", frameon=False)
-    ax.set_title("Durable state can bind late and still rejoin the original trajectory", loc="left", fontsize=8.5)
+    ax.set_title("(a) Execution resumes first; continuity binds later", loc="left")
+    # (b) rejoin time and settled continuity vs. arrival delay
+    ds, rejoin, settled = [], [], []
+    for d, key in delays:
+        x, y = cv[f"ph_zero_{d}"]
+        after = [(k, v) for k, v in zip(x, y) if k >= d]
+        rj = next((k - d for k, v in after if v >= tau), None)
+        ds.append(d); rejoin.append(rj if rj is not None else float("nan")); settled.append(st.mean([v for k, v in after if k >= d + 8]))
+    bx.bar([str(d) for d in ds], rejoin, color=[C[k] for _, k in delays], width=0.6)
+    for i, (r, s_) in enumerate(zip(rejoin, settled)):
+        bx.text(i, r + 0.15, f"{s_:.0f} dB\nafter", ha="center", va="bottom", fontsize=6.5)
+    bx.set_xlabel("Sink arrival delay (chunks)"); bx.set_ylabel(f"Chunks to rejoin (≥ {tau:.0f} dB)")
+    bx.set_ylim(0, max(rejoin) + 3.5)
+    bx.set_title("(b) Rejoin cost is flat in delay", loc="left")
     fig.tight_layout()
     fig.savefig(out / "fig3_late_binding.pdf"); fig.savefig(out / "fig3_late_binding.png"); plt.close(fig)
 
@@ -110,41 +210,42 @@ def mobility_points(pol: str):
         r = json.load(open(f))
         ready = r.get("t_ready_final", r.get("t_ready_C"))
         last_move = r["moves"][-1]["t"] if r.get("moves") else r.get("t_move")
-        pts.append((tm, None if ready is None else ready - last_move))
+        wasted = r.get("wasted_mb", 0.0)
+        pts.append((tm, None if ready is None else ready - last_move, wasted))
     return pts
 
 
 def fig4(out: Path, t_s: float = 16.6):
     fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(7.2, 2.8), gridspec_kw={"width_ratios": [1.15, 1.0]})
-    # (a) timeline illustration
-    ax0.axis("off"); ax0.set_xlim(0, 10); ax0.set_ylim(0, 6)
+    ax0.axis("off"); ax0.set_xlim(-1.2, 10); ax0.set_ylim(0, 6)
 
     def lane(y, label):
-        ax0.text(-0.1, y, label, ha="right", va="center", fontsize=7.5)
+        ax0.text(-0.2, y, label, ha="right", va="center", fontsize=7.5)
 
-    def arrow(x0, x1, y, color, lw=1.3, ls="-", double=False):
-        ax0.add_patch(FancyArrowPatch((x0, y), (x1, y), arrowstyle="-|>", mutation_scale=7, lw=lw, color=color, linestyle=ls))
+    def harrow(x0, x1, y, color, lw=1.3):
+        arrow(ax0, (x0, y), (x1, y), color=color, lw=lw, ms=7)
 
-    # rho < 1
-    ax0.text(0.0, 5.6, r"$\rho<1$: state keeps up", fontsize=8, weight="bold")
+    ax0.text(0.0, 5.6, r"$\rho = T_s/T_m < 1$: continuity state keeps up", fontsize=8, weight="bold")
     lane(4.9, "execution"); lane(4.1, "sink")
     for x0, x1, n in [(0, 3.6, "A→B"), (3.9, 7.5, "B→C")]:
-        arrow(x0, x1, 4.9, "#333333"); ax0.text((x0 + x1) / 2, 5.1, n, ha="center", fontsize=6.5)
-    arrow(0, 2.4, 4.1, C["sink"], lw=2.2); ax0.text(2.5, 4.1, "✓", color="#2ca02c", va="center", fontsize=8)
-    arrow(3.9, 6.3, 4.1, C["sink"], lw=2.2); ax0.text(6.4, 4.1, "✓", color="#2ca02c", va="center", fontsize=8)
-    # rho > 1
-    ax0.text(0.0, 2.9, r"$\rho>1$: execution outruns state", fontsize=8, weight="bold")
+        harrow(x0, x1, 4.9, "#333333"); ax0.text((x0 + x1) / 2, 5.1, n, ha="center", fontsize=6.5)
+    harrow(0, 2.4, 4.1, C["sink"], lw=2.2); ax0.text(2.5, 4.1, "✓ bound at B", color="#2ca02c", va="center", fontsize=7)
+    harrow(3.9, 6.3, 4.1, C["sink"], lw=2.2); ax0.text(6.4, 4.1, "✓ bound at C", color="#2ca02c", va="center", fontsize=7)
+    ax0.text(0.0, 2.9, r"$\rho > 1$: execution outruns its continuity state", fontsize=8, weight="bold")
     lane(2.2, "execution"); lane(1.4, "sink")
     for x0, x1, n in [(0, 1.6, "A→B"), (1.9, 3.5, "B→C"), (3.8, 5.4, "C→D")]:
-        arrow(x0, x1, 2.2, "#333333"); ax0.text((x0 + x1) / 2, 2.4, n, ha="center", fontsize=6.5)
-    arrow(0, 4.6, 1.4, C["sink"], lw=2.2); ax0.text(4.75, 1.4, "✗ B already left", color=C["restart"], va="center", fontsize=7)
-    ax0.text(0.0, 0.55, "restart: discard progress, start over   |   relay: keep progress, keep the stale route", fontsize=6.8, color="#444444")
-    ax0.set_title("(a) Mobility interval $T_m$ vs. durable-state transfer time $T_s$", loc="left")
-    # (b) measured
+        harrow(x0, x1, 2.2, "#333333"); ax0.text((x0 + x1) / 2, 2.4, n, ha="center", fontsize=6.5)
+    harrow(0, 4.6, 1.4, C["sink"], lw=2.2); ax0.text(4.75, 1.4, "✗ B already left", color=C["restart"], va="center", fontsize=7)
+    ax0.text(0.0, 0.5, "restart: discard delivered progress   |   relay: keep progress, but also the stale route", fontsize=6.8, color="#444444")
+    ax0.set_title("(a) Mobility interval $T_m$ vs. transfer time $T_s$", loc="left")
     for pol, label, col, mk in [("restart", "Restart", C["restart"], "s"), ("relay", "Relay", C["relay"], "^"), ("direct", "Oracle direct", C["direct"], "o")]:
-        pts = [(tm, y) for tm, y in mobility_points(pol) if y is not None]
-        xs = [t_s / tm for tm, _ in pts]; ys = [y for _, y in pts]
+        pts = [(tm, y, w) for tm, y, w in mobility_points(pol) if y is not None]
+        xs = [t_s / tm for tm, _, _ in pts]; ys = [y for _, y, _ in pts]
         ax1.plot(xs, ys, marker=mk, ms=4, lw=1.5, color=col, label=label)
+        if pol == "restart":
+            for (tm, y, w), x in zip(pts, xs):
+                if w and tm in (1, 4, 16):
+                    ax1.annotate(f"{w / 1024:.1f} GB\nwasted", (x, y), xytext=(0, 8), textcoords="offset points", ha="center", fontsize=6, color=col)
     ax1.axvline(1.0, color="k", lw=0.8, ls="--"); ax1.axvspan(1.0, 20, color="#f0f0f0", zorder=0)
     ax1.text(3.0, 2.0, "execution outruns\ncontinuity state", fontsize=7, va="bottom", ha="left", color="#444444")
     ax1.set_xscale("log"); ax1.set_xlim(0.45, 20)
@@ -162,7 +263,7 @@ def main():
     ap.add_argument("--out", type=str, default=str(ROOT / "results/state_migration/figures"))
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    fig2(out); fig3(out); fig4(out)
+    fig1(out); fig2(out); fig2_appendix(out); fig3(out); fig4(out)
     print(f"-> {out}")
 
 
