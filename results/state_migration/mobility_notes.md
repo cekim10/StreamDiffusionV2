@@ -1,25 +1,26 @@
-# A -> B -> C mobility reading (results/state_migration/mobility, harness ba92b5b, 1 Gbps, sink 1.6 GB)
+# Repeated mobility reading (results/state_migration/mobility, harness d250703, 1 Gbps per link, sink 1.6 GB, T_s link = 13.8 s, bind-ready ~16.6 s)
 
-Effective sink time from the A->B handoff to bind-ready is ~16.6 s (13.8 s link + ~2.5 s serialization and fast path), so every T_m in {1..16} is rho > 1: execution left B before the sink could bind there (ready_B is empty in all 15 runs). The move itself costs ~1.4 s after T_m (handoff + chunk quantization).
+All five policies now match the offline simulation (tools/test_sink_router.py) within serialization overhead.
 
-| policy | ready_C after the move | wasted bytes | total traffic | continuity at C after bind |
-|---|---|---|---|---|
-| restart | **constant 18.8 s** for every T_m: each move restarts a full 1.6 GB transfer | grows with T_m: 274 / 384 / 548 / 932 / 1645 MB (= bandwidth x time spent streaming to B) | 1.9 -> 3.3 GB | 41-43 dB |
-| relay | 29.8 -> 14.6 s as T_m grows; ready_C is pinned at **32 s = 2 T_s** regardless of when the move happens | 0 | 3.3 GB (two hops) | 40 dB |
-| direct (oracle) | 15.9 -> 0.6 s; ready_C = 18 s absolute, independent of the move | 0 | 1.65 GB | 43.7 dB (41 at T_m=16 where the bind coincided with the move) |
+## A -> B -> C -> D, T_m = 2 s (rho ~ 7 by link time): execution outruns its continuity state
+| policy | D ready (s) | after last move (s) | traffic | wasted | lag mean / max | continuity at D |
+|---|---|---|---|---|---|---|
+| direct (oracle) | 17.7 | 12.6 | 1.65 GB | 0 | 0.53 / 3 | 43.9 dB |
+| **split** | **17.7** | **12.7** | 2.4 GB | 0 | 0.53 / 3 | 43.9 dB |
+| relay_pipe (pipelined chain) | 19.3 | 14.4 | 4.9 GB | 0 | 0.60 / 3 | 43.9 dB |
+| restart | 23.8 | 18.7 | 2.2 GB | 548 MB | 0.76 / 3 | 41.3 dB |
+| relay (store-and-forward chain) | 45.9 | 40.8 | 4.9 GB | 0 | 1.73 / 3 | 40.7 dB |
 
-## Observation
-When mobility is faster than continuity-state transfer (rho > 1), execution outruns its continuity state and no single-destination policy is good on both axes:
-- restart keeps the post-move latency fixed at T_s but pays bandwidth x T_m in wasted bytes and resets the clock at every move, so for T_m < T_s the stream can never become continuity-ready across repeated moves;
-- relay never wastes bytes but delays readiness at the final edge by one full extra hop (2 T_s), and would add a hop per move;
-- direct achieves the lower bound on both axes but requires knowing the next edge when the transfer starts.
-The trade-off is continuity-ready latency vs network traffic, and the gap between the naive policies and the oracle is the room for a continuity router (direct when the next edge is predictable, relay or redirect of the in-flight remainder otherwise).
+- Naive relay accumulates one full sink time per hop (45.9 s ~ 3 T_s): continuity lag stays at 2-3 hops for most of the run.
+- Restart resets the clock at every move (always T_s after the last move) and wastes 548 MB over two moves (bandwidth x time spent streaming to edges that were then abandoned).
+- Pipelining the chain fixes latency (19.3 s) but triples traffic (4.9 GB).
+- Split (keep every delivered segment moving toward the current edge, send only the undelivered remainder from the source) reaches the oracle's readiness exactly (17.7 s) with zero waste and 2.4 GB of traffic (the forwarded prefixes are the only overhead). The source's bytes: 384 MB to B, 165 MB to C, 1,097 MB to D; the rest reached D via B and C.
+- Caveat: split's new edge receives over up to three links at once (A->D, B->D, C->D); a shared-ingress variant is needed before claiming the latency result generally.
 
-## Also visible
-- B phase and C gap sit at 16-17 dB (zero sink, refresh frozen): the gap-quality problem is unchanged by topology and still needs the placeholder.
-- restart at T_m=16 streamed all of B's 1.6 GB before the move flag was observed and then another 1.6 GB to C: the worst case of "the sink follows execution from the source".
+## A -> B -> C, T_m = 24 / 32 s (rho < 1 by link time): the current edge is continuous, the next edge is not
+- B binds at 18.2 s in every non-oracle policy: with rho < 1 the edge the user is on gets its continuity before the user leaves.
+- The next edge still needs a transfer: after the move, relay (B forwards) is ready in 14.1 s, restart (A resends) in 18.1 s with the full 1.6 GB wasted, direct is ready at the move (the sink was waiting there).
+- So rho < 1 does not make the policies converge at the destination; it only guarantees continuity at the edge being left. Readiness of the next edge is bounded below by one link time unless the sink was pre-positioned.
 
-## Next
-1. A -> B -> C -> D with T_m = 2 s to show execution-state lag L(t) growing under restart/relay.
-2. T_m in {24, 32} to cover rho < 1 and confirm the policies converge there.
-3. Then the router: redirect the in-flight remainder to the new edge (no restart, no second full hop) as the first non-oracle mechanism.
+## Observation for the paper
+When mobility is faster than continuity-state transfer, single-destination policies pay either in wasted traffic (restart), accumulating lag (relay) or multiplied traffic (pipelined relay). Treating transfer progress as routable state (split) removes the trade-off: delivered segments follow execution from wherever they are, the source sends only what has not left, and readiness equals the oracle's at modest extra traffic. The remaining questions are the shared-ingress case, predictive pre-positioning (direct without the oracle), and fan-out (one source, several simultaneous destinations).
