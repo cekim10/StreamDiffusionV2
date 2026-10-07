@@ -175,7 +175,7 @@ def fig3(out: Path, tau: float = 35.0):
     raw = ROOT / "results/state_migration/mechanism/ablation_raw.csv"
     delays = [(1, "d1"), (4, "d4"), (8, "d8"), (16, "d16")]
     cv = curves(raw, [f"ph_zero_{d}" for d, _ in delays] + ["ph_zero_noswap", "repeat"])
-    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.2, 2.75), gridspec_kw={"width_ratios": [1.6, 1.0]})
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.4, 2.75), gridspec_kw={"width_ratios": [1.45, 1.0]})
     for d, key in delays:
         if d == 8:
             continue  # keep (a) readable; 8 appears in (b)
@@ -191,19 +191,27 @@ def fig3(out: Path, tau: float = 35.0):
     ax.set_xlim(0, 39); ax.set_ylim(8, 54)
     ax.legend(loc="lower right", frameon=False)
     ax.set_title("(a) Execution resumes first; continuity binds later", loc="left")
-    # (b) rejoin time and settled continuity vs. arrival delay
-    ds, rejoin, settled = [], [], []
+    # (b) recovery aligned at the sink's arrival: curves collapse if rejoin cost is independent of the delay
     for d, key in delays:
         x, y = cv[f"ph_zero_{d}"]
-        after = [(k, v) for k, v in zip(x, y) if k >= d]
-        rj = next((k - d for k, v in after if v >= tau), None)
-        ds.append(d); rejoin.append(rj if rj is not None else float("nan")); settled.append(st.mean([v for k, v in after if k >= d + 8]))
-    bx.bar([str(d) for d in ds], rejoin, color=[C[k] for _, k in delays], width=0.6)
-    for i, (r, s_) in enumerate(zip(rejoin, settled)):
-        bx.text(i, r + 0.15, f"{s_:.0f} dB\nafter", ha="center", va="bottom", fontsize=6.5)
-    bx.set_xlabel("Sink arrival delay (chunks)"); bx.set_ylabel(f"Chunks to rejoin (≥ {tau:.0f} dB)")
-    bx.set_ylim(0, max(rejoin) + 3.5)
-    bx.set_title("(b) Rejoin cost is flat in delay", loc="left")
+        rel = [(k - d, v) for k, v in zip(x, y) if -6 <= k - d <= 22 and k >= 0]  # only chunks after migration
+        pre = [(k, v) for k, v in rel if k <= 0]; post = [(k, v) for k, v in rel if k >= 0]
+        bx.plot([k for k, _ in pre], [v for _, v in pre], color=C[key], lw=1.2, alpha=0.35)
+        bx.plot([k for k, _ in post], [v for _, v in post], color=C[key], lw=1.7, label=f"Δ = {d}")
+        rj = next((k for k, v in post if v >= tau), None)
+        if rj is not None:
+            bx.plot([rj], [tau], marker="|", ms=9, mew=1.6, color=C[key])
+    bx.axvspan(-6, 0, color="#f0f0f0", zorder=0)
+    bx.axvline(0, color="k", lw=0.8, ls="--")
+    bx.axhline(tau, color="k", lw=0.6, ls=":")
+    bx.text(-5.7, tau + 0.8, f"rejoin threshold {tau:.0f} dB", fontsize=6.5, va="bottom")
+    bx.text(-3, 12.5, "waiting\n(no sink)", ha="center", fontsize=6.5, color="#555555")
+    bx.text(0.6, 52.5, "curves collapse: ~6 chunks to rejoin for Δ = 1 … 16", ha="left", va="top", fontsize=6.8)
+    bx.set_xlim(-6, 22); bx.set_ylim(8, 54)
+    bx.set_xticks([-5, 0, 5, 10, 15, 20])
+    bx.set_xlabel("Chunks after the sink arrives"); bx.set_ylabel("PSNR to uninterrupted (dB)")
+    bx.legend(loc="lower right", frameon=False, title="arrival delay Δ (chunks)", title_fontsize=7, ncol=2, columnspacing=0.8, handlelength=1.4)
+    bx.set_title("(b) Recovery aligned at sink arrival", loc="left")
     fig.tight_layout()
     fig.savefig(out / "fig3_late_binding.pdf"); fig.savefig(out / "fig3_late_binding.png"); plt.close(fig)
 
