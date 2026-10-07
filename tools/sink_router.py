@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Continuity-state (sink) routing model shared by the mobility prototype and its offline simulator.
+
+The sink is a set of segments. Each edge holds a subset. Execution lives on one edge at a time and moves
+along the path A -> B -> C -> ... Links carry one segment at a time at a fixed bandwidth. Policies decide
+who forwards what to whom:
+    restart    : only the source streams, always to the current edge, restarting from segment 0 at each move
+    relay      : source streams to B; an edge forwards to its successor once it holds every segment
+    relay_pipe : source streams to B; an edge forwards each segment to its successor as soon as it holds it
+    split      : source streams the not-yet-sent segments to the current edge; every edge execution has left
+                 forwards the segments it holds that the current edge lacks (claims prevent duplicates)
+    direct     : source streams to the final edge (oracle)
+The router is driven by a clock (`now`) and a sleeper (`sleep`) so the same code runs in real time inside
+the destination process and in a fast offline simulation (tools/test_sink_router.py).
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+
+EDGE_NAMES = "ABCDEFGH"
+POLICIES = ("restart", "relay", "relay_pipe", "split", "direct")
+
+
+class SinkRouter:
+    def __init__(self, policy: str, edges: list[str], n_segments: int, seg_bytes: int, bw_bps: float,
+                 now=time.time, sleep=time.sleep, on_bytes=None):
+        assert policy in POLICIES, policy
+        self.policy, self.edges, self.L = policy, list(edges), n_segments
+        self.seg_bytes, self.bw = seg_bytes, bw_bps
+        self.now, self.sleep = now, sleep
+        self.on_bytes = on_bytes or (lambda link, n: None)
+        self.lock = threading.Lock()
+        self.holders = {e: set() for e in edges}
+        self.claimed: dict[str, set] = {}
+        self.idx = 0  # execution is on edges[idx]
+        self.stop = False
+        self.bytes: dict[str, int] = {}
+        self.threads = [threading.Thread(target=self._forwarder, args=(e,), daemon=True) for e in edges]
+
+    # ---- execution side
+    @property
+    def node(self):
+        return self.edges[self.idx]
+
+    def start(self):
+        for t in self.threads:
+            t.start()
+
+    def move(self):
+        """Execution moves to the next edge. Returns (old, new). restart drops the obsolete copy."""
+        with self.lock:
+            old = self.node
+            self.idx += 1
+            if self.policy == "restart":
+                self.holders[old] = set()
+            return old, self.node
+
+    def deliver(self, dest: str, seg: int, nbytes: int):
+        """A segment arrived from the source at `dest`."""
+        with self.lock:
+            if dest in self.holders:
+                self.holders[dest].add(seg)
+        self._account(f"A->{dest}", nbytes)
+
+    def ready(self, edge: str | None = None) -> bool:
+        edge = edge or self.node
+        with self.lock:
+            return len(self.holders[edge]) == self.L
+
+    def finish(self):
+        self.stop = True
+
+    # ---- source side helpers (what the source should stream next, given the policy)
+    def source_target(self, final_edge: str) -> str:
+        return final_edge if self.policy == "direct" else ("B" if self.policy in ("relay", "relay_pipe") else self.node)
+
+    # ---- forwarding
+    def _account(self, link, n):
+        self.bytes[link] = self.bytes.get(link, 0) + n
+        self.on_bytes(link, n)
+
+    def _target(self, holder: str):
+        hi = self.edges.index(holder)
+        if self.idx <= hi:
+            return None
+        if self.policy == "split":
+            return self.node  # every edge execution has left forwards what it still holds to the current edge
+        if self.policy in ("relay", "relay_pipe"):
+            return self.edges[hi + 1]
+        return None  # restart / direct never forward
+
+    def _forwarder(self, holder: str):
+        while not self.stop:
+            tgt = self._target(holder)
+            with self.lock:
+                if tgt is None:
+                    todo = []
+                else:
+                    complete = len(self.holders[holder]) == self.L
+                    allowed = self.policy in ("relay_pipe", "split") or (self.policy == "relay" and complete)
+                    todo = sorted(self.holders[holder] - self.holders[tgt] - self.claimed.setdefault(tgt, set())) if allowed else []
+                if todo:
+                    seg = todo[0]; self.claimed[tgt].add(seg)
+            if not todo:
+                self.sleep(0.01); continue
+            self.sleep(self.seg_bytes * 8 / self.bw)  # link time for one segment
+            with self.lock:
+                self.holders[tgt].add(seg); self.claimed[tgt].discard(seg)
+            self._account(f"{holder}->{tgt}", self.seg_bytes)
+
+    # ---- accounting
+    def wasted_bytes(self, final_edge: str, source_bytes_by_dest: dict | None = None) -> int:
+        obsolete = [e for e in self.edges if e != final_edge]
+        if self.policy == "restart":
+            src = source_bytes_by_dest or {k[3:]: v for k, v in self.bytes.items() if k.startswith("A->")}
+            return sum(v for d, v in src.items() if d in obsolete)
+        forwarded_from = {k.split("->")[0] for k in self.bytes if "->" in k and not k.startswith("A->")}
+        with self.lock:
+            return sum(len(self.holders[e]) for e in obsolete if e not in forwarded_from) * self.seg_bytes

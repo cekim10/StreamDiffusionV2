@@ -38,9 +38,7 @@ for p in (REPO_ROOT, REPO_ROOT / "tools"):
 import numpy as np  # noqa: E402
 
 from proto_handoff import MB, Throttle, build_runtime, pack_component, recv_msg, send_msg, tensor_to_bytes, unpack_into_snapshot  # noqa: E402
-
-EDGE_NAMES = "ABCDEFGH"
-POLICIES = ("restart", "relay", "relay_pipe", "split", "direct")
+from sink_router import EDGE_NAMES, POLICIES, SinkRouter  # noqa: E402
 
 
 # ----------------------------------------------------------------------------- per-layer sink framing
@@ -242,13 +240,13 @@ def run_dest(args):
 
         rec = {"policy": policy, "t_m": tm, "hops": hops, "bw_mbps": bw, "service_s": service_s, "edges": edges,
                "events": [], "calls": [], "bytes": {"fast": 0}, "ready": {}, "moves": []}
-        seg = {}  # layer -> tensors (content identical wherever it is held)
-        holders = {e: set() for e in edges}  # edge -> set of layers it holds
-        meta = {"layer_bytes": None}
-        state = {"node": "B", "idx": 0, "end": None, "stop": False}
-        lock = threading.Lock()
-        bound = {}
+        seg: dict[int, dict] = {}  # segment -> tensors (content identical wherever it is held)
+        state = {"end": None}
+        bound: dict[str, int] = {}
         t_mig = time.time()
+        # validated routing model (tools/test_sink_router.py); forwarders sleep the emulated link time per segment
+        seg_estimate = len(pl.denoising_step_list) * sink * fsl * pl.num_heads * 128 * 2 * 2  # k+v, bf16, all rows
+        router = SinkRouter(policy, edges, L, seg_estimate, bw * 1e6)
         send_msg(sock, "READY", {}, b"", None)
         while True:
             hdr, payload = recv_msg(sock)
@@ -260,42 +258,7 @@ def run_dest(args):
         for block in pl.generator.model.blocks:
             block.self_attn.adapt_sink_thr = -1
         torch.cuda.synchronize(device)
-
-        def add_bytes(link, n):
-            rec["bytes"][link] = rec["bytes"].get(link, 0) + n
-
-        claimed = {}  # target edge -> set of segments some forwarder is already delivering there
-
-        def forward_target(holder):
-            """relay / relay_pipe: naive chain, forward to the edge execution moved to FROM this holder;
-            split: only the edge execution just left forwards, to wherever execution is now."""
-            hi = edges.index(holder)
-            if state["idx"] <= hi:
-                return None
-            if policy == "split":
-                return state["node"] if hi == state["idx"] - 1 else None
-            return edges[hi + 1]
-
-        def forwarder(holder):
-            """Edge `holder` forwards (copies) segments it holds over one emulated link at `bw`; runs until the run ends."""
-            while not state["stop"]:
-                tgt = forward_target(holder)
-                with lock:
-                    if tgt is None or meta["layer_bytes"] is None:
-                        todo = []
-                    else:
-                        complete = len(holders[holder]) == L
-                        allowed = policy in ("relay_pipe", "split") or (policy == "relay" and complete)
-                        todo = sorted(holders[holder] - holders[tgt] - claimed.setdefault(tgt, set())) if allowed else []
-                    if todo:
-                        li = todo[0]; claimed[tgt].add(li)
-                if not todo:
-                    time.sleep(0.01); continue
-                time.sleep(meta["layer_bytes"] * 8 / (bw * 1e6))  # emulated link time for one segment
-                with lock:
-                    holders[tgt].add(li)  # a copy: the holder keeps its own
-                    claimed[tgt].discard(li)
-                add_bytes(f"{holder}->{tgt}", meta["layer_bytes"])
+        router.start()
 
         def receiver():
             while True:
@@ -304,24 +267,16 @@ def run_dest(args):
                 if k == "END":
                     state["end"] = hdr; break
                 if k == "SINK":
-                    dest = hdr["dest"]
-                    t = unpack_sink_layer(hdr, payload, device)
-                    with lock:
-                        seg[hdr["layer"]] = t
-                        if dest in holders:
-                            holders[dest].add(hdr["layer"])
-                        if meta["layer_bytes"] is None:
-                            meta["layer_bytes"] = len(payload)
-                    add_bytes(f"A->{dest}", len(payload))
+                    seg[hdr["layer"]] = unpack_sink_layer(hdr, payload, device)
+                    router.seg_bytes = len(payload)
+                    router.deliver(hdr["dest"], hdr["layer"], len(payload))
 
         threading.Thread(target=receiver, daemon=True).start()
-        for e in edges:
-            threading.Thread(target=forwarder, args=(e,), daemon=True).start()
 
         for c in range(M, M + N):
             now = time.time() - t_mig
             # ---- mobility event: move to the next edge every T_m
-            if state["idx"] < hops - 1 and now >= tm * (state["idx"] + 1):
+            if router.idx < hops - 1 and now >= tm * (router.idx + 1):
                 fast = sa.serialize_state(pl, pm, session)
                 fast_bytes = sum(x.numel() * x.element_size() for x in (fast["pipeline"]["hidden_states"][:-1], fast["session"]["last_image"]))
                 session = runner.fresh_destination()  # provisioning the next edge (excluded)
@@ -330,21 +285,17 @@ def run_dest(args):
                     block.self_attn.adapt_sink_thr = -1
                 torch.cuda.synchronize(device)
                 del fast
-                old = state["node"]
-                state["idx"] += 1; state["node"] = edges[state["idx"]]
-                with lock:
-                    held_old = len(holders[old])
-                    if policy == "restart":
-                        holders[old] = set()  # obsolete copy is dropped
+                with router.lock:
+                    held_old = len(router.holders[router.node])
+                old, new = router.move()
                 rec["bytes"]["fast"] += fast_bytes
-                rec["moves"].append({"t": time.time() - t_mig, "from": old, "to": state["node"], "call": c,
+                rec["moves"].append({"t": time.time() - t_mig, "from": old, "to": new, "call": c,
                                      "old_held_segments": held_old, "old_bound": old in bound})
-                send_msg(sock, "MOVED", {"to": state["node"], "t": time.time()}, b"", None)
-            node = state["node"]
-            with lock:
-                ready = len(holders[node]) == L and node not in bound
-                layers = {li: seg[li] for li in holders[node]} if ready else None
-            if ready:
+                send_msg(sock, "MOVED", {"to": new, "t": time.time()}, b"", None)
+            node = router.node
+            if node not in bound and router.ready(node):
+                with router.lock:
+                    layers = {li: seg[li] for li in router.holders[node]}
                 shifted = bind_sink(pl, layers, sink, fsl, device, cfg_thr)
                 bound[node] = c
                 rec["ready"][node] = time.time() - t_mig
@@ -353,26 +304,21 @@ def run_dest(args):
             torch.cuda.synchronize(device)
             ref = baseline.get(c)
             ps = float(np.mean([sa.psnr(ref[f].astype(np.float32) / 255.0, fr[f].astype(np.float32) / 255.0) for f in range(min(ref.shape[0], fr.shape[0]))])) if (fr is not None and ref is not None) else None
-            # execution-state lag: hops between the execution edge and the last edge that holds a bound sink (A = 0)
-            bound_idx = max([edges.index(e) + 1 for e in bound] + [0])
+            bound_idx = max([edges.index(e) + 1 for e in bound] + [0])  # A = 0
             rec["calls"].append({"call": c, "rel": c - M, "t_out": time.time() - t_mig, "node": node, "psnr": ps,
                                  "missing": fr is None, "lag": (edges.index(node) + 1) - bound_idx})
-        # wait for the source to finish (restart may still be streaming to an edge we no longer need)
-        for _ in range(3000):
+        for _ in range(3000):  # the source may still be streaming (restart); wait for its END
             if state["end"] is not None:
                 break
             time.sleep(0.1)
-        state["stop"] = True
-        with lock:
-            held = {e: sorted(holders[e]) for e in edges}
-        obsolete = [e for e in edges if e != final_edge]
-        if policy == "restart":
-            wasted = sum(v for k2, v in rec["bytes"].items() if k2.startswith("A->") and k2[3:] in obsolete)  # delivered to edges that were then abandoned
-        else:
-            forwarded_from = {k2.split("->")[0] for k2 in rec["bytes"] if "->" in k2 and not k2.startswith("A->")}
-            wasted = sum(len(held[e]) for e in obsolete if e not in forwarded_from) * (meta["layer_bytes"] or 0)  # copies that never served anyone
-        rec.update({"t_ready_final": rec["ready"].get(final_edge), "bound_call": bound, "held_at_end": {e: len(v) for e, v in held.items()},
-                    "wasted_mb": wasted / MB, "total_mb": sum(rec["bytes"].values()) / MB, "source_log": state["end"],
+        router.finish()
+        with router.lock:
+            held = {e: len(router.holders[e]) for e in edges}
+        rec["bytes"].update(router.bytes)
+        src_by_dest = (state["end"] or {}).get("bytes_by_dest")
+        rec.update({"t_ready_final": rec["ready"].get(final_edge), "bound_call": bound, "held_at_end": held,
+                    "wasted_mb": router.wasted_bytes(final_edge, src_by_dest) / MB, "total_mb": sum(rec["bytes"].values()) / MB,
+                    "source_log": state["end"],
                     "lag_mean": float(np.mean([x["lag"] for x in rec["calls"]])), "lag_max": int(max(x["lag"] for x in rec["calls"]))})
         results.append(rec)
         with open(out_dir / f"mob_{policy}_tm{tm:g}_h{hops}.json", "w") as fh:
@@ -423,4 +369,5 @@ def parse_args():
 
 if __name__ == "__main__":
     a = parse_args()
+    assert all(item.split(":")[0] in POLICIES for item in a.sweep.split(",")), f"policies must be in {POLICIES}"
     run_source(a) if a.role == "source" else run_dest(a)
