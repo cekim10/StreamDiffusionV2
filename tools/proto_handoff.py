@@ -66,18 +66,22 @@ class Throttle:
             time.sleep(min(0.01, (n - self.tokens) / self.rate))
 
 
-def send_msg(sock: socket.socket, kind: str, header: dict, payload: bytes, throttle: Throttle | None, chunk: int = 1 << 20):
+def send_msg(sock: socket.socket, kind: str, header: dict, payload, throttle: Throttle | None, chunk: int = 1 << 20):
+    """payload: bytes-like or a list of bytes-like buffers (sent back to back, no concatenation copy)."""
+    parts = payload if isinstance(payload, list) else [payload]
+    total = sum(memoryview(b).nbytes for b in parts)
     hdr = json.dumps({"kind": kind, "t_send": time.time(), **header}).encode()
-    sock.sendall(struct.pack("!QQ", len(hdr), len(payload)))
+    sock.sendall(struct.pack("!QQ", len(hdr), total))
     sock.sendall(hdr)
-    view = memoryview(payload)
-    off = 0
-    while off < len(view):
-        n = min(chunk, len(view) - off)
-        if throttle is not None:
-            throttle.take(n)
-        sock.sendall(view[off:off + n])
-        off += n
+    for b in parts:
+        view = memoryview(b).cast("B")
+        off = 0
+        while off < len(view):
+            n = min(chunk, len(view) - off)
+            if throttle is not None:
+                throttle.take(n)
+            sock.sendall(view[off:off + n])
+            off += n
 
 
 def recv_exact(sock: socket.socket, n: int) -> bytearray:
@@ -109,38 +113,41 @@ def _np_dtype(t):
             torch.int64: ("i64", np.int64), torch.int32: ("i32", np.int32), torch.bool: ("bool", np.bool_)}[t.dtype]
 
 
-def tensor_to_bytes(t) -> tuple[dict, bytes]:
+def tensor_to_bytes(t) -> tuple[dict, np.ndarray]:
+    """GPU tensor -> (meta, host numpy array). One device-to-host copy; no further copies."""
     import torch
 
-    tag, npdt = _np_dtype(t)
+    tag, _ = _np_dtype(t)
     c = t.detach().contiguous().cpu()
     if t.dtype == torch.bfloat16:
         c = c.view(torch.int16)
-    arr = c.numpy()
-    return {"shape": list(t.shape), "dtype": tag}, arr.tobytes()
+    return {"shape": list(t.shape), "dtype": tag}, c.numpy()
 
 
-def bytes_to_tensor(meta: dict, raw: memoryview | bytes, device):
+def bytes_to_tensor(meta: dict, raw: memoryview, device):
+    """host bytes -> GPU tensor. torch.frombuffer is zero-copy; .to(device) is the single copy."""
     import torch
 
     tag = meta["dtype"]
-    npdt = {"bf16": np.int16, "f16": np.float16, "f32": np.float32, "i64": np.int64, "i32": np.int32, "bool": np.bool_}[tag]
-    arr = np.frombuffer(raw, dtype=npdt).reshape(meta["shape"])
-    t = torch.from_numpy(arr.copy())
+    tdt = {"bf16": torch.int16, "f16": torch.float16, "f32": torch.float32, "i64": torch.int64, "i32": torch.int32, "bool": torch.bool}[tag]
+    t = torch.frombuffer(bytearray(raw) if not isinstance(raw, (bytes, bytearray)) and raw.readonly else raw, dtype=tdt).reshape(meta["shape"])
     if tag == "bf16":
         t = t.view(torch.bfloat16)
     return t.to(device)
 
 
-def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, bytes]:
-    """Serialize one component of a serialize_state() snapshot into (header, bytes)."""
-    parts: list[tuple[str, dict, bytes]] = []
+def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, list]:
+    """Serialize one component of a serialize_state() snapshot into (header, [buffers])."""
+    parts: list[tuple[str, dict, np.ndarray]] = []
     if comp in ("sink", "recent"):
         lo, hi = (0, sink * fsl) if comp == "sink" else (sink * fsl, None)
         for li, layer in enumerate(snap["kv"]):
             for key in ("k", "v"):
                 m, b = tensor_to_bytes(layer[key][:, lo:hi])
                 parts.append((f"kv/{li}/{key}", m, b))
+            if comp == "sink":
+                m, b = tensor_to_bytes(snap["ring"][li]["pos"][:, :sink])
+                parts.append((f"ring/{li}/pos_sink", m, b))
     elif comp == "meta":
         for li, r in enumerate(snap["ring"]):
             for key in ("global_end_index", "local_end_index", "pos"):
@@ -158,10 +165,13 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, by
     else:
         raise ValueError(comp)
     header = {"comp": comp, "tensors": [], "scalars": {}}
-    payload = bytearray()
+    buffers = []
+    off = 0
     for name, m, b in parts:
-        header["tensors"].append({"name": name, "offset": len(payload), "nbytes": len(b), **m})
-        payload += b
+        n = b.nbytes
+        header["tensors"].append({"name": name, "offset": off, "nbytes": n, **m})
+        buffers.append(b)
+        off += n
     if comp == "meta":
         header["scalars"] = {
             "ring": [{"total_steps": r["total_steps"], "current_step": r["current_step"]} for r in snap["ring"]],
@@ -170,7 +180,7 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int) -> tuple[dict, by
             "pm_processed": snap["pipeline"]["pm_processed"],
             "vae_flags": {k: v for k, v in snap["vae"].items() if k in ("_enc_conv_idx", "_conv_idx", "first_encode", "first_decode", "first_batch")},
         }
-    return header, bytes(payload)
+    return header, buffers
 
 
 def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, fsl: int) -> dict:
@@ -188,6 +198,8 @@ def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, f
                     snap["kv"][li][key][:, :sink * fsl] = t
                 else:
                     snap["kv"][li][key][:, sink * fsl:] = t
+            if comp == "sink":
+                snap.setdefault("sink_pos", {})[li] = tensors[f"ring/{li}/pos_sink"]
         snap.setdefault("have", set()).add(comp)
     elif comp == "meta":
         for li in range(len(snap["ring"])):
@@ -220,7 +232,8 @@ def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, f
 # ----------------------------------------------------------------------------- roles
 POLICIES = {
     # name: (messages sent before the destination may resume, messages sent in the background)
-    "ours": ({"inflight", "meta"}, {"sink"}),
+    "ours": ({"inflight", "meta"}, {"sink"}),            # refresh frozen until the true sink binds
+    "ours_refresh": ({"inflight", "meta"}, {"sink"}),    # adaptive refresh left on; true sink overwrites at bind
     "full": ({"sink", "recent", "meta", "vae", "inflight"}, set()),
     "cold": (set(), set()),
     "replay": ({"seeds"}, set()),
@@ -289,7 +302,7 @@ def run_source(args):
         hdr, _ = recv_msg(conn)
         if hdr["kind"] == "DONE":
             break
-        assert hdr["kind"] == "READY"
+        assert hdr["kind"] == "PREP", hdr["kind"]
         policy, bw = hdr["policy"], float(hdr["bw_mbps"])
         print(f"[source] {policy} @ {bw:g} Mbps: running to M={M}", flush=True)
         session = runner.start()
@@ -297,16 +310,17 @@ def run_source(args):
             runner.step(session, c)
         torch.cuda.synchronize(device)
         snap = sa.serialize_state(pl, pm, session)
+        send_msg(conn, "PREPARED", {}, b"", None)
+        hdr, _ = recv_msg(conn)
+        assert hdr["kind"] == "READY", hdr["kind"]
         throttle = Throttle(bw * 1e6)
         fg, bg = POLICIES[policy]
         t0 = time.time()
         if policy == "replay":
-            # seed frames the destination needs for sinkhist(pos) replay of W=3: first batch + chunks
-            # 0..last_refresh and M-3..M-1 (uint8 camera frames, as a camera would deliver them)
             hist_end = max(1, hdr.get("last_refresh_call", -1) + 1)
             idx = list(range(0, runner.first)) + [runner.first + cc * runner.chunk + f for cc in list(range(0, hist_end)) + list(range(M - 3, M)) for f in range(runner.chunk)]
-            frames = ((runner.video[0, :, idx].float().permute(1, 2, 3, 0) * 0.5 + 0.5).clamp(0, 1) * 255).to(torch.uint8).numpy()
-            send_msg(conn, "SEEDS", {"n_frames": int(frames.shape[0]), "hist_end": hist_end}, frames.tobytes(), throttle)
+            frames = ((runner.video[0, :, idx].float().permute(1, 2, 3, 0) * 0.5 + 0.5).clamp(0, 1) * 255).to(torch.uint8).contiguous().numpy()
+            send_msg(conn, "SEEDS", {"n_frames": int(frames.shape[0]), "hist_end": hist_end}, frames, throttle)
         else:
             for comp in sorted(fg):
                 h, b = pack_component(snap, comp, sink, fsl)
@@ -355,6 +369,9 @@ def run_dest(args):
     results = []
     for policy, bw in parse_sweep(args.sweep):
         print(f"[dest] === {policy} @ {bw:g} Mbps ===", flush=True)
+        send_msg(sock, "PREP", {"policy": policy, "bw_mbps": bw}, b"", None)
+        hdr, _ = recv_msg(sock)
+        assert hdr["kind"] == "PREPARED", hdr["kind"]
         # provisioning: allocate buffers on this GPU (not part of the handoff time)
         session = runner.fresh_destination()
         snap = sa.serialize_state(pl, pm, session)  # template with the right shapes; contents are overwritten
@@ -386,10 +403,11 @@ def run_dest(args):
         cfg_thr = float(getattr(pm.config, "adapt_sink_threshold", -1))
         if policy == "full":
             sa.restore_state(pl, pm, session, snap, set(sa.STATE_COMPONENTS))
-        elif policy == "ours":
+        elif policy in ("ours", "ours_refresh"):
             sa.restore_state(pl, pm, session, snap, {"meta", "inflight"})
-            for block in pl.generator.model.blocks:
-                block.self_attn.adapt_sink_thr = -1  # freeze promotions until the true sink binds
+            if policy == "ours":
+                for block in pl.generator.model.blocks:
+                    block.self_attn.adapt_sink_thr = -1  # freeze promotions until the true sink binds
         elif policy == "cold":
             pass
         elif policy == "replay":
@@ -423,14 +441,36 @@ def run_dest(args):
             pending_cold = None
         frames_out = {}
         for c in range(M, M + N):
-            if policy == "ours" and bound_call is None and bg["sink"] is not None:
+            if policy in ("ours", "ours_refresh") and bound_call is None and bg["sink"] is not None:
+                # Atomic bind. The destination may have rewound/realigned RoPE positions since M
+                # (t_refresh at call 48): re-rotate the transferred keys by the per-slot position delta.
+                from models.wan.causal_model import _shift_temporal_rope
+
+                freqs = pl.generator.model.freqs.to(device)
+                shifted = 0
                 for li, layer in enumerate(pl.kv_cache1):
-                    layer["k"][:, :sink * fsl] = snap["kv"][li]["k"][:, :sink * fsl]
-                    layer["v"][:, :sink * fsl] = snap["kv"][li]["v"][:, :sink * fsl]
+                    k_x = snap["kv"][li]["k"][:, :sink * fsl]
+                    v_x = snap["kv"][li]["v"][:, :sink * fsl]
+                    pos_x = snap["sink_pos"][li]
+                    for b in range(k_x.shape[0]):
+                        for sidx in range(sink):
+                            lo, hi = sidx * fsl, (sidx + 1) * fsl
+                            kk = k_x[b, lo:hi]
+                            if policy == "ours":
+                                # frozen refresh: slot positions only moved by a t_refresh realign; follow it
+                                delta = int(layer["pos"][b, sidx].item() - pos_x[b, sidx].item())
+                                if delta != 0:
+                                    kk = _shift_temporal_rope(kk, freqs, delta); shifted += 1
+                            else:
+                                # refresh was on: the slot may hold a promoted frame; take the true sink's
+                                # position back verbatim (exact only if no realign happened since M)
+                                layer["pos"][b, sidx] = pos_x[b, sidx]
+                            layer["k"][b, lo:hi] = kk
+                            layer["v"][b, lo:hi] = v_x[b, lo:hi]
                 for block in pl.generator.model.blocks:
                     block.self_attn.adapt_sink_thr = cfg_thr
                 bound_call = c
-                rec["events"].append({"t": time.time() - t_mig, "bound_at_call": c})
+                rec["events"].append({"t": time.time() - t_mig, "bound_at_call": c, "slots_rerotated": shifted})
             if pending_cold is not None and c == M:
                 fr = None
             else:
@@ -476,7 +516,7 @@ def parse_args():
     p.add_argument("--role", choices=["source", "dest"], required=True)
     p.add_argument("--host", type=str, default="127.0.0.1")
     p.add_argument("--port", type=int, default=29777)
-    p.add_argument("--sweep", type=str, default="ours:1000,full:1000,cold:1000,replay:1000", help="policy:bw_mbps,...")
+    p.add_argument("--sweep", type=str, default="ours:1000,ours_refresh:1000,full:1000,cold:1000,replay:1000", help="policy:bw_mbps,...")
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))
     p.add_argument("--checkpoint_folder", type=str, default=str(REPO_ROOT / "ckpts/wan_causal_dmd_v2v"))
     p.add_argument("--prompt_file_path", type=str, default=str(REPO_ROOT / "examples/prompt.txt"))
@@ -498,7 +538,7 @@ def parse_args():
     p.add_argument("--use_tensorrt", action="store_true", default=False)
     p.add_argument("--fast", action="store_true", default=False)
     p.add_argument("--migration_chunk", type=int, default=30)
-    p.add_argument("--post_chunks", type=int, default=60)
+    p.add_argument("--post_chunks", type=int, default=80)
     p.add_argument("--out_dir", type=str, default=str(REPO_ROOT / "results/state_migration/proto"))
     return p.parse_args()
 

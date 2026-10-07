@@ -587,7 +587,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
                 snap = serialize_state(pl, runner.pm, session)
                 session = runner.fresh_destination()
                 moved = restore_state(pl, runner.pm, session, snap, cfg["xfer"])
-                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes") - sum(moved.values())
+                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 not in ("prompt_embeds_bytes", "kv_all_bytes")) - sum(moved.values())
                 info["bytes_moved"] = moved
                 info["events"].append({"call": c, "xfer": sorted(cfg["xfer"]), "moved_mb": {k2: round(v / MB, 1) for k2, v in moved.items()}})
                 del snap
@@ -604,7 +604,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
             elif cfg.get("replay") is not None:
                 sink_snap = snapshot_kv(pl, 0, sink) if cfg.get("sinkxfer") else None
                 session, ms, seed_bytes, replayed = runner.replay_restart(c, cfg["replay"], cfg["sink0"], cfg.get("sinkhist", False), cfg.get("pos", False))
-                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
+                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 not in ("prompt_embeds_bytes", "kv_all_bytes"))
                 if sink_snap is not None:
                     moved = force_copy_kv(pl, sink_snap)
                     info["bytes_withheld"] -= moved
@@ -616,7 +616,7 @@ def run_config(name: str, runner: Runner, M: int, N: int, baseline: dict, log) -
                 # fall through: chunk M itself has not been consumed yet
             elif cfg["restart"]:
                 session, frames, ms = runner.restart_at(session, c)
-                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
+                info["bytes_withheld"] = sum(v for k2, v in inv.items() if k2 not in ("prompt_embeds_bytes", "kv_all_bytes"))
                 info["events"].append({"call": c, "restart_ms": ms})
                 # The restart denoises chunk M synchronously; the baseline emits chunk M at call M+(k-1).
                 # Score it there and record the k-1 missing calls as the bubble.
@@ -807,7 +807,7 @@ def summarize(all_rows: list[dict], infos: dict, out_dir: Path, args, static: di
     # Transfer-vs-replay crossover (analytic, from measured bytes and replay time)
     replay_cfgs = [n for n in order if summary[n].get("replay_ms") is not None]
     if replay_cfgs:
-        full_bytes = sum(v for k2, v in inv.items() if k2 != "prompt_embeds_bytes")
+        full_bytes = sum(v for k2, v in inv.items() if k2 not in ("prompt_embeds_bytes", "kv_all_bytes"))
         rtt_ms = 10.0
         bws = [0.1, 1.0, 10.0, 100.0]  # Gbps
         L.append(f"\n## Transfer vs seed+replay (analytic; full state {full_bytes / MB:,.0f} MB, RTT {rtt_ms:.0f} ms, no decompression/serialization cost)\n")

@@ -15,10 +15,10 @@ SRC_GPU="${SRC_GPU:-0}"
 DST_GPU="${DST_GPU:-1}"
 PORT="${PORT:-29777}"
 OUT_DIR="${OUT_DIR:-results/state_migration/proto}"
-POLICIES="${POLICIES:-ours cold replay full}"
+POLICIES="${POLICIES:-ours ours_refresh cold replay full}"
 BWS="${BWS:-500 1000 2000 5000 10000}"   # Mbps
 M="${M:-30}"
-POST="${POST:-60}"
+POST="${POST:-80}"
 EXTRA="${EXTRA:-}"
 
 SWEEP=""
