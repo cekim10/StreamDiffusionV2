@@ -66,6 +66,9 @@ class Agent:
     def ping(self) -> dict:
         return self.call(op="ping")
 
+    def exec(self, cmd: list[str], timeout: float = 30) -> dict:
+        return self.call(op="exec", cmd=cmd, timeout=timeout)
+
 
 def connect_all(hosts: dict[str, tuple[str, int]], labels: list[str], mss=DEFAULT_MSS) -> dict[str, Agent]:
     agents = {}

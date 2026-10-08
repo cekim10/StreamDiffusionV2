@@ -11,6 +11,7 @@ Protocol: newline-delimited JSON requests on one connection per client; response
     {"op":"poll","pid":N}                            -> {"ok":true,"running":bool,"rc":int|null}
     {"op":"wait","pid":N,"timeout":S}                -> {"ok":true,"rc":int|null,"timed_out":bool}
     {"op":"kill","pid":N}                            -> {"ok":true}
+    {"op":"exec","cmd":[...],"timeout":S}            -> {"ok":true,"rc":int,"stdout":...,"stderr":...}  (short probes)
     {"op":"read","path":"rel/path"}                  -> {"ok":true,"text":...}  (text files, <= 50 MB)
     {"op":"glob","pattern":"rel/glob"}               -> {"ok":true,"paths":[...]}
     {"op":"mkdir","path":"rel/dir"}                  -> {"ok":true}
@@ -73,6 +74,10 @@ def handle(req: dict) -> dict:
             rc = p.wait(timeout=float(req.get("timeout", 3600))); return {"ok": True, "rc": rc, "timed_out": False}
         except subprocess.TimeoutExpired:
             return {"ok": True, "rc": None, "timed_out": True}
+    if op == "exec":
+        # short synchronous command (read-only probes such as nvidia-smi); output returned inline
+        r = subprocess.run(req["cmd"], cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=float(req.get("timeout", 30)))
+        return {"ok": True, "rc": r.returncode, "stdout": r.stdout[-20000:], "stderr": r.stderr[-2000:]}
     if op == "read":
         p = safe_path(req["path"])
         if p.stat().st_size > 50 << 20:
