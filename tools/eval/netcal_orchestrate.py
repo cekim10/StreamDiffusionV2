@@ -72,9 +72,11 @@ def main():
                     cmd += ["--iface", a.iface]
                 rpids.append((agents[d], agents[d].run(cmd, f"{rel}/receiver_{d}.log")))
             time.sleep(2.0)
+            start_at = time.time() + 3.0  # barrier: all senders of this rep start transmitting together
             spids = []
             for s, d in pairs:
-                cmd = [a.py, "tools/eval/netcal.py", "--role", "sender", "--host", hosts[d][0], "--port", str(a.port + p), "--bytes", str(a.bytes), "--mss", str(a.mss), "--tag", name, "--out", rel]
+                cmd = [a.py, "tools/eval/netcal.py", "--role", "sender", "--host", hosts[d][0], "--port", str(a.port + p), "--bytes", str(a.bytes), "--mss", str(a.mss),
+                       "--tag", name, "--out", rel, "--start_at", f"{start_at:.3f}"]
                 spids.append((agents[s], agents[s].run(cmd, f"{rel}/sender_{s}_to_{d}.log")))
             ok = wait_all(spids, a.timeout, f"{name} rep{rep} senders") & wait_all(rpids, a.timeout + 30, f"{name} rep{rep} receivers")
             # pull every record and log back

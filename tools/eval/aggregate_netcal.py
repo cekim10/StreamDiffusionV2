@@ -18,7 +18,7 @@ def main():
     a = ap.parse_args()
     root = Path(a.root)
     rows = []
-    for f in sorted(root.rglob("recv_flow*.json")):
+    for f in sorted(list(root.rglob("recv_flow*.json")) + list(root.rglob("recv_*_flow*.json"))):
         r = json.load(open(f))
         parts = f.relative_to(root).parts  # <run>/<pattern>/rep<k>/file
         run, pattern, rep = parts[0], parts[1], parts[2]

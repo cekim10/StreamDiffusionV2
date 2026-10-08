@@ -45,7 +45,7 @@ def recv_flow(conn: socket.socket, idx: int, out: Path, tag: str):
     rec = {"role": "receiver", "flow": idx, "tag": tag, "peer": peer, "host": socket.gethostname(), "bytes": got, "bytes_expected": nbytes,
            "t_first_byte": t_first, "t_end": t_end, "sender_t0_raw": sender_t0, "recv_seconds": t_end - t_first,
            "mbps_app": got * 8 / max(1e-9, t_end - t_first) / 1e6, "mss": effective_mss(conn), "mss_warnings": list(MSS_WARNINGS)}
-    write_json(out / f"recv_flow{idx}_{peer}_{int(t_end)}.json", rec)
+    write_json(out / f"recv_{socket.gethostname()}_flow{idx}_from_{peer}_{int(t_end * 1000)}.json", rec)
     print(json.dumps(rec), flush=True)
     conn.close()
 
@@ -73,6 +73,8 @@ def run_sender(a):
     payload = memoryview(bytearray(os.urandom(CHUNK)))  # incompressible 1 MiB block, reused
     s = tcp_connect(a.host, a.port, a.mss)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8 << 20)
+    if a.start_at and a.start_at > time.time():
+        time.sleep(a.start_at - time.time())  # common start barrier so concurrent flows actually overlap
     t0 = time.time()
     s.sendall(struct.pack("!Qd", a.bytes, t0))
     sent = 0
@@ -87,7 +89,7 @@ def run_sender(a):
     t_ack = time.time()
     rec = {"role": "sender", "tag": a.tag, "host": socket.gethostname(), "peer": a.host, "bytes": sent, "t0": t0, "t_sent": t_sent, "t_ack": t_ack,
            "send_seconds": t_sent - t0, "ack_seconds": t_ack - t0, "mbps_app_ack": sent * 8 / max(1e-9, t_ack - t0) / 1e6,
-           "mss": effective_mss(s), "bw_mbps_cap": a.bw_mbps, "mss_warnings": list(MSS_WARNINGS)}
+           "mss": effective_mss(s), "bw_mbps_cap": a.bw_mbps, "mss_warnings": list(MSS_WARNINGS), "start_at": a.start_at}
     write_json(out / f"send_{socket.gethostname()}_to_{a.host}_{int(t0)}.json", rec)
     print(json.dumps(rec), flush=True)
     s.close()
@@ -103,6 +105,7 @@ def main():
     p.add_argument("--bw_mbps", type=float, default=0.0, help="sender token bucket; 0 = unlimited")
     p.add_argument("--iface", type=str, default=None)
     p.add_argument("--tag", type=str, default="")
+    p.add_argument("--start_at", type=float, default=0.0, help="sender: unix time to start transmitting (barrier)")
     p.add_argument("--out", type=str, required=True)
     a = p.parse_args()
     a.mss = a.mss or None
