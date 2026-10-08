@@ -507,6 +507,13 @@ class Run:
             return {n: max(b.values()) * 8 / 1e6 for n, b in bins.items()}  # Mbps over 1 s bins
 
         ingress_peak = peak_node_rate([r for r in self.recv if r["ok"]], "dst"); egress_peak = peak_node_rate(self.sent, "src")
+        nic_rx_peak, nic_tx_peak = {}, {}
+        for lb, e in ends.items():
+            txt = e.get("network_csv") or ""
+            rows_ = [l.split(",") for l in txt.splitlines()[1:] if l.strip()]
+            win = [r_ for r_ in rows_ if float(r_[0]) >= self.t0]
+            rx = [float(r_[4]) for r_ in win if r_[4]]; tx = [float(r_[5]) for r_ in win if r_[5]]
+            nic_rx_peak[lb] = max(rx) if rx else None; nic_tx_peak[lb] = max(tx) if tx else None
         ev_final = [e for e in self.node_events if e["node"] == fin]
         t_complete = next((e["t"] for e in ev_final if e["event"] == "sink_complete"), None)
         t_verified = next((e["t"] for e in ev_final if e["event"] == "sink_verified"), None)
@@ -558,6 +565,9 @@ class Run:
             "ingress_peak_mbps_max": max(ingress_peak.values()) if ingress_peak else 0.0,
             "ingress_within_physical_cap": (max(ingress_peak.values()) if ingress_peak else 0.0) <= a.physical_cap_mbps * 1.05,
             "ingress_within_emulated_cap": None if self.bw <= 0 else (max(ingress_peak.values()) if ingress_peak else 0.0) <= self.bw * 1.15,
+            # kernel NIC counters (network.csv, 1 s): the shaping must show up on the wire, not only in the orchestrator's bookkeeping
+            "nic_rx_peak_mbps_by_node": nic_rx_peak, "nic_tx_peak_mbps_by_node": nic_tx_peak,
+            "nic_ingress_within_emulated_cap": None if self.bw <= 0 else all(v is None or v <= self.bw * 1.15 for v in nic_rx_peak.values()),
             "continuity_comparable_to_phase1": (float(np.mean(after_rejoin)) >= 35.0) if after_rejoin else None,
             "stop_reason": self.stop_reason,
         }
