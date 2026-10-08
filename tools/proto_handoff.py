@@ -133,6 +133,35 @@ def component_digest(parts) -> str:
     return h.hexdigest()
 
 
+class RecvPool:
+    """Two preallocated receive buffers used alternately: while the bytes of message i are being hashed
+    (thread pool), message i+1 lands in the other buffer. A buffer is reused only once its digest is done,
+    so hashing is never on the receive path for back-to-back components (FullMigration)."""
+
+    def __init__(self, nbytes: int):
+        self.bufs = [bytearray(nbytes), bytearray(nbytes)]
+        self.pending = [None, None]
+        self.idx = 0
+
+    def next(self) -> bytearray:
+        self.idx ^= 1
+        fut = self.pending[self.idx]
+        if fut is not None:
+            fut.result()
+            self.pending[self.idx] = None
+        return self.bufs[self.idx]
+
+    def hold(self, fut) -> None:
+        """Mark the buffer handed out by the last next() as busy until `fut` completes."""
+        self.pending[self.idx] = fut
+
+    def drain(self) -> None:
+        for f in self.pending:
+            if f is not None:
+                f.result()
+        self.pending = [None, None]
+
+
 def payload_slices(header: dict, payload):
     view = memoryview(payload)
     return [view[t["offset"]:t["offset"] + t["nbytes"]] for t in header["tensors"]]
@@ -468,8 +497,8 @@ def run_dest(args):
           f"mss {effective_mss(sock)} (source {hello.get('mss_effective')})", flush=True)
 
     # receive pool: largest single component (VAE caches ~3 GB at 480x832) + margin; allocated once, reused
-    pool = bytearray(int(estimate_sink_bytes(k_steps, args.height, args.width, args.model_type) * 2.2) + (64 << 20))
-    print(f"[dest] receive pool {len(pool) / MB:.0f} MB preallocated", flush=True)
+    pool = RecvPool(int(estimate_sink_bytes(k_steps, args.height, args.width, args.model_type) * 2.2) + (64 << 20))
+    print(f"[dest] receive pool 2 x {len(pool.bufs[0]) / MB:.0f} MB preallocated", flush=True)
     results = []
     for rep in range(1, args.reps + 1):
         for policy, bw in parse_sweep(args.sweep):
@@ -512,8 +541,11 @@ def run_dest(args):
             local_digest: dict = {}  # comp -> future(digest), computed from the received bytes in the hash pool
 
             def hash_later(hdr, payload):
-                # the payload lives in the shared pool; hash its tensor slices now (pool threads) before reuse
-                local_digest[hdr["comp"]] = _pool().submit(component_digest, payload_slices(hdr, payload))
+                # the payload lives in a pool buffer; hash its tensor slices in the thread pool and keep the
+                # buffer reserved until the digest is done (the other buffer takes the next message meanwhile)
+                fut = _pool().submit(component_digest, payload_slices(hdr, payload))
+                local_digest[hdr["comp"]] = fut
+                pool.hold(fut)
 
             def verify_all(end_hdr):
                 for comp, d in (end_hdr.get("digests") or {}).items():
@@ -523,7 +555,7 @@ def run_dest(args):
                     ev.log("checksum", comp=comp, ok=ok)
 
             while True:
-                hdr, payload = recv_msg(sock, pool)
+                hdr, payload = recv_msg(sock, pool.next())
                 if hdr["kind"] == "GO":
                     ev.log("go", to_dest(hdr["t_go"])); break
                 if hdr["kind"] == "SEEDS":
@@ -531,7 +563,7 @@ def run_dest(args):
                     ev.log("fg_recv", hdr["t_recv"], comp="seeds", bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), checksum_ok=checksum_ok["seeds"])
                 else:
                     unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-                    hash_later(hdr, payload); local_digest[hdr["comp"]].result()  # pool is reused by the next message: finish hashing first
+                    hash_later(hdr, payload)
                     bytes_cat[hdr["comp"]] = len(payload); h2d_total += hdr.get("h2d_s", 0.0)
                     ev.log("fg_recv", hdr["t_recv"], comp=hdr["comp"], bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), d2h_s=hdr.get("d2h_s"), h2d_s=hdr.get("h2d_s"))
 
@@ -558,7 +590,7 @@ def run_dest(args):
 
             def receiver():
                 while True:
-                    hdr, payload = recv_msg(sock, pool)
+                    hdr, payload = recv_msg(sock, pool.next())
                     if hdr["kind"] == "END":
                         verify_all(hdr); bg["checksum_ok"] = checksum_ok.get("sink"); bg["end"] = hdr; break
                     if bg["sink_t_first"] is None:
@@ -568,7 +600,7 @@ def run_dest(args):
                     bg["bytes"] += len(payload); bg["h2d_s"] += hdr.get("h2d_s", 0.0)
                     bg["sink_t_end"] = time.time()  # bytes are on the GPU: the sink can bind now; verification follows
                     ev.log("sink_ready", bg["sink_t_end"], bytes=len(payload), h2d_s=hdr.get("h2d_s"), d2h_s=hdr.get("d2h_s"))
-                    hash_later(hdr, payload); local_digest[hdr["comp"]].result()
+                    hash_later(hdr, payload)
 
             th = threading.Thread(target=receiver, daemon=True); th.start()
 
@@ -653,7 +685,8 @@ def run_dest(args):
                 "validation": {
                     "full_identical": (all((r["psnr"] or 0) >= 99 for r in outs)) if policy == "full" else None,
                     "repeat_identical": (all((r["psnr"] or 0) >= 99 for r in outs)) if policy == "repeat" else None,
-                    "checksums_all_ok": all(v for v in list(checksum_ok.values()) + ([bg["checksum_ok"]] if bg["bytes"] else []) if v is not None),
+                    # every received component must have a matching digest (a missing digest fails, not skips)
+                    "checksums_all_ok": all(checksum_ok.get(c) is True for c in bytes_cat) and (bg["checksum_ok"] is True or not bg["bytes"]),
                 },
             }
             write_json(rd / "summary.json", summary)
