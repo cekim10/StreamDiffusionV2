@@ -631,7 +631,7 @@ class Orchestrator:
             if self.a.iface:
                 cmd += ["--iface", self.a.iface]
             cmd += self.a.node_extra.split()
-            pid = agents[lb].run(cmd, f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{stamp}.log")
+            pid = agents[lb].run(cmd, f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{stamp}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
             self.agent_pids[lb] = (agents[lb], pid)
             print(f"[orch] launched node {lb} on {nd['host']} (pid {pid})", flush=True)
 

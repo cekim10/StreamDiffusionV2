@@ -78,17 +78,31 @@ class GpuRuntime:
         self.session = None
         self.snap = None
 
+    def mem(self, tag: str):
+        torch = self.torch
+        print(f"[{self.args.label}] gpu mem {tag}: allocated {torch.cuda.memory_allocated(self.device) / MB:.0f} MB, reserved {torch.cuda.memory_reserved(self.device) / MB:.0f} MB", flush=True)
+
     def baseline(self, M: int, N: int):
         torch = self.torch
+        self.mem("after model load")
         session = self.runner.start()
+        self.mem("after baseline session start")
         base, times = {}, []
         for c in range(M + N):
             t0 = time.perf_counter(); fr = self.runner.step(session, c); torch.cuda.synchronize(self.device); times.append(time.perf_counter() - t0)
             if fr is not None:
                 base[c] = fr
             self.runner.noise_hist[c] = float(session.noise_scale)
+            if c in (M, M + N - 1):
+                self.mem(f"baseline call {c}")
         self.base = base
         self.service_s = float(np.median(times[M:]))
+        del session
+        self.pm.reset_stream_state(reset_vae_flags=True)  # drop the baseline session's caches before the run allocates its own
+        import gc
+
+        gc.collect(); torch.cuda.empty_cache()
+        self.mem("after baseline cleanup")
         return self.service_s
 
     def gpu_mem_mb(self):
@@ -96,14 +110,17 @@ class GpuRuntime:
 
     # --- source side
     def run_to(self, M: int):
+        self.mem("before run_to")
         self.session = self.runner.start()
         for c in range(M):
             self.runner.step(self.session, c)
         self.torch.cuda.synchronize(self.device)
+        self.mem(f"after run_to({M})")
 
     def serialize_live(self) -> dict:
         snap = self.sa.serialize_state(self.pl, self.pm, self.session)
         self.torch.cuda.synchronize(self.device)
+        self.mem("after serialize")
         return snap
 
     def pack(self, snap: dict, comp: str):
@@ -148,7 +165,11 @@ class GpuRuntime:
 
     def release(self):
         self.snap = None; self.session = None
-        self.torch.cuda.empty_cache()
+        self.pm.reset_stream_state(reset_vae_flags=True)
+        import gc
+
+        gc.collect(); self.torch.cuda.empty_cache()
+        self.mem("after release")
 
 
 class FakeRuntime:
@@ -343,6 +364,9 @@ class Node:
         t_sent = time.time()
         conn.close()
         del snap
+        if self.label == "A":
+            self.rt.session = None; self.rt.snap = None
+            self.rt.torch.cuda.empty_cache() if hasattr(self.rt, "torch") else None
         self.event("exec_stop", t_stop, call=r["call"], to=h["to"], wait_boundary_s=t_stop - t_req, serialize_s=t_ser - t_stop, fg_bytes=nbytes, fg_send_s=t_sent - t_ser)
         return {"t_stop": t_stop, "t_fg_sent": t_sent, "call": r["call"], "fg_bytes": nbytes}
 
