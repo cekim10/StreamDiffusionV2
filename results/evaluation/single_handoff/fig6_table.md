@@ -1,4 +1,4 @@
-| policy | BW (Mbps) | first output s (median [p25, p75]) | continuity-ready s | bytes (MB) |
+| policy | BW (Mbps) | first output s (median [p25, p75]) | Sink bound s (first output on the transferred Sink) | bytes (MB) |
 |---|---|---|---|---|
 | SDV2-FullMigration | 250 | 209.85 [209.83, 210.28] | 209.85 [209.83, 210.28] | 6163.8 |
 | SDV2-FullMigration | 500 | 106.50 [106.42, 106.56] | 106.50 [106.42, 106.56] | 6163.8 |

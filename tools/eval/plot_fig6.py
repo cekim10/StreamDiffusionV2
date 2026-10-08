@@ -37,7 +37,7 @@ def main():
                 data[r["policy"]][(bw, key)].append(float(r[key]))
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.6, 3.0))
     for key, axis, title, ylabel in (("first_output_latency_s", ax, "(a) Execution handoff: time to first output", "seconds after migration"),
-                                     ("continuity_ready_rel_s", bx, "(b) Continuity handoff: time to original trajectory", "seconds after migration")):
+                                     ("continuity_ready_rel_s", bx, "(b) Continuity handoff: time to Sink bind", "seconds after migration")):
         for pol in ("full", "cold", "replay", "ours"):
             pts = sorted({bw for (bw, k) in data[pol] if k == key})
             if not pts:
@@ -57,7 +57,7 @@ def main():
     out = root / "fig6_handoff_latency"
     fig.savefig(out.with_suffix(".pdf")); fig.savefig(out.with_suffix(".png"), dpi=200)
     # companion table
-    lines = ["| policy | BW (Mbps) | first output s (median [p25, p75]) | continuity-ready s | bytes (MB) |", "|---|---|---|---|---|"]
+    lines = ["| policy | BW (Mbps) | first output s (median [p25, p75]) | Sink bound s (first output on the transferred Sink) | bytes (MB) |", "|---|---|---|---|---|"]
     for pol in ("full", "cold", "replay", "ours"):
         for bw in sorted({bw for (bw, k) in data[pol]}):
             f = data[pol].get((bw, "first_output_latency_s"), []); c = data[pol].get((bw, "continuity_ready_rel_s"), []); b = data[pol].get((bw, "total_bytes"), [])

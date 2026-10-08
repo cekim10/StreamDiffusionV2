@@ -6,7 +6,7 @@ Workload: original demo clip, seed 0, 480x832, k=2, migration at chunk M (identi
 
 ## Headline (median of 3 reps; `fig6_table.md` has p25/p75)
 
-| policy | bytes | first output, 250 Mbps | first output, native | continuity-ready, 250 Mbps | continuity-ready, native |
+| policy | bytes | first output, 250 Mbps | first output, native | Sink bound, 250 Mbps | Sink bound, native |
 |---|---|---|---|---|---|
 | SDV2-FullMigration | 6164 MB | 209.9 s | 7.85 s | 209.9 s | 7.85 s |
 | SDV2-Restart | 0 | 1.07 s | 1.07 s | never | never |
@@ -15,7 +15,7 @@ Workload: original demo clip, seed 0, 480x832, k=2, migration at chunk M (identi
 
 - `ours` first output is 0.69-0.74 s at every bandwidth: the foreground fragment is 0.2 MB in-flight rows + ~2 MB metadata, so first output is dominated by one chunk of generation (0.54 s) plus resume bookkeeping. It is below Restart (1.07 s) because Restart pays the SDV2 cold-start path (VAE cache rebuild, first-chunk warm-up).
 - FullMigration scales with bytes/bandwidth exactly as expected (6.16 GB: 209.9 s at 250 Mbps, 53.8 s at 1 Gbps, 7.85 s native). At native speed the per-rep spread (6.86-8.95 s) tracks link throughput (6.0-8.1 Gbps effective for the 6 components, with H2D copies between messages); restore after the last byte is 0.55-0.75 s.
-- `ours` continuity-ready = sink arrival + bind at the next chunk boundary + rejoin. At native, the 1.65 GB sink lands at 2.08 s after GO, is verified at 2.17 s (off the data path), binds at 2.54 s, and the output is back on the original trajectory (>=40 dB vs the uninterrupted run) at 3.09 s. Rejoin takes 6 calls after bind at every bandwidth (8 at 500 Mbps); PSNR after bind is 39-45 dB, i.e. the same stream, not a different valid stream (cold/replay stay at 22-30 dB).
+- `continuity_ready_rel_s` (Fig. 6b, 'Sink bound') is the output time of the first chunk produced on the transferred Sink, i.e. sink arrival + verification + bind at the next chunk boundary. At native, the 1.65 GB sink lands at 2.08 s after migration start, is verified at 2.17 s (off the data path), binds at 2.54 s, and the first chunk on the bound Sink is out at 3.09 s. Rejoin to the original trajectory (first chunk >= 35 dB vs the uninterrupted run) takes 6 further calls at every bandwidth (7-8 at 250/500 Mbps), i.e. ~3.5 s more; mean PSNR from bind+8 onward is 39-45 dB, the same stream rather than a different valid stream (cold/replay stay at 22-30 dB and never reach 35 dB). Fig. 7 (results/evaluation/continuity/) shows the full timeline.
 - Replay (42 MB) still needs 5.8-7.1 s because replaying W=3 chunks of history is compute, not bytes, and it never rejoins the original trajectory.
 
 ## Validation
