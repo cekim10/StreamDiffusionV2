@@ -75,8 +75,13 @@ def send_msg(sock: socket.socket, kind: str, header: dict, payload, throttle: Th
             off += n
 
 
-def recv_exact(sock: socket.socket, n: int) -> bytearray:
-    buf = bytearray(n)
+def recv_exact(sock: socket.socket, n: int, pool: bytearray | None = None):
+    """Read exactly n bytes. With `pool` (preallocated, large enough) the bytes land in pool[:n] with no
+    allocation; allocating a multi-GB bytearray holds the GIL for hundreds of ms and stalls generation."""
+    if pool is not None and n <= len(pool):
+        buf = memoryview(pool)[:n]
+    else:
+        buf = bytearray(n)
     view = memoryview(buf)
     got = 0
     while got < n:
@@ -87,12 +92,12 @@ def recv_exact(sock: socket.socket, n: int) -> bytearray:
     return buf
 
 
-def recv_msg(sock: socket.socket):
+def recv_msg(sock: socket.socket, pool: bytearray | None = None):
     lens = recv_exact(sock, 16)
     hl, pl = struct.unpack("!QQ", bytes(lens))
     hdr = json.loads(bytes(recv_exact(sock, hl)).decode())
     t0 = time.time()
-    payload = recv_exact(sock, pl) if pl else bytearray()
+    payload = recv_exact(sock, pl, pool) if pl else bytearray()
     hdr["t_recv_start"] = t0
     hdr["t_recv"] = time.time()
     return hdr, payload
@@ -103,6 +108,34 @@ def sha256_parts(parts) -> str:
     for b in parts:
         h.update(memoryview(b).cast("B"))
     return h.hexdigest()
+
+
+_HASH_POOL = None
+
+
+def _pool():
+    global _HASH_POOL
+    if _HASH_POOL is None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        _HASH_POOL = ThreadPoolExecutor(max_workers=16)
+    return _HASH_POOL
+
+
+def component_digest(parts) -> str:
+    """Digest of a component as sha256 over the per-buffer sha256 digests (buffers = tensors, in header
+    order). Per-buffer hashing runs in a thread pool (hashlib releases the GIL), so verification keeps up
+    with a 10 GbE link without sitting on the transfer's critical path."""
+    futs = [_pool().submit(lambda b=b: hashlib.sha256(memoryview(b).cast("B")).digest()) for b in parts]
+    h = hashlib.sha256()
+    for f in futs:
+        h.update(f.result())
+    return h.hexdigest()
+
+
+def payload_slices(header: dict, payload):
+    view = memoryview(payload)
+    return [view[t["offset"]:t["offset"] + t["nbytes"]] for t in header["tensors"]]
 
 
 # ----------------------------------------------------------------------------- state packing
@@ -290,21 +323,14 @@ def build_runtime(args):
 
 
 # ----------------------------------------------------------------------------- source (edge A)
-def send_state(conn, h, b, throttle):
-    """Send one component; its SHA-256 is computed in a background thread while the bytes are on the wire
-    and delivered afterwards as a CHECKSUM trailer, so verification never delays the transfer itself."""
-    result = {}
-
-    def hasher():
-        result["sha256"] = sha256_parts(b)
-
-    th = threading.Thread(target=hasher, daemon=True); th.start()
+def send_state(conn, h, b, throttle, digests: dict):
+    """Send one component; its digest is computed concurrently (thread pool) and collected into `digests`,
+    which the source ships once in the END message. Nothing waits for hashing on the data path."""
+    fut = _pool().submit(component_digest, b)
+    digests[h["comp"]] = fut
     t0 = time.time()
     send_msg(conn, "STATE", h, b, throttle)
-    t1 = time.time()
-    th.join()
-    send_msg(conn, "CHECKSUM", {"comp": h["comp"], "sha256": result["sha256"], "fg": h.get("fg")}, b"", None)
-    return t0, t1
+    return t0, time.time()
 
 
 def run_source(args):
@@ -342,6 +368,7 @@ def run_source(args):
         throttle = Throttle(bw * 1e6) if bw > 0 else None
         fg, bg = POLICIES[policy]
         log = {"policy": policy, "bytes_by_comp": {}, "d2h_by_comp": {}, "t_send_by_comp": {}}
+        digests: dict = {}
         if policy == "replay":
             hist_end = max(1, hdr.get("last_refresh_call", -1) + 1)
             idx = list(range(0, runner.first)) + [runner.first + cc * runner.chunk + f for cc in list(range(0, hist_end)) + list(range(M - 3, M)) for f in range(runner.chunk)]
@@ -352,13 +379,14 @@ def run_source(args):
         else:
             for comp in sorted(fg):
                 h, b = pack_component(snap, comp, sink, fsl)
-                t0, t1 = send_state(conn, {"fg": True, **h}, b, throttle)
+                t0, t1 = send_state(conn, {"fg": True, **h}, b, throttle, digests)
                 log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, t1]
         send_msg(conn, "GO", {"policy": policy, "t_go": time.time()}, b"", None)
         for comp in sorted(bg):
             h, b = pack_component(snap, comp, sink, fsl)
-            t0, t1 = send_state(conn, {"fg": False, **h}, b, throttle)
+            t0, t1 = send_state(conn, {"fg": False, **h}, b, throttle, digests)
             log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, t1]
+        log["digests"] = {comp: f.result() for comp, f in digests.items()}
         send_msg(conn, "END", {"t_end": time.time(), **log}, b"", None)
         del snap
         torch.cuda.empty_cache()
@@ -439,6 +467,9 @@ def run_dest(args):
     print(f"[dest] connected to {args.host}; clock offset {off * 1e3:+.2f} ms, rtt_min {sync['rtt_min_s'] * 1e3:.2f} ms, "
           f"mss {effective_mss(sock)} (source {hello.get('mss_effective')})", flush=True)
 
+    # receive pool: largest single component (VAE caches ~3 GB at 480x832) + margin; allocated once, reused
+    pool = bytearray(int(estimate_sink_bytes(k_steps, args.height, args.width, args.model_type) * 2.2) + (64 << 20))
+    print(f"[dest] receive pool {len(pool) / MB:.0f} MB preallocated", flush=True)
     results = []
     for rep in range(1, args.reps + 1):
         for policy, bw in parse_sweep(args.sweep):
@@ -478,36 +509,29 @@ def run_dest(args):
 
             bytes_cat, checksum_ok = {}, {}
             h2d_total = 0.0
-            pending_hash: dict[str, threading.Thread] = {}
-            hash_result: dict[str, str] = {}
+            local_digest: dict = {}  # comp -> future(digest), computed from the received bytes in the hash pool
 
-            def hash_later(comp, payload):
-                def run():
-                    hash_result[comp] = sha256_parts([payload])
-                th = threading.Thread(target=run, daemon=True); th.start(); pending_hash[comp] = th
+            def hash_later(hdr, payload):
+                # the payload lives in the shared pool; hash its tensor slices now (pool threads) before reuse
+                local_digest[hdr["comp"]] = _pool().submit(component_digest, payload_slices(hdr, payload))
 
-            def take_checksum(hdr):
-                comp = hdr["comp"]
-                th = pending_hash.pop(comp, None)
-                if th is not None:
-                    th.join()
-                ok = hash_result.get(comp) == hdr["sha256"]
-                checksum_ok[comp] = ok
-                ev.log("checksum", hdr["t_recv"], comp=comp, ok=ok)
-                return ok
+            def verify_all(end_hdr):
+                for comp, d in (end_hdr.get("digests") or {}).items():
+                    fut = local_digest.get(comp)
+                    ok = (fut.result() == d) if fut is not None else None
+                    checksum_ok[comp] = ok
+                    ev.log("checksum", comp=comp, ok=ok)
 
             while True:
-                hdr, payload = recv_msg(sock)
+                hdr, payload = recv_msg(sock, pool)
                 if hdr["kind"] == "GO":
                     ev.log("go", to_dest(hdr["t_go"])); break
-                if hdr["kind"] == "CHECKSUM":
-                    take_checksum(hdr); continue
                 if hdr["kind"] == "SEEDS":
                     bytes_cat["seeds"] = len(payload); checksum_ok["seeds"] = sha256_parts([payload]) == hdr["sha256"]
                     ev.log("fg_recv", hdr["t_recv"], comp="seeds", bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), checksum_ok=checksum_ok["seeds"])
                 else:
                     unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-                    hash_later(hdr["comp"], payload)
+                    hash_later(hdr, payload); local_digest[hdr["comp"]].result()  # pool is reused by the next message: finish hashing first
                     bytes_cat[hdr["comp"]] = len(payload); h2d_total += hdr.get("h2d_s", 0.0)
                     ev.log("fg_recv", hdr["t_recv"], comp=hdr["comp"], bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), d2h_s=hdr.get("d2h_s"), h2d_s=hdr.get("h2d_s"))
 
@@ -534,19 +558,17 @@ def run_dest(args):
 
             def receiver():
                 while True:
-                    hdr, payload = recv_msg(sock)
+                    hdr, payload = recv_msg(sock, pool)
                     if hdr["kind"] == "END":
-                        bg["end"] = hdr; break
-                    if hdr["kind"] == "CHECKSUM":
-                        bg["checksum_ok"] = take_checksum(hdr); continue
+                        verify_all(hdr); bg["checksum_ok"] = checksum_ok.get("sink"); bg["end"] = hdr; break
                     if bg["sink_t_first"] is None:
                         bg["sink_t_first"] = hdr["t_recv_start"]; bg["t_send_src"] = to_dest(hdr["t_send"])
                         ev.log("sink_recv_start", hdr["t_recv_start"], t_send_src=bg["t_send_src"])
                     unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-                    hash_later(hdr["comp"], payload)
                     bg["bytes"] += len(payload); bg["h2d_s"] += hdr.get("h2d_s", 0.0)
-                    bg["sink_t_end"] = time.time()
+                    bg["sink_t_end"] = time.time()  # bytes are on the GPU: the sink can bind now; verification follows
                     ev.log("sink_ready", bg["sink_t_end"], bytes=len(payload), h2d_s=hdr.get("h2d_s"), d2h_s=hdr.get("d2h_s"))
+                    hash_later(hdr, payload); local_digest[hdr["comp"]].result()
 
             th = threading.Thread(target=receiver, daemon=True); th.start()
 
