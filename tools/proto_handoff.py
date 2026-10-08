@@ -136,7 +136,7 @@ def bytes_to_tensor(meta: dict, raw: memoryview, device):
     return t.to(device)
 
 
-def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: bool = True) -> tuple[dict, list]:
+def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: str = "async") -> tuple[dict, list]:
     """Serialize one component of a serialize_state() snapshot into (header, [buffers]). D2H happens here."""
     import torch
 
@@ -178,7 +178,7 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: bool = 
         buffers.append(b)
         off += n
     header["nbytes"] = off
-    if checksum:
+    if checksum == "inline":  # legacy: hash before sending (adds hashing time to the critical path)
         header["sha256"] = sha256_parts(buffers)
     if comp == "meta":
         header["scalars"] = {
@@ -196,7 +196,7 @@ def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, f
     Verifies the checksum when present (records header['checksum_ok']) and times the H2D copies."""
     import torch
 
-    if "sha256" in header:
+    if "sha256" in header:  # inline mode only
         header["checksum_ok"] = sha256_parts([payload]) == header["sha256"]
     t0 = time.perf_counter()
     view = memoryview(payload)
@@ -277,7 +277,7 @@ def build_runtime(args):
     pm.load_model(args.checkpoint_folder)
     pl = pm.pipeline
     chunk = pm.base_chunk_size * pl.num_frame_per_block
-    total_calls = args.migration_chunk + args.post_chunks
+    total_calls = args.migration_chunk + max(args.post_chunks, getattr(args, "max_post_chunks", args.post_chunks))
     needed = 1 + chunk + total_calls * chunk
     video = load_mp4_as_tensor(args.video_path, resize_hw=(args.height, args.width))
     reps = (needed + video.shape[1] - 1) // video.shape[1]
@@ -290,6 +290,23 @@ def build_runtime(args):
 
 
 # ----------------------------------------------------------------------------- source (edge A)
+def send_state(conn, h, b, throttle):
+    """Send one component; its SHA-256 is computed in a background thread while the bytes are on the wire
+    and delivered afterwards as a CHECKSUM trailer, so verification never delays the transfer itself."""
+    result = {}
+
+    def hasher():
+        result["sha256"] = sha256_parts(b)
+
+    th = threading.Thread(target=hasher, daemon=True); th.start()
+    t0 = time.time()
+    send_msg(conn, "STATE", h, b, throttle)
+    t1 = time.time()
+    th.join()
+    send_msg(conn, "CHECKSUM", {"comp": h["comp"], "sha256": result["sha256"], "fg": h.get("fg")}, b"", None)
+    return t0, t1
+
+
 def run_source(args):
     import torch
 
@@ -335,15 +352,13 @@ def run_source(args):
         else:
             for comp in sorted(fg):
                 h, b = pack_component(snap, comp, sink, fsl)
-                t0 = time.time()
-                send_msg(conn, "STATE", {"fg": True, **h}, b, throttle)
-                log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, time.time()]
+                t0, t1 = send_state(conn, {"fg": True, **h}, b, throttle)
+                log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, t1]
         send_msg(conn, "GO", {"policy": policy, "t_go": time.time()}, b"", None)
         for comp in sorted(bg):
             h, b = pack_component(snap, comp, sink, fsl)
-            t0 = time.time()
-            send_msg(conn, "STATE", {"fg": False, **h}, b, throttle)
-            log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, time.time()]
+            t0, t1 = send_state(conn, {"fg": False, **h}, b, throttle)
+            log["bytes_by_comp"][comp] = h["nbytes"]; log["d2h_by_comp"][comp] = h["d2h_s"]; log["t_send_by_comp"][comp] = [t0, t1]
         send_msg(conn, "END", {"t_end": time.time(), **log}, b"", None)
         del snap
         torch.cuda.empty_cache()
@@ -384,15 +399,20 @@ def run_dest(args):
     sink, fsl = pl.num_sink_tokens, pl.frame_seq_length
     M, N = args.migration_chunk, args.post_chunks
     me = socket.gethostname()
+    min_bw = min([bw for _, bw in parse_sweep(args.sweep) if bw > 0] or [0])
     cfg_thr = float(getattr(pm.config, "adapt_sink_threshold", -1))
     workload = Path(args.video_path).stem
     k_steps = len(pl.denoising_step_list)
 
     # 1. bit-exact baseline on this GPU (same seeds -> same frames as the source would have produced)
-    print("[dest] baseline run", flush=True)
+    est_sink_bytes = k_steps * 2 * pl.num_transformer_blocks * sink * fsl * pl.num_heads * 128 * 2
+    N_base = N
+    if min_bw > 0:
+        N_base = max(N, int((est_sink_bytes * 8 / (min_bw * 1e6) + 30 * 0.55) / 0.55) + 1)  # 0.55 s/chunk conservative service time
+    print(f"[dest] baseline run ({M + N_base} calls; window up to {N_base} post-migration calls for the slowest bandwidth)", flush=True)
     session = runner.start()
     baseline, chunk_times, sink_pos_hist = {}, [], {}
-    for c in range(M + N):
+    for c in range(M + N_base):
         t0 = time.perf_counter()
         fr = runner.step(session, c)
         torch.cuda.synchronize(device)
@@ -402,7 +422,7 @@ def run_dest(args):
         sink_pos_hist[c] = sa.slot_positions(pl)["sink_slot_pos"]
         runner.noise_hist[c] = float(session.noise_scale)
     service_s = float(np.median(chunk_times[M:]))
-    refresh = [c for c in range(1, M + N) if sink_pos_hist[c] != sink_pos_hist[c - 1]]
+    refresh = [c for c in range(1, M + N_base) if sink_pos_hist[c] != sink_pos_hist[c - 1]]
     pre = [c for c in refresh if c < M]
     runner.last_refresh_call = pre[-1] if pre else -1
     print(f"[dest] baseline done; service time {service_s * 1e3:.0f} ms/chunk; refresh calls {refresh}", flush=True)
@@ -458,17 +478,38 @@ def run_dest(args):
 
             bytes_cat, checksum_ok = {}, {}
             h2d_total = 0.0
+            pending_hash: dict[str, threading.Thread] = {}
+            hash_result: dict[str, str] = {}
+
+            def hash_later(comp, payload):
+                def run():
+                    hash_result[comp] = sha256_parts([payload])
+                th = threading.Thread(target=run, daemon=True); th.start(); pending_hash[comp] = th
+
+            def take_checksum(hdr):
+                comp = hdr["comp"]
+                th = pending_hash.pop(comp, None)
+                if th is not None:
+                    th.join()
+                ok = hash_result.get(comp) == hdr["sha256"]
+                checksum_ok[comp] = ok
+                ev.log("checksum", hdr["t_recv"], comp=comp, ok=ok)
+                return ok
+
             while True:
                 hdr, payload = recv_msg(sock)
                 if hdr["kind"] == "GO":
                     ev.log("go", to_dest(hdr["t_go"])); break
+                if hdr["kind"] == "CHECKSUM":
+                    take_checksum(hdr); continue
                 if hdr["kind"] == "SEEDS":
                     bytes_cat["seeds"] = len(payload); checksum_ok["seeds"] = sha256_parts([payload]) == hdr["sha256"]
                     ev.log("fg_recv", hdr["t_recv"], comp="seeds", bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), checksum_ok=checksum_ok["seeds"])
                 else:
                     unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-                    bytes_cat[hdr["comp"]] = len(payload); checksum_ok[hdr["comp"]] = hdr.get("checksum_ok"); h2d_total += hdr.get("h2d_s", 0.0)
-                    ev.log("fg_recv", hdr["t_recv"], comp=hdr["comp"], bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), d2h_s=hdr.get("d2h_s"), h2d_s=hdr.get("h2d_s"), checksum_ok=hdr.get("checksum_ok"))
+                    hash_later(hdr["comp"], payload)
+                    bytes_cat[hdr["comp"]] = len(payload); h2d_total += hdr.get("h2d_s", 0.0)
+                    ev.log("fg_recv", hdr["t_recv"], comp=hdr["comp"], bytes=len(payload), t_send_src=to_dest(hdr["t_send"]), d2h_s=hdr.get("d2h_s"), h2d_s=hdr.get("h2d_s"))
 
             bound_call = None
             if policy == "full":
@@ -496,13 +537,16 @@ def run_dest(args):
                     hdr, payload = recv_msg(sock)
                     if hdr["kind"] == "END":
                         bg["end"] = hdr; break
+                    if hdr["kind"] == "CHECKSUM":
+                        bg["checksum_ok"] = take_checksum(hdr); continue
                     if bg["sink_t_first"] is None:
                         bg["sink_t_first"] = hdr["t_recv_start"]; bg["t_send_src"] = to_dest(hdr["t_send"])
                         ev.log("sink_recv_start", hdr["t_recv_start"], t_send_src=bg["t_send_src"])
                     unpack_into_snapshot(hdr, payload, device, snap, sink, fsl)
-                    bg["bytes"] += len(payload); bg["h2d_s"] += hdr.get("h2d_s", 0.0); bg["checksum_ok"] = hdr.get("checksum_ok")
+                    hash_later(hdr["comp"], payload)
+                    bg["bytes"] += len(payload); bg["h2d_s"] += hdr.get("h2d_s", 0.0)
                     bg["sink_t_end"] = time.time()
-                    ev.log("sink_ready", bg["sink_t_end"], bytes=len(payload), h2d_s=hdr.get("h2d_s"), checksum_ok=hdr.get("checksum_ok"), d2h_s=hdr.get("d2h_s"))
+                    ev.log("sink_ready", bg["sink_t_end"], bytes=len(payload), h2d_s=hdr.get("h2d_s"), d2h_s=hdr.get("d2h_s"))
 
             th = threading.Thread(target=receiver, daemon=True); th.start()
 
@@ -514,7 +558,13 @@ def run_dest(args):
             first_out = None
             rows = []
             last_pos = sink_pos_hist.get(M - 1)
-            for c in range(M, M + N):
+            n_calls = N
+            if policy in ("ours", "ours_refresh") and bw > 0:
+                est_sink_bytes = k_steps * 2 * len(pl.kv_cache1) * sink * fsl * pl.num_heads * 128 * 2
+                n_calls = max(N, int((est_sink_bytes * 8 / (bw * 1e6) + 30 * service_s) / service_s) + 1)
+                if n_calls > N:
+                    ev.log("window_extended", calls=n_calls)
+            for c in range(M, M + n_calls):
                 if policy in ("ours", "ours_refresh") and bound_call is None and bg["sink_t_end"] is not None:
                     shifted = bind_sink_into_live(pl, snap, sink, fsl, device, cfg_thr, refresh_was_frozen=(policy == "ours"))
                     bound_call = c
@@ -637,7 +687,20 @@ def parse_args():
     p.add_argument("--out_dir", type=str, default=None, help="optional: also write a combined proto_results.json here")
     a = p.parse_args()
     a.mss = a.mss or None
+    # The input video must cover the longest adaptive window (slowest shaped bandwidth): sink time / service + 30 chunks.
+    bws = [bw for _, bw in parse_sweep(a.sweep) if bw > 0]
+    a.max_post_chunks = a.post_chunks
+    if bws:
+        a.max_post_chunks = max(a.post_chunks, int((estimate_sink_bytes(a.step, a.height, a.width, a.model_type) * 8 / (min(bws) * 1e6) + 30 * 0.55) / 0.55) + 1)
     return a
+
+
+def estimate_sink_bytes(k: int, height: int, width: int, model_type: str = "T2V-1.3B") -> int:
+    """Upper-bound estimate of the durable sink (K+V, bf16, all Stream-Batch rows) from the config, before the model is loaded."""
+    layers, heads = (40, 40) if model_type == "T2V-14B" else (30, 12)
+    fsl = (height // 16) * (width // 16)
+    sink_slots = 3
+    return k * layers * sink_slots * fsl * heads * 128 * 2 * 2
 
 
 if __name__ == "__main__":
