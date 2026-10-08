@@ -40,7 +40,7 @@ def main():
     ap.add_argument("--bytes", type=int, default=1 << 30)
     ap.add_argument("--mss", type=int, default=1400)
     ap.add_argument("--port", type=int, default=29800, help="data port for netcal receivers")
-    ap.add_argument("--py", type=str, default=".venv/bin/python", help="python on the remote hosts (relative to repo root or absolute)")
+    ap.add_argument("--py", type=str, default="auto", help="python on the remote hosts: 'auto' = the agent's interpreter, or a path relative to the repo root")
     ap.add_argument("--timeout", type=float, default=600)
     ap.add_argument("--iface", type=str, default=None)
     a = ap.parse_args()

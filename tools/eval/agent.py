@@ -53,7 +53,11 @@ def handle(req: dict) -> dict:
             log.parent.mkdir(parents=True, exist_ok=True)
         fh = open(log, "ab") if log else subprocess.DEVNULL
         env = dict(os.environ); env.update(req.get("env") or {})
-        p = subprocess.Popen(req["cmd"], cwd=str(REPO_ROOT), stdout=fh, stderr=subprocess.STDOUT, env=env)
+        cmd = list(req["cmd"])
+        # interpreter resolution: "python"/"auto", or a venv path that does not exist on this host -> the agent's own python
+        if cmd and (cmd[0] in ("python", "auto") or ("/" in cmd[0] and not os.path.exists(os.path.join(REPO_ROOT, cmd[0])) and not os.path.exists(cmd[0]))):
+            cmd[0] = sys.executable
+        p = subprocess.Popen(cmd, cwd=str(REPO_ROOT), stdout=fh, stderr=subprocess.STDOUT, env=env)
         with LOCK:
             PROCS[p.pid] = p
         return {"ok": True, "pid": p.pid}
