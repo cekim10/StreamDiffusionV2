@@ -35,9 +35,9 @@ def main():
         for key in ("first_output_latency_s", "continuity_ready_rel_s", "total_bytes"):
             if r.get(key):
                 data[r["policy"]][(bw, key)].append(float(r[key]))
-    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.4, 3.0))
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.6, 3.0))
     for key, axis, title, ylabel in (("first_output_latency_s", ax, "(a) Execution handoff: time to first output", "seconds after migration"),
-                                     ("continuity_ready_rel_s", bx, "(b) Continuity handoff: time to original-trajectory state", "seconds after migration")):
+                                     ("continuity_ready_rel_s", bx, "(b) Continuity handoff: time to original trajectory", "seconds after migration")):
         for pol in ("full", "cold", "replay", "ours"):
             pts = sorted({bw for (bw, k) in data[pol] if k == key})
             if not pts:
