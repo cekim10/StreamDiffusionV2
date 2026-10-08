@@ -2,7 +2,7 @@
 
 Transport: plain TCP with TCP_MAXSEG=1400 (effective MSS 1388) and TCP_NODELAY on every socket; sender-side token bucket for shaping; no RDMA. Orchestration through per-host agents over the same MSS-capped TCP, because inter-host ssh fails at key exchange on this path (NIC MTU 9200, path drops >1500-byte frames, no management network; /home is local ZFS per host). Raw records: results/evaluation/network_calibration/<run>/<pattern>/rep<k>/ on elves-01 (pulled from each host through the agents); aggregate: network_calibration.csv, network_calibration_summary.csv.
 
-Runs: mss=1400_bytes=1073741824_20261007-180758 (patterns 1-5; p3/p4 without a sender barrier) and ..._181243 (patterns 3-5 with a common start barrier so concurrent flows overlap). 1 GiB per flow, 5 reps.
+Runs: mss=1400_bytes=1073741824_20261007-180758 (patterns 1-5; p3/p4 without a sender barrier, so those two reps partly serialized) and ..._181243 (patterns 3-5 with a common start barrier so concurrent flows overlap; these are the numbers below for p3-p5). 1 GiB per flow, 5 reps.
 
 | pattern | flows | per-flow Gbps (median) | aggregate Gbps |
 |---|---|---|---|
@@ -16,5 +16,5 @@ Findings:
 - One 10 GbE NIC per host bounds both egress and ingress at ~9.4 Gbps application throughput; concurrent flows share it almost exactly fairly (spread < 1%).
 - Destination ingress does not scale with the number of senders: this testbed is the "1x shared ingress" case of the simulation (results/state_migration/ingress_notes.md). Any latency gain of progress-aware routing here cannot come from bandwidth aggregation; its measurable benefits are wasted-traffic and source-uplink reduction.
 - Expected durable-state transfer time at native bandwidth: 1.6 GB sink ~ 1.5 s link time (+ serialization), measured in Phase 1.
-- Pending: the MSS=0 control run (kernel default MSS) to document whether uncapped TCP stalls on this path.
+- Control run mss=0_bytes=1073741824_20261007-181449 (kernel-default MSS, p2 A->B, 1 GiB): sender and receiver both timed out at 120 s with the transfer stalled, versus 0.93 s with the 1400-byte cap. Uncapped TCP does not complete on this path; the MSS cap is a correctness requirement of the testbed, not a tuning choice.
 These numbers are recorded for interpretation only; the routing mechanism is unchanged.
