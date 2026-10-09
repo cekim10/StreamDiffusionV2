@@ -246,6 +246,12 @@ class Node:
         self.data_srv = tcp_listen(args.bind, args.data_port, args.mss)
         threading.Thread(target=self._data_accept_loop, daemon=True).start()
 
+    def _thread_init(self):
+        """torch.set_grad_enabled(False) is thread-local: every worker thread that may touch the model must
+        disable autograd itself, or forward passes keep their activations and the GPU fills up."""
+        if not self.a.dry_run:
+            self.rt.torch.set_grad_enabled(False)
+
     # ------------------------------------------------------------------ control plane
     def send(self, kind: str, **fields):
         with self.ctl_lock:
@@ -280,6 +286,7 @@ class Node:
 
     def _dispatch(self, hdr: dict):
         kind, cid = hdr["kind"], hdr.get("cmd_id")
+        self._thread_init()
         try:
             fn = getattr(self, "cmd_" + kind.lower())
             out = fn(hdr) or {}
@@ -486,6 +493,7 @@ class Node:
 
     def _data_conn(self, conn: socket.socket):
         r = self.run
+        self._thread_init()
         try:
             while True:
                 lens = recv_exact(conn, 16)
@@ -561,6 +569,7 @@ class Node:
         self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=n, t_start=t_start, t_end=t_end, ok=ok, dup=dup, t_send=hdr.get("t_send"))
 
     def _verify_sink(self, t_complete: float):
+        self._thread_init()
         r = self.run; man = r["manifest"]
         digest = component_digest(payload_slices(man["header"], r["sink_buf"]))
         ok = digest == man["sink_digest"]
@@ -598,6 +607,7 @@ class Node:
         r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
 
     def _generate(self):
+        self._thread_init()
         r = self.run
         while not r["stop_owner"]:
             c = r["call"]
