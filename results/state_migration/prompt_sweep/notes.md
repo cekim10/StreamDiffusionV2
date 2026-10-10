@@ -45,3 +45,28 @@ what diverges is appearance (identity, texture, color). The dog shows it most cl
 reference while the scene stays plausible). A new clip (car, robot arm) would also follow its input motion, so
 "different position / different motion" cannot appear in this mode; it would need text-to-video, which the harness
 does not support and which has no VAE encoder caches (a different ephemeral state).
+
+## Dragon prompts (2026-10-09, 9 more runs)
+
+Prompts A (flying, castle courtyard) and B (walking, village, tower) from `examples/dragon_{a,b}_prompt.txt`, on the dog
+clip (A and B) and the bird clip (A), seeds 0/1/2, same conditions and criteria as above.
+
+| case | input clip | D | E | gap from M+16 (dB) | no Sink, mean from M+16 | no eph., mean from M+16 |
+|---|---|---|---|---|---|---|
+| dragonB_dog | dog | 3/3 | 3/3 | 20.5 / 26.6 / 23.9 | 18.6-18.9 | 39.3-45.5 |
+| dragonA_dog | dog | 3/3 | 3/3 | 16.4-19.0 | 18.7-19.2 | 35.1-38.2 |
+| dragonA_bird | bird | 3/3 | 3/3 | 16.4-17.0 | 18.7-19.2 | 35.7-35.8 |
+
+Totals now: D 31/31, E 26/31; E holds in 21/21 runs without an adaptive Sink refresh before migration and 5/10 with one.
+The bird clip under the dragon prompt refreshed before M in only one seed (s0) and healed in all three, unlike the bird
+clip under its own prompt; refresh depends on the generated content, not only on the clip.
+
+Visual reading. Video-to-video keeps the input clip's subject and motion: on the dog clip both dragon prompts produce a
+red cat-like animal on grass (no wings, village or tower); on the bird clip prompt A produces a red feathered,
+dragon-like creature on a branch. Without the Sink KV the bird-clip creature changes visibly (green, scaled face, open
+mouth at M+8..M+32), the clearest appearance divergence of all candidates, but its ephemeral recovery is slower (31 dB at
+M+16, 39 dB at M+32 in s1).
+
+Rule pick changed: the pre-registered rule now picks `dragonB_dog_s1_k2` (gap 26.6 dB vs the dog's 25.8). Fig. 3 in the
+repo has NOT been re-rendered yet; it switches to the rule pick on the next run of make_background_figures.py unless
+FIG3_SELECTED overrides it. Decision pending from the user (see below).
