@@ -39,4 +39,4 @@ Criteria (fixed in tools/aggregate_prompt_sweep.py before the sweep ran): D = no
 D holds in 31/31 runs, E in 26/31 runs.
 
 Fig. 3 rule pick: dragonB_dog_s1_k2 (gap 26.6 dB)
-Manual override (FIG3_SELECTED): results/state_migration/prompt_sweep/dragonA_bird_s2_k2
+Manual override (FIG3_SELECTED): results/state_migration/prompt_sweep/original_s0_k2
