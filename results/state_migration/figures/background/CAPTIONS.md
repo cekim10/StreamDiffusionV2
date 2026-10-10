@@ -32,13 +32,15 @@ Numbers moved out of the figure and into the text: full migration moves 2,309$\t
 handoff and 3.7$\times$ more than continuity-preserving migration. The Immediate state is 0.04% of the total, so
 both panels show it in a magnified inset (MiB axis).
 
-Ablation caption (`fig2b_state_ablation`, now in the same role colors):
+Ablation caption (`fig2b_state_ablation`; same canvas, plot box, fonts and colors as Fig. 2a; each curve is labelled
+directly with the component that was lost, so the figure has no legend):
 
 ```latex
-\caption{PSNR to the uninterrupted same-seed execution after one component is lost at migration. Losing the
+\caption{PSNR to the uninterrupted same-seed execution after one component is lost at migration (curve labels name
+the lost component; colors follow Fig.~2a: immediate orange, durable red, ephemeral blue and gray). Losing the
 in-flight rows causes an immediate drop that never fully recovers; losing recent KV or VAE caches degrades output
 only transiently; losing the Sink KV leaves the stream on a different trajectory for as long as we measured
-(39 chunks). The uninterrupted execution is bit-identical to itself and lies above the axis.}
+(39 chunks). The uninterrupted execution is bit-identical to itself and lies above the plotted range.}
 ```
 
 Measured values behind the caption:

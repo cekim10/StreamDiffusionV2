@@ -286,22 +286,29 @@ ABL = [("drop_inflight", "No in-flight rows (0.19 MiB)", C_IMM, "^", "solid", "I
 
 
 def fig2b(out: Path):
+    """Continuity after losing one component. Same canvas, plot box, fonts and palette as Fig. 2a; curves are
+    labelled directly (italic, curve colour) instead of a legend; the caption carries the reference note."""
     raw = ROOT / "results/state_migration/gen/original_s0_k2/ablation_raw.csv"
     cv = post_curves(raw, [a[0] for a in ABL])
-    fig, ax = plt.subplots(figsize=PANEL_FIG_SIZE)
+    fig = plt.figure(figsize=FIG2A_SIZE)
+    ax = fig.add_axes(FIG2A_AXES)
     ends = {}
     for cfg, label, col, mk, ls, role in ABL:
         x, y = cv[cfg]
-        line(ax, x, y, col, mk, ls, label, emphasized=(role == "Durable"))
+        ax.plot(x, y, color=col, lw=2.6 if role == "Durable" else 2.2, ls=ls, marker=mk, markersize=8, markevery=6,
+                markerfacecolor=col if role == "Durable" else "white", markeredgecolor=col, markeredgewidth=1.6, zorder=3 if role == "Durable" else 2)
         ends[cfg] = float(np.mean(y[-3:]))
-    lab = {"Immediate": ends["drop_inflight"], "Durable": ends["ph_localrefresh"], "Ephemeral": (ends["drop_kv_recent"] + ends["drop_vae_all"]) / 2}
-    for role, yv in lab.items():
-        text(ax, 40.0, yv, role, ha="left", va="center", color=ROLE[role], clip_on=False)
-    reference_note(ax)
+    # direct labels (data coordinates chosen in empty regions next to each curve's plateau)
+    direct = [("Recent KV", C_EPH, 25.5, 48.9, "bottom"), ("VAE caches", "#7a7a7a", 13.6, 44.4, "top"),
+              ("In-flight rows", C_IMM_TEXT, 38.5, 32.6, "top"), ("Sink KV", C_DUR, 38.5, 18.0, "top")]
+    for txt, col, xx, yy, va in direct:
+        _in_label(ax, xx, yy, txt, F2_ANNOT, ha="right" if xx > 30 else "left", va=va, color=col, zorder=4)
     ax.set_xlim(0, 39); ax.set_xticks([0, 10, 20, 30])
-    style_axis(ax, ylabel="PSNR to Uninterrupted (dB)", xlabel="Chunks After Migration", ylim=(8, YMAX), yticks=[10, 20, 30, 40, 50])
-    legend(ax, loc="upper center", bbox_to_anchor=(0.5, -0.3), ncol=2)
-    save(fig, out / "fig2b_state_ablation")
+    ax.set_ylim(8, 54); ax.set_yticks([10, 20, 30, 40, 50])
+    _fig2a_axis(ax, "Chunks After Migration")
+    ax.set_ylabel("PSNR (dB)", fontsize=F2_LABEL)
+    ax.tick_params(axis="y", length=5)
+    save(fig, out / "fig2b_state_ablation", tight=False)
     return {cfg: {"psnr_min": min(cv[cfg][1]), "psnr_max": max(cv[cfg][1]), "psnr_last3_mean": ends[cfg]} for cfg, *_ in ABL}
 
 
