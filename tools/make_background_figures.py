@@ -58,8 +58,11 @@ FIG2A_AXES = [0.19, 0.20, 0.78, 0.73]
 # dense annotations 18
 F2_LABEL, F2_TICK, F2_ANNOT, F2_SMALL = 28, 28, 19, 18
 F2_ROW = 23          # row names of the requirements panel when drawn inside the plot box
-F2_ROW_OUT = 21      # row names as y tick labels outside the plot box (largest two-line size that fits the 1.46 in margin)
-ROW_LABELS_OUTSIDE = __import__("os").environ.get("FIG2A_ROWS_OUTSIDE", "0") == "1"
+F2_ROW_OUT = F2_TICK  # row names as y tick labels outside the plot box, same size as the x label (28 pt)
+# One short word per row so 28 pt fits the reference's 1.38 in left margin; the caption spells them out:
+# Full = full-state migration, Sink = continuity-preserving migration (Immediate + Sink KV), Handoff = immediate handoff.
+ROW_SHORT = ["Full", "Sink", "Handoff"]
+ROW_LABELS_OUTSIDE = __import__("os").environ.get("FIG2A_ROWS_OUTSIDE", "1") == "1"
 F2_ZOOM_TITLE = 15   # "Zoomed view (MiB)"
 C_ZOOM_LINE = "#4a2c12"  # dark brown: zoom source box, connector lines, inset frame
 WIDE_W = 12.4
@@ -233,7 +236,7 @@ def fig2a(out: Path):
             ("Continuity-preserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
             ("Immediate handoff", [(d["imm"], C_IMM, "")])]
     ys = [2, 1, 0]
-    XMAX = 7.7 if ROW_LABELS_OUTSIDE else 6.4
+    XMAX = 7.55 if ROW_LABELS_OUTSIDE else 6.4
     bh = 0.46
     for y, (name, parts) in zip(ys, rows):
         left = 0.0
@@ -251,7 +254,7 @@ def fig2a(out: Path):
             # row name and total above its bar (28 pt names do not fit the reference's left margin)
             bx.text(0.04, y + bh / 2 + 0.04, f"{name} ({val})", fontsize=F2_ROW, ha="left", va="bottom", color=BLACK)
     if ROW_LABELS_OUTSIDE:
-        bx.set_yticks(ys); bx.set_yticklabels(["Full\nmigration", "Continuity-\npreserving", "Immediate\nhandoff"], fontsize=F2_ROW_OUT)
+        bx.set_yticks(ys); bx.set_yticklabels(ROW_SHORT, fontsize=F2_ROW_OUT)
     else:
         bx.set_yticks([])
     bx.set_xlim(0, XMAX); bx.set_ylim(-0.42, 2.72); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
