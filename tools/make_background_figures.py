@@ -313,12 +313,49 @@ def fig2b(out: Path):
 
 
 # ----------------------------------------------------------------------------- Fig. 3
+# Fig. 3 canvas: same height as Fig. 2a/2b (4.8 in); width chosen so that, printed across the full text width of a
+# two-column paper (7.0 in) while Fig. 2b fills one column (3.33 in), both figures print at the same scale
+# (identical printed font sizes): 7.7 in * 7.0 / 3.33 = 16.19 in.
+PAPER_TEXT_W, PAPER_COL_W = 7.0, 3.33
+FIG3_SIZE = (FIG2A_SIZE[0] * PAPER_TEXT_W / PAPER_COL_W, FIG2A_SIZE[1])
+FIG3_PROMPT = (ROOT / "examples/prompt.txt").read_text().strip()   # the prompt the mechanism runs used
+
+
 def fig3(out: Path):
-    mq.strip([("Uninterrupted", "baseline", "reference"),
-              ("No Sink KV", "ph_localrefresh", "plausible, but a\ndifferent trajectory"),
-              ("Ephemeral +\nin-flight lost", "xfer_sink+meta", "recent KV, VAE, in-flight\ndropped together")],
-             [0, 2, 8, 16, 32], out / "fig3_state_loss_frames", "")
-    print(f"  {out / 'fig3_state_loss_frames'}.{{pdf,png}}")
+    """Frames after migration (last frame of chunk M+k), three rows x five time points, PSNR to the uninterrupted
+    frame in each corner. Row and column labels at the Fig. 2b axis-label size; prompt underneath in italics."""
+    from matplotlib.patches import FancyBboxPatch  # noqa: F401
+    rows = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("Ephemeral +\nin-flight lost", "xfer_sink+meta")]
+    chunks = [0, 2, 8, 16, 32]
+    vids = {name: mq.load(name) for _, name in rows}
+    base = vids["baseline"]
+    W, H = FIG3_SIZE
+    top, bottom, gap = 0.50, 0.50, 0.07          # inches: column labels above, prompt below, gap between frames
+    label_w = 2.55                                # inches for the 28 pt row labels
+    fh = (H - top - bottom - 2 * gap) / 3
+    fw = fh * base.shape[2] / base.shape[1]       # keep the 832 x 480 aspect
+    block_w = label_w + 5 * fw + 4 * gap
+    x0 = (W - block_w) / 2 + label_w              # centre the label column + frame grid on the canvas
+    fig = plt.figure(figsize=FIG3_SIZE)
+    for r, (label, name) in enumerate(rows):
+        y = H - top - (r + 1) * fh - r * gap
+        for c, ch in enumerate(chunks):
+            fi = ch * mq.FPC + 3
+            fr = vids[name][min(fi, len(vids[name]) - 1)]
+            ax = fig.add_axes([(x0 + c * (fw + gap)) / W, y / H, fw / W, fh / H])
+            ax.imshow(fr); ax.set_xticks([]); ax.set_yticks([])
+            for sp in ax.spines.values():
+                sp.set_visible(False)
+            if r == 0:
+                ax.text(0.5, 1.04, f"M+{ch}", transform=ax.transAxes, ha="center", va="bottom", fontsize=F2_TICK)
+            if r > 0:
+                ref = base[min(fi, len(base) - 1)]
+                _in_label(ax, 0.04, 0.05, f"{mq.psnr(ref, fr):.0f} dB", F2_ANNOT, transform=ax.transAxes, ha="left", va="bottom",
+                          color="white", weight="bold", bbox=dict(boxstyle="round,pad=0.18", fc="black", alpha=0.6, ec="none"))
+            if c == 0:
+                fig.text((x0 - 0.15) / W, (y + fh / 2) / H, label, ha="right", va="center", fontsize=F2_LABEL, linespacing=1.0)
+    fig.text(0.5, 0.18 / H, f"Prompt: \u201c{FIG3_PROMPT}\u201d", ha="center", va="center", fontsize=F2_TICK - 4, style="italic")
+    save(fig, out / "fig3_state_loss_frames", tight=False)
 
 
 # ----------------------------------------------------------------------------- Fig. 4a / 4b

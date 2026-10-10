@@ -72,6 +72,8 @@ generative trajectory. In the bottom row, recent KV, VAE caches and in-flight ro
 converges back toward the reference.}
 ```
 
+Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): the same 4.8 in height as Fig. 2a/2b, and a width chosen so that the figure printed across the full 7.0 in text width has the same scale as Fig. 2b printed in one 3.33 in column (7.7 in x 7.0 / 3.33), so row and column labels (28 pt, like Fig. 2b's axis labels) and the PSNR overlays (19 pt) print at identical sizes. The frame grid is height-limited (832 x 480 frames), so it is centred with white margins on both sides. The per-row notes were removed from the figure; the caption carries them (uninterrupted = reference; no Sink KV = plausible but a different trajectory; bottom row = recent KV, VAE caches and in-flight rows dropped together). The prompt line under the grid is the prompt used by these runs (`examples/prompt.txt`).
+
 Time points reduced from 7 to 5: M+0, M+2, M+8, M+16, M+32. The bottom row label says "Ephemeral + in-flight lost" because the in-flight rows are Immediate, not Ephemeral; the run (`xfer_sink+meta`) kept only the Sink and metadata.
 
 ## Fig. 4: Execution resumption and continuity restoration are decoupled
