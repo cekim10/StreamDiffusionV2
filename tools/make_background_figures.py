@@ -304,7 +304,7 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
                  color=BLACK, bbox=None if hatch is None else box)
     sx.set_ylim(-0.5, 0.5); sx.set_yticks([0]); sx.set_yticklabels(["Site"])
     # Sink progress at the current site
-    discarded = []
+    discarded, binds = [], []
     for e, a, b, ok, mb in attempts:
         b_c = t_end if b is None else min(b, t_end)
         frac = 100.0 * (mb / sink_mib if not ok else 1.0)
@@ -315,8 +315,9 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
             px.plot(xs, ys, color=BLACK, lw=1.2, zorder=3)
             nxt = next((t for _, _, t in moves if t > b), t_end)
             px.plot([b, nxt], [100, 100], color=fc, lw=2.4, zorder=3)
-            px.plot([b], [100], marker="*", ms=15, color=BLUE, markeredgecolor=BLACK, zorder=5)
-            text(px, b, 106, "bind", ANNOT_FONT_SIZE - 1, ha="center", va="bottom")
+            px.plot([b], [100], marker="*", ms=10, color=BLUE, markeredgecolor=BLACK, markeredgewidth=0.8, zorder=5)
+            text(px, b, 105, "bind", ANNOT_FONT_SIZE - 2, ha="center", va="bottom")
+            binds.append((e, b))
         else:
             px.fill_between(xs, 0, ys, facecolor="white", hatch="xxxx", edgecolor=RED, lw=0.0, zorder=2)
             px.plot(xs, ys, color=RED, lw=1.4, zorder=3)
@@ -326,7 +327,8 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
         for ax in (sx, px, qx):
             ax.axvline(t, color=BLACK, lw=0.9, ls=":", zorder=1)
     if discarded:
-        text(px, 0.6, 66, " + ".join(f"{m:.0f}" for m in discarded) + " MiB\ndiscarded at moves", ANNOT_FONT_SIZE - 2, ha="left", va="top", color=RED,
+        text(px, 0.6, 66, f"{sum(discarded):.0f} MiB transferred\nbut not reused\n(" + " + ".join(f"{m:.0f}" for m in discarded) + " MiB)",
+             ANNOT_FONT_SIZE - 2, ha="left", va="top", color=RED,
              bbox=dict(boxstyle="square,pad=0.1", fc="white", ec="none"), zorder=4)
     px.axhline(100, color=DIMGRAY, lw=0.8, ls="--", zorder=1)
     px.set_ylim(0, 120); px.set_yticks([0, 50, 100])
@@ -338,9 +340,22 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
             qx.plot([p[0] for p in pts], [p[1] for p in pts], color=col, lw=1.6, marker="o", ms=3.2, markevery=3,
                     markerfacecolor="white", markeredgecolor=col, markeredgewidth=1.0)
     qx.axhline(TAU, color=BLACK, lw=0.9, ls=":")
-    text(qx, t_end - 0.5, TAU + 1.0, f"rejoin {TAU:.0f} dB", ANNOT_FONT_SIZE - 3, ha="right", va="bottom")
-    qx.set_ylim(10, YMAX); qx.set_xlim(0, t_end)
-    style_axis(sx); style_axis(px, ylabel="Sink at current\nsite (%)"); style_axis(qx, ylabel="PSNR (dB)", xlabel="Time After the First Handoff (s)", yticks=[10, 30, 50])
+    text(qx, 0.5, TAU + 1.0, f"{TAU:.0f} dB rejoin threshold", ANNOT_FONT_SIZE - 3, ha="left", va="bottom")
+    # bind (star) -> rejoin (first chunk at or above the threshold at that site): the recovery interval after binding
+    for e, tb in binds:
+        rj = next((c for c in calls if c["node"] == e and c["t_out"] >= tb and c["psnr"] is not None and c["psnr"] >= TAU), None)
+        qx.plot([tb], [12.5], marker="*", ms=10, color=BLUE, markeredgecolor=BLACK, markeredgewidth=0.8, zorder=5, clip_on=False)
+        qx.axvline(tb, color=BLUE, lw=0.9, ls="--", zorder=1)
+        if rj is None or rj["t_out"] > t_end:
+            continue
+        tr = rj["t_out"]
+        qx.axvspan(tb, tr, color="#dfe6fb", zorder=0, lw=0)
+        qx.plot([tr], [rj["psnr"]], marker="v", ms=8, color=BLACK, zorder=6)
+        qx.annotate("", xy=(tb, 45.5), xytext=(tr, 45.5), arrowprops=dict(arrowstyle="<->", lw=1.0))
+        text(qx, (tb + tr) / 2, 46.3, f"{tr - tb:.1f} s", ANNOT_FONT_SIZE - 3, ha="center", va="bottom")
+        text(qx, tr - 0.3, TAU + 2.2, "rejoin", ANNOT_FONT_SIZE - 3, ha="right", va="bottom")
+    qx.set_ylim(10, 52); qx.set_xlim(0, t_end)
+    style_axis(sx); style_axis(px, ylabel="Sink available\nat execution\nsite (%)"); style_axis(qx, ylabel="PSNR (dB)", xlabel="Time After the First Handoff (s)", yticks=[10, 30, 50])
     for ax in (sx, px):
         ax.tick_params(labelbottom=False)
     sx.tick_params(axis="y", length=0); sx.tick_params(axis="x", length=0)
@@ -351,9 +366,9 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
 
 def fig5(out: Path):
     d = ROOT / "results/state_migration/mobility"
-    progress_panel(out / "fig5a_mobility_slow", d / "mob_restart_tm24_h2.json", 46.0,
+    progress_panel(out / "fig5a_mobility_slow", d / "mob_restart_tm24_h2.json", 50.0,
                    r"$\rho<1$: $T_m$ = 24 s, A$\to$B$\to$C")
-    progress_panel(out / "fig5b_mobility_fast", d / "mob_restart_tm2_h3_iu.json", 46.0,
+    progress_panel(out / "fig5b_mobility_fast", d / "mob_restart_tm2_h3_iu.json", 50.0,
                    r"$\rho>1$: $T_m$ = 2 s (moves at 3.4 s, 5.6 s), A$\to$B$\to$C$\to$D")
 
 

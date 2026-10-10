@@ -76,17 +76,41 @@ Rejoin (first chunk at or above 35 dB after arrival): Δ=1: 6, Δ=4: 6, Δ=8: 7,
 
 Why 35 dB: the shaded band in (b) is the full range of the never-arriving-Sink run over 40 chunks (at most 28.0 dB). Across Phase 1, no policy that loses the trajectory exceeded 33.7 dB in any chunk (Restart 23.6, Replay 33.7), and every bound run settles at 39 dB or more. 35 dB separates the two populations. Sensitivity (chunks from arrival to the criterion, for Δ = 1, 4, 8, 16): 34 dB: 5, 6, 6, 6; 35 dB: 6, 6, 7, 6; 36 dB: 6, 6, 7, 6; 38 dB: 6, 7, 9, 7. The conclusion, a few chunks largely independent of Δ, holds across that range; Δ = 8 is consistently the slowest by 1 to 2 chunks.
 
-## Fig. 5: When execution outruns state transfer
+## Fig. 5: Execution mobility can outpace continuity-state transfer
+
+Two separate files, `fig5a_mobility_slow` and `fig5b_mobility_fast`, laid out side by side as (a) and (b).
 
 ```latex
-\caption{Repeated mobility under a restart policy that cancels the in-progress Sink transfer and resends the
-whole Sink to the new execution site (emulated 1~Gbps links, 1.6~GiB Sink). Each panel shows, top to bottom,
-the site where execution runs, the share of the Sink held at that site, and the PSNR measured there.
-(a) $\rho = T_s/T_m < 1$ ($T_m$ = 24~s): each transfer completes and binds before the next move, and
-continuity is restored at every site. (b) $\rho > 1$ (nominal $T_m$ = 2~s): execution moves before the Sink
-arrives, the progress toward B and C (384 + 219~MiB) is discarded at each move, and continuity is restored
-only after a full transfer to D.}
+\caption{\textbf{Impact of mobility frequency on continuity-state transfer.}
+Two mobility regimes under a naive restart-on-migration policy; $\rho = T_s/T_m$ is the ratio of the Sink
+transfer time to the mobility interval. Each panel shows, top to bottom, where execution runs, the share of the
+Sink available at that site, and the PSNR measured there relative to the uninterrupted execution.
+(a)~When $\rho < 1$, each Sink transfer completes before the next handoff, so continuity can recover between moves.
+(b)~When $\rho > 1$, execution migrates again before the Sink arrives. The 603~MiB already transferred toward B
+and C is not reused at the new execution site, the transfer restarts toward D, and continuity is restored only
+after a full transfer. Stars mark Sink binding; triangles mark the first chunk at or above the operational
+35~dB rejoin threshold (dotted line); the shaded band between them is the recovery after binding (4.4~s at every
+site in both runs).}
 ```
+
+Measured events (seconds after the first handoff):
+
+| run | site | Sink bound | rejoin (first chunk at or above 35 dB) | recovery after bind | next move |
+|---|---|---|---|---|---|
+| (a) ρ<1, T_m = 24 s | B | 18.2 | 22.6 (37.0 dB) | 4.4 s | 25.1 |
+| (a) ρ<1, T_m = 24 s | C | 43.2 | 47.6 (36.5 dB) | 4.4 s | none |
+| (b) ρ>1, T_m = 2 s | D | 24.3 | 28.7 (37.8 dB) | 4.4 s | none |
+
+Interpretation notes:
+- Sink transfer completion is not continuity restoration. Binding happens when the Sink is complete; the stream reaches the rejoin threshold 4.4 s later. Continuity-ready latency therefore includes the recovery after binding, not only the transfer.
+- ρ<1 does not guarantee that continuity is fully restored before the next move. In (a), B rejoins at 22.6 s and execution moves at 25.1 s, a margin of 2.5 s. The safe wording is: "When the mobility interval exceeds the Sink transfer time, durable state can arrive before the next handoff, potentially allowing continuity to recover before execution moves again."
+- "Not reused" rather than "discarded": the 384 MiB at B and 219 MiB at C are not deleted; the restart policy simply never uses them at the new execution site. This is exactly the progress that progress-aware continuity routing reuses.
+- 35 dB is an operational threshold; the justification is in the Fig. 4 notes (never-arriving Sink stays at or below 28.0 dB, Phase 1 Replay at most 33.7 dB, bound runs settle at 39 dB or more).
+- The figure shows the problem only. That progress-aware routing solves it must be shown by the physical repeated-mobility evaluation (Fig. 8), not by this figure.
+
+Suggested text around the figure:
+- Observation 3: Execution mobility can outpace continuity-state migration. Even after execution has moved successfully, generation continuity can remain unavailable for a long time: in (b) execution runs at D from 5.6 s, but continuity returns only at 28.7 s.
+- Challenge 3: How can a migration system preserve and reuse continuity-transfer progress when execution moves before durable state arrives?
 
 The progress curve is linear between each attempt's measured start and its measured end (completion at bind,
 or abort at the move) with the measured byte count; the source streams at the shaped link rate, so the
@@ -94,9 +118,9 @@ intermediate points follow from the endpoints. Per-segment arrival times were no
 The PSNR row is the measured per-chunk PSNR at the executing site.
 
 Data conditions (keep separate from any other mobility number):
-- Both rows come from the earlier emulated mobility harness (`tools/proto_mobility.py`): one source GPU, one destination GPU hosting the logical sites B, C, D, Sink streamed as 30 per-layer segments over a real 1 Gbps-shaped TCP link from A, site-to-site links emulated. They are not the physical four-host Phase 3 runs.
-- Top row: `mob_restart_tm24_h2`, path A→B→C. Sink bound at B 18.2 s and at C 43.2 s.
-- Bottom row: `mob_restart_tm2_h3_iu`, path A→B→C→D. Moves happen at chunk boundaries, so the nominal 2 s interval produced moves at 3.4 s and 5.6 s. Source bytes: A→B 384 MiB, A→C 219 MiB (both abandoned), A→D 1.61 GiB.
+- Both panels come from the earlier emulated mobility harness (`tools/proto_mobility.py`): one source GPU, one destination GPU hosting the logical sites B, C, D, Sink streamed as 30 per-layer segments over a real 1 Gbps-shaped TCP link from A, site-to-site links emulated. They are not the physical four-host Phase 3 runs.
+- Panel (a): `mob_restart_tm24_h2`, path A→B→C. Sink bound at B 18.2 s and at C 43.2 s.
+- Panel (b): `mob_restart_tm2_h3_iu`, path A→B→C→D. Moves happen at chunk boundaries, so the nominal 2 s interval produced moves at 3.4 s and 5.6 s. Source bytes: A→B 384 MiB, A→C 219 MiB (both abandoned), A→D 1.61 GiB.
 - The "1.6 GB wasted" values in the evaluation plot come from other runs of the same harness at other T_m (e.g. T_m = 24 s, where the copy delivered to B is never reused at C). They are not the same experiment as this figure.
 - "Conventional" should only describe a policy that actually cancels and restarts; the caption says "restart policy" for that reason.
 
