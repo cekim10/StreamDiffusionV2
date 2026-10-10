@@ -61,7 +61,8 @@ def run_metrics(run: Path, source: str) -> dict | None:
         return None
     static = json.load(open(run / "ablation_static.json"))
     M = int(static["args"]["migration_chunk"])
-    clip = Path(static["args"]["video_path"]).stem
+    clip = run.name.rsplit("_s", 1)[0]          # case name: the clip, or a clip+prompt pairing such as dragonB_dog
+    video = Path(static["args"]["video_path"]).stem
     n = max(ns) + 1
     ns16 = [v for k, v in ns.items() if k >= 16]; ep16 = [v for k, v in ep.items() if k >= 16]
     eplast = [v for k, v in ep.items() if k >= n - 16]
@@ -69,7 +70,7 @@ def run_metrics(run: Path, source: str) -> dict | None:
     first = next((k for k, v in ep.items() if v >= TAU), None)
     E = first is not None and st.mean(eplast) >= TAU
     refresh = [c for c in static.get("sink_refresh_calls", []) if 4 < c < M]  # call 4 = first fill
-    return {"run": run.name, "source": source, "clip": clip, "seed": int(static["args"]["seed"]), "k": int(static["k"]), "window": n,
+    return {"run": run.name, "source": source, "clip": clip, "video": video, "seed": int(static["args"]["seed"]), "k": int(static["k"]), "window": n,
             "no_sink_mean16": st.mean(ns16), "no_sink_max_after4": max(v for k, v in ns.items() if k > 4),
             "no_eph_m0": ep[0], "no_eph_first35": first, "no_eph_mean16": st.mean(ep16), "no_eph_last16": st.mean(eplast),
             "gap16": st.mean(ep16) - st.mean(ns16), "D": D, "E": E, "refresh_before_M": refresh, "dir": run,
@@ -114,7 +115,7 @@ def main():
     override = (SWEEP / "FIG3_SELECTED").read_text().strip() if (SWEEP / "FIG3_SELECTED").exists() else None
     # tables
     SWEEP.mkdir(parents=True, exist_ok=True)
-    cols = ["source", "run", "clip", "seed", "k", "window", "no_sink_mean16", "no_sink_max_after4", "no_eph_m0", "no_eph_first35",
+    cols = ["source", "run", "clip", "video", "seed", "k", "window", "no_sink_mean16", "no_sink_max_after4", "no_eph_m0", "no_eph_first35",
             "no_eph_mean16", "no_eph_last16", "gap16", "D", "E", "refresh_before_M"]
     with open(SWEEP / "summary.csv", "w", newline="") as fh:
         w = csv.writer(fh); w.writerow(cols)
@@ -124,8 +125,8 @@ def main():
     lines = ["# Prompt/clip sweep: does the state asymmetry reproduce?", "",
              f"Criteria (fixed in tools/aggregate_prompt_sweep.py before the sweep ran): D = no-Sink mean over M+16.. < {D_MAX:g} dB and no chunk >= {TAU:g} dB after M+4; "
              f"E = no-ephemeral reaches >= {TAU:g} dB and its last-16-chunk mean >= {TAU:g} dB.", "",
-             "| source | run | clip | seed | k | window | no Sink mean M+16.. | no Sink max after M+4 | no eph. M+0 | no eph. first >= 35 | no eph. mean M+16.. | no eph. last 16 | gap | D | E | refreshes before M |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| source | run | case | input clip | seed | k | window | no Sink mean M+16.. | no Sink max after M+4 | no eph. M+0 | no eph. first >= 35 | no eph. mean M+16.. | no eph. last 16 | gap | D | E | refreshes before M |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lines.append("| " + " | ".join(f(r[c]) for c in cols) + " |")
     nD = sum(r["D"] for r in rows); nE = sum(r["E"] for r in rows)

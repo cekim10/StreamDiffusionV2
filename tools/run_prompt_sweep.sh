@@ -27,15 +27,25 @@ CONFIGS="${CONFIGS:-ph_localrefresh,xfer_sink+meta+inflight}"
 
 prompt_for() { if [ "$1" = "original" ]; then echo "examples/prompt.txt"; else echo "examples/$1_prompt.txt"; fi; }
 
-for clip in $CLIPS; do
+# CASES (optional) pairs a clip with another prompt: "name=clip:prompt_file ..." (the run directory uses <name>), e.g.
+#   CASES="dragonB_dog=original:examples/dragon_b_prompt.txt" tools/run_prompt_sweep.sh
+# Without CASES every clip in CLIPS runs with its own prompt (name = clip).
+if [ -n "${CASES:-}" ]; then
+  LIST="$CASES"
+else
+  LIST=""; for c in $CLIPS; do LIST="$LIST $c=$c:$(prompt_for "$c")"; done
+fi
+
+for case in $LIST; do
+  name="${case%%=*}"; rest="${case#*=}"; clip="${rest%%:*}"; prompt="${rest#*:}"
   [ -f "examples/$clip.mp4" ] || { echo "[sweep] missing examples/$clip.mp4"; exit 1; }
-  [ -f "$(prompt_for "$clip")" ] || { echo "[sweep] missing $(prompt_for "$clip")"; exit 1; }
+  [ -f "$prompt" ] || { echo "[sweep] missing $prompt"; exit 1; }
   for seed in $SEEDS; do
-    out="$OUT_ROOT/${clip}_s${seed}_k${K}"
+    out="$OUT_ROOT/${name}_s${seed}_k${K}"
     if [ -f "$out/ablation_summary.md" ]; then echo "[sweep] skip $out (exists)"; continue; fi
     mkdir -p "$out"
-    echo "==================== $clip seed=$seed k=$K post=$POST ===================="
-    "$PY" tools/state_ablation.py --gpu_id "$GPU" --video_path "examples/$clip.mp4" --prompt_file_path "$(prompt_for "$clip")" \
+    echo "==================== $name ($clip + $prompt) seed=$seed k=$K post=$POST ===================="
+    "$PY" tools/state_ablation.py --gpu_id "$GPU" --video_path "examples/$clip.mp4" --prompt_file_path "$prompt" \
       --seed "$seed" --step "$K" --migration_chunk "$M" --post_chunks "$POST" --configs "$CONFIGS" --save_video --out_dir "$out" \
       2>&1 | tee "$out/stdout.log"
   done
