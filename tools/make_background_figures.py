@@ -378,16 +378,18 @@ def fig3(out: Path):
     """Frames after migration, three rows x five time points. Source: the dedicated run in results/state_migration/fig3_frames
     (bottom row drops only recent KV + VAE caches). A sweep selection (aggregate_prompt_sweep.py) replaces it only when the
     user promotes a candidate by writing its run directory into results/state_migration/prompt_sweep/FIG3_SELECTED."""
-    sel = ROOT / "results/state_migration/prompt_sweep/FIG3_SELECTED"
-    if sel.exists():
-        run_dir = ROOT / sel.read_text().strip()
+    # Priority: manual override (FIG3_SELECTED) > the sweep's pre-registered rule pick (FIG3_RULE_PICK) > the single run
+    sweep = ROOT / "results/state_migration/prompt_sweep"
+    chosen = next((f for f in (sweep / "FIG3_SELECTED", sweep / "FIG3_RULE_PICK") if f.exists()), None)
+    if chosen is not None:
+        run_dir = ROOT / chosen.read_text().strip()
         prompt = json.load(open(run_dir / "ablation_static.json"))["args"]["prompt_file_path"]
         prompt_text = (ROOT / "examples" / Path(prompt).name).read_text().strip()
-        print(f"  fig3: using promoted sweep run {run_dir.relative_to(ROOT)}")
+        print(f"  fig3: {chosen.name} -> {run_dir.relative_to(ROOT)}")
     else:
         run_dir = ROOT / "results/state_migration/fig3_frames"
         prompt_text = FIG3_PROMPT
-    frames_strip(run_dir, ROWS_EPHEMERAL, [0, 2, 8, 16, 32], prompt_text, out / "fig3_state_loss_frames")
+    frames_strip(run_dir, ROWS_EPHEMERAL, [0, 4, 8, 16, 32], prompt_text, out / "fig3_state_loss_frames")
 
 
 # ----------------------------------------------------------------------------- Fig. 4a / 4b

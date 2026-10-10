@@ -134,6 +134,12 @@ def main():
               + (f" (gap {pick['gap16']:.1f} dB)" if pick else ""),
               f"Manual override (FIG3_SELECTED): {override or 'none'}"]
     (SWEEP / "summary.md").write_text("\n".join(lines) + "\n")
+    # the rule's pick is what Fig. 3 uses unless a person overrides it (FIG3_SELECTED)
+    rule_file = SWEEP / "FIG3_RULE_PICK"
+    if pick:
+        rule_file.write_text(str(pick["dir"].relative_to(ROOT)) + "\n")
+    elif rule_file.exists():
+        rule_file.unlink()
     print("\n".join(lines))
     # appendix figures: sweep runs per clip if present, else the grid's k=2 runs
     for clip in sorted({r["clip"] for r in rows}):

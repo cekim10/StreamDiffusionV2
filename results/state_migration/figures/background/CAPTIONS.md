@@ -71,10 +71,9 @@ Without the ephemeral state (recent KV and VAE caches, 4.5~GiB; in-flight rows a
 briefly and converges back to the reference (45--46~dB from $M{+}16$).}
 ```
 
-Source: one dedicated run, `results/state_migration/fig3_frames/` (state_ablation.py, configs `ph_localrefresh` and
-`xfer_sink+meta+inflight`, `--save_video`; same video, seed 0, k = 2, migration at chunk 30 as the mechanism run). Its
-PSNR reproduces the generalization grid (`gen/original_s0_k2`) exactly (max difference 0.0000 dB over 40 chunks for both
-configs), so the run is deterministic.
+Source: `results/state_migration/prompt_sweep/original_s0_k2`, chosen by the selection rule fixed before the prompt/clip sweep ran (largest gap between the two conditions among the runs where both claims reproduce; see `prompt_sweep/notes.md`). Columns M+0, 4, 8, 16, 32. Its first 40 chunks are identical to the earlier single run `fig3_frames` (same configs, seed, clip and migration point; the harness is deterministic).
+
+Suggested addition to the caption or text: across 22 runs (4 clips, 3 seeds, k = 1/2/4), losing the Sink KV diverges in all 22; losing recent KV + VAE caches heals in 13/13 runs without adaptive Sink refresh before migration and in 4/9 runs with one (Appendix, `fig_state_loss_<clip>`).
 
 The bottom row used to be `xfer_sink+meta` from the mechanism run, which also lost the in-flight rows (10 dB at M+0). It
 is now the ephemeral-only loss, which isolates the transient effect of ephemeral state; the in-flight effect is shown
@@ -84,10 +83,10 @@ PSNR overlays are the measured values of the exact frame shown (frame 3 of each 
 computed on uncompressed frames. Earlier versions recomputed PSNR from the saved MP4 files, where compression of both
 frames capped values near 35 to 37 dB (for example 37 instead of 46 dB at M+16).
 
-| row | M+0 | M+2 | M+8 | M+16 | M+32 |
+| row | M+0 | M+4 | M+8 | M+16 | M+32 |
 |---|---|---|---|---|---|
-| No Sink KV | 26.9 | 22.4 | 20.6 | 19.0 | 19.9 |
-| No recent KV + VAE caches | 21.0 | 18.4 | 36.1 | 45.7 | 45.1 |
+| No Sink KV | 27 | 21 | 21 | 19 | 20 |
+| No recent KV + VAE caches | 21 | 25 | 36 | 46 | 45 |
 
 Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): the same 4.8 in height as Fig. 2a/2b, and a width chosen so that the figure
 printed across the full 7.0 in text width has the same scale as Fig. 2b printed in one 3.33 in column (7.7 in x 7.0 /
