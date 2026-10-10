@@ -49,6 +49,8 @@ LEGEND_FONT_SIZE = 14
 ANNOT_FONT_SIZE = 14
 SPINE_WIDTH = 1.0
 PANEL_FIG_SIZE = (5.83, 3.22)
+# Fig. 2a canvas: same height as EC-LLM fig_attention_locality_layerwise.pdf (419.76 x 344.16 pt), twice its width
+FIG2A_SIZE = (2 * 419.76 / 72.0, 344.16 / 72.0)
 WIDE_W = 12.4
 
 BLUE, ORANGE, RED = "#486ee2", "#ffb226", "red"
@@ -77,10 +79,12 @@ def configure_matplotlib() -> None:
         mpl.rcParams[key] = "black"
 
 
-def save(fig, path: Path):
+def save(fig, path: Path, tight: bool = True):
+    """tight=False keeps the exact canvas size (used where the page size must match a reference figure)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path.with_suffix(".png"), bbox_inches="tight", dpi=300)
-    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight", dpi=300)
+    kw = {"bbox_inches": "tight"} if tight else {}
+    fig.savefig(path.with_suffix(".png"), dpi=300, **kw)
+    fig.savefig(path.with_suffix(".pdf"), dpi=300, **kw)
     plt.close(fig)
     print(f"  {path.relative_to(ROOT)}.{{pdf,png}}")
 
@@ -157,7 +161,8 @@ def fig2a(out: Path):
     pct = lambda b: 100.0 * b / T  # noqa: E731
 
     # ---------------- (a) composition
-    fig, ax = plt.subplots(figsize=(PANEL_FIG_SIZE[0] * 1.15, 2.3))
+    fig = plt.figure(figsize=FIG2A_SIZE)
+    ax = fig.add_axes([0.03, 0.18, 0.94, 0.40])
     h, left = 0.5, 0.0
     segs = [("", d["imm"], C_IMM), ("Sink KV", d["sink"], C_DUR), ("Recent KV", d["recent"], C_EPH), ("VAE caches", d["vae"], C_EPH2)]
     for name, b, col in segs:
@@ -169,25 +174,34 @@ def fig2a(out: Path):
     ax.set_xlim(0, 100); ax.set_ylim(-0.34, 0.34); ax.set_yticks([])
     ax.set_xticks([0, 25, 50, 75, 100])
     style_axis(ax, xlabel="Share of Execution State (%)")
-    # Immediate state, magnified (in-flight rows | metadata)
-    ix = ax.inset_axes([0.0, 1.32, 0.40, 0.36])
-    ix.barh(0, d["inflight"] / MiB, height=0.7, color=C_IMM, edgecolor="white", lw=1.2)
-    ix.barh(0, d["meta"] / MiB, left=d["inflight"] / MiB, height=0.7, color=C_IMM_LIGHT, edgecolor="white", lw=1.2)
-    ix.set_xlim(0, d["imm"] / MiB); ix.set_ylim(-0.4, 0.4); ix.set_yticks([])
-    ix.set_xticks([0, 1, 2]); ix.set_xticklabels(["0", "1", "2 MiB"])
+    # Immediate state, zoomed: dashed source box at the bar's origin, corner connectors, tinted framed inset
+    from matplotlib.patches import Rectangle as _Rect
+    ix = ax.inset_axes([0.0, 1.38, 0.40, 0.36])
+    ix.set_facecolor(C_ZOOM_BG)
+    ix.barh(0, d["inflight"] / MiB, height=0.62, color=C_IMM, edgecolor="white", lw=1.2, zorder=2)
+    ix.barh(0, d["meta"] / MiB, left=d["inflight"] / MiB, height=0.62, color=C_IMM_LIGHT, edgecolor="white", lw=1.2, zorder=2)
+    ix.set_xlim(0, d["imm"] / MiB * 1.04); ix.set_ylim(-0.42, 0.42); ix.set_yticks([])
+    ix.xaxis.tick_top()
+    ix.set_xticks([0, 1, 2]); ix.set_xticklabels(["0", "1", "2"])
     for sp in ix.spines.values():
-        sp.set_linewidth(SPINE_WIDTH)
-    ix.tick_params(axis="x", direction="in", width=1, length=3, pad=3, labelsize=TICK_FONT_SIZE - 4)
-    _in_label(ix, (d["inflight"] + d["meta"] / 2) / MiB, 0, "Metadata", ANNOT_FONT_SIZE - 3, ha="center", va="center")
-    _in_label(ix, d["inflight"] / MiB / 2, 0.42, "In-flight", ANNOT_FONT_SIZE - 4, ha="left", va="bottom")
-    _in_label(ix, d["imm"] / MiB * 1.04, 0, f"Immediate {d['imm'] / MiB:.2f} MiB ({pct(d['imm']):.2f}%)", ANNOT_FONT_SIZE - 2,
+        sp.set_linewidth(1.6); sp.set_edgecolor(C_IMM_TEXT)
+    ix.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=TICK_FONT_SIZE - 4)
+    _in_label(ix, (d["inflight"] + d["meta"] / 2) / MiB, 0, "Metadata", ANNOT_FONT_SIZE - 2, ha="center", va="center", zorder=3)
+    _in_label(ix, d["inflight"] / MiB / 2, 0, "In-flight", ANNOT_FONT_SIZE - 5, ha="center", va="center", rotation=90, zorder=3)
+    _in_label(ix, 0.0, 1.0, "Zoomed view (MiB)", ANNOT_FONT_SIZE, transform=ix.transAxes, ha="left", va="bottom",
+              color=C_IMM_TEXT, weight="bold").set_position((0.0, 1.30))
+    _in_label(ix, 1.03, 0.5, f"Immediate {d['imm'] / MiB:.2f} MiB ({pct(d['imm']):.2f}%)", ANNOT_FONT_SIZE - 1, transform=ix.transAxes,
               ha="left", va="center", clip_on=False, color=C_IMM_TEXT)
-    ax.annotate("", xy=(0.15, h / 2), xytext=(0.6, 0.86), xycoords="data", textcoords="data",
-                arrowprops=dict(arrowstyle="->", lw=1.0, color=C_IMM_TEXT, shrinkA=0, shrinkB=0), annotation_clip=False)
-    save(fig, out / "fig2a_state_composition")
+    sx1, sy = 0.8, h / 2 + 0.03
+    ax.add_patch(_Rect((0.0, -sy), sx1, 2 * sy, fill=False, edgecolor=C_IMM_TEXT, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
+    for (xa, ya), (xb, yb) in (((0.0, sy), (0, 0)), ((sx1, sy), (1, 0))):
+        ax.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=ax.transData, xyB=(xb, yb), coordsB=ix.transAxes,
+                                      color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
+    save(fig, out / "fig2a_state_composition", tight=False)
 
     # ---------------- (b) state required per migration objective (shared GiB axis)
-    fig, bx = plt.subplots(figsize=(PANEL_FIG_SIZE[0] * 1.15, 2.6))
+    fig = plt.figure(figsize=FIG2A_SIZE)
+    bx = fig.add_axes([0.155, 0.18, 0.815, 0.76])
     rows = [("Full migration", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "Sink KV"), (d["recent"], C_EPH, "Recent KV"), (d["vae"], C_EPH2, "VAE caches")]),
             ("Continuity-\npreserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
             ("Immediate\nhandoff", [(d["imm"], C_IMM, "")])]
@@ -229,7 +243,7 @@ def fig2a(out: Path):
     for (xa, ya), (xb, yb) in (((sx1, sy1), (0, 1)), ((sx1, sy0), (0, 0))):
         bx.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=bx.transData, xyB=(xb, yb), coordsB=jx.transAxes,
                                       color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
-    save(fig, out / "fig2a_state_requirements")
+    save(fig, out / "fig2a_state_requirements", tight=False)
     return {"source_run": src, "immediate_MiB": d["imm"] / MiB, "inflight_MiB": d["inflight"] / MiB, "meta_MiB": d["meta"] / MiB,
             "sink_GiB": d["sink"] / GiB, "recent_GiB": d["recent"] / GiB, "vae_GiB": d["vae"] / GiB, "total_GiB": T / GiB,
             "pct": {"immediate": pct(d["imm"]), "durable": pct(d["sink"]), "ephemeral": pct(d["recent"] + d["vae"])},
