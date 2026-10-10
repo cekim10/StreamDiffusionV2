@@ -56,6 +56,7 @@ BLACK, DARKGRAY, DIMGRAY = "black", "darkgray", "dimgray"
 # temporal-role palette, shared with the CAKE paper (muted red / blue / gray measured from its Fig. 3) + muted orange
 C_DUR, C_EPH, C_EPH2 = "#de6565", "#6383e6", "#b5b5b5"      # Durable (Sink KV), Ephemeral (recent KV), Ephemeral (VAE caches)
 C_IMM, C_IMM_LIGHT, C_IMM_TEXT = "#eda04f", "#f6cf9f", "#c06d12"  # Immediate (in-flight rows / metadata), text tint
+C_ZOOM_BG = "#fdf3e7"                                       # background of zoomed insets
 CAKE_SANS = "DejaVu Sans"
 ROLE = {"Immediate": C_IMM_TEXT, "Durable": C_DUR, "Ephemeral": C_EPH}
 
@@ -206,20 +207,28 @@ def fig2a(out: Path):
     bx.set_xlim(0, XMAX); bx.set_ylim(-0.55, 2.55); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
     style_axis(bx, xlabel="Required State (GiB)")
     bx.tick_params(axis="y", length=0)
-    # magnified view of the Immediate bar (invisible at GiB scale)
-    ix0, iy0, iw, ih = 0.34, 0.05, 0.36, 0.17
+    # zoomed view of the Immediate bar (invisible at GiB scale): source box at the bar's origin, connector lines
+    # from its corners to the inset's corners, tinted inset with a matching frame
+    from matplotlib.patches import Rectangle as _Rect
+    ix0, iy0, iw, ih = 0.40, 0.04, 0.38, 0.21
     jx = bx.inset_axes([ix0, iy0, iw, ih])
-    jx.barh(0, d["imm"] / MiB, height=0.6, color=C_IMM, edgecolor="white", lw=1.0)
+    jx.set_facecolor(C_ZOOM_BG)
+    jx.barh(0, d["imm"] / MiB, height=0.6, color=C_IMM, edgecolor="white", lw=1.0, zorder=2)
     jx.set_xlim(0, 3.0); jx.set_ylim(-0.45, 0.45); jx.set_yticks([])
     jx.xaxis.tick_top()
-    jx.set_xticks([0, 1, 2, 3]); jx.set_xticklabels(["0", "1", "2", "3 MiB"])
+    jx.set_xticks([0, 1, 2, 3]); jx.set_xticklabels(["0", "1", "2", "3"])
     for sp in jx.spines.values():
-        sp.set_linewidth(SPINE_WIDTH)
-    jx.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=TICK_FONT_SIZE - 5)
-    _in_label(bx, (ix0 + iw) * XMAX + 0.1, 0, f"{d['imm'] / MiB:.2f} MiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
-    y_in = -0.55 + (iy0 + ih / 2) * 3.1
-    bx.plot([0.02, ix0 * XMAX], [0, y_in], color=C_IMM_TEXT, lw=0.8, ls=(0, (3, 2)), zorder=1)
-    _in_label(bx, 0.05, 0.36, "Zoomed view (MiB)", ANNOT_FONT_SIZE - 4, ha="left", va="center", color=C_IMM_TEXT)
+        sp.set_linewidth(1.6); sp.set_edgecolor(C_IMM_TEXT)
+    jx.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=TICK_FONT_SIZE - 4, colors=BLACK)
+    _in_label(bx, (ix0 + iw) * XMAX + 0.1, -0.55 + (iy0 + ih / 2) * 3.1, f"{d['imm'] / MiB:.2f} MiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
+    _in_label(jx, 0.0, 1.0, "Zoomed view (MiB)", ANNOT_FONT_SIZE, transform=jx.transAxes, ha="left", va="bottom",
+              color=C_IMM_TEXT, weight="bold").set_position((0.0, 1.52))
+    # source region on the main axis
+    sx0, sx1, sy0, sy1 = 0.0, 0.16, -0.30, 0.30
+    bx.add_patch(_Rect((sx0, sy0), sx1 - sx0, sy1 - sy0, fill=False, edgecolor=C_IMM_TEXT, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
+    for (xa, ya), (xb, yb) in (((sx1, sy1), (0, 1)), ((sx1, sy0), (0, 0))):
+        bx.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=bx.transData, xyB=(xb, yb), coordsB=jx.transAxes,
+                                      color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
     save(fig, out / "fig2a_state_requirements")
     return {"source_run": src, "immediate_MiB": d["imm"] / MiB, "inflight_MiB": d["inflight"] / MiB, "meta_MiB": d["meta"] / MiB,
             "sink_GiB": d["sink"] / GiB, "recent_GiB": d["recent"] / GiB, "vae_GiB": d["vae"] / GiB, "total_GiB": T / GiB,
