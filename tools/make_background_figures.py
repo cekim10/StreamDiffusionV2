@@ -57,6 +57,9 @@ FIG2A_AXES = [0.19, 0.20, 0.78, 0.73]
 # font sizes of the same reference (LONGBENCH_STYLE): axis label 28, ticks 28, annotations 19 (italic DejaVu Sans),
 # dense annotations 18
 F2_LABEL, F2_TICK, F2_ANNOT, F2_SMALL = 28, 28, 19, 18
+F2_ROW = 23          # row names of the requirements panel (they stand in for y tick labels)
+F2_ZOOM_TITLE = 15   # "Zoomed view (MiB)"
+C_ZOOM_LINE = "#4a2c12"  # dark brown: zoom source box, connector lines, inset frame
 WIDE_W = 12.4
 
 BLUE, ORANGE, RED = "#486ee2", "#ffb226", "red"
@@ -172,15 +175,15 @@ def _zoom(ax, ix, src_box, connect, title_y, title_right=False):
     from matplotlib.patches import Rectangle as _Rect
     ix.set_facecolor(C_ZOOM_BG)
     for sp in ix.spines.values():
-        sp.set_linewidth(1.6); sp.set_edgecolor(C_IMM_TEXT)
+        sp.set_linewidth(1.6); sp.set_edgecolor(C_ZOOM_LINE)
     ix.xaxis.tick_top()
     ix.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=F2_SMALL, colors=BLACK)
     x0, y0, w, h = src_box
-    ax.add_patch(_Rect((x0, y0), w, h, fill=False, edgecolor=C_IMM_TEXT, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
+    ax.add_patch(_Rect((x0, y0), w, h, fill=False, edgecolor=C_ZOOM_LINE, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
     for (xa, ya), (xb, yb) in connect:
         ax.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=ax.transData, xyB=(xb, yb), coordsB=ix.transAxes,
-                                      color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
-    _in_label(ix, 1.0 if title_right else 0.0, title_y, "Zoomed view (MiB)", F2_ANNOT, transform=ix.transAxes,
+                                      color=C_ZOOM_LINE, lw=1.1, ls=(0, (3, 2)), zorder=3))
+    _in_label(ix, 1.0 if title_right else 0.0, title_y, "Zoomed view (MiB)", F2_ZOOM_TITLE, transform=ix.transAxes,
               ha="right" if title_right else "left", va="bottom", color=C_IMM_TEXT, weight="bold")
 
 
@@ -239,11 +242,11 @@ def fig2a(out: Path):
         tot = sum(b for b, _, _ in parts)
         val = f"{tot / GiB:.2f} GiB" if tot > 0.1 * GiB else f"{tot / MiB:.2f} MiB"
         # row name and total above its bar (28 pt names do not fit the reference's left margin)
-        bx.text(0.04, y + bh / 2 + 0.04, f"{name} ({val})", fontsize=F2_ANNOT, ha="left", va="bottom", color=BLACK)
+        bx.text(0.04, y + bh / 2 + 0.04, f"{name} ({val})", fontsize=F2_ROW, ha="left", va="bottom", color=BLACK)
     bx.set_yticks([])
     bx.set_xlim(0, XMAX); bx.set_ylim(-0.42, 2.72); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
     _fig2a_axis(bx, "Required State (GiB)")
-    ix0, iy0, iw, ih = 0.64, 0.05, 0.31, 0.17
+    ix0, iy0, iw, ih = 0.71, 0.05, 0.255, 0.17
     jx = bx.inset_axes([ix0, iy0, iw, ih])
     jx.barh(0, d["imm"] / MiB, height=0.6, color=C_IMM, edgecolor="white", lw=1.0, zorder=2)
     jx.set_xlim(0, 3.0); jx.set_ylim(-0.45, 0.45); jx.set_yticks([])
