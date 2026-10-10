@@ -300,7 +300,7 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
         fc, hatch = SITE[e]
         sx.barh(0, b - a, left=a, height=1.0, color=fc, hatch=hatch, edgecolor=BLACK, lw=1.0)
         if b - a > 1.2:
-            text(sx, (a + b) / 2, 0, e if b - a < 4 else f"executing at {e}", ANNOT_FONT_SIZE - 1, ha="center", va="center",
+            text(sx, (a + b) / 2, 0, e, ANNOT_FONT_SIZE - 1, ha="center", va="center",
                  color=BLACK, bbox=None if hatch is None else box)
     sx.set_ylim(-0.5, 0.5); sx.set_yticks([0]); sx.set_yticklabels(["Site"])
     # Sink progress at the current site
@@ -315,7 +315,7 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
             px.plot(xs, ys, color=BLACK, lw=1.2, zorder=3)
             nxt = next((t for _, _, t in moves if t > b), t_end)
             px.plot([b, nxt], [100, 100], color=fc, lw=2.4, zorder=3)
-            px.plot([b], [100], marker="*", ms=10, color=BLUE, markeredgecolor=BLACK, markeredgewidth=0.8, zorder=5)
+            px.plot([b], [100], marker="*", ms=8, color=BLUE, markeredgecolor=BLACK, markeredgewidth=0.6, zorder=5)
             text(px, b, 105, "bind", ANNOT_FONT_SIZE - 2, ha="center", va="bottom")
             binds.append((e, b))
         else:
@@ -327,7 +327,7 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
         for ax in (sx, px, qx):
             ax.axvline(t, color=BLACK, lw=0.9, ls=":", zorder=1)
     if discarded:
-        text(px, 0.6, 66, f"{sum(discarded):.0f} MiB transferred\nbut not reused\n(" + " + ".join(f"{m:.0f}" for m in discarded) + " MiB)",
+        text(px, 0.6, 62, f"{sum(discarded):.0f} MiB transferred,\nnot reused (" + " + ".join(f"{m:.0f}" for m in discarded) + ")",
              ANNOT_FONT_SIZE - 2, ha="left", va="top", color=RED,
              bbox=dict(boxstyle="square,pad=0.1", fc="white", ec="none"), zorder=4)
     px.axhline(100, color=DIMGRAY, lw=0.8, ls="--", zorder=1)
@@ -344,18 +344,18 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
     # bind (star) -> rejoin (first chunk at or above the threshold at that site): the recovery interval after binding
     for e, tb in binds:
         rj = next((c for c in calls if c["node"] == e and c["t_out"] >= tb and c["psnr"] is not None and c["psnr"] >= TAU), None)
-        qx.plot([tb], [12.5], marker="*", ms=10, color=BLUE, markeredgecolor=BLACK, markeredgewidth=0.8, zorder=5, clip_on=False)
+        qx.plot([tb], [12.5], marker="*", ms=8, color=BLUE, markeredgecolor=BLACK, markeredgewidth=0.6, zorder=5, clip_on=False)
         qx.axvline(tb, color=BLUE, lw=0.9, ls="--", zorder=1)
         if rj is None or rj["t_out"] > t_end:
             continue
         tr = rj["t_out"]
         qx.axvspan(tb, tr, color="#dfe6fb", zorder=0, lw=0)
-        qx.plot([tr], [rj["psnr"]], marker="v", ms=8, color=BLACK, zorder=6)
+        qx.plot([tr], [rj["psnr"]], marker="v", ms=5.5, color=BLACK, zorder=6)
         qx.annotate("", xy=(tb, 45.5), xytext=(tr, 45.5), arrowprops=dict(arrowstyle="<->", lw=1.0))
         text(qx, (tb + tr) / 2, 46.3, f"{tr - tb:.1f} s", ANNOT_FONT_SIZE - 3, ha="center", va="bottom")
         text(qx, tr - 0.3, TAU + 2.2, "rejoin", ANNOT_FONT_SIZE - 3, ha="right", va="bottom")
     qx.set_ylim(10, 52); qx.set_xlim(0, t_end)
-    style_axis(sx); style_axis(px, ylabel="Sink available\nat execution\nsite (%)"); style_axis(qx, ylabel="PSNR (dB)", xlabel="Time After the First Handoff (s)", yticks=[10, 30, 50])
+    style_axis(sx); style_axis(px, ylabel="Sink\navailable (%)"); style_axis(qx, ylabel="PSNR (dB)", xlabel="Time since first handoff (s)", yticks=[10, 30, 50])
     for ax in (sx, px):
         ax.tick_params(labelbottom=False)
     sx.tick_params(axis="y", length=0); sx.tick_params(axis="x", length=0)
@@ -366,10 +366,8 @@ def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
 
 def fig5(out: Path):
     d = ROOT / "results/state_migration/mobility"
-    progress_panel(out / "fig5a_mobility_slow", d / "mob_restart_tm24_h2.json", 50.0,
-                   r"$\rho<1$: $T_m$ = 24 s, A$\to$B$\to$C")
-    progress_panel(out / "fig5b_mobility_fast", d / "mob_restart_tm2_h3_iu.json", 50.0,
-                   r"$\rho>1$: $T_m$ = 2 s (moves at 3.4 s, 5.6 s), A$\to$B$\to$C$\to$D")
+    progress_panel(out / "fig5a_mobility_slow", d / "mob_restart_tm24_h2.json", 50.0, r"(a) Slow mobility ($\rho<1$)")
+    progress_panel(out / "fig5b_mobility_fast", d / "mob_restart_tm2_h3_iu.json", 50.0, r"(b) Fast mobility ($\rho>1$)")
 
 
 # ----------------------------------------------------------------------------- Evaluation / Appendix (moved out of Background)

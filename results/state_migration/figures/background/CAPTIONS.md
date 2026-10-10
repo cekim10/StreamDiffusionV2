@@ -82,15 +82,20 @@ Two separate files, `fig5a_mobility_slow` and `fig5b_mobility_fast`, laid out si
 
 ```latex
 \caption{\textbf{Impact of mobility frequency on continuity-state transfer.}
-Two mobility regimes under a naive restart-on-migration policy; $\rho = T_s/T_m$ is the ratio of the Sink
-transfer time to the mobility interval. Each panel shows, top to bottom, where execution runs, the share of the
-Sink available at that site, and the PSNR measured there relative to the uninterrupted execution.
-(a)~When $\rho < 1$, each Sink transfer completes before the next handoff, so continuity can recover between moves.
-(b)~When $\rho > 1$, execution migrates again before the Sink arrives. The 603~MiB already transferred toward B
-and C is not reused at the new execution site, the transfer restarts toward D, and continuity is restored only
-after a full transfer. Stars mark Sink binding; triangles mark the first chunk at or above the operational
-35~dB rejoin threshold (dotted line); the shaded band between them is the recovery after binding (4.4~s at every
-site in both runs).}
+Two mobility regimes under a naive restart-on-migration policy (emulated 1~Gbps links, 1.6~GiB Sink);
+$\rho = T_s/T_m$ is the ratio of the Sink transfer time to the mobility interval. Each panel shows, top to
+bottom, the execution site (B blue, C orange, D gray, in both panels), Sink availability, and the PSNR measured
+at the execution site relative to the uninterrupted execution. Sink availability is the fraction of the durable
+Sink KV state present at the current execution site.
+(a)~Slow mobility ($T_m$ = 24~s, A$\to$B$\to$C): each Sink transfer completes before the next handoff, and in
+this run continuity recovers at B 2.5~s before execution moves to C.
+(b)~Fast mobility (nominal $T_m$ = 2~s; moves at 3.4~s and 5.6~s, A$\to$B$\to$C$\to$D): execution migrates again
+before the Sink arrives. Under a restart-on-migration policy, Sink fragments already transferred to previous
+execution sites (384 + 219~MiB) are not reused when the destination changes; the transfer restarts toward D,
+and continuity returns only after a full transfer.
+Stars mark Sink binding; triangles mark rejoin, the first generated chunk at or above the operational 35~dB PSNR
+threshold (dotted line). The shaded interval from binding to rejoin is the post-bind recovery, 4.4~s at every
+site in both runs, measured at chunk granularity (one chunk every 0.55~s).}
 ```
 
 Measured events (seconds after the first handoff):
@@ -102,6 +107,11 @@ Measured events (seconds after the first handoff):
 | (b) ρ>1, T_m = 2 s | D | 24.3 | 28.7 (37.8 dB) | 4.4 s | none |
 
 Interpretation notes:
+- Measurement of the 4.4 s: both endpoints are logged timestamps (the bind event and the output time of the first chunk at or above 35 dB); nothing is interpolated. Resolution is one chunk (0.55 s): the preceding chunks were at 34.0, 32.3 and 33.7 dB for B, C and D.
+- Rejoin definition: "first chunk at or above 35 dB after binding". In these runs it coincides with the stricter "stays at or above 35 dB from then on": after the first crossing no chunk at that site falls below 35 dB (4 chunks at B before the move, 52 at C, 86 at D). Use the same definition everywhere in the paper.
+- Metric, measured from the first handoff: T_continuity-ready = T_Sink-arrival + T_post-bind-recovery, where T_Sink-arrival absorbs every delay before binding (transfer, verification, waiting for the chunk boundary).
+- 603 MiB is the volume transferred but not reused at the new site. It is not the traffic a progress-aware policy saves: forwarding those fragments from B or C to D also costs network transfer. Report traffic savings only from the evaluation.
+- The restart behaviour is the policy under test, not a property of every migration system: a reviewer asking "why not forward from B or C?" is asking exactly the question progress-aware routing answers.
 - Sink transfer completion is not continuity restoration. Binding happens when the Sink is complete; the stream reaches the rejoin threshold 4.4 s later. Continuity-ready latency therefore includes the recovery after binding, not only the transfer.
 - ρ<1 does not guarantee that continuity is fully restored before the next move. In (a), B rejoins at 22.6 s and execution moves at 25.1 s, a margin of 2.5 s. The safe wording is: "When the mobility interval exceeds the Sink transfer time, durable state can arrive before the next handoff, potentially allowing continuity to recover before execution moves again."
 - "Not reused" rather than "discarded": the 384 MiB at B and 219 MiB at C are not deleted; the restart policy simply never uses them at the new execution site. This is exactly the progress that progress-aware continuity routing reuses.
