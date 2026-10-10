@@ -57,7 +57,9 @@ FIG2A_AXES = [0.19, 0.20, 0.78, 0.73]
 # font sizes of the same reference (LONGBENCH_STYLE): axis label 28, ticks 28, annotations 19 (italic DejaVu Sans),
 # dense annotations 18
 F2_LABEL, F2_TICK, F2_ANNOT, F2_SMALL = 28, 28, 19, 18
-F2_ROW = 23          # row names of the requirements panel (they stand in for y tick labels)
+F2_ROW = 23          # row names of the requirements panel when drawn inside the plot box
+F2_ROW_OUT = 21      # row names as y tick labels outside the plot box (largest two-line size that fits the 1.46 in margin)
+ROW_LABELS_OUTSIDE = __import__("os").environ.get("FIG2A_ROWS_OUTSIDE", "0") == "1"
 F2_ZOOM_TITLE = 15   # "Zoomed view (MiB)"
 C_ZOOM_LINE = "#4a2c12"  # dark brown: zoom source box, connector lines, inset frame
 WIDE_W = 12.4
@@ -95,7 +97,8 @@ def save(fig, path: Path, tight: bool = True):
     fig.savefig(path.with_suffix(".png"), dpi=300, **kw)
     fig.savefig(path.with_suffix(".pdf"), dpi=300, **kw)
     plt.close(fig)
-    print(f"  {path.relative_to(ROOT)}.{{pdf,png}}")
+    shown = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+    print(f"  {shown}.{{pdf,png}}")
 
 
 def style_axis(ax, ylabel: str = "", xlabel: str = "", ylim=None, yticks=None) -> None:
@@ -230,7 +233,7 @@ def fig2a(out: Path):
             ("Continuity-preserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
             ("Immediate handoff", [(d["imm"], C_IMM, "")])]
     ys = [2, 1, 0]
-    XMAX = 6.4
+    XMAX = 7.7 if ROW_LABELS_OUTSIDE else 6.4
     bh = 0.46
     for y, (name, parts) in zip(ys, rows):
         left = 0.0
@@ -241,17 +244,30 @@ def fig2a(out: Path):
             left += b / GiB
         tot = sum(b for b, _, _ in parts)
         val = f"{tot / GiB:.2f} GiB" if tot > 0.1 * GiB else f"{tot / MiB:.2f} MiB"
-        # row name and total above its bar (28 pt names do not fit the reference's left margin)
-        bx.text(0.04, y + bh / 2 + 0.04, f"{name} ({val})", fontsize=F2_ROW, ha="left", va="bottom", color=BLACK)
-    bx.set_yticks([])
+        if ROW_LABELS_OUTSIDE:
+            if tot > 0.1 * GiB:  # the Immediate total is shown next to its zoomed view
+                _in_label(bx, left + 0.06, y, val, F2_ANNOT, ha="left", va="center")
+        else:
+            # row name and total above its bar (28 pt names do not fit the reference's left margin)
+            bx.text(0.04, y + bh / 2 + 0.04, f"{name} ({val})", fontsize=F2_ROW, ha="left", va="bottom", color=BLACK)
+    if ROW_LABELS_OUTSIDE:
+        bx.set_yticks(ys); bx.set_yticklabels(["Full\nmigration", "Continuity-\npreserving", "Immediate\nhandoff"], fontsize=F2_ROW_OUT)
+    else:
+        bx.set_yticks([])
     bx.set_xlim(0, XMAX); bx.set_ylim(-0.42, 2.72); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
     _fig2a_axis(bx, "Required State (GiB)")
-    ix0, iy0, iw, ih = 0.71, 0.05, 0.255, 0.17
+    if ROW_LABELS_OUTSIDE:
+        bx.tick_params(axis="y", labelsize=F2_ROW_OUT)
+        bx.set_ylim(-0.55, 2.55)
+    ix0, iy0, iw, ih = (0.30, 0.06, 0.30, 0.19) if ROW_LABELS_OUTSIDE else (0.71, 0.05, 0.255, 0.17)
     jx = bx.inset_axes([ix0, iy0, iw, ih])
     jx.barh(0, d["imm"] / MiB, height=0.6, color=C_IMM, edgecolor="white", lw=1.0, zorder=2)
     jx.set_xlim(0, 3.0); jx.set_ylim(-0.45, 0.45); jx.set_yticks([])
     jx.set_xticks([0, 1, 2, 3]); jx.set_xticklabels(["0", "1", "2", "3"])
-    _zoom(bx, jx, (0.0, -bh / 2 - 0.04, 0.16, bh + 0.08), (((0.16, bh / 2 + 0.04), (0, 1)), ((0.16, -bh / 2 - 0.04), (0, 0))), 1.55, title_right=True)
+    _zoom(bx, jx, (0.0, -bh / 2 - 0.04, 0.16, bh + 0.08), (((0.16, bh / 2 + 0.04), (0, 1)), ((0.16, -bh / 2 - 0.04), (0, 0))), 1.55,
+          title_right=not ROW_LABELS_OUTSIDE)
+    if ROW_LABELS_OUTSIDE:
+        _in_label(jx, 1.04, 0.5, f"{d['imm'] / MiB:.2f} MiB", F2_ANNOT, transform=jx.transAxes, ha="left", va="center", clip_on=False)
     save(fig, out / "fig2a_state_requirements", tight=False)
     return {"source_run": src, "immediate_MiB": d["imm"] / MiB, "inflight_MiB": d["inflight"] / MiB, "meta_MiB": d["meta"] / MiB,
             "sink_GiB": d["sink"] / GiB, "recent_GiB": d["recent"] / GiB, "vae_GiB": d["vae"] / GiB, "total_GiB": T / GiB,
@@ -292,7 +308,7 @@ def fig3(out: Path):
               ("No Sink KV", "ph_localrefresh", "plausible, but a\ndifferent trajectory"),
               ("Ephemeral +\nin-flight lost", "xfer_sink+meta", "recent KV, VAE, in-flight\ndropped together")],
              [0, 2, 8, 16, 32], out / "fig3_state_loss_frames", "")
-    print(f"  {(out / 'fig3_state_loss_frames').relative_to(ROOT)}.{{pdf,png}}")
+    print(f"  {out / 'fig3_state_loss_frames'}.{{pdf,png}}")
 
 
 # ----------------------------------------------------------------------------- Fig. 4a / 4b
@@ -461,7 +477,7 @@ def eval_late_binding_frames(out: Path):
               ("No durable state", "xfer_meta", "never rejoins"),
               ("Late binding", "ph_zero_16", "Sink arrives at M+16")],
              [0, 2, 4, 8, 12, 16, 20, 24, 32], out / "eval" / "fig_late_binding_frames", "", arrival=16)
-    print(f"  {(out / 'eval' / 'fig_late_binding_frames').relative_to(ROOT)}.{{pdf,png}}")
+    print(f"  {out / 'eval' / 'fig_late_binding_frames'}.{{pdf,png}}")
 
 
 def appendix_heatmap(out: Path):
