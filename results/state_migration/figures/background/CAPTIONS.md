@@ -89,8 +89,10 @@ KV + VAE caches heals in 21/21 runs without an adaptive Sink refresh before migr
 `fig_state_loss_<case>`). Full reading: `prompt_sweep/notes.md`.
 
 Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): same height as Fig. 2a/2b and the same print scale across the full text
-width. Row and column labels 28 pt; overlays 19 pt (measured per-frame PSNR on uncompressed frames). The prompt line is
-the prompt used by the run.
+width. The frame grid fills the full width with no side margins: each 832 x 480 frame is centre-cropped top and bottom to
+389 rows (rows 45 to 433; nothing is stretched), so each tile is 2.64 x 1.23 in. Row and column labels and the prompt line
+are 28 pt like Fig. 2b's axis text; the PSNR overlays are 19 pt like Fig. 2b's in-plot annotations (measured per-frame
+PSNR on uncompressed, uncropped frames). The prompt line is the prompt used by the run.
 
 ## Fig. 4: Execution resumption and continuity restoration are decoupled
 

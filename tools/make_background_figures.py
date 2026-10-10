@@ -347,20 +347,23 @@ def frames_strip(run_dir: Path, rows, chunks, prompt: str, out_path: Path):
     base = vids["baseline"]
     W, H = FIG3_SIZE
     n = len(chunks)
-    top, bottom, gap = 0.50, 0.50, 0.07          # inches: column labels above, prompt below, gap between frames
-    label_w = 2.55                                # inches for the 28 pt row labels
+    top, bottom, gap = 0.48, 0.48, 0.07          # inches: column labels above, prompt below, gap between frames
+    left_pad, label_w, right_pad = 0.03, 2.66, 0.03  # 28 pt row labels (widest "No recent KV +" = 2.50 in)
+    x0 = left_pad + label_w
     fh = (H - top - bottom - 2 * gap) / 3
-    fw = fh * base.shape[2] / base.shape[1]       # keep the frame aspect (832 x 480)
-    block_w = label_w + n * fw + (n - 1) * gap
-    x0 = (W - block_w) / 2 + label_w              # centre the label column + frame grid on the canvas
+    fw = (W - x0 - right_pad - (n - 1) * gap) / n  # frames fill the full width (no side margins)
+    # tiles are wider than 832 x 480: crop each frame top and bottom (centred) to the tile aspect, never stretch
+    Hf, Wf = base.shape[1], base.shape[2]
+    keep = min(Hf, int(round(Wf * fh / fw)))
+    r0 = (Hf - keep) // 2
     fig = plt.figure(figsize=FIG3_SIZE)
     for r, (label, name) in enumerate(rows):
         y = H - top - (r + 1) * fh - r * gap
         for c, ch in enumerate(chunks):
             fi = ch * mq.FPC + 3
-            fr = vids[name][min(fi, len(vids[name]) - 1)]
+            fr = vids[name][min(fi, len(vids[name]) - 1)][r0:r0 + keep]
             ax = fig.add_axes([(x0 + c * (fw + gap)) / W, y / H, fw / W, fh / H])
-            ax.imshow(fr); ax.set_xticks([]); ax.set_yticks([])
+            ax.imshow(fr, aspect="auto"); ax.set_xticks([]); ax.set_yticks([])
             for sp in ax.spines.values():
                 sp.set_visible(False)
             if r == 0:
@@ -369,8 +372,10 @@ def frames_strip(run_dir: Path, rows, chunks, prompt: str, out_path: Path):
                 _in_label(ax, 0.04, 0.05, f"{measured[(name, ch, 3)]:.0f} dB", F2_ANNOT, transform=ax.transAxes, ha="left", va="bottom",
                           color="white", weight="bold", bbox=dict(boxstyle="round,pad=0.18", fc="black", alpha=0.6, ec="none"))
             if c == 0:
-                fig.text((x0 - 0.15) / W, (y + fh / 2) / H, label, ha="right", va="center", fontsize=F2_LABEL, linespacing=1.0)
-    fig.text(0.5, 0.18 / H, f"Prompt: \u201c{short_prompt(prompt)}\u201d", ha="center", va="center", fontsize=F2_TICK - 4, style="italic")
+                fig.text((x0 - 0.12) / W, (y + fh / 2) / H, label, ha="right", va="center", fontsize=F2_LABEL, linespacing=1.0)
+    fig.text((x0 + (W - right_pad - x0) / 2) / W, 0.21 / H, f"Prompt: \u201c{short_prompt(prompt, 70)}\u201d", ha="center", va="center",
+             fontsize=F2_TICK, style="italic")
+    print(f"  frames_strip: tile {fw:.2f} x {fh:.2f} in, frames cropped to {keep}/{Hf} rows (rows {r0}..{r0 + keep - 1})")
     save(fig, out_path, tight=False)
 
 
