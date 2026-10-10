@@ -339,6 +339,12 @@ def fig3(out: Path):
     chunks = [0, 2, 8, 16, 32]
     import imageio.v3 as _iio
     vids = {name: _iio.imread(vid_dir / f"{name}.mp4", plugin="pyav") for _, name in rows}
+    # PSNR overlays: the measured value of the exact frame shown, from the run's uncompressed frames (ablation_raw.csv);
+    # recomputing it from the saved MP4s would be capped near 35-37 dB by video compression of both frames
+    measured = {}
+    for r_ in csv.DictReader(open(vid_dir.parent / "ablation_raw.csv")):
+        if r_["psnr"]:
+            measured[(r_["config"], int(r_["rel_call"]), int(r_["frame"]))] = float(r_["psnr"])
     base = vids["baseline"]
     W, H = FIG3_SIZE
     top, bottom, gap = 0.50, 0.50, 0.07          # inches: column labels above, prompt below, gap between frames
@@ -361,7 +367,7 @@ def fig3(out: Path):
                 ax.text(0.5, 1.04, f"M+{ch}", transform=ax.transAxes, ha="center", va="bottom", fontsize=F2_TICK)
             if r > 0:
                 ref = base[min(fi, len(base) - 1)]
-                _in_label(ax, 0.04, 0.05, f"{mq.psnr(ref, fr):.0f} dB", F2_ANNOT, transform=ax.transAxes, ha="left", va="bottom",
+                _in_label(ax, 0.04, 0.05, f"{measured[(name, ch, 3)]:.0f} dB", F2_ANNOT, transform=ax.transAxes, ha="left", va="bottom",
                           color="white", weight="bold", bbox=dict(boxstyle="round,pad=0.18", fc="black", alpha=0.6, ec="none"))
             if c == 0:
                 fig.text((x0 - 0.15) / W, (y + fh / 2) / H, label, ha="right", va="center", fontsize=F2_LABEL, linespacing=1.0)

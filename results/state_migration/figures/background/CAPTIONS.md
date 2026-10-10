@@ -64,17 +64,36 @@ Notes:
 ## Fig. 3: Visual evidence of state criticality
 
 ```latex
-\caption{Frames after migration (last frame of chunk $M{+}k$; PSNR to the uninterrupted frame in each corner).
-Without the Sink KV, the generated dog remains plausible but its appearance and pose diverge from the
-uninterrupted execution (19--27~dB): a visually valid video is not necessarily a continuation of the original
-generative trajectory. In the bottom row, recent KV, VAE caches and in-flight rows are dropped together
-(a combined loss, not the effect of each ephemeral component alone): output is badly damaged at first but
-converges back toward the reference.}
+\caption{Frames after migration (last frame of chunk $M{+}k$; measured PSNR to the uninterrupted frame in each corner).
+Without the Sink KV, the generated dog remains plausible but its appearance and pose diverge from the uninterrupted
+execution (19--27~dB): a visually valid video is not necessarily a continuation of the original generative trajectory.
+Without the ephemeral state (recent KV and VAE caches, 4.5~GiB; in-flight rows and Sink KV kept), output degrades only
+briefly and converges back to the reference (45--46~dB from $M{+}16$).}
 ```
 
-Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): the same 4.8 in height as Fig. 2a/2b, and a width chosen so that the figure printed across the full 7.0 in text width has the same scale as Fig. 2b printed in one 3.33 in column (7.7 in x 7.0 / 3.33), so row and column labels (28 pt, like Fig. 2b's axis labels) and the PSNR overlays (19 pt) print at identical sizes. The frame grid is height-limited (832 x 480 frames), so it is centred with white margins on both sides. The per-row notes were removed from the figure; the caption carries them (uninterrupted = reference; no Sink KV = plausible but a different trajectory; bottom row = recent KV, VAE caches and in-flight rows dropped together). The prompt line under the grid is the prompt used by these runs (`examples/prompt.txt`).
+Source: one dedicated run, `results/state_migration/fig3_frames/` (state_ablation.py, configs `ph_localrefresh` and
+`xfer_sink+meta+inflight`, `--save_video`; same video, seed 0, k = 2, migration at chunk 30 as the mechanism run). Its
+PSNR reproduces the generalization grid (`gen/original_s0_k2`) exactly (max difference 0.0000 dB over 40 chunks for both
+configs), so the run is deterministic.
 
-Time points reduced from 7 to 5: M+0, M+2, M+8, M+16, M+32. The bottom row label says "Ephemeral + in-flight lost" because the in-flight rows are Immediate, not Ephemeral; the run (`xfer_sink+meta`) kept only the Sink and metadata.
+The bottom row used to be `xfer_sink+meta` from the mechanism run, which also lost the in-flight rows (10 dB at M+0). It
+is now the ephemeral-only loss, which isolates the transient effect of ephemeral state; the in-flight effect is shown
+by the in-flight curve in Fig. 2b.
+
+PSNR overlays are the measured values of the exact frame shown (frame 3 of each chunk) from `ablation_raw.csv`, i.e.
+computed on uncompressed frames. Earlier versions recomputed PSNR from the saved MP4 files, where compression of both
+frames capped values near 35 to 37 dB (for example 37 instead of 46 dB at M+16).
+
+| row | M+0 | M+2 | M+8 | M+16 | M+32 |
+|---|---|---|---|---|---|
+| No Sink KV | 26.9 | 22.4 | 20.6 | 19.0 | 19.9 |
+| No recent KV + VAE caches | 21.0 | 18.4 | 36.1 | 45.7 | 45.1 |
+
+Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): the same 4.8 in height as Fig. 2a/2b, and a width chosen so that the figure
+printed across the full 7.0 in text width has the same scale as Fig. 2b printed in one 3.33 in column (7.7 in x 7.0 /
+3.33). Row and column labels are 28 pt like Fig. 2b's axis labels; overlays 19 pt. The frame grid is height-limited
+(832 x 480 frames), so it is centred with white margins on both sides. The prompt line under the grid is the prompt
+used by the run (`examples/prompt.txt`).
 
 ## Fig. 4: Execution resumption and continuity restoration are decoupled
 
