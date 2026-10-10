@@ -49,8 +49,11 @@ LEGEND_FONT_SIZE = 14
 ANNOT_FONT_SIZE = 14
 SPINE_WIDTH = 1.0
 PANEL_FIG_SIZE = (5.83, 3.22)
-# Fig. 2a canvas: same height as EC-LLM fig_attention_locality_layerwise.pdf (419.76 x 344.16 pt), twice its width
-FIG2A_SIZE = (2 * 419.76 / 72.0, 344.16 / 72.0)
+# Fig. 2a geometry copied from EC-LLM summary_tables/eval_figures/fig_motivation_context_sweep.pdf
+# (tools/plot_eval_figures.py, figure "m2"): 7.7 x 4.8 in canvas (554.4 x 345.6 pt), axes box
+# [0.19, 0.20, 0.78, 0.73] = 6.006 x 3.504 in plot area, saved without tight-bbox trimming.
+FIG2A_SIZE = (7.7, 4.8)
+FIG2A_AXES = [0.19, 0.20, 0.78, 0.73]
 WIDE_W = 12.4
 
 BLUE, ORANGE, RED = "#486ee2", "#ffb226", "red"
@@ -162,7 +165,7 @@ def fig2a(out: Path):
 
     # ---------------- (a) composition
     fig = plt.figure(figsize=FIG2A_SIZE)
-    ax = fig.add_axes([0.03, 0.18, 0.94, 0.40])
+    ax = fig.add_axes(FIG2A_AXES)
     h, left = 0.5, 0.0
     segs = [("", d["imm"], C_IMM), ("Sink KV", d["sink"], C_DUR), ("Recent KV", d["recent"], C_EPH), ("VAE caches", d["vae"], C_EPH2)]
     for name, b, col in segs:
@@ -171,12 +174,14 @@ def fig2a(out: Path):
             _in_label(ax, left + pct(b) / 2, 0.06, name, ha="center", va="bottom", zorder=3)
             _in_label(ax, left + pct(b) / 2, -0.04, f"{b / GiB:.2f} GiB · {pct(b):.1f}%", ANNOT_FONT_SIZE - 3, ha="center", va="top", zorder=3)
         left += pct(b)
-    ax.set_xlim(0, 100); ax.set_ylim(-0.34, 0.34); ax.set_yticks([])
+    ax.set_xlim(0, 100); ax.set_ylim(-0.34, 1.62)  # upper part of the plot box holds the zoomed view
+    ax.set_yticks([0]); ax.set_yticklabels(["Session\nstate"])
     ax.set_xticks([0, 25, 50, 75, 100])
     style_axis(ax, xlabel="Share of Execution State (%)")
+    ax.tick_params(axis="y", length=0)
     # Immediate state, zoomed: dashed source box at the bar's origin, corner connectors, tinted framed inset
     from matplotlib.patches import Rectangle as _Rect
-    ix = ax.inset_axes([0.0, 1.38, 0.40, 0.36])
+    ix = ax.inset_axes([0.035, 0.60, 0.42, 0.20])
     ix.set_facecolor(C_ZOOM_BG)
     ix.barh(0, d["inflight"] / MiB, height=0.62, color=C_IMM, edgecolor="white", lw=1.2, zorder=2)
     ix.barh(0, d["meta"] / MiB, left=d["inflight"] / MiB, height=0.62, color=C_IMM_LIGHT, edgecolor="white", lw=1.2, zorder=2)
@@ -189,7 +194,7 @@ def fig2a(out: Path):
     _in_label(ix, (d["inflight"] + d["meta"] / 2) / MiB, 0, "Metadata", ANNOT_FONT_SIZE - 2, ha="center", va="center", zorder=3)
     _in_label(ix, d["inflight"] / MiB / 2, 0, "In-flight", ANNOT_FONT_SIZE - 5, ha="center", va="center", rotation=90, zorder=3)
     _in_label(ix, 0.0, 1.0, "Zoomed view (MiB)", ANNOT_FONT_SIZE, transform=ix.transAxes, ha="left", va="bottom",
-              color=C_IMM_TEXT, weight="bold").set_position((0.0, 1.30))
+              color=C_IMM_TEXT, weight="bold").set_position((0.0, 1.42))
     _in_label(ix, 1.03, 0.5, f"Immediate {d['imm'] / MiB:.2f} MiB ({pct(d['imm']):.2f}%)", ANNOT_FONT_SIZE - 1, transform=ix.transAxes,
               ha="left", va="center", clip_on=False, color=C_IMM_TEXT)
     sx1, sy = 0.8, h / 2 + 0.03
@@ -201,7 +206,7 @@ def fig2a(out: Path):
 
     # ---------------- (b) state required per migration objective (shared GiB axis)
     fig = plt.figure(figsize=FIG2A_SIZE)
-    bx = fig.add_axes([0.155, 0.18, 0.815, 0.76])
+    bx = fig.add_axes(FIG2A_AXES)
     rows = [("Full migration", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "Sink KV"), (d["recent"], C_EPH, "Recent KV"), (d["vae"], C_EPH2, "VAE caches")]),
             ("Continuity-\npreserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
             ("Immediate\nhandoff", [(d["imm"], C_IMM, "")])]
