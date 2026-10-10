@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import statistics as st
 import sys
 from pathlib import Path
@@ -321,37 +322,36 @@ FIG3_SIZE = (FIG2A_SIZE[0] * PAPER_TEXT_W / PAPER_COL_W, FIG2A_SIZE[1])
 FIG3_PROMPT = (ROOT / "examples/prompt.txt").read_text().strip()   # the prompt the mechanism runs used
 
 
-def fig3(out: Path):
-    """Frames after migration (last frame of chunk M+k), three rows x five time points, PSNR to the uninterrupted
-    frame in each corner. Row and column labels at the Fig. 2b axis-label size; prompt underneath in italics."""
-    from matplotlib.patches import FancyBboxPatch  # noqa: F401
-    # Preferred source: one dedicated run in which the bottom row drops ONLY the ephemeral state (recent KV + VAE caches)
-    # and keeps the in-flight rows (config xfer_sink+meta+inflight). Until that run exists, fall back to the mechanism
-    # run, whose bottom row (xfer_sink+meta) also loses the in-flight rows and is labelled accordingly.
-    new_dir = ROOT / "results/state_migration/fig3_frames/videos"
-    if (new_dir / "xfer_sink+meta+inflight.mp4").exists():
-        vid_dir = new_dir
-        rows = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("No recent KV +\nVAE caches", "xfer_sink+meta+inflight")]
-    else:
-        vid_dir = mq.VID
-        rows = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("Ephemeral +\nin-flight lost", "xfer_sink+meta")]
-        print("  fig3: results/state_migration/fig3_frames not found; using the mechanism run (bottom row = ephemeral + in-flight lost)")
-    chunks = [0, 2, 8, 16, 32]
+ROWS_EPHEMERAL = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("No recent KV +\nVAE caches", "xfer_sink+meta+inflight")]
+
+
+def short_prompt(prompt: str, max_chars: int = 95) -> str:
+    """First sentence of a prompt, cut at a word boundary; the full prompt goes in the caption."""
+    first = prompt.split(". ")[0].strip().rstrip(".")
+    if len(first) <= max_chars:
+        return first + ("\u2026" if len(first) < len(prompt.strip().rstrip(".")) else "")
+    return first[:max_chars].rsplit(" ", 1)[0] + "\u2026"
+
+
+def frames_strip(run_dir: Path, rows, chunks, prompt: str, out_path: Path):
+    """Three rows x len(chunks) frames (last frame of chunk M+k) from one run directory with videos/ and ablation_raw.csv.
+    PSNR overlays are the measured per-frame values (uncompressed); canvas FIG3_SIZE; labels at the Fig. 2b sizes."""
     import imageio.v3 as _iio
+    vid_dir = run_dir / "videos"
     vids = {name: _iio.imread(vid_dir / f"{name}.mp4", plugin="pyav") for _, name in rows}
-    # PSNR overlays: the measured value of the exact frame shown, from the run's uncompressed frames (ablation_raw.csv);
-    # recomputing it from the saved MP4s would be capped near 35-37 dB by video compression of both frames
+    # recomputing PSNR from the saved MP4s would be capped near 35-37 dB by compression of both frames
     measured = {}
-    for r_ in csv.DictReader(open(vid_dir.parent / "ablation_raw.csv")):
+    for r_ in csv.DictReader(open(run_dir / "ablation_raw.csv")):
         if r_["psnr"]:
             measured[(r_["config"], int(r_["rel_call"]), int(r_["frame"]))] = float(r_["psnr"])
     base = vids["baseline"]
     W, H = FIG3_SIZE
+    n = len(chunks)
     top, bottom, gap = 0.50, 0.50, 0.07          # inches: column labels above, prompt below, gap between frames
     label_w = 2.55                                # inches for the 28 pt row labels
     fh = (H - top - bottom - 2 * gap) / 3
-    fw = fh * base.shape[2] / base.shape[1]       # keep the 832 x 480 aspect
-    block_w = label_w + 5 * fw + 4 * gap
+    fw = fh * base.shape[2] / base.shape[1]       # keep the frame aspect (832 x 480)
+    block_w = label_w + n * fw + (n - 1) * gap
     x0 = (W - block_w) / 2 + label_w              # centre the label column + frame grid on the canvas
     fig = plt.figure(figsize=FIG3_SIZE)
     for r, (label, name) in enumerate(rows):
@@ -366,13 +366,28 @@ def fig3(out: Path):
             if r == 0:
                 ax.text(0.5, 1.04, f"M+{ch}", transform=ax.transAxes, ha="center", va="bottom", fontsize=F2_TICK)
             if r > 0:
-                ref = base[min(fi, len(base) - 1)]
                 _in_label(ax, 0.04, 0.05, f"{measured[(name, ch, 3)]:.0f} dB", F2_ANNOT, transform=ax.transAxes, ha="left", va="bottom",
                           color="white", weight="bold", bbox=dict(boxstyle="round,pad=0.18", fc="black", alpha=0.6, ec="none"))
             if c == 0:
                 fig.text((x0 - 0.15) / W, (y + fh / 2) / H, label, ha="right", va="center", fontsize=F2_LABEL, linespacing=1.0)
-    fig.text(0.5, 0.18 / H, f"Prompt: \u201c{FIG3_PROMPT}\u201d", ha="center", va="center", fontsize=F2_TICK - 4, style="italic")
-    save(fig, out / "fig3_state_loss_frames", tight=False)
+    fig.text(0.5, 0.18 / H, f"Prompt: \u201c{short_prompt(prompt)}\u201d", ha="center", va="center", fontsize=F2_TICK - 4, style="italic")
+    save(fig, out_path, tight=False)
+
+
+def fig3(out: Path):
+    """Frames after migration, three rows x five time points. Source: the dedicated run in results/state_migration/fig3_frames
+    (bottom row drops only recent KV + VAE caches). A sweep selection (aggregate_prompt_sweep.py) replaces it only when the
+    user promotes a candidate by writing its run directory into results/state_migration/prompt_sweep/FIG3_SELECTED."""
+    sel = ROOT / "results/state_migration/prompt_sweep/FIG3_SELECTED"
+    if sel.exists():
+        run_dir = ROOT / sel.read_text().strip()
+        prompt = json.load(open(run_dir / "ablation_static.json"))["args"]["prompt_file_path"]
+        prompt_text = (ROOT / "examples" / Path(prompt).name).read_text().strip()
+        print(f"  fig3: using promoted sweep run {run_dir.relative_to(ROOT)}")
+    else:
+        run_dir = ROOT / "results/state_migration/fig3_frames"
+        prompt_text = FIG3_PROMPT
+    frames_strip(run_dir, ROWS_EPHEMERAL, [0, 2, 8, 16, 32], prompt_text, out / "fig3_state_loss_frames")
 
 
 # ----------------------------------------------------------------------------- Fig. 4a / 4b
