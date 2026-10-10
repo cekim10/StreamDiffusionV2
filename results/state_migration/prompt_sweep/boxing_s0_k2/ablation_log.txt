@@ -1,0 +1,17 @@
+[ablation] baseline: 110 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 32, 48, 78, 93]; last before M: 4
+[ablation] baseline done in 61 s; 109 calls with output
+[ablation] baseline SSIM vs input (M on): 0.24105066088959576
+[ablation] config ph_localrefresh
+  ph_localrefresh: call 30 (M+0) psnr 29.5
+  ph_localrefresh: call 31 (M+1) psnr 26.2
+  ph_localrefresh: call 34 (M+4) psnr 23.7
+  ph_localrefresh: call 46 (M+16) psnr 24.6
+[ablation] config xfer_sink+meta+inflight
+  xfer_sink+meta+inflight: call 30 (M+0) psnr 20.9
+  xfer_sink+meta+inflight: call 31 (M+1) psnr 19.6
+  xfer_sink+meta+inflight: call 34 (M+4) psnr 29.0
+  xfer_sink+meta+inflight: call 46 (M+16) psnr 35.1
+[ablation] done -> results/state_migration/prompt_sweep/boxing_s0_k2/ablation_summary.md
+  ph_localrefresh        withheld    1645 MB  PSNR M+0..3  26.4  M+16..  22.6  recovery None
+  xfer_sink+meta+inflight withheld    4604 MB  PSNR M+0..3  21.5  M+16..  36.6  recovery None

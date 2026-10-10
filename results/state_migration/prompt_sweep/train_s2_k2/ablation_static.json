@@ -1,0 +1,167 @@
+{
+  "k": 2,
+  "denoising_step_list": [
+    700,
+    500
+  ],
+  "args": {
+    "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+    "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+    "prompt_file_path": "examples/train_prompt.txt",
+    "video_path": "examples/train.mp4",
+    "output_folder": "/home/ckim151/StreamDiffusionV2/results/state_migration",
+    "noise_scale": 0.8,
+    "height": 480,
+    "width": 832,
+    "fps": 16,
+    "step": 2,
+    "seed": 2,
+    "gpu_id": 0,
+    "model_type": "T2V-1.3B",
+    "fixed_noise_scale": false,
+    "t2v": false,
+    "profile": false,
+    "use_taehv": false,
+    "normalize_latents": false,
+    "use_tensorrt": false,
+    "fast": false,
+    "out_dir": "results/state_migration/prompt_sweep/train_s2_k2",
+    "migration_chunk": 30,
+    "post_chunks": 80,
+    "configs": "ph_localrefresh,xfer_sink+meta+inflight",
+    "preset": "ablation",
+    "save_video": true
+  },
+  "git_commit": "9ddc74ed15a5b347b4f325404689b821ad3bc399",
+  "gpu_name": "NVIDIA L40S",
+  "torch": "2.6.0+cu124",
+  "hostname": "elves-01",
+  "source_frames": 65,
+  "needed_frames": 445,
+  "chunk": 4,
+  "sink_refresh_calls": [
+    4,
+    20,
+    22,
+    48,
+    93
+  ],
+  "sink_pos_at_M_baseline": [
+    22,
+    24,
+    6
+  ],
+  "baseline_ssim_vs_input_M_on": 0.5003808191977441,
+  "inventory_baseline_end": {
+    "kv_sink_bytes": 1725235200,
+    "kv_recent_bytes": 1725235200,
+    "kv_all_bytes": 3450470400,
+    "vae_enc_bytes": 1121402880,
+    "vae_dec_bytes": 1888573440,
+    "inflight_bytes": 199680,
+    "crossattn_bytes": 94371840,
+    "prompt_embeds_bytes": 8388608
+  },
+  "infos": {
+    "ph_localrefresh": {
+      "config": "ph_localrefresh",
+      "bytes_withheld": 1725235200,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_sink"
+            ],
+            "delay": [],
+            "restart": false,
+            "ph": "refresh"
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          22,
+          24,
+          6
+        ],
+        "recent_slot_pos": [
+          30,
+          31,
+          29
+        ]
+      },
+      "run_s": 85.83475460484624
+    },
+    "xfer_sink+meta+inflight": {
+      "config": "xfer_sink+meta+inflight",
+      "bytes_withheld": 4827183840,
+      "events": [
+        {
+          "call": 30,
+          "xfer": [
+            "inflight",
+            "meta",
+            "sink"
+          ],
+          "moved_mb": {
+            "sink": 1645.3,
+            "recent": 0.0,
+            "meta": 2.3,
+            "vae": 0.0,
+            "inflight": 0.2
+          }
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "xfer": "{'sink', 'inflight', 'meta'}"
+          }
+        }
+      ],
+      "inventory_at_M": {
+        "kv_sink_bytes": 1725235200,
+        "kv_recent_bytes": 1725235200,
+        "kv_all_bytes": 3450470400,
+        "vae_enc_bytes": 1121402880,
+        "vae_dec_bytes": 1888573440,
+        "inflight_bytes": 199680,
+        "crossattn_bytes": 94371840,
+        "prompt_embeds_bytes": 8388608
+      },
+      "slot_pos_at_M": {
+        "sink_slot_pos": [
+          22,
+          24,
+          6
+        ],
+        "recent_slot_pos": [
+          30,
+          31,
+          29
+        ]
+      },
+      "bytes_moved": {
+        "sink": 1725235200,
+        "recent": 0,
+        "meta": 2399520,
+        "vae": 0,
+        "inflight": 199680
+      },
+      "run_s": 86.77988756075501
+    }
+  }
+}
