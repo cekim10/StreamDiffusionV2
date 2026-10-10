@@ -69,4 +69,4 @@ M+16, 39 dB at M+32 in s1).
 
 Rule pick changed: the pre-registered rule now picks `dragonB_dog_s1_k2` (gap 26.6 dB vs the dog's 25.8). Fig. 3 in the
 repo has NOT been re-rendered yet; it switches to the rule pick on the next run of make_background_figures.py unless
-FIG3_SELECTED overrides it. Decision pending from the user (see below).
+FIG3_SELECTED overrides it. Decision: the user chose the bird-clip dragon; FIG3_SELECTED = dragonA_bird_s2_k2 (seed by the same rule). Its ephemeral recovery is not monotone: >= 35 dB first at M+23, dips to 33-35 dB at M+54..66, sustained from M+67.

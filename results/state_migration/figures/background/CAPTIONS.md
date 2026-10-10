@@ -64,35 +64,40 @@ Notes:
 ## Fig. 3: Visual evidence of state criticality
 
 ```latex
-\caption{Frames after migration (last frame of chunk $M{+}k$; measured PSNR to the uninterrupted frame in each corner).
-Without the Sink KV, the generated dog remains plausible but its appearance and pose diverge from the uninterrupted
-execution (19--27~dB): a visually valid video is not necessarily a continuation of the original generative trajectory.
-Without the ephemeral state (recent KV and VAE caches, 4.5~GiB; in-flight rows and Sink KV kept), output degrades only
-briefly and converges back to the reference (45--46~dB from $M{+}16$).}
+\caption{Frames after migration in a generated dragon stream (last frame of chunk $M{+}k$; measured PSNR to the
+uninterrupted frame in each corner). The stream is StreamDiffusionV2 in video-to-video mode with the prompt ``A large
+red dragon flying low through a medieval stone castle courtyard, turning its head and spreading its wings as it moves
+past the camera, cinematic realistic style, continuous smooth motion.'' It is a generated example that illustrates the
+AR scenario of \S1, not an AR mobility experiment. Without the Sink KV, the creature remains plausible but its face,
+color and scales diverge from the uninterrupted stream (18--24~dB) and never return. Without the ephemeral state
+(recent KV and VAE caches; in-flight rows and Sink KV kept), output degrades and then converges back toward the
+reference (38~dB at $M{+}32$).}
 ```
 
-Source: `results/state_migration/prompt_sweep/original_s0_k2`, chosen by the selection rule fixed before the prompt/clip sweep ran (largest gap between the two conditions among the runs where both claims reproduce; see `prompt_sweep/notes.md`). Columns M+0, 4, 8, 16, 32. Its first 40 chunks are identical to the earlier single run `fig3_frames` (same configs, seed, clip and migration point; the harness is deterministic).
-
-Suggested addition to the caption or text: across 22 runs (4 clips, 3 seeds, k = 1/2/4), losing the Sink KV diverges in all 22; losing recent KV + VAE caches heals in 13/13 runs without adaptive Sink refresh before migration and in 4/9 runs with one (Appendix, `fig_state_loss_<clip>`).
-
-The bottom row used to be `xfer_sink+meta` from the mechanism run, which also lost the in-flight rows (10 dB at M+0). It
-is now the ephemeral-only loss, which isolates the transient effect of ephemeral state; the in-flight effect is shown
-by the in-flight curve in Fig. 2b.
-
-PSNR overlays are the measured values of the exact frame shown (frame 3 of each chunk) from `ablation_raw.csv`, i.e.
-computed on uncompressed frames. Earlier versions recomputed PSNR from the saved MP4 files, where compression of both
-frames capped values near 35 to 37 dB (for example 37 instead of 46 dB at M+16).
+Source: `results/state_migration/prompt_sweep/dragonA_bird_s2_k2` (bird input clip, dragon prompt A, seed 2, k = 2,
+migration at chunk 30). Chosen by the user over the pre-registered rule pick (`dragonB_dog_s1_k2`, which renders a red
+cat-like animal on the dog clip and would not read as a dragon); the override is recorded in `prompt_sweep/FIG3_SELECTED`
+and in `summary.md`. Among the three bird-dragon seeds, seed 2 was taken by the same rule (largest gap from M+16:
+17.0 dB vs 16.6 and 16.4 dB).
 
 | row | M+0 | M+4 | M+8 | M+16 | M+32 |
 |---|---|---|---|---|---|
-| No Sink KV | 27 | 21 | 21 | 19 | 20 |
-| No recent KV + VAE caches | 21 | 25 | 36 | 46 | 45 |
+| No Sink KV | 24.0 | 20.5 | 19.0 | 17.9 | 20.0 |
+| No recent KV + VAE caches | 17.1 | 20.9 | 26.3 | 27.3 | 38.2 |
 
-Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): the same 4.8 in height as Fig. 2a/2b, and a width chosen so that the figure
-printed across the full 7.0 in text width has the same scale as Fig. 2b printed in one 3.33 in column (7.7 in x 7.0 /
-3.33). Row and column labels are 28 pt like Fig. 2b's axis labels; overlays 19 pt. The frame grid is height-limited
-(832 x 480 frames), so it is centred with white margins on both sides. The prompt line under the grid is the prompt
-used by the run (`examples/prompt.txt`).
+Recovery in this run is slower and less stable than in the dog example: the ephemeral-loss stream first reaches 35 dB at
+M+23, dips back to 33 to 35 dB around M+26 to 27 and M+54 to 66, and stays at or above 35 dB only from M+67 (mean of the
+last 16 chunks 36.4 dB, maximum 40.3 dB). It passes the pre-registered criterion, but the text should say "converges back
+toward the reference" rather than "returns to the reference within a few chunks". The dog example (`original_s0_k2`,
+appendix `fig_state_loss_frames_dog`) reaches 35 dB at M+8 and stays there (45 to 46 dB).
+
+Across 31 runs (5 clips or clip/prompt pairings, 3 seeds, k = 1/2/4): losing the Sink KV diverges in 31/31; losing recent
+KV + VAE caches heals in 21/21 runs without an adaptive Sink refresh before migration and 5/10 with one (Appendix,
+`fig_state_loss_<case>`). Full reading: `prompt_sweep/notes.md`.
+
+Canvas 16.19 x 4.8 in (1165.4 x 345.6 pt): same height as Fig. 2a/2b and the same print scale across the full text
+width. Row and column labels 28 pt; overlays 19 pt (measured per-frame PSNR on uncompressed frames). The prompt line
+under the grid is the first part of the prompt; the caption gives it in full.
 
 ## Fig. 4: Execution resumption and continuity restoration are decoupled
 

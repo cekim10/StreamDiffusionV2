@@ -390,6 +390,10 @@ def fig3(out: Path):
         run_dir = ROOT / "results/state_migration/fig3_frames"
         prompt_text = FIG3_PROMPT
     frames_strip(run_dir, ROWS_EPHEMERAL, [0, 4, 8, 16, 32], prompt_text, out / "fig3_state_loss_frames")
+    # appendix: the rule-picked dog example (cleanest quantitative case) in the same layout
+    dog = ROOT / "results/state_migration/prompt_sweep/original_s0_k2"
+    if dog.exists() and dog != run_dir:
+        frames_strip(dog, ROWS_EPHEMERAL, [0, 4, 8, 16, 32], FIG3_PROMPT, out / "appendix" / "fig_state_loss_frames_dog")
 
 
 # ----------------------------------------------------------------------------- Fig. 4a / 4b
