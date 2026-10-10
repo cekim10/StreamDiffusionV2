@@ -187,22 +187,24 @@ def fig2a(out: Path):
 
     # ---------------- (b) state required per migration objective (shared GiB axis)
     fig, bx = plt.subplots(figsize=(PANEL_FIG_SIZE[0] * 1.15, 2.6))
-    rows = [("Full migration", [(d["imm"], C_IMM), (d["sink"], C_DUR), (d["recent"], C_EPH), (d["vae"], C_EPH2)]),
-            ("Continuity-\npreserving", [(d["imm"], C_IMM), (d["sink"], C_DUR)]),
-            ("Immediate\nhandoff", [(d["imm"], C_IMM)])]
+    rows = [("Full migration", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "Sink KV"), (d["recent"], C_EPH, "Recent KV"), (d["vae"], C_EPH2, "VAE caches")]),
+            ("Continuity-\npreserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
+            ("Immediate\nhandoff", [(d["imm"], C_IMM, "")])]
     ys = [2, 1, 0]
     for y, (name, parts) in zip(ys, rows):
         left = 0.0
-        for b, col in parts:
+        for b, col, lab in parts:
             bx.barh(y, b / GiB, left=left, height=0.56, color=col, edgecolor="white", lw=1.3, zorder=2)
+            if lab:
+                _in_label(bx, left + b / GiB / 2, y, lab, ANNOT_FONT_SIZE - 1, ha="center", va="center", zorder=3)
             left += b / GiB
-        tot = sum(b for b, _ in parts)
+        tot = sum(b for b, _, _ in parts)
         if tot > 0.1 * GiB:  # the Immediate bar is labelled on its magnified view below
             _in_label(bx, left + 0.08, y, f"{tot / GiB:.2f} GiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
     bx.set_yticks(ys); bx.set_yticklabels([r[0] for r in rows])
     XMAX = 7.4
     bx.set_xlim(0, XMAX); bx.set_ylim(-0.55, 2.55); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
-    style_axis(bx, xlabel="State to Transfer (GiB)")
+    style_axis(bx, xlabel="Required State (GiB)")
     bx.tick_params(axis="y", length=0)
     # magnified view of the Immediate bar (invisible at GiB scale)
     ix0, iy0, iw, ih = 0.34, 0.05, 0.36, 0.17
@@ -217,7 +219,7 @@ def fig2a(out: Path):
     _in_label(bx, (ix0 + iw) * XMAX + 0.1, 0, f"{d['imm'] / MiB:.2f} MiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
     y_in = -0.55 + (iy0 + ih / 2) * 3.1
     bx.plot([0.02, ix0 * XMAX], [0, y_in], color=C_IMM_TEXT, lw=0.8, ls=(0, (3, 2)), zorder=1)
-    _in_label(bx, 0.05, 0.36, "magnified \u2192", ANNOT_FONT_SIZE - 4, ha="left", va="center", color=C_IMM_TEXT)
+    _in_label(bx, 0.05, 0.36, "Zoomed view (MiB)", ANNOT_FONT_SIZE - 4, ha="left", va="center", color=C_IMM_TEXT)
     save(fig, out / "fig2a_state_requirements")
     return {"source_run": src, "immediate_MiB": d["imm"] / MiB, "inflight_MiB": d["inflight"] / MiB, "meta_MiB": d["meta"] / MiB,
             "sink_GiB": d["sink"] / GiB, "recent_GiB": d["recent"] / GiB, "vae_GiB": d["vae"] / GiB, "total_GiB": T / GiB,
