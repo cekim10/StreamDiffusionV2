@@ -9,7 +9,7 @@ Background
   fig3_state_loss_frames       frames after migration (5 time points)       <- mechanism/videos
   fig4a_late_binding           execution resumes first, Sink binds later    <- mechanism/ablation_raw.csv
   fig4b_recovery_aligned       recovery aligned at Sink arrival             <- mechanism/ablation_raw.csv
-  fig5_mobility_timeline       when execution outruns the Sink transfer     <- mobility/mob_restart_*.json (emulated links)
+  fig5a_mobility_slow / fig5b_mobility_fast   Sink progress at the current site + continuity, rho<1 / rho>1  <- mobility/mob_restart_*.json
 Evaluation / Appendix (moved out of Background, unchanged content)
   eval/fig_mobility_policies   continuity-ready latency vs rho per policy   <- mobility/mob_{restart,relay,direct}_tm*.json
   eval/fig_late_binding_frames late binding, frames                         <- mechanism/videos
@@ -130,50 +130,62 @@ def reference_note(ax):
 
 # ----------------------------------------------------------------------------- Fig. 2a
 def fig2a(out: Path):
+    """Area-true treemap of the per-session execution state. The whole square is the full state; areas are exact.
+    Dashed outlines nest the three migration objectives: full state > continuity-preserving > immediate handoff."""
+    from matplotlib.patches import Rectangle
     comp, src = load_bytes()
     inflight, meta = comp["inflight"], comp["meta"]
     imm, sink, recent, vae = inflight + meta, comp["sink"], comp["recent"], comp["vae"]
     total = imm + sink + recent + vae
     pct = lambda b: 100.0 * b / total  # noqa: E731
-    fig, ax = plt.subplots(figsize=(PANEL_FIG_SIZE[0] * 1.25, 2.4))
-    h, left = 0.56, 0.0
-    white_box = dict(boxstyle="square,pad=0.15", fc="white", ec="none")
-    segs = [("", imm, RED, None, BLACK), ("Sink KV", sink, BLUE, "x", BLACK), ("Recent KV", recent, DARKGRAY, None, BLACK), ("VAE caches", vae, "white", "//", BLACK)]
-    for name, b, fc, hatch, tc in segs:
-        ax.barh(0, b / GiB, left=left / GiB, height=h, color=fc, hatch=hatch, edgecolor=BLACK, linewidth=1.2, zorder=2)
-        if name:
-            text(ax, (left + b / 2) / GiB, 0, f"{name}\n{b / GiB:.2f} GiB", ha="center", va="center", color=tc, zorder=3,
-                 bbox=white_box if hatch else None)
-        left += b
+    # layout (unit square = total): left column = Sink(+Immediate) below Recent KV, right column = VAE caches
+    wl = (imm + sink + recent) / total
+    hs = (imm + sink) / (imm + sink + recent)
+    s = (imm / total) ** 0.5                        # side of the area-true Immediate square
+    fig, ax = plt.subplots(figsize=(7.4, 3.9))
+    ax.set_xlim(-0.01, 2.02); ax.set_ylim(-0.02, 1.02); ax.set_aspect("equal"); ax.axis("off")
+    box = dict(boxstyle="square,pad=0.15", fc="white", ec="none")
 
-    def bracket(x0, x1, label, color):
-        y = 0.36
-        ax.plot([x0, x0, x1, x1], [y, y + 0.07, y + 0.07, y], color=color, lw=1.2, clip_on=False)
-        text(ax, (x0 + x1) / 2, y + 0.1, label, ha="center", va="bottom", color=color, clip_on=False)
-    bracket((imm + 0.004 * GiB) / GiB, (imm + sink) / GiB - 0.015, f"Durable {pct(sink):.1f}%", BLUE)
-    bracket((imm + sink) / GiB + 0.015, total / GiB - 0.004, f"Ephemeral {pct(recent + vae):.1f}%", DIMGRAY)
-    ax.set_xlim(0, total / GiB); ax.set_ylim(-0.42, 0.42); ax.set_yticks([])
-    ax.set_xticks([0, 1, 2, 3, 4, 5, 6])
-    style_axis(ax, xlabel=f"Execution-State Size (GiB; total {total / GiB:.2f} GiB)")
-    # zoomed inset: the Immediate state at MiB scale
-    ix = ax.inset_axes([0.0, 1.6, 0.42, 0.42])
-    ix.barh(0, inflight / MiB, height=0.6, color=RED, edgecolor=BLACK, linewidth=1.0)
-    ix.barh(0, meta / MiB, left=inflight / MiB, height=0.6, color="white", hatch="..", edgecolor=RED, linewidth=0)
-    ix.barh(0, meta / MiB, left=inflight / MiB, height=0.6, fill=False, edgecolor=BLACK, linewidth=1.0)
-    ix.set_xlim(0, imm / MiB); ix.set_ylim(-0.32, 0.32); ix.set_yticks([])
-    ix.set_xticks([0, 1, 2]); ix.set_xticklabels(["0", "1", "2 MiB"])
-    for sp in ix.spines.values():
-        sp.set_linewidth(SPINE_WIDTH)
-    ix.tick_params(axis="x", direction="in", width=1, length=3, pad=3, labelsize=TICK_FONT_SIZE - 3)
-    text(ix, 0, 0.37, f"In-flight rows {inflight / MiB:.2f} MiB", ANNOT_FONT_SIZE - 2, ha="left", va="bottom")
-    text(ix, (inflight + meta / 2) / MiB, 0, f"Metadata {meta / MiB:.2f}", ANNOT_FONT_SIZE - 2, ha="center", va="center",
-         bbox=dict(boxstyle="square,pad=0.12", fc="white", ec="none"))
-    text(ix, imm / MiB * 1.04, 0.0, f"Immediate {imm / MiB:.2f} MiB\n({pct(imm):.2f}%, zoomed)", ha="left", va="center", color=RED, clip_on=False)
-    # the Immediate sliver sits at x = 0 of the main bar: one vertical leader to the zoomed inset
-    ax.add_artist(ConnectionPatch(xyA=(0, h / 2), coordsA=ax.transData, xyB=(0, -0.32), coordsB=ix.transData, color=RED, lw=1.2, ls=(0, (3, 2)), zorder=0))
+    def block(x, y, w, h, fc, hatch, label, fy=0.5):
+        ax.add_patch(Rectangle((x, y), w, h, facecolor=fc, hatch=hatch, edgecolor=BLACK, lw=1.2, zorder=2))
+        text(ax, x + w / 2, y + h * fy, label, ANNOT_FONT_SIZE - 1, ha="center", va="center", zorder=4, bbox=box if hatch else None,
+             color="white" if fc in (BLUE, BLACK) and not hatch else BLACK, linespacing=1.15)
+    block(0, 0, wl, hs, BLUE, "x", f"Sink KV\n{sink / GiB:.2f} GiB\nDurable\n{pct(sink):.1f}%", fy=0.62)
+    block(0, hs, wl, 1 - hs, DARKGRAY, None, f"Recent KV\n{recent / GiB:.2f} GiB\nEphemeral\n{pct(recent):.1f}%")
+    block(wl, 0, 1 - wl, 1, "white", "//", f"VAE caches\n{vae / GiB:.2f} GiB\nEphemeral\n{pct(vae):.1f}%", fy=0.72)
+    # Immediate state: true-to-area square in the Sink corner
+    ax.add_patch(Rectangle((0, 0), s, s, facecolor=RED, edgecolor=RED, lw=0.6, zorder=5))
+    # migration objectives as nested outlines
+    ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, edgecolor=BLACK, lw=2.0, zorder=6))
+    # magnified Immediate square (area-true split into in-flight rows and metadata)
+    m0x, m0y, ms = 1.10, 0.03, 0.36
+    fi = inflight / imm
+    ax.add_patch(Rectangle((m0x, m0y), ms * fi, ms, facecolor=RED, edgecolor=BLACK, lw=1.0, zorder=3))
+    ax.add_patch(Rectangle((m0x + ms * fi, m0y), ms * (1 - fi), ms, facecolor="white", hatch="..", edgecolor=RED, lw=0, zorder=3))
+    ax.add_patch(Rectangle((m0x, m0y), ms, ms, fill=False, edgecolor=RED, lw=2.0, zorder=4))
+    ax.plot([s, m0x], [0.002, m0y], color=RED, lw=0.9, ls=(0, (3, 2)), zorder=3)
+    ax.plot([s, m0x], [s, m0y + ms], color=RED, lw=0.9, ls=(0, (3, 2)), zorder=3)
+    text(ax, m0x + ms * fi / 2, m0y + ms + 0.025, f"In-flight\n{inflight / MiB:.2f} MiB", ANNOT_FONT_SIZE - 3, ha="left", va="bottom")
+    text(ax, m0x + ms * (fi + (1 - fi) / 2), m0y + ms / 2, f"Metadata\n{meta / MiB:.2f} MiB", ANNOT_FONT_SIZE - 2, ha="center", va="center", bbox=box)
+    text(ax, m0x + ms + 0.03, m0y + ms / 2, f"Immediate state\n{imm / MiB:.2f} MiB ({pct(imm):.2f}%)\nmagnified {ms / s:.0f}× (linear)",
+         ANNOT_FONT_SIZE - 1, ha="left", va="center", color=RED)
+    # objective key: outline style + bytes each objective must move
+    # key: which blocks each migration objective must move (swatches = the blocks themselves)
+    keys = [([("white", None, BLACK, 2.0)], "Full-state migration", f"all blocks, {total / GiB:.2f} GiB"),
+            ([(RED, None, RED, 0.8), (BLUE, "x", BLACK, 1.0)], "Continuity-preserving", f"{(imm + sink) / GiB:.2f} GiB ({total / (imm + sink):.1f}× less)"),
+            ([(RED, None, RED, 0.8)], "Immediate handoff", f"{imm / MiB:.2f} MiB ({total / imm:,.0f}× less)")]
+    y = 1.0
+    text(ax, 1.10, y, "State each migration objective must move", ANNOT_FONT_SIZE - 1, ha="left", va="top", weight="bold")
+    y -= 0.04
+    for swatches, name, val in keys:
+        y -= 0.12
+        for i, (fc, hatch, ec, lw) in enumerate(swatches):
+            ax.add_patch(Rectangle((1.10 + i * 0.055, y - 0.035), 0.045, 0.07, facecolor=fc, hatch=hatch, edgecolor=ec, lw=lw))
+        text(ax, 1.23, y, f"{name}: {val}", ANNOT_FONT_SIZE - 1, ha="left", va="center")
     save(fig, out / "fig2a_state_breakdown")
     return {"source_run": src, "immediate_MiB": imm / MiB, "inflight_MiB": inflight / MiB, "meta_MiB": meta / MiB, "sink_GiB": sink / GiB,
-            "recent_GiB": recent / GiB, "vae_GiB": vae / GiB, "total_GiB": total / GiB, "pct": {"immediate": pct(imm), "durable": pct(sink), "ephemeral": pct(recent + vae)}}
+            "recent_GiB": recent / GiB, "vae_GiB": vae / GiB, "total_GiB": total / GiB, "pct": {"immediate": pct(imm), "durable": pct(sink), "ephemeral": pct(recent + vae)},
+            "full_over_immediate": total / imm, "full_over_continuity": total / (imm + sink), "zoom_linear": ms / s}
 
 
 # ----------------------------------------------------------------------------- Fig. 2b
@@ -263,79 +275,86 @@ def fig4(out: Path):
 
 
 # ----------------------------------------------------------------------------- Fig. 5
-SITE = {"B": (BLUE, "x"), "C": (ORANGE, "--"), "D": (BLACK, None)}
+SITE = {"B": (BLUE, "x"), "C": (ORANGE, "--"), "D": (DARKGRAY, None)}
 
 
-def gantt(ax, run: Path, t_end: float, brackets: bool):
+def sink_progress(run: Path):
+    """Share of the Sink held by the CURRENT execution site over time, from the measured transfer records.
+    Under the restart policy each attempt streams segments from A at the shaped link rate, so progress is linear between
+    the attempt's measured start and its measured end (completion or abort at the move) with the measured byte count."""
     exec_blocks, attempts, ready, moves = mm.restart_timeline(run)
-    Y = {"exec": 2.6, "sink": 1.6, "cont": 0.6}
-    box = dict(boxstyle="square,pad=0.12", fc="white", ec="none")
-    ax.set_xlim(0, t_end); ax.set_ylim(0.15, 3.25)
-    ax.set_yticks([Y["cont"], Y["sink"], Y["exec"]]); ax.set_yticklabels(["Continuity", "Sink transfer", "Execution"])
+    r = __import__("json").load(open(run))
+    sink_mib = r["bytes"]["A->" + r["edges"][-1]] / MiB
+    return exec_blocks, attempts, ready, moves, sink_mib, r["calls"]
 
-    def bar(y, a, b, site, label):
-        fc, hatch = SITE[site]
-        ax.barh(y, b - a, left=a, height=0.5, color=fc, hatch=hatch, edgecolor=BLACK, lw=1.0, zorder=2)
-        if label and b - a > 1.5:
-            text(ax, (a + b) / 2, y, label, ha="center", va="center", color="white" if hatch is None else BLACK, zorder=3, bbox=None if hatch is None else box)
 
+def progress_panel(path: Path, run: Path, t_end: float, label_rho: str):
+    exec_blocks, attempts, ready, moves, sink_mib, calls = sink_progress(run)
+    fig = plt.figure(figsize=(PANEL_FIG_SIZE[0], 4.6))
+    gs = fig.add_gridspec(3, 1, height_ratios=[0.32, 1.6, 1.0], hspace=0.16)
+    sx = fig.add_subplot(gs[0]); px = fig.add_subplot(gs[1], sharex=sx); qx = fig.add_subplot(gs[2], sharex=sx)
+    box = dict(boxstyle="square,pad=0.1", fc="white", ec="none")
+    # execution site strip
     for e, a, b in exec_blocks:
         b = t_end if b is None else min(b, t_end)
-        bar(Y["exec"], a, b, e, f"at {e}" if b - a > 4 else e)
-    for _, _, t in moves:
-        ax.axvline(t, color=BLACK, lw=0.9, ls=":", zorder=1)
-    wasted = []
+        fc, hatch = SITE[e]
+        sx.barh(0, b - a, left=a, height=1.0, color=fc, hatch=hatch, edgecolor=BLACK, lw=1.0)
+        if b - a > 1.2:
+            text(sx, (a + b) / 2, 0, e if b - a < 4 else f"executing at {e}", ANNOT_FONT_SIZE - 1, ha="center", va="center",
+                 color=BLACK, bbox=None if hatch is None else box)
+    sx.set_ylim(-0.5, 0.5); sx.set_yticks([0]); sx.set_yticklabels(["Site"])
+    # Sink progress at the current site
+    discarded = []
     for e, a, b, ok, mb in attempts:
-        b = t_end if b is None else min(b, t_end)
+        b_c = t_end if b is None else min(b, t_end)
+        frac = 100.0 * (mb / sink_mib if not ok else 1.0)
+        xs = [a, b_c]; ys = [0.0, frac * (b_c - a) / (b - a) if b and b > a else frac]
+        fc, hatch = SITE[e]
         if ok:
-            bar(Y["sink"], a, b, e, f"A→{e}  1.6 GB" if b - a > 4 else "")
-            text(ax, b + 0.35, Y["sink"], "bind", ha="left", va="center", color=BLUE)
+            px.fill_between(xs, 0, ys, color=fc, hatch=hatch, edgecolor=BLACK, lw=1.0, alpha=1.0, zorder=2)
+            px.plot(xs, ys, color=BLACK, lw=1.2, zorder=3)
+            nxt = next((t for _, _, t in moves if t > b), t_end)
+            px.plot([b, nxt], [100, 100], color=fc, lw=2.4, zorder=3)
+            px.plot([b], [100], marker="*", ms=15, color=BLUE, markeredgecolor=BLACK, zorder=5)
+            text(px, b, 106, "bind", ANNOT_FONT_SIZE - 1, ha="center", va="bottom")
         else:
-            ax.barh(Y["sink"], b - a, left=a, height=0.5, color="white", hatch="xxxx", edgecolor=RED, lw=1.0, zorder=2)
-            wasted.append((b, mb))
-    if wasted:
-        xw = max(b for b, _ in wasted)
-        text(ax, xw + 0.4, Y["sink"] - 0.42, " + ".join(f"{mb:.0f}" for _, mb in wasted) + " MiB discarded", ANNOT_FONT_SIZE - 1, ha="left", va="center", color=RED)
-    for e, a, b in exec_blocks:
-        b = t_end if b is None else min(b, t_end)
-        rb = ready.get(e)
-        segs = [(a, b, False)] if (rb is None or rb >= b) else [(a, max(a, rb), False), (max(a, rb), b, True)]
-        for s0, s1, ok in segs:
-            if s1 > s0:
-                ax.barh(Y["cont"], s1 - s0, left=s0, height=0.34, color=BLUE if ok else "white", hatch=None if ok else "..",
-                        edgecolor=BLUE if ok else RED, lw=1.0, zorder=2)
-    if brackets:
-        e, a, b, ok, _ = attempts[0]
-        if ok:
-            ax.annotate("", xy=(a, Y["sink"] - 0.4), xytext=(b, Y["sink"] - 0.4), arrowprops=dict(arrowstyle="<->", lw=1.0))
-            text(ax, (a + b) / 2, Y["sink"] - 0.44, r"$T_s$ (Sink transfer)", ha="center", va="top", bbox=box)
-        if moves:
-            t1 = moves[0][2]
-            ax.annotate("", xy=(0, Y["exec"] + 0.4), xytext=(t1, Y["exec"] + 0.4), arrowprops=dict(arrowstyle="<->", lw=1.0))
-            text(ax, t1 / 2, Y["exec"] + 0.44, r"$T_m$ (mobility interval)", ha="center", va="bottom")
+            px.fill_between(xs, 0, ys, facecolor="white", hatch="xxxx", edgecolor=RED, lw=0.0, zorder=2)
+            px.plot(xs, ys, color=RED, lw=1.4, zorder=3)
+            px.plot([b_c, b_c], [ys[1], 0], color=RED, lw=1.4, zorder=3)
+            discarded.append(mb)
+    for _, to, t in moves:
+        for ax in (sx, px, qx):
+            ax.axvline(t, color=BLACK, lw=0.9, ls=":", zorder=1)
+    if discarded:
+        text(px, 0.6, 66, " + ".join(f"{m:.0f}" for m in discarded) + " MiB\ndiscarded at moves", ANNOT_FONT_SIZE - 2, ha="left", va="top", color=RED,
+             bbox=dict(boxstyle="square,pad=0.1", fc="white", ec="none"), zorder=4)
+    px.axhline(100, color=DIMGRAY, lw=0.8, ls="--", zorder=1)
+    px.set_ylim(0, 120); px.set_yticks([0, 50, 100])
+    # continuity measured at the executing site (per chunk)
+    for e in SITE:
+        pts = [(c["t_out"], c["psnr"]) for c in calls if c["node"] == e and c["psnr"] is not None and c["t_out"] <= t_end]
+        if pts:
+            col = {"B": BLUE, "C": ORANGE, "D": DIMGRAY}[e]
+            qx.plot([p[0] for p in pts], [p[1] for p in pts], color=col, lw=1.6, marker="o", ms=3.2, markevery=3,
+                    markerfacecolor="white", markeredgecolor=col, markeredgewidth=1.0)
+    qx.axhline(TAU, color=BLACK, lw=0.9, ls=":")
+    text(qx, t_end - 0.5, TAU + 1.0, f"rejoin {TAU:.0f} dB", ANNOT_FONT_SIZE - 3, ha="right", va="bottom")
+    qx.set_ylim(10, YMAX); qx.set_xlim(0, t_end)
+    style_axis(sx); style_axis(px, ylabel="Sink at current\nsite (%)"); style_axis(qx, ylabel="PSNR (dB)", xlabel="Time After the First Handoff (s)", yticks=[10, 30, 50])
+    for ax in (sx, px):
+        ax.tick_params(labelbottom=False)
+    sx.tick_params(axis="y", length=0); sx.tick_params(axis="x", length=0)
+    text(sx, 0.0, 1.25, label_rho, LABEL_FONT_SIZE - 3, transform=sx.transAxes, ha="left", va="bottom")
+    fig.align_ylabels([sx, px, qx])
+    save(fig, path)
 
 
 def fig5(out: Path):
     d = ROOT / "results/state_migration/mobility"
-    fig = plt.figure(figsize=(WIDE_W, 5.8))
-    gs = fig.add_gridspec(2, 1, height_ratios=[1.15, 1.0], hspace=0.45)
-    axA = fig.add_subplot(gs[0]); axB = fig.add_subplot(gs[1], sharex=axA)
-    t_end = 46.0
-    gantt(axA, d / "mob_restart_tm24_h2.json", t_end, True)
-    gantt(axB, d / "mob_restart_tm2_h3_iu.json", t_end, False)
-    text(axA, 0.0, 1.14, r"$\rho<1$ ($T_m$ = 24 s, A$\to$B$\to$C): the Sink transfer completes before the next move", LABEL_FONT_SIZE - 2,
-         transform=axA.transAxes, va="bottom")
-    text(axB, 0.0, 1.04, r"$\rho>1$ ($T_m$ = 2 s, A$\to$B$\to$C$\to$D): execution moves again before the Sink arrives", LABEL_FONT_SIZE - 2,
-         transform=axB.transAxes, va="bottom")
-    style_axis(axA); style_axis(axB, xlabel="Time After the First Handoff (s)")
-    axA.tick_params(labelbottom=False)
-    for ax in (axA, axB):
-        ax.tick_params(axis="y", length=0)
-    handles = [Patch(facecolor=BLUE, hatch="x", edgecolor=BLACK, label="at B"), Patch(facecolor=ORANGE, hatch="--", edgecolor=BLACK, label="at C"),
-               Patch(facecolor=BLACK, edgecolor=BLACK, label="at D"), Patch(facecolor="white", hatch="xxxx", edgecolor=RED, label="Discarded transfer"),
-               Patch(facecolor=BLUE, edgecolor=BLUE, label="Continuity restored"), Patch(facecolor="white", hatch="..", edgecolor=RED, label="Continuity missing")]
-    legend(fig, handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.02), ncol=6, handlelength=1.6)
-    save(fig, out / "fig5_mobility_timeline")
+    progress_panel(out / "fig5a_mobility_slow", d / "mob_restart_tm24_h2.json", 46.0,
+                   r"$\rho<1$: $T_m$ = 24 s, A$\to$B$\to$C")
+    progress_panel(out / "fig5b_mobility_fast", d / "mob_restart_tm2_h3_iu.json", 46.0,
+                   r"$\rho>1$: $T_m$ = 2 s (moves at 3.4 s, 5.6 s), A$\to$B$\to$C$\to$D")
 
 
 # ----------------------------------------------------------------------------- Evaluation / Appendix (moved out of Background)
