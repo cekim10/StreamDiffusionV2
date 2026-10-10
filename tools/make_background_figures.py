@@ -54,6 +54,9 @@ PANEL_FIG_SIZE = (5.83, 3.22)
 # [0.19, 0.20, 0.78, 0.73] = 6.006 x 3.504 in plot area, saved without tight-bbox trimming.
 FIG2A_SIZE = (7.7, 4.8)
 FIG2A_AXES = [0.19, 0.20, 0.78, 0.73]
+# font sizes of the same reference (LONGBENCH_STYLE): axis label 28, ticks 28, annotations 19 (italic DejaVu Sans),
+# dense annotations 18
+F2_LABEL, F2_TICK, F2_ANNOT, F2_SMALL = 28, 28, 19, 18
 WIDE_W = 12.4
 
 BLUE, ORANGE, RED = "#486ee2", "#ffb226", "red"
@@ -155,10 +158,36 @@ def _in_label(ax, x, y, s, size=ANNOT_FONT_SIZE, color=BLACK, **kw):
     return ax.text(x, y, s, fontsize=size, family=CAKE_SANS, style="italic", color=color, **kw)
 
 
+def _fig2a_axis(ax, xlabel):
+    """Axis finish with the reference's font sizes (EC-LLM plot_eval_figures.py, LONGBENCH_STYLE)."""
+    for side in ("left", "bottom", "right", "top"):
+        ax.spines[side].set_visible(True); ax.spines[side].set_linewidth(SPINE_WIDTH)
+    ax.set_xlabel(xlabel, fontsize=F2_LABEL)
+    ax.tick_params(axis="x", direction="in", width=1, length=5, pad=7, labelsize=F2_TICK)
+    ax.tick_params(axis="y", direction="in", width=1, length=0, pad=5, labelsize=F2_TICK)
+
+
+def _zoom(ax, ix, src_box, connect, title_y, title_right=False):
+    """Dashed source box on the main axis, corner connectors, tinted orange-framed inset with a bold title."""
+    from matplotlib.patches import Rectangle as _Rect
+    ix.set_facecolor(C_ZOOM_BG)
+    for sp in ix.spines.values():
+        sp.set_linewidth(1.6); sp.set_edgecolor(C_IMM_TEXT)
+    ix.xaxis.tick_top()
+    ix.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=F2_SMALL, colors=BLACK)
+    x0, y0, w, h = src_box
+    ax.add_patch(_Rect((x0, y0), w, h, fill=False, edgecolor=C_IMM_TEXT, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
+    for (xa, ya), (xb, yb) in connect:
+        ax.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=ax.transData, xyB=(xb, yb), coordsB=ix.transAxes,
+                                      color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
+    _in_label(ix, 1.0 if title_right else 0.0, title_y, "Zoomed view (MiB)", F2_ANNOT, transform=ix.transAxes,
+              ha="right" if title_right else "left", va="bottom", color=C_IMM_TEXT, weight="bold")
+
+
 def fig2a(out: Path):
-    """(a) 100% stacked composition bar in the CAKE palette, Immediate state shown in a magnified inset;
-    (b) state each migration objective must move, three bars on one GiB axis, Immediate bar magnified."""
-    from matplotlib.patches import Rectangle
+    """(a) 100% stacked composition bar in the CAKE palette, Immediate state in a zoomed inset;
+    (b) state each migration objective must move, three bars on one GiB axis, Immediate bar zoomed.
+    Canvas, plot box and font sizes copy EC-LLM fig_motivation_context_sweep.pdf."""
     d, src = _state_bytes()
     T = d["total"]
     pct = lambda b: 100.0 * b / T  # noqa: E731
@@ -166,88 +195,60 @@ def fig2a(out: Path):
     # ---------------- (a) composition
     fig = plt.figure(figsize=FIG2A_SIZE)
     ax = fig.add_axes(FIG2A_AXES)
-    h, left = 0.5, 0.0
+    h, left = 0.56, 0.0
     segs = [("", d["imm"], C_IMM), ("Sink KV", d["sink"], C_DUR), ("Recent KV", d["recent"], C_EPH), ("VAE caches", d["vae"], C_EPH2)]
     for name, b, col in segs:
         ax.barh(0, pct(b), left=left, height=h, color=col, edgecolor="white", lw=1.5, zorder=2)
         if name:
-            _in_label(ax, left + pct(b) / 2, 0.06, name, ha="center", va="bottom", zorder=3)
-            _in_label(ax, left + pct(b) / 2, -0.04, f"{b / GiB:.2f} GiB · {pct(b):.1f}%", ANNOT_FONT_SIZE - 3, ha="center", va="top", zorder=3)
+            _in_label(ax, left + pct(b) / 2, 0.03, name, F2_ANNOT, ha="center", va="bottom", zorder=3)
+            _in_label(ax, left + pct(b) / 2, -0.03, f"{pct(b):.1f}%", F2_ANNOT, ha="center", va="top", zorder=3)
         left += pct(b)
-    ax.set_xlim(0, 100); ax.set_ylim(-0.34, 1.62)  # upper part of the plot box holds the zoomed view
-    ax.set_yticks([0]); ax.set_yticklabels(["Session\nstate"])
-    ax.set_xticks([0, 25, 50, 75, 100])
-    style_axis(ax, xlabel="Share of Execution State (%)")
-    ax.tick_params(axis="y", length=0)
-    # Immediate state, zoomed: dashed source box at the bar's origin, corner connectors, tinted framed inset
-    from matplotlib.patches import Rectangle as _Rect
-    ix = ax.inset_axes([0.035, 0.60, 0.42, 0.20])
-    ix.set_facecolor(C_ZOOM_BG)
+    ax.set_xlim(0, 100); ax.set_ylim(-0.36, 1.66)  # upper part of the plot box holds the zoomed view
+    ax.set_yticks([0]); ax.set_yticklabels(["State"])
+    ax.set_xticks([0, 25, 50, 75])  # a 28 pt "100" at the right edge would run off the reference canvas
+    _fig2a_axis(ax, "Share of Execution State (%)")
+    ix = ax.inset_axes([0.03, 0.56, 0.36, 0.20])
     ix.barh(0, d["inflight"] / MiB, height=0.62, color=C_IMM, edgecolor="white", lw=1.2, zorder=2)
     ix.barh(0, d["meta"] / MiB, left=d["inflight"] / MiB, height=0.62, color=C_IMM_LIGHT, edgecolor="white", lw=1.2, zorder=2)
     ix.set_xlim(0, d["imm"] / MiB * 1.04); ix.set_ylim(-0.42, 0.42); ix.set_yticks([])
-    ix.xaxis.tick_top()
     ix.set_xticks([0, 1, 2]); ix.set_xticklabels(["0", "1", "2"])
-    for sp in ix.spines.values():
-        sp.set_linewidth(1.6); sp.set_edgecolor(C_IMM_TEXT)
-    ix.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=TICK_FONT_SIZE - 4)
-    _in_label(ix, (d["inflight"] + d["meta"] / 2) / MiB, 0, "Metadata", ANNOT_FONT_SIZE - 2, ha="center", va="center", zorder=3)
-    _in_label(ix, d["inflight"] / MiB / 2, 0, "In-flight", ANNOT_FONT_SIZE - 5, ha="center", va="center", rotation=90, zorder=3)
-    _in_label(ix, 0.0, 1.0, "Zoomed view (MiB)", ANNOT_FONT_SIZE, transform=ix.transAxes, ha="left", va="bottom",
-              color=C_IMM_TEXT, weight="bold").set_position((0.0, 1.42))
-    _in_label(ix, 1.03, 0.5, f"Immediate {d['imm'] / MiB:.2f} MiB ({pct(d['imm']):.2f}%)", ANNOT_FONT_SIZE - 1, transform=ix.transAxes,
+    _in_label(ix, (d["inflight"] + d["meta"] / 2) / MiB, 0, "Metadata", F2_SMALL, ha="center", va="center", zorder=3)
+    _in_label(ix, 0.0, -0.06, "\u2191 In-flight", F2_SMALL, transform=ix.transAxes, ha="left", va="top", zorder=3)
+    sy = h / 2 + 0.03
+    _zoom(ax, ix, (0.0, -sy, 0.8, 2 * sy), (((0.0, sy), (0, 0)), ((0.8, sy), (1, 0))), 1.50)
+    _in_label(ix, 1.04, 0.5, f"Immediate\n{d['imm'] / MiB:.2f} MiB ({pct(d['imm']):.2f}%)", F2_ANNOT, transform=ix.transAxes,
               ha="left", va="center", clip_on=False, color=C_IMM_TEXT)
-    sx1, sy = 0.8, h / 2 + 0.03
-    ax.add_patch(_Rect((0.0, -sy), sx1, 2 * sy, fill=False, edgecolor=C_IMM_TEXT, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
-    for (xa, ya), (xb, yb) in (((0.0, sy), (0, 0)), ((sx1, sy), (1, 0))):
-        ax.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=ax.transData, xyB=(xb, yb), coordsB=ix.transAxes,
-                                      color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
     save(fig, out / "fig2a_state_composition", tight=False)
 
     # ---------------- (b) state required per migration objective (shared GiB axis)
     fig = plt.figure(figsize=FIG2A_SIZE)
     bx = fig.add_axes(FIG2A_AXES)
     rows = [("Full migration", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "Sink KV"), (d["recent"], C_EPH, "Recent KV"), (d["vae"], C_EPH2, "VAE caches")]),
-            ("Continuity-\npreserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
-            ("Immediate\nhandoff", [(d["imm"], C_IMM, "")])]
+            ("Continuity-preserving", [(d["imm"], C_IMM, ""), (d["sink"], C_DUR, "")]),
+            ("Immediate handoff", [(d["imm"], C_IMM, "")])]
     ys = [2, 1, 0]
+    XMAX = 6.4
+    bh = 0.46
     for y, (name, parts) in zip(ys, rows):
         left = 0.0
         for b, col, lab in parts:
-            bx.barh(y, b / GiB, left=left, height=0.56, color=col, edgecolor="white", lw=1.3, zorder=2)
+            bx.barh(y, b / GiB, left=left, height=bh, color=col, edgecolor="white", lw=1.3, zorder=2)
             if lab:
-                _in_label(bx, left + b / GiB / 2, y, lab, ANNOT_FONT_SIZE - 1, ha="center", va="center", zorder=3)
+                _in_label(bx, left + b / GiB / 2, y, lab, F2_SMALL, ha="center", va="center", zorder=3)
             left += b / GiB
         tot = sum(b for b, _, _ in parts)
-        if tot > 0.1 * GiB:  # the Immediate bar is labelled on its magnified view below
-            _in_label(bx, left + 0.08, y, f"{tot / GiB:.2f} GiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
-    bx.set_yticks(ys); bx.set_yticklabels([r[0] for r in rows])
-    XMAX = 7.4
-    bx.set_xlim(0, XMAX); bx.set_ylim(-0.55, 2.55); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
-    style_axis(bx, xlabel="Required State (GiB)")
-    bx.tick_params(axis="y", length=0)
-    # zoomed view of the Immediate bar (invisible at GiB scale): source box at the bar's origin, connector lines
-    # from its corners to the inset's corners, tinted inset with a matching frame
-    from matplotlib.patches import Rectangle as _Rect
-    ix0, iy0, iw, ih = 0.40, 0.04, 0.38, 0.21
+        val = f"{tot / GiB:.2f} GiB" if tot > 0.1 * GiB else f"{tot / MiB:.2f} MiB"
+        # row name and total above its bar (28 pt names do not fit the reference's left margin)
+        bx.text(0.04, y + bh / 2 + 0.04, f"{name} ({val})", fontsize=F2_ANNOT, ha="left", va="bottom", color=BLACK)
+    bx.set_yticks([])
+    bx.set_xlim(0, XMAX); bx.set_ylim(-0.42, 2.72); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
+    _fig2a_axis(bx, "Required State (GiB)")
+    ix0, iy0, iw, ih = 0.64, 0.05, 0.31, 0.17
     jx = bx.inset_axes([ix0, iy0, iw, ih])
-    jx.set_facecolor(C_ZOOM_BG)
     jx.barh(0, d["imm"] / MiB, height=0.6, color=C_IMM, edgecolor="white", lw=1.0, zorder=2)
     jx.set_xlim(0, 3.0); jx.set_ylim(-0.45, 0.45); jx.set_yticks([])
-    jx.xaxis.tick_top()
     jx.set_xticks([0, 1, 2, 3]); jx.set_xticklabels(["0", "1", "2", "3"])
-    for sp in jx.spines.values():
-        sp.set_linewidth(1.6); sp.set_edgecolor(C_IMM_TEXT)
-    jx.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=TICK_FONT_SIZE - 4, colors=BLACK)
-    _in_label(bx, (ix0 + iw) * XMAX + 0.1, -0.55 + (iy0 + ih / 2) * 3.1, f"{d['imm'] / MiB:.2f} MiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
-    _in_label(jx, 0.0, 1.0, "Zoomed view (MiB)", ANNOT_FONT_SIZE, transform=jx.transAxes, ha="left", va="bottom",
-              color=C_IMM_TEXT, weight="bold").set_position((0.0, 1.52))
-    # source region on the main axis
-    sx0, sx1, sy0, sy1 = 0.0, 0.16, -0.30, 0.30
-    bx.add_patch(_Rect((sx0, sy0), sx1 - sx0, sy1 - sy0, fill=False, edgecolor=C_IMM_TEXT, lw=1.4, ls=(0, (3, 2)), zorder=4, clip_on=False))
-    for (xa, ya), (xb, yb) in (((sx1, sy1), (0, 1)), ((sx1, sy0), (0, 0))):
-        bx.add_artist(ConnectionPatch(xyA=(xa, ya), coordsA=bx.transData, xyB=(xb, yb), coordsB=jx.transAxes,
-                                      color=C_IMM_TEXT, lw=1.0, ls=(0, (3, 2)), zorder=3))
+    _zoom(bx, jx, (0.0, -bh / 2 - 0.04, 0.16, bh + 0.08), (((0.16, bh / 2 + 0.04), (0, 1)), ((0.16, -bh / 2 - 0.04), (0, 0))), 1.55, title_right=True)
     save(fig, out / "fig2a_state_requirements", tight=False)
     return {"source_run": src, "immediate_MiB": d["imm"] / MiB, "inflight_MiB": d["inflight"] / MiB, "meta_MiB": d["meta"] / MiB,
             "sink_GiB": d["sink"] / GiB, "recent_GiB": d["recent"] / GiB, "vae_GiB": d["vae"] / GiB, "total_GiB": T / GiB,
