@@ -4,7 +4,8 @@ Visual style matches the EC-LLM-eval paper figures: Times New Roman, closed fram
 black-edged hatched fills, white-faced markers, 300 dpi, 5.83 x 3.22 in panels, no in-figure titles.
 
 Background
-  fig2a_state_breakdown        execution-state size by temporal role       <- frozen Phase 1 FullMigration bytes
+  fig2a_state_composition      100% stacked composition by temporal role   <- frozen Phase 1 FullMigration bytes
+  fig2a_state_requirements     state each migration objective must move     <- same bytes
   fig2b_state_ablation         continuity after losing one component        <- gen/original_s0_k2/ablation_raw.csv
   fig3_state_loss_frames       frames after migration (5 time points)       <- mechanism/videos
   fig4a_late_binding           execution resumes first, Sink binds later    <- mechanism/ablation_raw.csv
@@ -52,7 +53,11 @@ WIDE_W = 12.4
 
 BLUE, ORANGE, RED = "#486ee2", "#ffb226", "red"
 BLACK, DARKGRAY, DIMGRAY = "black", "darkgray", "dimgray"
-ROLE = {"Immediate": RED, "Durable": BLUE, "Ephemeral": DIMGRAY}
+# temporal-role palette, shared with the CAKE paper (muted red / blue / gray measured from its Fig. 3) + muted orange
+C_DUR, C_EPH, C_EPH2 = "#de6565", "#6383e6", "#b5b5b5"      # Durable (Sink KV), Ephemeral (recent KV), Ephemeral (VAE caches)
+C_IMM, C_IMM_LIGHT, C_IMM_TEXT = "#eda04f", "#f6cf9f", "#c06d12"  # Immediate (in-flight rows / metadata), text tint
+CAKE_SANS = "DejaVu Sans"
+ROLE = {"Immediate": C_IMM_TEXT, "Durable": C_DUR, "Ephemeral": C_EPH}
 
 TAU = 35.0   # rejoin criterion (justified in fig4b from the data)
 YMAX = 50.0  # plotted range; the uninterrupted run itself is bit-identical (reported as 99 dB) and off scale
@@ -129,70 +134,102 @@ def reference_note(ax):
 
 
 # ----------------------------------------------------------------------------- Fig. 2a
-def fig2a(out: Path):
-    """Area-true treemap of the per-session execution state. The whole square is the full state; areas are exact.
-    Dashed outlines nest the three migration objectives: full state > continuity-preserving > immediate handoff."""
-    from matplotlib.patches import Rectangle
+def _state_bytes():
     comp, src = load_bytes()
-    inflight, meta = comp["inflight"], comp["meta"]
-    imm, sink, recent, vae = inflight + meta, comp["sink"], comp["recent"], comp["vae"]
-    total = imm + sink + recent + vae
-    pct = lambda b: 100.0 * b / total  # noqa: E731
-    # layout (unit square = total): left column = Sink(+Immediate) below Recent KV, right column = VAE caches
-    wl = (imm + sink + recent) / total
-    hs = (imm + sink) / (imm + sink + recent)
-    s = (imm / total) ** 0.5                        # side of the area-true Immediate square
-    fig, ax = plt.subplots(figsize=(7.4, 3.9))
-    ax.set_xlim(-0.01, 2.02); ax.set_ylim(-0.02, 1.02); ax.set_aspect("equal"); ax.axis("off")
-    box = dict(boxstyle="square,pad=0.15", fc="white", ec="none")
+    d = {"inflight": comp["inflight"], "meta": comp["meta"], "sink": comp["sink"], "recent": comp["recent"], "vae": comp["vae"]}
+    d["imm"] = d["inflight"] + d["meta"]
+    d["total"] = d["imm"] + d["sink"] + d["recent"] + d["vae"]
+    return d, src
 
-    def block(x, y, w, h, fc, hatch, label, fy=0.5):
-        ax.add_patch(Rectangle((x, y), w, h, facecolor=fc, hatch=hatch, edgecolor=BLACK, lw=1.2, zorder=2))
-        text(ax, x + w / 2, y + h * fy, label, ANNOT_FONT_SIZE - 1, ha="center", va="center", zorder=4, bbox=box if hatch else None,
-             color="white" if fc in (BLUE, BLACK) and not hatch else BLACK, linespacing=1.15)
-    block(0, 0, wl, hs, BLUE, "x", f"Sink KV\n{sink / GiB:.2f} GiB\nDurable\n{pct(sink):.1f}%", fy=0.62)
-    block(0, hs, wl, 1 - hs, DARKGRAY, None, f"Recent KV\n{recent / GiB:.2f} GiB\nEphemeral\n{pct(recent):.1f}%")
-    block(wl, 0, 1 - wl, 1, "white", "//", f"VAE caches\n{vae / GiB:.2f} GiB\nEphemeral\n{pct(vae):.1f}%", fy=0.72)
-    # Immediate state: true-to-area square in the Sink corner
-    ax.add_patch(Rectangle((0, 0), s, s, facecolor=RED, edgecolor=RED, lw=0.6, zorder=5))
-    # migration objectives as nested outlines
-    ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, edgecolor=BLACK, lw=2.0, zorder=6))
-    # magnified Immediate square (area-true split into in-flight rows and metadata)
-    m0x, m0y, ms = 1.10, 0.03, 0.36
-    fi = inflight / imm
-    ax.add_patch(Rectangle((m0x, m0y), ms * fi, ms, facecolor=RED, edgecolor=BLACK, lw=1.0, zorder=3))
-    ax.add_patch(Rectangle((m0x + ms * fi, m0y), ms * (1 - fi), ms, facecolor="white", hatch="..", edgecolor=RED, lw=0, zorder=3))
-    ax.add_patch(Rectangle((m0x, m0y), ms, ms, fill=False, edgecolor=RED, lw=2.0, zorder=4))
-    ax.plot([s, m0x], [0.002, m0y], color=RED, lw=0.9, ls=(0, (3, 2)), zorder=3)
-    ax.plot([s, m0x], [s, m0y + ms], color=RED, lw=0.9, ls=(0, (3, 2)), zorder=3)
-    text(ax, m0x + ms * fi / 2, m0y + ms + 0.025, f"In-flight\n{inflight / MiB:.2f} MiB", ANNOT_FONT_SIZE - 3, ha="left", va="bottom")
-    text(ax, m0x + ms * (fi + (1 - fi) / 2), m0y + ms / 2, f"Metadata\n{meta / MiB:.2f} MiB", ANNOT_FONT_SIZE - 2, ha="center", va="center", bbox=box)
-    text(ax, m0x + ms + 0.03, m0y + ms / 2, f"Immediate state\n{imm / MiB:.2f} MiB ({pct(imm):.2f}%)\nmagnified {ms / s:.0f}× (linear)",
-         ANNOT_FONT_SIZE - 1, ha="left", va="center", color=RED)
-    # objective key: outline style + bytes each objective must move
-    # key: which blocks each migration objective must move (swatches = the blocks themselves)
-    keys = [([("white", None, BLACK, 2.0)], "Full-state migration", f"all blocks, {total / GiB:.2f} GiB"),
-            ([(RED, None, RED, 0.8), (BLUE, "x", BLACK, 1.0)], "Continuity-preserving", f"{(imm + sink) / GiB:.2f} GiB ({total / (imm + sink):.1f}× less)"),
-            ([(RED, None, RED, 0.8)], "Immediate handoff", f"{imm / MiB:.2f} MiB ({total / imm:,.0f}× less)")]
-    y = 1.0
-    text(ax, 1.10, y, "State each migration objective must move", ANNOT_FONT_SIZE - 1, ha="left", va="top", weight="bold")
-    y -= 0.04
-    for swatches, name, val in keys:
-        y -= 0.12
-        for i, (fc, hatch, ec, lw) in enumerate(swatches):
-            ax.add_patch(Rectangle((1.10 + i * 0.055, y - 0.035), 0.045, 0.07, facecolor=fc, hatch=hatch, edgecolor=ec, lw=lw))
-        text(ax, 1.23, y, f"{name}: {val}", ANNOT_FONT_SIZE - 1, ha="left", va="center")
-    save(fig, out / "fig2a_state_breakdown")
-    return {"source_run": src, "immediate_MiB": imm / MiB, "inflight_MiB": inflight / MiB, "meta_MiB": meta / MiB, "sink_GiB": sink / GiB,
-            "recent_GiB": recent / GiB, "vae_GiB": vae / GiB, "total_GiB": total / GiB, "pct": {"immediate": pct(imm), "durable": pct(sink), "ephemeral": pct(recent + vae)},
-            "full_over_immediate": total / imm, "full_over_continuity": total / (imm + sink), "zoom_linear": ms / s}
+
+def _in_label(ax, x, y, s, size=ANNOT_FONT_SIZE, color=BLACK, **kw):
+    """CAKE-style label inside a filled region: italic sans-serif."""
+    return ax.text(x, y, s, fontsize=size, family=CAKE_SANS, style="italic", color=color, **kw)
+
+
+def fig2a(out: Path):
+    """(a) 100% stacked composition bar in the CAKE palette, Immediate state shown in a magnified inset;
+    (b) state each migration objective must move, three bars on one GiB axis, Immediate bar magnified."""
+    from matplotlib.patches import Rectangle
+    d, src = _state_bytes()
+    T = d["total"]
+    pct = lambda b: 100.0 * b / T  # noqa: E731
+
+    # ---------------- (a) composition
+    fig, ax = plt.subplots(figsize=(PANEL_FIG_SIZE[0] * 1.15, 2.3))
+    h, left = 0.5, 0.0
+    segs = [("", d["imm"], C_IMM), ("Sink KV", d["sink"], C_DUR), ("Recent KV", d["recent"], C_EPH), ("VAE caches", d["vae"], C_EPH2)]
+    for name, b, col in segs:
+        ax.barh(0, pct(b), left=left, height=h, color=col, edgecolor="white", lw=1.5, zorder=2)
+        if name:
+            _in_label(ax, left + pct(b) / 2, 0.06, name, ha="center", va="bottom", zorder=3)
+            _in_label(ax, left + pct(b) / 2, -0.04, f"{b / GiB:.2f} GiB · {pct(b):.1f}%", ANNOT_FONT_SIZE - 3, ha="center", va="top", zorder=3)
+        left += pct(b)
+    ax.set_xlim(0, 100); ax.set_ylim(-0.34, 0.34); ax.set_yticks([])
+    ax.set_xticks([0, 25, 50, 75, 100])
+    style_axis(ax, xlabel="Share of Execution State (%)")
+    # Immediate state, magnified (in-flight rows | metadata)
+    ix = ax.inset_axes([0.0, 1.32, 0.40, 0.36])
+    ix.barh(0, d["inflight"] / MiB, height=0.7, color=C_IMM, edgecolor="white", lw=1.2)
+    ix.barh(0, d["meta"] / MiB, left=d["inflight"] / MiB, height=0.7, color=C_IMM_LIGHT, edgecolor="white", lw=1.2)
+    ix.set_xlim(0, d["imm"] / MiB); ix.set_ylim(-0.4, 0.4); ix.set_yticks([])
+    ix.set_xticks([0, 1, 2]); ix.set_xticklabels(["0", "1", "2 MiB"])
+    for sp in ix.spines.values():
+        sp.set_linewidth(SPINE_WIDTH)
+    ix.tick_params(axis="x", direction="in", width=1, length=3, pad=3, labelsize=TICK_FONT_SIZE - 4)
+    _in_label(ix, (d["inflight"] + d["meta"] / 2) / MiB, 0, "Metadata", ANNOT_FONT_SIZE - 3, ha="center", va="center")
+    _in_label(ix, d["inflight"] / MiB / 2, 0.42, "In-flight", ANNOT_FONT_SIZE - 4, ha="left", va="bottom")
+    _in_label(ix, d["imm"] / MiB * 1.04, 0, f"Immediate {d['imm'] / MiB:.2f} MiB ({pct(d['imm']):.2f}%)", ANNOT_FONT_SIZE - 2,
+              ha="left", va="center", clip_on=False, color=C_IMM_TEXT)
+    ax.annotate("", xy=(0.15, h / 2), xytext=(0.6, 0.86), xycoords="data", textcoords="data",
+                arrowprops=dict(arrowstyle="->", lw=1.0, color=C_IMM_TEXT, shrinkA=0, shrinkB=0), annotation_clip=False)
+    save(fig, out / "fig2a_state_composition")
+
+    # ---------------- (b) state required per migration objective (shared GiB axis)
+    fig, bx = plt.subplots(figsize=(PANEL_FIG_SIZE[0] * 1.15, 2.6))
+    rows = [("Full migration", [(d["imm"], C_IMM), (d["sink"], C_DUR), (d["recent"], C_EPH), (d["vae"], C_EPH2)]),
+            ("Continuity-\npreserving", [(d["imm"], C_IMM), (d["sink"], C_DUR)]),
+            ("Immediate\nhandoff", [(d["imm"], C_IMM)])]
+    ys = [2, 1, 0]
+    for y, (name, parts) in zip(ys, rows):
+        left = 0.0
+        for b, col in parts:
+            bx.barh(y, b / GiB, left=left, height=0.56, color=col, edgecolor="white", lw=1.3, zorder=2)
+            left += b / GiB
+        tot = sum(b for b, _ in parts)
+        if tot > 0.1 * GiB:  # the Immediate bar is labelled on its magnified view below
+            _in_label(bx, left + 0.08, y, f"{tot / GiB:.2f} GiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
+    bx.set_yticks(ys); bx.set_yticklabels([r[0] for r in rows])
+    XMAX = 7.4
+    bx.set_xlim(0, XMAX); bx.set_ylim(-0.55, 2.55); bx.set_xticks([0, 1, 2, 3, 4, 5, 6])
+    style_axis(bx, xlabel="State to Transfer (GiB)")
+    bx.tick_params(axis="y", length=0)
+    # magnified view of the Immediate bar (invisible at GiB scale)
+    ix0, iy0, iw, ih = 0.34, 0.05, 0.36, 0.17
+    jx = bx.inset_axes([ix0, iy0, iw, ih])
+    jx.barh(0, d["imm"] / MiB, height=0.6, color=C_IMM, edgecolor="white", lw=1.0)
+    jx.set_xlim(0, 3.0); jx.set_ylim(-0.45, 0.45); jx.set_yticks([])
+    jx.xaxis.tick_top()
+    jx.set_xticks([0, 1, 2, 3]); jx.set_xticklabels(["0", "1", "2", "3 MiB"])
+    for sp in jx.spines.values():
+        sp.set_linewidth(SPINE_WIDTH)
+    jx.tick_params(axis="x", direction="in", width=1, length=3, pad=2, labelsize=TICK_FONT_SIZE - 5)
+    _in_label(bx, (ix0 + iw) * XMAX + 0.1, 0, f"{d['imm'] / MiB:.2f} MiB", ANNOT_FONT_SIZE - 1, ha="left", va="center")
+    y_in = -0.55 + (iy0 + ih / 2) * 3.1
+    bx.plot([0.02, ix0 * XMAX], [0, y_in], color=C_IMM_TEXT, lw=0.8, ls=(0, (3, 2)), zorder=1)
+    _in_label(bx, 0.05, 0.36, "magnified \u2192", ANNOT_FONT_SIZE - 4, ha="left", va="center", color=C_IMM_TEXT)
+    save(fig, out / "fig2a_state_requirements")
+    return {"source_run": src, "immediate_MiB": d["imm"] / MiB, "inflight_MiB": d["inflight"] / MiB, "meta_MiB": d["meta"] / MiB,
+            "sink_GiB": d["sink"] / GiB, "recent_GiB": d["recent"] / GiB, "vae_GiB": d["vae"] / GiB, "total_GiB": T / GiB,
+            "pct": {"immediate": pct(d["imm"]), "durable": pct(d["sink"]), "ephemeral": pct(d["recent"] + d["vae"])},
+            "full_over_immediate": T / d["imm"], "full_over_continuity": T / (d["imm"] + d["sink"])}
 
 
 # ----------------------------------------------------------------------------- Fig. 2b
-ABL = [("drop_inflight", "No in-flight rows (0.19 MiB)", RED, "^", "solid", "Immediate"),
-       ("drop_kv_recent", "No recent KV (1.61 GiB)", DIMGRAY, "o", "dashed", "Ephemeral"),
-       ("drop_vae_all", "No VAE caches (2.80 GiB)", DARKGRAY, "D", "dashdot", "Ephemeral"),
-       ("ph_localrefresh", "No Sink KV (1.61 GiB)", BLUE, "s", "solid", "Durable")]
+ABL = [("drop_inflight", "No in-flight rows (0.19 MiB)", C_IMM, "^", "solid", "Immediate"),
+       ("drop_kv_recent", "No recent KV (1.61 GiB)", C_EPH, "o", "dashed", "Ephemeral"),
+       ("drop_vae_all", "No VAE caches (2.80 GiB)", "#8f8f8f", "D", "dashdot", "Ephemeral"),
+       ("ph_localrefresh", "No Sink KV (1.61 GiB)", C_DUR, "s", "solid", "Durable")]
 
 
 def fig2b(out: Path):
