@@ -302,7 +302,7 @@ def fig2b(out: Path):
     direct = [("Recent KV", C_EPH, 25.5, 48.9, "bottom"), ("VAE caches", "#7a7a7a", 13.6, 44.4, "top"),
               ("In-flight rows", C_IMM_TEXT, 38.5, 32.6, "top"), ("Sink KV", C_DUR, 38.5, 18.0, "top")]
     for txt, col, xx, yy, va in direct:
-        _in_label(ax, xx, yy, txt, F2_ANNOT, ha="right" if xx > 30 else "left", va=va, color=col, zorder=4)
+        _in_label(ax, xx, yy, txt, F2_ANNOT, ha="right" if xx > 30 else "left", va=va, color=col, zorder=4, weight="bold")
     ax.set_xlim(0, 39); ax.set_xticks([0, 10, 20, 30])
     ax.set_ylim(8, 54); ax.set_yticks([10, 20, 30, 40, 50])
     _fig2a_axis(ax, "Chunks After Migration")
