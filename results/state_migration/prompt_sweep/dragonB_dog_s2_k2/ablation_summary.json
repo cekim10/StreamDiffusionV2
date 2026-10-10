@@ -1,0 +1,83 @@
+{
+  "floor_psnr": NaN,
+  "seed_shift_psnr": NaN,
+  "per_config": {
+    "ph_localrefresh": {
+      "bytes_withheld_mb": 1645.3125,
+      "psnr_M0": 27.8315,
+      "psnr_M0_3": 21.92575,
+      "psnr_M4_15": 18.780604166666667,
+      "psnr_M16_end": 18.748582031250002,
+      "ssim_M0_3": 0.8060749999999999,
+      "ssim_M16_end": 0.746290625,
+      "ssim_in_M0_3": 0.39185625,
+      "ssim_in_M16_end": 0.42148632812500003,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "arrival": null,
+      "psnr_M0_7": 20.5185,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": null,
+      "events": [
+        {
+          "call": 30,
+          "applied": {
+            "drop": [
+              "kv_sink"
+            ],
+            "delay": [],
+            "restart": false,
+            "ph": "refresh"
+          }
+        }
+      ]
+    },
+    "xfer_sink+meta+inflight": {
+      "bytes_withheld_mb": 4603.561248779297,
+      "psnr_M0": 18.32225,
+      "psnr_M0_3": 20.5791875,
+      "psnr_M4_15": 34.239916666666666,
+      "psnr_M16_end": 39.268640625,
+      "ssim_M0_3": 0.7135625,
+      "ssim_M16_end": 0.98682265625,
+      "ssim_in_M0_3": 0.3850125,
+      "ssim_in_M16_end": 0.40305429687499994,
+      "first_call_psnr_below_60": 30,
+      "seed_mb": 0.0,
+      "arrival": null,
+      "psnr_M0_7": 24.855937500000003,
+      "sink_transfer_mb": 0.0,
+      "replay_ms": null,
+      "missing_frames": 0,
+      "recovery_rel_call": null,
+      "events": [
+        {
+          "call": 30,
+          "xfer": [
+            "inflight",
+            "meta",
+            "sink"
+          ],
+          "moved_mb": {
+            "sink": 1645.3,
+            "recent": 0.0,
+            "meta": 2.3,
+            "vae": 0.0,
+            "inflight": 0.2
+          }
+        },
+        {
+          "call": 30,
+          "applied": {
+            "drop": [],
+            "delay": [],
+            "restart": false,
+            "xfer": "{'inflight', 'sink', 'meta'}"
+          }
+        }
+      ]
+    }
+  }
+}

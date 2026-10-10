@@ -1,0 +1,17 @@
+[ablation] baseline: 110 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 48, 93]; last before M: 4
+[ablation] baseline done in 61 s; 109 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4025199569761753
+[ablation] config ph_localrefresh
+  ph_localrefresh: call 30 (M+0) psnr 28.2
+  ph_localrefresh: call 31 (M+1) psnr 22.0
+  ph_localrefresh: call 34 (M+4) psnr 19.0
+  ph_localrefresh: call 46 (M+16) psnr 18.6
+[ablation] config xfer_sink+meta+inflight
+  xfer_sink+meta+inflight: call 30 (M+0) psnr 17.2
+  xfer_sink+meta+inflight: call 31 (M+1) psnr 19.0
+  xfer_sink+meta+inflight: call 34 (M+4) psnr 22.7
+  xfer_sink+meta+inflight: call 46 (M+16) psnr 37.4
+[ablation] done -> results/state_migration/prompt_sweep/dragonA_dog_s0_k2/ablation_summary.md
+  ph_localrefresh        withheld    1645 MB  PSNR M+0..3  22.4  M+16..  19.2  recovery None
+  xfer_sink+meta+inflight withheld    4604 MB  PSNR M+0..3  18.4  M+16..  37.3  recovery None
