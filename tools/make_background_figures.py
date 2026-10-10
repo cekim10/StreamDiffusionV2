@@ -325,9 +325,20 @@ def fig3(out: Path):
     """Frames after migration (last frame of chunk M+k), three rows x five time points, PSNR to the uninterrupted
     frame in each corner. Row and column labels at the Fig. 2b axis-label size; prompt underneath in italics."""
     from matplotlib.patches import FancyBboxPatch  # noqa: F401
-    rows = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("Ephemeral +\nin-flight lost", "xfer_sink+meta")]
+    # Preferred source: one dedicated run in which the bottom row drops ONLY the ephemeral state (recent KV + VAE caches)
+    # and keeps the in-flight rows (config xfer_sink+meta+inflight). Until that run exists, fall back to the mechanism
+    # run, whose bottom row (xfer_sink+meta) also loses the in-flight rows and is labelled accordingly.
+    new_dir = ROOT / "results/state_migration/fig3_frames/videos"
+    if (new_dir / "xfer_sink+meta+inflight.mp4").exists():
+        vid_dir = new_dir
+        rows = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("No recent KV +\nVAE caches", "xfer_sink+meta+inflight")]
+    else:
+        vid_dir = mq.VID
+        rows = [("Uninterrupted", "baseline"), ("No Sink KV", "ph_localrefresh"), ("Ephemeral +\nin-flight lost", "xfer_sink+meta")]
+        print("  fig3: results/state_migration/fig3_frames not found; using the mechanism run (bottom row = ephemeral + in-flight lost)")
     chunks = [0, 2, 8, 16, 32]
-    vids = {name: mq.load(name) for _, name in rows}
+    import imageio.v3 as _iio
+    vids = {name: _iio.imread(vid_dir / f"{name}.mp4", plugin="pyav") for _, name in rows}
     base = vids["baseline"]
     W, H = FIG3_SIZE
     top, bottom, gap = 0.50, 0.50, 0.07          # inches: column labels above, prompt below, gap between frames
