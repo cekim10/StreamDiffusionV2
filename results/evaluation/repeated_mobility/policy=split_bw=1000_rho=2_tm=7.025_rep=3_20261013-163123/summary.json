@@ -1,0 +1,264 @@
+{
+ "run_id": "policy=split_bw=1000_rho=2_tm=7.025_rep=3_20261013-163123",
+ "policy": "split",
+ "policy_label": "Reuse, fixed routing (holders forward; source sends the rest)",
+ "bw_mbps": 1000.0,
+ "tm_s": 7.025,
+ "rho": 2.0,
+ "rep": 3,
+ "path": [
+  "A",
+  "B",
+  "C",
+  "D"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "sink_bytes": 1725236640,
+ "n_frags": 412,
+ "frag_bytes": 4194304,
+ "sink_version": "ae58e37e00bb71e2",
+ "t_final_move_rel_s": 14.373374223709106,
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0002486705780029297,
+   "t_stop": 0.002501249313354492,
+   "t_fg_sent": 0.0474245548248291,
+   "call": 30,
+   "fg_bytes": 2799408
+  },
+  {
+   "i": 2,
+   "from": "B",
+   "to": "C",
+   "t_req": 7.060499906539917,
+   "t_stop": 7.58367657661438,
+   "t_fg_sent": 7.6445701122283936,
+   "call": 43,
+   "fg_bytes": 2799408
+  },
+  {
+   "i": 3,
+   "from": "C",
+   "to": "D",
+   "t_req": 14.063305139541626,
+   "t_stop": 14.169756174087524,
+   "t_fg_sent": 14.270942449569702,
+   "call": 54,
+   "fg_bytes": 2799408
+  }
+ ],
+ "transfer_start_rel_s": 0.19458937644958496,
+ "final": {
+  "sink_complete_rel_s": 28.289270639419556,
+  "sink_verified_rel_s": 28.37680172920227,
+  "sink_bind_rel_s": 29.046303033828735,
+  "first_output_rel_s": 14.91392731666565,
+  "first_bound_output_rel_s": 29.646018743515015,
+  "rejoin_rel_s": 33.86045241355896,
+  "bind_call": 79
+ },
+ "latency_after_final_move_s": {
+  "first_output": 0.540553092956543,
+  "sink_received": 13.91589641571045,
+  "sink_verified": 14.003427505493164,
+  "sink_bind": 14.672928810119629,
+  "continuity_ready": 15.272644519805908,
+  "rejoin": 19.487078189849854
+ },
+ "bytes": {
+  "total_sent": 3474261408,
+  "total_received": 3474261408,
+  "useful": 3356820896,
+  "wasted_delivered": 117440512,
+  "wasted_in_transit": 0,
+  "wasted": 117440512,
+  "duplicate": 0,
+  "by_link": {
+   "A->B": 922746880,
+   "B->C": 411041792,
+   "A->C": 415236096,
+   "C->D": 788529152,
+   "B->D": 448790528,
+   "A->D": 487916960
+  },
+  "by_src": {
+   "A": 1825899936,
+   "B": 859832320,
+   "C": 788529152,
+   "D": 0
+  },
+  "reused_from_non_source": 1648361472
+ },
+ "normalized": {
+  "total_traffic": 2.0137883276116835,
+  "waste": 0.0680721179211682,
+  "useful": 1.9457162096905152,
+  "duplicate": 0.0
+ },
+ "throughput_mbps": {
+  "by_link": {
+   "A->B": 986.5864394160138,
+   "B->C": 495.0966538858552,
+   "A->C": 498.413981936254,
+   "C->D": 452.94497948516016,
+   "B->D": 331.09437667922924,
+   "A->D": 340.2651023063588
+  },
+  "ingress_peak_by_node": {
+   "B": 1006.63296,
+   "C": 1006.63296,
+   "D": 1051.20896
+  },
+  "egress_peak_by_node": {
+   "A": 1006.63296,
+   "B": 503.31648,
+   "C": 1006.63296
+  }
+ },
+ "continuity": {
+  "psnr_after_rejoin_mean": 40.80709119732703,
+  "psnr_after_bind_8_mean": 41.31896885558681,
+  "psnr_after_bind_8_min": 36.759524715073155,
+  "ssim_after_bind_8_mean": 0.9910939715125344,
+  "psnr_gap_mean": 16.528863042176898,
+  "rejoin_calls_after_bind": 7,
+  "lag_hops_mean": 1.6176470588235294,
+  "lag_hops_max": 3,
+  "missing_chunks": 0,
+  "n_chunks": 68
+ },
+ "held_at_end": {
+  "A": 412,
+  "B": 220,
+  "C": 197,
+  "D": 412
+ },
+ "physically_held_at_end": {
+  "A": 412,
+  "B": 220,
+  "C": 197,
+  "D": 412
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1791934349.6184363,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A418",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 20133.02783203125,
+   "t_recv_start": 1791934349.6188562,
+   "t_recv": 1791934349.6188583
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1791934350.2444448,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B2338",
+   "ok": true,
+   "have": 220,
+   "n_frags": 412,
+   "sink_verified": null,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 26390.71044921875,
+   "t_recv_start": 1791934350.245363,
+   "t_recv": 1791934350.245365
+  },
+  "C": {
+   "kind": "REPLY",
+   "t_send": 1791934350.8842254,
+   "label": "C",
+   "host": "elves-03",
+   "cmd_id": "C2369",
+   "ok": true,
+   "have": 197,
+   "n_frags": 412,
+   "sink_verified": null,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 26390.71044921875,
+   "t_recv_start": 1791934350.8852227,
+   "t_recv": 1791934350.8852248
+  },
+  "D": {
+   "kind": "REPLY",
+   "t_send": 1791934351.427016,
+   "label": "D",
+   "host": "elves-04",
+   "cmd_id": "D256",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 79,
+   "rejoin_call": 86,
+   "gpu_mem_alloc_mb": 26389.20166015625,
+   "t_recv_start": 1791934351.4275424,
+   "t_recv": 1791934351.4275446
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1791934301.5262773,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A409",
+  "ok": true,
+  "t_prepared": 1791934301.5008209,
+  "t_recv_start": 1791934301.5284472,
+  "t_recv": 1791934301.528449
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "owner_sequence": [
+   "A",
+   "B",
+   "C",
+   "D"
+  ],
+  "ownership_changed": true,
+  "single_owner": true,
+  "restart_discarded_progress": null,
+  "relay_path_only_chain_links": null,
+  "relay_pipe_forwarded_before_complete": null,
+  "ours_reused_fragments": true,
+  "oracle_direct_only": null,
+  "all_fragments_verified": true,
+  "sink_version_consistent": true,
+  "final_sink_digest_matches_source": true,
+  "ingress_peak_mbps_max": 1051.20896,
+  "ingress_within_physical_cap": true,
+  "ingress_within_emulated_cap": true,
+  "nic_rx_peak_mbps_by_node": {
+   "A": 0.9,
+   "B": 1038.8,
+   "C": 1039.0,
+   "D": 1045.3
+  },
+  "nic_tx_peak_mbps_by_node": {
+   "A": 1036.2,
+   "B": 523.2,
+   "C": 1033.3,
+   "D": 1.5
+  },
+  "nic_ingress_within_emulated_cap": true,
+  "continuity_comparable_to_phase1": true,
+  "stop_reason": "rejoin+tail"
+ }
+}

@@ -1,0 +1,264 @@
+{
+ "run_id": "policy=split_bw=1000_rho=8_tm=1.75625_rep=1_20261013-153728",
+ "policy": "split",
+ "policy_label": "Reuse, fixed routing (holders forward; source sends the rest)",
+ "bw_mbps": 1000.0,
+ "tm_s": 1.75625,
+ "rho": 8.0,
+ "rep": 1,
+ "path": [
+  "A",
+  "B",
+  "C",
+  "D"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "sink_bytes": 1725236640,
+ "n_frags": 412,
+ "frag_bytes": 4194304,
+ "sink_version": "ae58e37e00bb71e2",
+ "t_final_move_rel_s": 3.896914482116699,
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.00014734268188476562,
+   "t_stop": 0.0022857189178466797,
+   "t_fg_sent": 0.04317498207092285,
+   "call": 30,
+   "fg_bytes": 2799408
+  },
+  {
+   "i": 2,
+   "from": "B",
+   "to": "C",
+   "t_req": 1.7953743934631348,
+   "t_stop": 1.8225429058074951,
+   "t_fg_sent": 1.8719875812530518,
+   "call": 33,
+   "fg_bytes": 2799408
+  },
+  {
+   "i": 3,
+   "from": "C",
+   "to": "D",
+   "t_req": 3.5472912788391113,
+   "t_stop": 3.6817519664764404,
+   "t_fg_sent": 3.7733728885650635,
+   "call": 36,
+   "fg_bytes": 2799408
+  }
+ ],
+ "transfer_start_rel_s": 0.19171452522277832,
+ "final": {
+  "sink_complete_rel_s": 17.838536024093628,
+  "sink_verified_rel_s": 17.985559701919556,
+  "sink_bind_rel_s": 18.594311475753784,
+  "first_output_rel_s": 4.417176008224487,
+  "first_bound_output_rel_s": 19.191710233688354,
+  "rejoin_rel_s": 23.402011156082153,
+  "bind_call": 61
+ },
+ "latency_after_final_move_s": {
+  "first_output": 0.5202615261077881,
+  "sink_received": 13.941621541976929,
+  "sink_verified": 14.088645219802856,
+  "sink_bind": 14.697396993637085,
+  "continuity_ready": 15.294795751571655,
+  "rejoin": 19.505096673965454
+ },
+ "bytes": {
+  "total_sent": 2182415776,
+  "total_received": 2182415776,
+  "useful": 2123695520,
+  "wasted_delivered": 58720256,
+  "wasted_in_transit": 0,
+  "wasted": 58720256,
+  "duplicate": 0,
+  "by_link": {
+   "A->B": 209715200,
+   "B->C": 121634816,
+   "A->C": 125829120,
+   "C->D": 201326592,
+   "B->D": 96468992,
+   "A->D": 1427441056
+  },
+  "by_src": {
+   "A": 1762985376,
+   "B": 218103808,
+   "C": 201326592,
+   "D": 0
+  },
+  "reused_from_non_source": 419430400
+ },
+ "normalized": {
+  "total_traffic": 1.2649950304788333,
+  "waste": 0.0340360589605841,
+  "useful": 1.2309589715182492,
+  "duplicate": 0.0
+ },
+ "throughput_mbps": {
+  "by_link": {
+   "A->B": 992.2480618973046,
+   "B->C": 498.8617061021967,
+   "A->C": 507.4175051058539,
+   "C->D": 402.16901488858605,
+   "B->D": 334.15100624009193,
+   "A->D": 819.0504961239054
+  },
+  "ingress_peak_by_node": {
+   "B": 872.415232,
+   "C": 1006.63296,
+   "D": 1006.63296
+  },
+  "egress_peak_by_node": {
+   "A": 1006.63296,
+   "B": 503.31648,
+   "C": 469.762048
+  }
+ },
+ "continuity": {
+  "psnr_after_rejoin_mean": 41.16515859806894,
+  "psnr_after_bind_8_mean": 41.49193177779867,
+  "psnr_after_bind_8_min": 39.30002602688025,
+  "ssim_after_bind_8_mean": 0.9900995393594106,
+  "psnr_gap_mean": 16.464538141559004,
+  "rejoin_calls_after_bind": 7,
+  "lag_hops_mean": 1.6470588235294117,
+  "lag_hops_max": 3,
+  "missing_chunks": 0,
+  "n_chunks": 51
+ },
+ "held_at_end": {
+  "A": 412,
+  "B": 50,
+  "C": 59,
+  "D": 412
+ },
+ "physically_held_at_end": {
+  "A": 412,
+  "B": 50,
+  "C": 59,
+  "D": 412
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1791931105.307736,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A160",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 20133.02783203125,
+   "t_recv_start": 1791931105.3081625,
+   "t_recv": 1791931105.3081646
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1791931105.8889709,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B1020",
+   "ok": true,
+   "have": 50,
+   "n_frags": 412,
+   "sink_verified": null,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 26390.71044921875,
+   "t_recv_start": 1791931105.8891442,
+   "t_recv": 1791931105.889146
+  },
+  "C": {
+   "kind": "REPLY",
+   "t_send": 1791931106.5220828,
+   "label": "C",
+   "host": "elves-03",
+   "cmd_id": "C1030",
+   "ok": true,
+   "have": 59,
+   "n_frags": 412,
+   "sink_verified": null,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 26390.71044921875,
+   "t_recv_start": 1791931106.5227463,
+   "t_recv": 1791931106.5227485
+  },
+  "D": {
+   "kind": "REPLY",
+   "t_send": 1791931107.1155732,
+   "label": "D",
+   "host": "elves-04",
+   "cmd_id": "D96",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 61,
+   "rejoin_call": 68,
+   "gpu_mem_alloc_mb": 26389.20166015625,
+   "t_recv_start": 1791931107.115461,
+   "t_recv": 1791931107.1154633
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1791931067.1003392,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A150",
+  "ok": true,
+  "t_prepared": 1791931066.9665902,
+  "t_recv_start": 1791931067.1022408,
+  "t_recv": 1791931067.1022425
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "owner_sequence": [
+   "A",
+   "B",
+   "C",
+   "D"
+  ],
+  "ownership_changed": true,
+  "single_owner": true,
+  "restart_discarded_progress": null,
+  "relay_path_only_chain_links": null,
+  "relay_pipe_forwarded_before_complete": null,
+  "ours_reused_fragments": true,
+  "oracle_direct_only": null,
+  "all_fragments_verified": true,
+  "sink_version_consistent": true,
+  "final_sink_digest_matches_source": true,
+  "ingress_peak_mbps_max": 1006.63296,
+  "ingress_within_physical_cap": true,
+  "ingress_within_emulated_cap": true,
+  "nic_rx_peak_mbps_by_node": {
+   "A": 1.5,
+   "B": 1027.5,
+   "C": 1033.6,
+   "D": 1046.7
+  },
+  "nic_tx_peak_mbps_by_node": {
+   "A": 1039.4,
+   "B": 514.9,
+   "C": 511.1,
+   "D": 2.3
+  },
+  "nic_ingress_within_emulated_cap": true,
+  "continuity_comparable_to_phase1": true,
+  "stop_reason": "rejoin+tail"
+ }
+}

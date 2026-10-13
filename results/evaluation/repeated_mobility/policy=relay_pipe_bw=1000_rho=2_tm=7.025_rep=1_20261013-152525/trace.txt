@@ -1,0 +1,18 @@
+[orch] === run policy=relay_pipe_bw=1000_rho=2_tm=7.025_rep=1_20261013-152525: Pipelined Relay, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (migration start)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments (chain starts)
+[orch] t=   7.14s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->B (210 left, 1000 Mbps), B->C (202 left, 1000 Mbps)
+        next   B->C pipelined (202 held now, more as they arrive)
+[orch] t=  14.31s move C->D (final move)
+        held   A: 100.0%, B:  98.8%, C:  49.3%, D:   0.0%
+        active A->B (4 left, 1000 Mbps), B->C (204 left, 1000 Mbps), C->D (203 left, 1000 Mbps)
+        next   C->D pipelined (203 held now, more as they arrive)
+[orch] t=  45.95s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Pipelined Relay @ 1000.0 Mbps rho 2.0: after final move: first output 0.64 s, Sink received 14.0 s, bound 14.23 s, continuity-ready 14.84 s, rejoin 20.26 s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 40.8 dB | ingress peak 1007 Mbps

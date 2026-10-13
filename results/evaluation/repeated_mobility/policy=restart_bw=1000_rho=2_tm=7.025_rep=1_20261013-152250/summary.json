@@ -1,0 +1,256 @@
+{
+ "run_id": "policy=restart_bw=1000_rho=2_tm=7.025_rep=1_20261013-152250",
+ "policy": "restart",
+ "policy_label": "Restart",
+ "bw_mbps": 1000.0,
+ "tm_s": 7.025,
+ "rho": 2.0,
+ "rep": 1,
+ "path": [
+  "A",
+  "B",
+  "C",
+  "D"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "sink_bytes": 1725236640,
+ "n_frags": 412,
+ "frag_bytes": 4194304,
+ "sink_version": "ae58e37e00bb71e2",
+ "t_final_move_rel_s": 14.337387561798096,
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0001773834228515625,
+   "t_stop": 0.002687692642211914,
+   "t_fg_sent": 0.04489254951477051,
+   "call": 30,
+   "fg_bytes": 2799408
+  },
+  {
+   "i": 2,
+   "from": "B",
+   "to": "C",
+   "t_req": 7.043224096298218,
+   "t_stop": 7.05377984046936,
+   "t_fg_sent": 7.112238168716431,
+   "call": 42,
+   "fg_bytes": 2799408
+  },
+  {
+   "i": 3,
+   "from": "C",
+   "to": "D",
+   "t_req": 14.055928707122803,
+   "t_stop": 14.190991163253784,
+   "t_fg_sent": 14.295052289962769,
+   "call": 54,
+   "fg_bytes": 2799408
+  }
+ ],
+ "transfer_start_rel_s": 0.22186970710754395,
+ "final": {
+  "sink_complete_rel_s": 28.32416605949402,
+  "sink_verified_rel_s": 28.409164667129517,
+  "sink_bind_rel_s": 28.580084085464478,
+  "first_output_rel_s": 14.934787034988403,
+  "first_bound_output_rel_s": 29.180678129196167,
+  "rejoin_rel_s": 34.60164713859558,
+  "bind_call": 78
+ },
+ "latency_after_final_move_s": {
+  "first_output": 0.5973994731903076,
+  "sink_received": 13.986778497695923,
+  "sink_verified": 14.071777105331421,
+  "sink_bind": 14.242696523666382,
+  "continuity_ready": 14.843290567398071,
+  "rejoin": 20.264259576797485
+ },
+ "bytes": {
+  "total_sent": 3465872800,
+  "total_received": 3465872800,
+  "useful": 1725236640,
+  "wasted_delivered": 1740636160,
+  "wasted_in_transit": 0,
+  "wasted": 1740636160,
+  "duplicate": 0,
+  "by_link": {
+   "A->B": 851443712,
+   "A->C": 889192448,
+   "A->D": 1725236640
+  },
+  "by_src": {
+   "A": 3465872800,
+   "B": 0,
+   "C": 0,
+   "D": 0
+  },
+  "reused_from_non_source": 0
+ },
+ "normalized": {
+  "total_traffic": 2.008926033474457,
+  "waste": 1.0089260334744572,
+  "useful": 1.0,
+  "duplicate": 0.0
+ },
+ "throughput_mbps": {
+  "by_link": {
+   "A->B": 986.7192573265455,
+   "A->C": 988.3730551140931,
+   "A->D": 986.8597245016826
+  },
+  "ingress_peak_by_node": {
+   "B": 1006.63296,
+   "C": 1006.63296,
+   "D": 1006.63296
+  },
+  "egress_peak_by_node": {
+   "A": 1006.63296
+  }
+ },
+ "continuity": {
+  "psnr_after_rejoin_mean": 41.42261585042626,
+  "psnr_after_bind_8_mean": 40.960548444167856,
+  "psnr_after_bind_8_min": 34.95367216280866,
+  "ssim_after_bind_8_mean": 0.9912436136177608,
+  "psnr_gap_mean": 16.53797562128535,
+  "rejoin_calls_after_bind": 9,
+  "lag_hops_mean": 1.542857142857143,
+  "lag_hops_max": 3,
+  "missing_chunks": 0,
+  "n_chunks": 70
+ },
+ "held_at_end": {
+  "A": 412,
+  "B": 3,
+  "C": 9,
+  "D": 412
+ },
+ "physically_held_at_end": {
+  "A": 412,
+  "B": 203,
+  "C": 212,
+  "D": 412
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1791930239.2513444,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A67",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 20133.02783203125,
+   "t_recv_start": 1791930239.2517886,
+   "t_recv": 1791930239.2517903
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1791930239.834931,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B57",
+   "ok": true,
+   "have": 203,
+   "n_frags": 412,
+   "sink_verified": null,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 26390.71044921875,
+   "t_recv_start": 1791930239.8362117,
+   "t_recv": 1791930239.8362145
+  },
+  "C": {
+   "kind": "REPLY",
+   "t_send": 1791930240.480505,
+   "label": "C",
+   "host": "elves-03",
+   "cmd_id": "C70",
+   "ok": true,
+   "have": 212,
+   "n_frags": 412,
+   "sink_verified": null,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 26390.71044921875,
+   "t_recv_start": 1791930240.4810517,
+   "t_recv": 1791930240.481054
+  },
+  "D": {
+   "kind": "REPLY",
+   "t_send": 1791930241.0266595,
+   "label": "D",
+   "host": "elves-04",
+   "cmd_id": "D44",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 78,
+   "rejoin_call": 87,
+   "gpu_mem_alloc_mb": 26389.20166015625,
+   "t_recv_start": 1791930241.0269735,
+   "t_recv": 1791930241.0269754
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1791930189.7778735,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A60",
+  "ok": true,
+  "t_prepared": 1791930189.621679,
+  "t_recv_start": 1791930189.7793198,
+  "t_recv": 1791930189.7793214
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "owner_sequence": [
+   "A",
+   "B",
+   "C",
+   "D"
+  ],
+  "ownership_changed": true,
+  "single_owner": true,
+  "restart_discarded_progress": true,
+  "relay_path_only_chain_links": null,
+  "relay_pipe_forwarded_before_complete": null,
+  "ours_reused_fragments": null,
+  "oracle_direct_only": null,
+  "all_fragments_verified": true,
+  "sink_version_consistent": true,
+  "final_sink_digest_matches_source": true,
+  "ingress_peak_mbps_max": 1006.63296,
+  "ingress_within_physical_cap": true,
+  "ingress_within_emulated_cap": true,
+  "nic_rx_peak_mbps_by_node": {
+   "A": 2.0,
+   "B": 1038.6,
+   "C": 1040.6,
+   "D": 1039.7
+  },
+  "nic_tx_peak_mbps_by_node": {
+   "A": 1039.7,
+   "B": 23.3,
+   "C": 23.2,
+   "D": 1.9
+  },
+  "nic_ingress_within_emulated_cap": true,
+  "continuity_comparable_to_phase1": true,
+  "stop_reason": "rejoin+tail"
+ }
+}

@@ -1,0 +1,16 @@
+[orch] === run policy=direct_bw=1000_rho=0.5_tm=28.1_rep=1_20261013-151425: Oracle Direct, bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (migration start)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   A->D all 412 fragments (oracle knows the final owner)
+[orch] t=  28.65s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+[orch] t=  56.77s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+[orch] t=  75.24s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Oracle Direct @ 1000.0 Mbps rho 0.5: after final move: first output 0.67 s, Sink received -42.6 s, bound 0.03 s, continuity-ready 0.67 s, rejoin 6.61 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 38.0 dB | ingress peak 1007 Mbps

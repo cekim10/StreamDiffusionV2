@@ -1,0 +1,18 @@
+[orch] === run policy=relay_bw=1000_rho=0.5_tm=28.1_rep=2_20261013-154114: Relay, bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (migration start)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments (chain starts)
+[orch] t=  28.65s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C store-and-forward of the whole Sink
+[orch] t=  56.56s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D store-and-forward of the whole Sink
+[orch] t=  87.87s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Relay @ 1000.0 Mbps rho 0.5: after final move: first output 0.63 s, Sink received 13.99 s, bound 14.72 s, continuity-ready 15.32 s, rejoin 19.5 s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 40.9 dB | ingress peak 1007 Mbps
