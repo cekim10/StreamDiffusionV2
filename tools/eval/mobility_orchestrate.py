@@ -46,7 +46,7 @@ from proto_handoff import MB, recv_msg, send_msg  # noqa: E402
 
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
-POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Ours (Progress-Aware Continuity Routing)", "direct": "Oracle Direct"}
+POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct"}
 REJOIN_DB = 35.0
 
 
