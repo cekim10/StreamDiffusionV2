@@ -412,6 +412,11 @@ class Orch:
     def launch(self):
         agents = connect_all(parse_hosts(self.a.agent_hosts), ["A"] + EDGES)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        for lb in ["A"] + EDGES:   # stop restore nodes left over from an interrupted run (they hold the ports)
+            r = agents[lb].exec(["pkill", "-f", "tools/eval/restore_node.py"])
+            if r.get("rc") == 0:
+                print(f"[orch] stopped a leftover restore node on {lb}", flush=True)
+        time.sleep(1.0)
         for lb in ["A"] + EDGES:
             nd = self.node_spec[lb]
             cmd = [self.a.py, "tools/eval/restore_node.py", "--label", lb, "--ctl_port", str(nd["ctl"]), "--data_port", str(nd["data"]), "--mss", str(self.a.mss or 0)]
@@ -455,6 +460,7 @@ def main():
     p.add_argument("--mss", type=int, default=DEFAULT_MSS)
     p.add_argument("--iface", default=None)
     p.add_argument("--launch", action="store_true")
+    p.add_argument("--no_resume", action="store_true", help="re-run configurations that already have a completed run directory")
     p.add_argument("--agent_hosts", default=None)
     p.add_argument("--py", default="auto")
     a = p.parse_args()
@@ -465,11 +471,16 @@ def main():
     o.connect()
     out = []
     try:
+        root = EVAL_ROOT / a.experiment
         for rep in range(1, a.reps + 1):
             for moves in [int(x) for x in a.moves.split(",")]:
                 for rho in [float(x) for x in a.rhos.split(",")]:
                     for n in [int(x) for x in a.sessions.split(",")]:
                         for pol in a.policies.split(","):
+                            mtag = "cont" if moves == 0 else str(moves)
+                            done = [d for d in root.glob(f"policy={pol}_N={n}_moves={mtag}_rho={rho:g}_rep={rep}_*") if (d / "summary.json").exists()]
+                            if done and not a.no_resume:
+                                print(f"[orch] skip (done): {done[0].name}", flush=True); continue
                             out.append(Run(o, pol, n, moves, rho, rep).execute())
     finally:
         o.shutdown()
