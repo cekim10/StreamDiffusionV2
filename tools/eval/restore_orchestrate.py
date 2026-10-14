@@ -97,6 +97,7 @@ class Run:
         self.history = {sid: [self.owner[sid]] for sid in self.sids}   # owners in order
         self.held = {sid: {e: set() for e in ["A"] + EDGES} for sid in self.sids}
         self.inflight = {sid: defaultdict(set) for sid in self.sids}  # dst -> fids sent, not yet received
+        self.skipped = {sid: set() for sid in self.sids}               # fragments a holder was asked for before it had them
         self.flows: dict[str, dict] = {}
         self.nflow = 0
         self.restored: dict[str, list] = defaultdict(list)            # sid -> [(t, edge)] restorations while owner
@@ -117,7 +118,7 @@ class Run:
         return len(self.lens)
 
     def realloc(self):
-        act = [(f["id"], f["src"], f["dst"]) for f in self.flows.values() if f["active"]]
+        act = [(f["id"], f["src"], f["dst"]) for f in self.flows.values() if f["active"] or f.get("draining")]
         rates = maxmin(act, self.caps)
         for fid, _, _ in act:
             fl = self.flows[fid]
@@ -127,7 +128,7 @@ class Run:
                     self.node(fl["src"]).cast("FLOW_SET_RATE", flow_id=fid, rate_bps=rates[fid])
         return rates
 
-    def start_flow(self, sid, src, dst, fids, reason):
+    def start_flow(self, sid, src, dst, fids, reason, keep_order=False):
         if not fids:
             return
         self.nflow += 1
@@ -137,7 +138,9 @@ class Run:
         self.flows[fid_] = fl
         self.realloc()
         nd = self.o.node_spec[dst]
-        self.node(src).cast("FLOW_START", flow_id=fid_, session=sid, dst=dst, dst_host=nd["host"], dst_port=nd["data"], frag_ids=sorted(fids), rate_bps=fl["rate"])
+        self.node(src).cast("FLOW_START", flow_id=fid_, session=sid, dst=dst, dst_host=nd["host"], dst_port=nd["data"],
+                            frag_ids=list(fids) if keep_order else sorted(fids), rate_bps=fl["rate"])
+        fl["order"] = list(fids) if keep_order else sorted(fids)
         fl["started"] = True
         self.ev.log("flow_start", flow=fid_, session=sid, src=src, dst=dst, n=len(fids), rate_bps=fl["rate"], reason=reason)
 
@@ -145,6 +148,7 @@ class Run:
         for fl in list(self.flows.values()):
             if fl["active"] and fl["sid"] == sid and fl["dst"] != keep_dst:
                 fl["active"] = False; fl["cancelled"] = True; fl["t_end"] = time.time()
+                fl["draining"] = True   # its in-flight fragment still uses bandwidth until the sender reports FLOW_DONE
                 self.node(fl["src"]).cast("FLOW_CANCEL", flow_id=fl["id"])
                 self.ev.log("flow_cancel", flow=fl["id"], session=sid, left=len(fl["left"]))
         self.realloc()
@@ -175,13 +179,25 @@ class Run:
             return
         holders = [e for e in reversed(self.history[sid][:-1]) if e != own]
         holders = list(dict.fromkeys(holders))  # newest first, unique
+        # fragments already on their way to a holder (sent, or the one a draining flow is finishing) will be held
+        # there shortly: let that holder forward them (queued last) instead of asking the source to send them again
+        soon = {h: set(self.inflight[sid][h]) for h in holders}
+        for fl in self.flows.values():
+            if fl.get("draining") and fl["sid"] == sid and fl["dst"] in soon and fl["left"]:
+                soon[fl["dst"]].add(next(f for f in fl["order"] if f in fl["left"]))
         assign = defaultdict(list)
+        late = defaultdict(list)
         if self.policy == "reuse_fixed":
             for f in sorted(missing):
-                src = next((h for h in holders if f in self.held[sid][h]), "A")
+                src = next((h for h in holders if f in self.held[sid][h]), None)
+                if src is None:
+                    src = next((h for h in holders if f in soon[h]), None) if f not in self.skipped[sid] else None
+                    if src is not None:
+                        late[src].append(f); continue
+                    src = "A"
                 assign[src].append(f)
         else:  # reuse_adaptive: earliest estimated finish per fragment, given current queues and max-min rates
-            act = [(fl["id"], fl["src"], fl["dst"]) for fl in self.flows.values() if fl["active"]]
+            act = [(fl["id"], fl["src"], fl["dst"]) for fl in self.flows.values() if fl["active"] or fl.get("draining")]
             cand = holders + ["A"]
             # estimated rate of a new flow provider -> own if it were added now
             est = {}
@@ -190,11 +206,16 @@ class Run:
                 est[c] = max(1.0, maxmin(probe, self.caps)["__probe__"])
             load = {c: 0 for c in cand}
             for f in sorted(missing):
+                inbound = next((h for h in holders if f in soon[h] and f not in self.held[sid][h]), None) if f not in self.skipped[sid] else None
+                if inbound is not None and not any(f in self.held[sid][h] for h in holders):
+                    late[inbound].append(f); continue
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
                 best = min(opts, key=lambda c: ((load[c] + 1) * self.flen * 8 / est[c], c == "A"))  # ties: prefer a holder
                 assign[best].append(f); load[best] += 1
-        for src, ids in assign.items():
-            self.start_flow(sid, src, own, ids, f"{self.policy}: {'reuse fragments held at ' + src if src != 'A' else 'source sends the rest'}")
+        for src in set(assign) | set(late):
+            ids = assign.get(src, []) + late.get(src, [])   # in-flight fragments last: they arrive while the rest is sent
+            self.start_flow(sid, src, own, ids, f"{self.policy}: {'reuse fragments held at ' + src if src != 'A' else 'source sends the rest'}",
+                            keep_order=True)
 
     # ---------------- events
     def handle(self, m):
@@ -211,8 +232,9 @@ class Run:
                     fl["left"].discard(m["fragment_id"]); fl["bytes"] += m["bytes"]
             elif k == "FRAG_SKIP":
                 fl = self.flows.get(m["flow_id"])
+                self.skipped[m["session"]].add(m["fragment_id"])
                 if fl:
-                    fl["left"].discard(m["fragment_id"])
+                    fl["left"].discard(m["fragment_id"]); fl["n_skipped"] = fl.get("n_skipped", 0) + 1
             elif k == "FRAG_RECV":
                 sid, f, dst = m["session"], m["fragment_id"], m["label"]
                 t = nc.to_orch(m["t_end"])
@@ -220,17 +242,21 @@ class Run:
                 self.inflight[sid][dst].discard(f)
                 if m["ok"]:
                     self.held[sid][dst].add(f)
+                    self.skipped[sid].discard(f)   # it has landed: holders may forward it again
                     if dst == self.owner[sid] and len(self.held[sid][dst]) == self.nfr() and not self.restored_now[sid]:
                         self.restored_now[sid] = True
                         self.restored[sid].append((t, dst))
                         self.ev.log("restored", t, session=sid, edge=dst)
             elif k == "FLOW_DONE":
                 fl = self.flows.get(m["flow_id"])
+                if fl and fl.get("draining"):
+                    fl["draining"] = False; fl["t_drained"] = nc.to_orch(m["t"])
+                    self.realloc()
                 if fl and fl["active"]:
                     fl["active"] = False; fl["t_end"] = nc.to_orch(m["t"])
                     self.realloc()
-                    if fl["left"] and not m.get("cancelled"):
-                        self.plan(fl["sid"], "flow_done")   # fragments the provider did not hold: re-plan the rest
+                    if (fl["left"] or fl.get("n_skipped")) and not m.get("cancelled"):
+                        self.plan(fl["sid"], "flow_done")   # fragments the provider did not hold: re-plan them
             elif k == "SINK_COMPLETE":
                 self.ev.log("sink_complete", nc.to_orch(m["t"]), session=m["session"], node=m["label"], digest_ok=m["digest_ok"])
             elif k == "EVENT":
@@ -380,20 +406,26 @@ class Run:
             "coverage_mean": st.mean(r["coverage"] for r in per),
             "bytes": {"total_sent": tot, "source_sent": src, "by_link": dict(link), "unused": unused, "duplicate": dup},
             "normalized": {"total_per_session": tot / S / self.N, "source_per_session": src / S / self.N, "unused_per_session": unused / S / self.N},
+            "node_stats": {lb: e.get("stats") for lb, e in ends.items()},
+            "paced_egress_worst_1s_mbps": {lb: e.get("egress_worst_1s_mbps") for lb, e in ends.items()},
+            "paced_egress_worst_10s_mbps": {lb: e.get("egress_worst_10s_mbps") for lb, e in ends.items()},
             "nic": nic_rx, "hosts": {lb: self.node(lb).hello.get("host") for lb in ["A"] + EDGES},
             "validation": {"all_fragments_verified": all(ok for *_, ok, dup in self.recv),
                            "four_hosts_distinct": len({self.node(lb).hello.get("host") for lb in ["A"] + EDGES}) == 4,
                            "nic_within_cap": all(v["rx_peak"] is None or v["rx_peak"] <= 1.15 * self.caps[("in", lb)] / 1e6 for lb, v in nic_rx.items()),
-                           "source_nic_within_cap": nic_rx["A"]["tx_peak"] is None or nic_rx["A"]["tx_peak"] <= 1.15 * self.caps[("out", "A")] / 1e6},
+                           "source_nic_within_cap": nic_rx["A"]["tx_peak"] is None or nic_rx["A"]["tx_peak"] <= 1.15 * self.caps[("out", "A")] / 1e6,
+                           # paced payload per node within 1.05 x its egress cap in every 10 s window (exact count at the token bucket)
+                           "paced_egress_within_cap": all((e.get("egress_worst_10s_mbps") or 0) <= 1.05 * self.caps[("out", lb)] / 1e6 for lb, e in ends.items())},
         }
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
         (self.dir / "config.json").write_text(json.dumps({"args": vars(a), "policy": self.policy, "N": self.N, "moves": self.moves, "rho": self.rho, "tm_s": self.tm,
                                                           "nodes": self.o.node_spec, "transport": "tcp+tcp_maxseg+per-flow token bucket, max-min fair per-node caps"}, indent=1, default=str))
         with open(self.dir / "flows.csv", "w", newline="") as fh:
-            w = csv.writer(fh); w.writerow(["flow", "session", "src", "dst", "n", "bytes", "t_start_rel", "t_end_rel", "cancelled", "reason"])
+            w = csv.writer(fh); w.writerow(["flow", "session", "src", "dst", "n", "bytes", "t_start_rel", "t_end_rel", "cancelled", "drain_s", "reason"])
             for fl in self.flows.values():
                 w.writerow([fl["id"], fl["sid"], fl["src"], fl["dst"], fl["n"], fl["bytes"], f"{self.rel(fl['t_start']):.3f}",
-                            "" if fl["t_end"] is None else f"{self.rel(fl['t_end']):.3f}", fl["cancelled"], fl["reason"]])
+                            "" if fl["t_end"] is None else f"{self.rel(fl['t_end']):.3f}", fl["cancelled"],
+                            f"{fl['t_drained'] - fl['t_end']:.3f}" if fl.get("t_drained") and fl["t_end"] else "", fl["reason"]])
         ms = summary["makespan_s"]
         print(f"[orch] {self.policy} N={self.N} moves={self.moves or 'cont'} rho={self.rho:g}: restored {len(fin)}/{self.N}, median first {summary['first_restored']['median'] and round(summary['first_restored']['median'], 1)} s, "
               f"makespan {ms and round(ms, 1)} s, coverage {summary['coverage_mean']:.2f}, source {src / S:.2f} S, total {tot / S:.2f} S, unused {unused / S:.2f} S | "
@@ -444,7 +476,7 @@ def main():
     p.add_argument("--nodes", default=None, help="A=host[:ctl[:data]],B=...,C=...,D=... (default elves-01..04)")
     p.add_argument("--ctl_port", type=int, default=29831)
     p.add_argument("--data_port", type=int, default=29832)
-    p.add_argument("--experiment", default="restore_contention")
+    p.add_argument("--experiment", default="restore_contention_v2")  # v1 (restore_contention) lost early rate updates; kept for reference
     p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive")
     p.add_argument("--sessions", default="1,2,4,8")
     p.add_argument("--moves", default="1,0", help="1 = one move then stay; 0 = continuous mobility until the horizon")

@@ -37,6 +37,22 @@ from common import DEFAULT_MSS, MSS_WARNINGS, CsvLog, ResourceSampler, Throttle,
 from proto_handoff import recv_exact, recv_msg, send_msg  # noqa: E402
 
 POOL = ThreadPoolExecutor(max_workers=16)
+
+
+class CountingThrottle(Throttle):
+    """Per-flow token bucket that starts empty (no initial burst) and counts every paced byte into the node's
+    0.25 s egress histogram, so the node's payload egress rate can be checked against its cap exactly."""
+
+    def __init__(self, bw_bps, hist, lock):
+        super().__init__(bw_bps)
+        self.tokens = 0.0
+        self.hist, self.hlock = hist, lock
+
+    def take(self, n):
+        super().take(n)
+        k = int(time.time() * 4)
+        with self.hlock:
+            self.hist[k] = self.hist.get(k, 0) + n
 MANIFEST_CACHE: dict = {}
 
 
@@ -60,6 +76,13 @@ class Node:
         self.ctl_lock = threading.Lock()
         self.sess: dict[str, dict] = {}       # sid -> {"lens", "hashes", "have": set, "complete_t"}
         self.flows: dict[str, dict] = {}
+        # Commands run in separate threads, so a rate update or cancel can arrive before its FLOW_START.
+        # Keep them and apply at start instead of dropping them (dropping let flows exceed their max-min share).
+        self.pending_rate: dict[str, float] = {}
+        self.pending_cancel: set = set()
+        self.stats = {"rate_before_start": 0, "cancel_before_start": 0}
+        self.egress_hist: dict[int, int] = {}
+        self.hist_lock = threading.Lock()
         self.run_dir = None
         self.frag_log = None
         self.sampler = None
@@ -102,6 +125,9 @@ class Node:
         for fl in list(self.flows.values()):
             fl["cancel"] = True
         self.flows, self.sess = {}, {}
+        self.pending_rate, self.pending_cancel = {}, set()
+        self.stats = {"rate_before_start": 0, "cancel_before_start": 0}
+        self.egress_hist = {}
         self.run_dir = REPO_ROOT / h["run_rel"] / f"node_{self.label}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.frag_log = CsvLog(self.run_dir / "fragments.csv", ["t", "event", "session", "fragment_id", "src", "dst", "bytes", "flow", "ok"])
@@ -139,30 +165,43 @@ class Node:
         return {}
 
     def cmd_flow_start(self, h):
+        with self.lock:
+            if h["flow_id"] in self.pending_cancel:
+                self.pending_cancel.discard(h["flow_id"])
+                self.send("FLOW_DONE", flow_id=h["flow_id"], session=h["session"], cancelled=True, sent=0, bytes=0, t=time.time())
+                return {"cancelled_before_start": True}
+            if h["flow_id"] in self.pending_rate:
+                h["rate_bps"] = self.pending_rate.pop(h["flow_id"])
         fl = {"id": h["flow_id"], "sid": h["session"], "dst": h["dst"], "host": h["dst_host"], "port": int(h["dst_port"]),
-              "queue": list(h["frag_ids"]), "cancel": False, "throttle": Throttle(float(h["rate_bps"])) if float(h["rate_bps"]) > 0 else None,
+              "queue": list(h["frag_ids"]), "cancel": False,
+              "throttle": CountingThrottle(float(h["rate_bps"]), self.egress_hist, self.hist_lock) if float(h["rate_bps"]) > 0 else None,
               "lock": threading.Lock(), "sent": 0, "bytes": 0}
-        self.flows[fl["id"]] = fl
+        with self.lock:
+            self.flows[fl["id"]] = fl
         fl["thread"] = threading.Thread(target=self._sender, args=(fl,), daemon=True)
         fl["thread"].start()
         return {}
 
     def cmd_flow_set_rate(self, h):
-        fl = self.flows.get(h["flow_id"])
-        if fl is None:
-            return {"missing": True}
+        with self.lock:
+            fl = self.flows.get(h["flow_id"])
+            if fl is None:
+                self.pending_rate[h["flow_id"]] = float(h["rate_bps"]); self.stats["rate_before_start"] += 1
+                return {"pending": True}
         rate = float(h["rate_bps"])
         with fl["lock"]:
             if fl["throttle"] is None:
-                fl["throttle"] = Throttle(rate) if rate > 0 else None
+                fl["throttle"] = CountingThrottle(rate, self.egress_hist, self.hist_lock) if rate > 0 else None
             else:
                 fl["throttle"].rate = rate / 8.0
         return {}
 
     def cmd_flow_cancel(self, h):
-        fl = self.flows.get(h["flow_id"])
-        if fl is None:
-            return {"missing": True}
+        with self.lock:
+            fl = self.flows.get(h["flow_id"])
+            if fl is None:
+                self.pending_cancel.add(h["flow_id"]); self.stats["cancel_before_start"] += 1
+                return {"pending": True}
         fl["cancel"] = True
         fl["thread"].join(timeout=30)
         return {"sent": fl["sent"], "bytes": fl["bytes"]}
@@ -179,7 +218,16 @@ class Node:
         net = (self.run_dir / "network.csv").read_text() if self.run_dir and (self.run_dir / "network.csv").exists() else ""
         held = {sid: len(s["have"]) for sid, s in self.sess.items()}
         self.sess, self.flows = {}, {}
-        return {"held": held, "network_csv": net}
+        hist = dict(self.egress_hist)
+        def worst(nbins):  # worst window of nbins x 0.25 s of paced payload egress, Mbps
+            if not hist:
+                return 0.0
+            ks = sorted(hist)
+            return max(sum(hist.get(k + i, 0) for i in range(nbins)) * 8 / 1e6 / (nbins / 4) for k in range(ks[0], ks[-1] + 1))
+        # Bytes are paced in 1 MiB chunks, so a 1 s window can over-count by about one chunk per active flow (8.4 Mbit);
+        # the 10 s window bounds that quantization error to under 1 Mbps per flow and is the one validated.
+        return {"held": held, "network_csv": net, "stats": dict(self.stats), "egress_worst_1s_mbps": worst(4), "egress_worst_10s_mbps": worst(40),
+                "egress_hist_qs": {str(k): v for k, v in hist.items()}}
 
     # ---------------- data plane
     def _sender(self, fl):

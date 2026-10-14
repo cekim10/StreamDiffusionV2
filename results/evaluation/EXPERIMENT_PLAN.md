@@ -122,3 +122,22 @@ Decision criteria (median of 3 reps; fixed now):
   coverage is higher by >= 0.05 (continuous), without being worse by the same margin at any other N.
 - A run is invalid if any fragment fails verification or a NIC peak exceeds 1.15 x its cap; invalid runs are listed,
   not dropped, and the condition is re-run.
+
+### Scenario B harness fixes before the reported run (2026-10-14; criteria unchanged)
+
+The first server run (`restore_contention/`, 72 runs, v1) is kept but not reported. Inspecting its NIC counters showed
+nodes up to ~8 % above their 1 Gbps cap at times, from three harness defects, all fixed and validated on loopback before
+the v2 run (`restore_contention_v2/`):
+1. Rate updates and cancels that reached a node before the flow's start command were dropped (commands run in separate
+   threads); they are now kept and applied at start.
+2. A cancelled flow kept sending its in-flight fragment but no longer counted in the max-min allocation; it now counts
+   until its sender reports it stopped.
+3. New flows started with a full token bucket (1 MiB burst); buckets now start empty.
+Validation added: every node's paced payload, counted at its token bucket, must stay within 1.05 x its egress cap in
+every 10 s window (1 s windows over-count by up to one 1 MiB chunk per flow). Reuse planning also no longer asks the
+source to resend a fragment that is already in flight to a holder (that holder forwards it once it lands; if it is not
+there in time the source sends it). Loopback check at the real fragments-per-Sink ratio (412 fragments): reuse_fixed
+sends exactly 1.00 Sink per session from the source and its single-move makespan equals N T_s.
+The v1 data already agreed with every prediction (single move: restart - fixed = 0.0 / 7.5 / 9.6 / 10.0 s at N = 1/2/4/8;
+continuous: restart restored 0 sessions at every N, reuse_fixed all; adaptive worse than fixed at N >= 2), see
+`restore_contention/criteria.md`.
