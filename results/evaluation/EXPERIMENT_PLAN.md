@@ -76,3 +76,49 @@ Phase 0 (this document) -> Phase 1 shakedown at rho 2, one run per policy, inspe
 ## 12. Deliverables after each phase
 
 Research summary, raw locations, figures, unexpected observations, negative results, remaining uncertainties, next experiments: written to `results/evaluation/<experiment>_notes.md` and summarized to the user before the next phase starts.
+
+## Experiment 3 Scenario B: source-egress contention (pre-registered 2026-10-13, before any server run)
+
+Motivation (Phase 1): with one session, restoration at the final owner is bound by that owner's ingress, so reuse
+cannot beat restart; reuse only removed waste and halved the source's egress. Scenario B asks whether that offload
+turns into latency when the source is the shared bottleneck.
+
+Harness: `tools/eval/restore_node.py` + `restore_orchestrate.py` (+ `run_restore_contention.sh`), network level, no GPU.
+Same Sink size (1,725,236,640 B), 4 MiB fragments, MSS-capped TCP, per-flow token buckets, per-fragment SHA-256 as the
+GPU harness; contents are deterministic per (session, fragment) so holders forward exactly the bytes they verified.
+Validated on loopback (4 nodes, 64 MiB Sink, 100 Mbps): runs complete, all fragments verify, restart and reuse behave
+as specified.
+
+Setup: source A = elves-01; edges B, C, D = elves-02..04. N sessions; session i starts at edge [B, C, D][i mod 3] and
+moves to the next edge every T_m (moves staggered by T_m * i / N). Every node's egress and ingress capped at 1 Gbps,
+shared max-min fairly by all flows of all sessions (so A's egress is shared by N sessions, each edge's ingress by about
+N/3). T_s = 14.05 s, rho = 2 (T_m = 7.02 s). Independent variables: N in {1, 2, 4, 8}; mobility mode {one move then
+stay, continuous moves over B -> C -> D -> B ...}; policy {restart, reuse_fixed, reuse_adaptive}. 3 reps each (72 runs,
+~1.7 h). Single-move runs end when every session is restored at its final edge (deadline 2 N T_s + 3 T_m); continuous
+runs last 2 N T_s + 2 T_m.
+
+Metrics: per session first restoration time (all fragments verified at the edge while it is the owner) and makespan;
+coverage (share of the run during which the current owner holds the whole Sink); source bytes, total bytes, unused
+bytes (delivered to an edge, never part of a restoration there, never forwarded), duplicates; source egress over time;
+kernel NIC peaks per node (validation: within 1.15 x cap).
+
+Flow-model predictions (written before the runs):
+- Single move, N = 1: no difference (the edge's 1 Gbps ingress, not A, is the bottleneck, as in Phase 1).
+- Single move, N >= 2: A is the bottleneck. Restart must resend what it delivered before the moves; reuse sends every
+  byte from A once. Predicted makespans: restart ~ N T_s + (A's bytes delivered before the moves) / 1 Gbps, reuse ~ N T_s;
+  the absolute saving is about T_m to 2 T_m (7-14 s) independent of N, so the relative saving shrinks as N grows.
+- Continuous mobility: restart never restores any session when N rho > 1 (each ownership period delivers at most
+  S / (N rho) < S and is then discarded); here N rho >= 2 for every N, so restart is predicted to restore 0 sessions.
+  Reuse accumulates progress across edges, restores every session after about N T_s, and once all three edges hold a
+  session's Sink every later move restores it immediately (coverage rises toward 1).
+- reuse_adaptive vs reuse_fixed: no difference expected; with A as the bottleneck, fixed routing already sends every held
+  fragment from its holder, and adaptive's only extra freedom (sending a held fragment from A instead) cannot help.
+
+Decision criteria (median of 3 reps; fixed now):
+- H3a single move: supported at N if reuse_fixed's makespan is shorter than restart's by >= 0.5 T_m (3.5 s).
+- H3a continuous: supported at N if restart restores fewer than N sessions within the run in all 3 reps while
+  reuse_fixed restores all N in all 3 reps.
+- H3b: supported at N if reuse_adaptive's makespan is shorter than reuse_fixed's by >= 1 s (single move) or its
+  coverage is higher by >= 0.05 (continuous), without being worse by the same margin at any other N.
+- A run is invalid if any fragment fails verification or a NIC peak exceeds 1.15 x its cap; invalid runs are listed,
+  not dropped, and the condition is re-run.
