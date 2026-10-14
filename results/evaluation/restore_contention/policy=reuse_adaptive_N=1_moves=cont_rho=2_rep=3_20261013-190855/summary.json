@@ -1,0 +1,82 @@
+{
+ "run_id": "policy=reuse_adaptive_N=1_moves=cont_rho=2_rep=3_20261013-190855",
+ "policy": "reuse_adaptive",
+ "N": 1,
+ "moves": 0,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 3,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 1000.0,
+  "C:out": 1000.0,
+  "D:out": 1000.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "horizon",
+ "duration_s": 42.15000009536743,
+ "restored_sessions": 1,
+ "first_restored": {
+  "median": 28.056884050369263,
+  "max": 28.056884050369263,
+  "all": [
+   28.056884050369263
+  ]
+ },
+ "makespan_s": 28.056884050369263,
+ "coverage_mean": 0.004006120987377315,
+ "bytes": {
+  "total_sent": 5175709920,
+  "source_sent": 3163882912,
+  "by_link": {
+   "A->B": 1725236640,
+   "A->C": 864026624,
+   "B->C": 861210016,
+   "B->D": 574619648,
+   "A->D": 574619648,
+   "C->D": 575997344
+  },
+  "unused": 0,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 3.0,
+  "source_per_session": 1.8338834445343104,
+  "unused_per_session": 0.0
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 1.5,
+   "tx_peak": 1040.1
+  },
+  "B": {
+   "rx_peak": 1038.3,
+   "tx_peak": 523.1
+  },
+  "C": {
+   "rx_peak": 1046.1,
+   "tx_peak": 349.1
+  },
+  "D": {
+   "rx_peak": 1050.6,
+   "tx_peak": 3.2
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true
+ }
+}
