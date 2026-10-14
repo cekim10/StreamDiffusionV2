@@ -1,0 +1,88 @@
+{
+ "run_id": "policy=reuse_adaptive_N=4_moves=cont_rho=2_rep=1_20261013-180320",
+ "policy": "reuse_adaptive",
+ "N": 4,
+ "moves": 0,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 1,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 1000.0,
+  "C:out": 1000.0,
+  "D:out": 1000.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "horizon",
+ "duration_s": 126.45000004768372,
+ "restored_sessions": 4,
+ "first_restored": {
+  "median": 78.47431564331055,
+  "max": 80.20184516906738,
+  "all": [
+   80.20184516906738,
+   77.63996767997742,
+   78.02479553222656,
+   78.92383575439453
+  ]
+ },
+ "makespan_s": 80.20184516906738,
+ "coverage_mean": 0.3596453006612382,
+ "bytes": {
+  "total_sent": 20702839680,
+  "source_sent": 10137510336,
+  "by_link": {
+   "A->C": 3355381984,
+   "A->D": 3274312512,
+   "A->B": 3507815840,
+   "B->C": 2680160256,
+   "C->D": 2656372128,
+   "D->B": 2512326880,
+   "B->D": 970261920,
+   "C->B": 880803840,
+   "D->C": 865404320
+  },
+  "unused": 0,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 3.0,
+  "source_per_session": 1.4690028748751824,
+  "unused_per_session": 0.0
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 3.2,
+   "tx_peak": 1075.8
+  },
+  "B": {
+   "rx_peak": 1079.7,
+   "tx_peak": 1044.8
+  },
+  "C": {
+   "rx_peak": 1102.5,
+   "tx_peak": 1047.7
+  },
+  "D": {
+   "rx_peak": 1082.2,
+   "tx_peak": 1039.8
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true
+ }
+}
