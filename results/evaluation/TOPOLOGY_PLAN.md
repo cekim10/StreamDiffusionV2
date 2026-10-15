@@ -1,9 +1,18 @@
-# OTTER M3 research plan: pre-positioning, transfer topologies, dynamic re-planning (DRAFT for review, 2026-10-15)
+# OTTER M3 research plan: pre-positioning, transfer topologies, dynamic re-planning (DRAFT v2 for review, 2026-10-15)
 
-Status: audit + experimental design. Nothing in this document has been run. Criteria in sections F are proposals;
-they become pre-registered at the commit that follows the user's approval, and are not edited after that.
-Every number is tagged: **measured** (committed artifact), **analytical** (closed-form from link capacities, not a
-run), **proposed** (mechanism not implemented), or **model** (fluid simulation `tools/eval/restore_model.py`).
+Status: audit + experimental design, revised after the first review (v1 commit e3dd1f8). Nothing in this document
+has been run. Criteria in section F are proposals; they become pre-registered at the commit that follows approval and
+are not edited after that. Every number is tagged **measured** (committed artifact), **analytical** (closed-form from
+link capacities, not a run), **model** (fluid simulation `tools/eval/restore_model.py`, to be extended), or
+**proposed** (mechanism not implemented). Progress-Aware Topology Morphing (M3) stays **provisional**: it is neither
+removed nor confirmed until Experiments B and E decide whether reconfiguration adds value beyond provider selection.
+
+Changes from v1: (1) pre-positioning predictions recomputed with one latency definition (the v1 top-1 figure 10.4 s was
+an arithmetic error; correct 8.4 s); H5b split into mean and tail with the predicted mean penalty of tail coverage
+stated; (2) H5e reworded and given an explicit cost model with holder egress and ingress sharing; (3) the Butterfly /
+Tree comparison restricted to the stated implementations and assumptions, with the assumptions listed and H6d left to
+measurement; (4) M3 kept provisional; (5) Experiment E (topology under repeated execution mobility) added; (6) execution
+order changed to pilots before any sweep.
 
 ## A. Current verified evidence (measured; artifacts named)
 
@@ -18,227 +27,314 @@ run), **proposed** (mechanism not implemented), or **model** (fluid simulation `
 
 Two facts organize everything below:
 1. **Ingress bound.** A destination with ingress B_in cannot be restored sooner than (bytes it still lacks) / B_in after
-   it becomes the owner. At 1 Gbps that is 14.05 s for a whole Sink, regardless of where the bytes come from.
-   Phase 1 measured exactly this for every non-oracle policy.
-2. **Source-sharing bound.** When one source serves N sessions, the source must send at least what no holder has;
-   fixed reuse makes that exactly one Sink per session (measured 1.00). Latency gains from routing exist only when the
-   binding resource is a shared sender (source or slow holder), never when it is the receiver's ingress.
+   it becomes the owner; 14.05 s for a whole Sink at 1 Gbps, regardless of where the bytes come from (Phase 1 measured
+   exactly this for every non-oracle policy).
+2. **Source-sharing bound.** When one source serves N sessions it must send at least what no holder has; fixed reuse
+   makes that exactly one Sink per session (measured 1.00). Routing gains exist only when the binding resource is a
+   shared sender (source or slow holder), not the receiver's ingress.
 
 ## B. Implementation status (inspected 2026-10-15)
 
 | capability | GPU harness (`mobility_node.py`, `mobility_orchestrate.py`) | network harness (`restore_node.py`, `restore_orchestrate.py`) |
 |---|---|---|
 | policies | restart, relay, relay_pipe, split (= reuse_fixed), direct (perfect oracle, unlimited budget, from t = 0) | restart, reuse_fixed, reuse_adaptive, reuse_aware |
-| fragment-level multi-provider delivery to ONE destination (several holders + source send disjoint fragment sets to the owner) | yes (split) | yes (fixed / adaptive / aware) |
-| one session required at SEVERAL destinations at once (dissemination) | no: one owner per session; non-owners only receive as intermediate owners | no |
-| forwarding between non-owners / pipelined forwarding of fragments as they arrive | relay_pipe only along the fixed chain (FLOW_ADD exists) | no FLOW_ADD; a flow's fragment list is fixed at start |
-| topology change without discarding verified fragments | yes, at MOVES only: every reuse policy cancels obsolete flows, keeps held fragments, re-plans providers (= attach + reparent + prune at a move) | same |
-| re-plan on other events (bandwidth change, deadline change, candidate-set change) | no | no (the plan runs only at start, move, flow_done) |
-| pre-positioning to non-owners before a move | only the oracle (`direct`): final owner known, whole Sink, no budget | no; `holders` are derived from the ownership history, so fragments delivered to a never-owner would not be forwarded |
-| per-node egress/ingress caps, max-min fair, token buckets, cap verification on the wire | yes | yes (+ paced-egress check per 10 s window) |
-| per-LINK capacity matrix (A->D 250 while B->D 1000), time-varying caps | no | no (caps are per node and constant) |
+| fragment-level multi-provider delivery to ONE destination | yes (split) | yes (fixed / adaptive / aware) |
+| one session required at SEVERAL destinations at once (dissemination) | no: one owner per session | no |
+| forwarding between non-owners / pipelined forwarding as fragments arrive | relay_pipe only along the fixed chain (FLOW_ADD exists) | no FLOW_ADD; a flow's fragment list is fixed at start |
+| topology change without discarding verified fragments | yes, at MOVES only (cancel obsolete flows, keep held fragments, re-plan providers = attach + reparent + prune at a move) | same |
+| re-plan on other events (bandwidth, deadline, candidate-set change) | no | no (plan runs at start, move, flow_done) |
+| pre-positioning to non-owners before a move | only the oracle (`direct`): final owner known, whole Sink, no budget | no; `holders` come from the ownership history, so fragments at a never-owner would not be forwarded |
+| per-node egress/ingress caps, max-min fair, token buckets, on-the-wire verification | yes | yes (+ paced-egress check per 10 s window) |
+| per-LINK capacity matrix, time-varying caps | no | no (per node, constant) |
 | deadlines, deadline-miss accounting | no | no |
-| time to 35 dB PSNR, bind, first output | yes | n/a (network level) |
-| full-state migration / cold restart / replay as repeated-mobility baselines | single-handoff harness only | n/a |
-| ingress-aware correction of `reuse_aware` (H4c fix) | not implemented | **not implemented** (sketched in `restore_holder_notes.md` only) |
+| time to 35 dB PSNR, bind, first output | yes | n/a |
+| full-state migration / cold restart / replay under repeated mobility | single-handoff harness only | n/a |
+| ingress-aware correction of `reuse_aware` (H4c) | not implemented | **not implemented** (sketched in `restore_holder_notes.md`) |
 
-Answers to the First Task questions 4-7: multi-destination dissemination: **not supported**; fragment-level multipath
-forwarding: **supported into one destination** (several providers), **not** provider-to-provider or to several
-destinations; reconfiguration without discarding verified fragments: **supported, triggered by moves only**;
-pre-positioning: **only the perfect oracle**, no probabilities, budget, or lookahead.
+Multi-destination dissemination: **not supported**. Fragment-level multipath: **into one destination only**.
+Reconfiguration without discarding verified fragments: **supported, triggered by moves only**. Pre-positioning:
+**perfect oracle only**.
 
-## C. Remaining scientific questions and experiment matrix
+## C. Experiment matrix
 
-| id | question | level | depends on | priority |
+| id | question | level | depends on | order |
 |---|---|---|---|---|
-| A | Can bytes sent to likely destinations before a move cut post-move restoration latency, at what traffic cost, and when does spreading beat top-1? | network (model + 4 hosts), then 2-3 GPU points | nothing | 1 |
-| B | Which transfer graph (star / pipelined line / tree / disjoint multipath) is optimal under which capacities when 3 destinations need one Sink, and does the backlog-aware rule reproduce the best one? | model (free, any size) + 4 hosts (1 source, 3 destinations) | dissemination mode | 2 |
-| C | Does re-planning on bandwidth / deadline / candidate changes (not only moves) reduce deadline misses over "aware at moves only" by more than its switching cost? | network, 4 hosts | B, time-varying caps | 3, conditional on a model-predicted gain |
-| D | End-to-end on GPUs: TTFO, bind, 35 dB rejoin, coverage for full / cold / reuse / aware / pre-positioned under slow, fast, repeated mobility | GPU, 4 hosts | A (and B/C if kept) | 4 |
+| H4c fix | does the ingress-aware correction remove the (N = 1, 500 Mbps) retransmission without changing any other Step 2 result? | network, 4 hosts | nothing | 1 |
+| A | can bytes sent to likely destinations before a move cut post-move restoration latency, at what traffic cost, and when does spreading beat top-1? | model + 4 hosts; 2-3 GPU points later | E.1 | pilot 2, sweep 4 |
+| B | which transfer graph (star / pipelined line / tree / disjoint multipath) is optimal under which capacities when three destinations need one Sink, and does the backlog-aware rule reproduce the best one? | model (any size) + 4 hosts (1 source, 3 destinations) | E.2, E.3 | pilot 3, sweep 5 |
+| E | under execution mobility A->B->C->D with incomplete restoration at intermediate owners, do fixed topologies (star, line, tree, butterfly-like) differ, and does progress-aware dynamic reconfiguration beat the best fixed one and "aware at moves only"? | network, 4 hosts; GPU subset in D | E.2, E.3, E.4 | 5b (after B) |
+| C | does re-planning on bandwidth / deadline changes (not only moves) reduce deadline misses over "aware at moves only" by more than its switching cost? | network, 4 hosts | B, E, E.4 | 6, only if B/E and the model identify a condition with >= 15 % gain |
+| D | end-to-end on GPUs: TTFO, bind, 35 dB rejoin, coverage for full / cold / reuse / aware / pre-positioned / (dynamic if kept) | GPU, 4 hosts | A, B, E | 7 |
 
-The testbed has four hosts: one source + three others. Physical runs therefore have at most 3 candidate
-destinations / 3 dissemination targets. Anything with 4-8 destinations is **model only** and is labelled so.
+Physical runs have at most three candidate destinations / three dissemination targets (four hosts, one is the
+source). Anything with 4-8 destinations is **model only** and labelled so.
 
-## D. Analytical predictions (closed-form; S = 1.61 GiB, T_s = 14.05 s at 1 Gbps; +0.3 s control plane per plan)
+## D. Analytical predictions
+
+Common definitions. S = 1.61 GiB; T(x) = S / x; T_s = T(1 Gbps) = 14.05 s. **Post-move restoration latency T_r** =
+time from the move event to the last fragment verified at the new owner (network level; the GPU equivalent is Sink
+bound, which adds the bind step), including the measured ~0.3 s control plane. Every prediction below is T_r in this
+sense unless it says "makespan" (= last T_r among sessions/destinations). All are **analytical** unless tagged.
 
 ### D.1 Pre-positioning (Experiment A), single session, source egress B_s, candidate ingress B_in = 1 Gbps
 
-Let the mover leave in L seconds; candidates i = 1..k with probabilities p_1 >= p_2 >= ...; x_i = fraction of the Sink
-delivered to i before the move. Constraints: sum x_i <= min(b, L B_s / S) (budget, source egress); x_i <= L B_in / S
-(each candidate's ingress). Post-move latency if the true destination is d: (1 - x_d) T_s (ingress-bound).
-- Expected latency = T_s (1 - sum p_i x_i) is linear in x, so the optimum is a corner: **fill the top-1 candidate first**.
-  Spreading can only lower the mean when the top candidate's ingress constraint binds before the source budget does,
-  i.e. when B_s > B_in (fast source, e.g. native 9.4 Gbps vs 1 Gbps edges): then every candidate can be filled in
-  parallel and "send to all affordable candidates" dominates. With B_s = B_in = 1 Gbps, top-1 is optimal for the mean
-  at every budget (prediction: H5b REJECTED for the mean objective at 1 Gbps).
-- Tail objective P(latency > tau): a candidate is "covered" if x_i >= 1 - tau / T_s; cover candidates in probability
-  order with just that much each. With tau = 7 s (half of T_s) coverage costs 0.5 Sink per candidate, so at budget 1
-  two candidates can be covered: P(miss) = p_3 (0.1) for coverage vs p_2 + p_3 (0.4) for top-1. (prediction: H5b
-  SUPPORTED for the tail objective when b >= 2 (1 - tau/T_s) and L B_s / S allows it; at L = 10 s and 1 Gbps only
-  0.71 Sink can leave the source, so tail coverage needs L >= 14 s or a faster source.)
-- Numbers at (p = 0.6/0.3/0.1, L = 10 s, b = 1, 1 Gbps everywhere; pre-sendable 0.71 Sink): none 14.4 s; oracle
-  4.4 s; top-1 mean 0.6 x 4.4 + 0.4 x 14.4 = 10.4 s, p90 14.4 s; proportional (x = 0.43 / 0.21 / 0.07) mean
-  T_s (1 - 0.71 (0.36 + 0.09 + 0.01)) + 0.3 = 9.8 s, p90 ~13.4 s (proportional spreads the same 0.71 Sink, so its mean
-  is close to top-1's; neither beats the other by the 1 s margin at 1 Gbps). At L = 20 s (1.42 Sinks sendable, b = 2):
-  top-1 x_1 = 1 then x_2 = 0.42: mean 0.6 x 0.3 + 0.3 x 8.5 + 0.1 x 14.4 = 4.2 s; coverage with tau = 7 covers all three
-  at 0.5 each (1.5 > 1.42: covers two fully, third partially): p90 ~ 7.3 s vs top-1 p90 8.5 s.
-- **Wrong-destination bytes are not waste under source sharing.** With N sessions sharing the source, a session whose
-  pre-positioned fraction x landed at a non-chosen candidate still restores in (1 - x) S / (B_s / N) + x S / B_h' where
-  the candidate forwards at B_h': at N = 4, 1 Gbps, x = 0.5: 28 + 7 = 35 s (parallel: max(28, 7) = 28 s) vs 56 s
-  with nothing pre-positioned. Under a single session (ingress-bound) the same bytes are worth 0 s. (prediction H5e,
-  new: the value of a speculative byte is independent of where it lands when the source is the bottleneck and zero
-  unless it lands at the destination when the ingress is the bottleneck.)
-- H5d: pre-positioning x Sinks for one session delays the active restorations of the other N - 1 sessions by
-  x T_s (source-bound regime) and by 0 s when the source is idle.
+Candidates i = 1..k with probabilities p_1 >= p_2 >= ..., lookahead L s, budget b Sinks; x_i = fraction of the Sink at
+candidate i when the move happens. Constraints: sum x_i <= min(b, L B_s / S) (budget and source egress); x_i <= L B_in / S
+(each candidate's ingress). If the true destination is d: T_r = (1 - x_d) T_s + 0.3 (ingress-bound; the source is
+idle after the move in the single-session case).
+- Expected T_r = T_s (1 - sum p_i x_i) + 0.3 is linear in x: the optimum is a corner, **fill the top-1 candidate
+  first**. Spreading can lower the mean only when the top candidate's ingress constraint binds before the source budget
+  does (B_s > B_in, e.g. a native 9.4 Gbps source with 1 Gbps edges): then every candidate can be filled in parallel.
+  With B_s = B_in = 1 Gbps, top-1 is optimal for the mean at every budget.
+- Reference condition p = (0.6, 0.3, 0.1), L = 10 s, b = 1, 1 Gbps everywhere: pre-sendable 0.71 Sink.
 
-### D.2 Static topologies (Experiment B), one source A, three destinations B, C, D all needing the whole Sink
+  Tail metric: the miss probability P(T_r > tau) over destination draws with tau = 7.5 s (about half of T_s); it is
+  robust to the percentile convention at 30 draws, which p90 is not.
 
-Per-node full-duplex caps: source egress B_s, forwarder egress B_f (B, C, D), destination ingress B_in. T(x) = S / x.
-| topology | per-destination completion (analytical) |
+| policy | x | T_r if d = B / C / D | mean T_r | P(T_r > 7.5 s) |
+|---|---|---|---|---|
+| none | 0 / 0 / 0 | 14.35 each | 14.35 | 1.0 |
+| oracle | 0.71 at the true d | 4.4 | 4.4 | 0 |
+| top-1 | 0.71 / 0 / 0 | 4.4 / 14.35 / 14.35 | 8.4 | 0.4 |
+| proportional | 0.43 / 0.21 / 0.07 | 8.3 / 11.4 / 13.4 | 9.8 | 1.0 |
+| tail coverage (tau = 7.5 s needs x >= 0.49 per candidate) | 0.5 / 0.21 / 0 | 7.3 / 11.4 / 14.35 | 9.2 | 0.4 (only B covered) |
+
+  Top-1 beats proportional by 1.4 s in the mean; at L = 10 s nothing can cover two candidates, so no policy improves
+  the tail over top-1.
+- Condition L = 20 s, b = 2 (pre-sendable 1.42 Sinks): top-1 x = (1, 0.42, 0): T_r 0.3 / 8.45 / 14.35, mean 4.2,
+  miss 0.4. Tail coverage: x = (0.5, 0.5, 0.42): T_r 7.3 / 7.3 / 8.45, mean 7.4, miss 0.1. Proportional x = (0.85,
+  0.43, 0.14): T_r 2.4 / 8.3 / 12.4, mean 4.2, miss 0.4. **Predicted trade-off: coverage cuts the miss probability
+  from 0.4 to 0.1 and raises the mean by 3.2 s.** H5b therefore has a mean part (predicted rejected at 1 Gbps) and a
+  tail part (predicted supported, with a stated mean cost).
+- Fast source (native 9.4 Gbps, 1 Gbps edges), L = 10 s, b = 2: each candidate can take 0.71 Sink in parallel (0.71 x 3
+  = 2.1 > b, so the budget binds: x = 0.71 / 0.71 / 0.58): T_r 4.4 / 4.4 / 6.2, mean 4.6, miss 0 — here spreading beats
+  top-1's mean (8.4) because the ingress, not the source, limits each candidate. (predicted: H5b-mean supported only
+  with B_s > B_in.)
+- H5d: pre-positioning x Sinks for one session while N - 1 others restore through the same source delays their
+  makespan by x S / B_s (7.0 s for x = 0.5 at 1 Gbps) in the source-bound regime and by ~0 when the source is idle.
+
+### D.1b Value of fragments pre-positioned at a non-chosen candidate (H5e, explicit cost model)
+
+After the move to d, the session's Sink is split: fraction x verified at holder h (the wrong candidate), 1 - x only at
+the source A. A serves N sessions (rate B_s / N per session when busy), h forwards at egress B_h, d receives at B_in;
+the two flows into d share B_in max-min. Under fixed reuse (h forwards all of x, A sends 1 - x):
+
+    T_r = max( (1 - x) S / r_A,  x S / r_h ) + 0.3,   r_A = min(B_s / N, B_in), r_h = min(B_h, B_in - r_A)
+    (r_A, r_h = the two flows' max-min shares of d's ingress)
+
+and under the aware rule a fraction y of x is moved back to A so that the two finish together. Compared with the same
+x at the correct destination (T_r = (1 - x) S / min(B_s / N, B_in) + 0.3):
+
+| regime (x = 0.5) | correct-destination bytes | wrong-destination bytes, fixed | wrong-destination bytes, aware | none |
+|---|---|---|---|---|
+| N = 1, B_h = 1 Gbps (ingress-bound) | 7.3 s | 14.35 s (both flows share d's ingress: S / B_in) | 14.35 s | 14.35 s |
+| N = 4, B_h = 1 Gbps (source-bound) | 28.4 s | 28.4 s (A 28.1 s in parallel with h 9.4 s at 750 Mbps) | 28.4 s | 56.5 s |
+| N = 4, B_h = 125 Mbps (slow holder) | 28.4 s | 56.5 s (h needs 56.2 s) | 37.8 s (y = 0.167: A sends 0.667 S at 250 Mbps) | 56.5 s |
+| N = 4, B_h = 62.5 Mbps | 28.4 s | 112.7 s (worse than none) | 45.3 s (y = 0.3) | 56.5 s |
+
+So a wrongly placed fragment is worth as much as a correctly placed one only when the source is shared **and** the
+holder's egress is at least x B_s / (N (1 - x)) (250 Mbps here); it is worth nothing when the ingress binds (N = 1),
+and under fixed forwarding it can be harmful when the holder is slow. The aware rule recovers part of the value by
+moving fragments back to the source. H5e (revised wording): *speculatively transferred fragments can retain
+restoration value after incorrect destination predictions, but their benefit depends on holder forwarding capacity
+and shared network bottlenecks*; the table is the pre-registered prediction of that dependence.
+
+### D.2 Static topologies (Experiment B): one source A, three destinations B, C, D each needing the whole Sink
+
+Assumptions of the closed forms (they define the scope of every statement in this subsection): per-node full-duplex
+caps (egress B_s at A, B_f at B/C/D, ingress B_in at B/C/D), no per-link limits, max-min sharing, perfect pipelining
+(a forwarder re-sends a fragment as soon as it is verified), fragment granularity and control-plane time ignored
+(+0.3 s per plan, +0.03 s per hop at 1 Gbps), the source splits fragments into disjoint thirds for the multipath plan,
+no duplicates. The four plans are specific implementations, not families: a different tree (e.g. A->{B}, B->C, C->D is
+the line; A->{B,C}, B->D is another tree) or a different multipath partition gives different numbers.
+
+| plan | per-destination completion |
 |---|---|
-| Star A->{B,C,D} | all at T(B_s / 3) = 3 T(B_s): 42.2 s at 1 Gbps; 168.6 s at 250 Mbps; 6.2 s native source |
-| Pipelined line A->B->C->D | B: T(min(B_s, B_in)); C, D: + one fragment lag each (~0.05 s) if B_f >= the arrival rate, else T(B_f) + lag: 14.1 / 14.4 / 14.7 s uniform; 112.4 s for C, D at B_f = 125 |
-| Tree A->B->{C,D} | B: T(B_s); C, D: T(min(B_f / 2, B_s)): 28.1 s uniform; 56.2 s at B_f = 250; 224.8 s at B_f = 125 |
-| Disjoint multipath (A sends third i to node i; each node forwards its third to both peers) | each destination receives its own third from A at B_s / 3 and the other two thirds from the two peers at B_f / 2 each: completion = max(T(B_s), (2/3) S / B_f, S / B_in) = max(T_s, (2/3) T(B_f), T(B_in)): uniform 14.1 s + lag; B_f = 500: 18.7 s; B_f = 250: 37.5 s; B_f = 125: 74.9 s |
+| Star A->{B,C,D} | all at T(B_s / 3) = 3 T(B_s): 42.2 s at 1 Gbps; 168.6 s at B_s = 250 Mbps; 6.2 s native source |
+| Pipelined line A->B->C->D | B: T(min(B_s, B_in)); C, D: T(min(B_s, B_f, B_in)) + one fragment lag per hop: 14.1 / 14.4 / 14.7 s uniform; 112.4 s for C and D at B_f = 125 |
+| Tree A->B->{C,D} | B: T(B_s); C, D: T(min(B_f / 2, B_s, B_in)): 28.1 s uniform; 56.2 s at B_f = 250; 224.8 s at B_f = 125; 28.1 s with a native source |
+| Disjoint multipath (A sends third i to node i; each node forwards its third to both peers) | max( T(B_s), (2/3) T(B_f), T(B_in) ) + lag: 14.1 s uniform; 18.7 s at B_f = 500; 37.5 s at B_f = 250; 74.9 s at B_f = 125; with a native source and B_f = 1 Gbps: (2/3) T_s = 9.4 s |
 
-Predicted optimal regions (uniform 1 Gbps ingress, 1 Gbps source): line = multipath (ingress-bound) for B_f = 1 Gbps;
-multipath < line for 222 < B_f < 1000 Mbps (parallel ingress from two peers beats a single forwarder); star < all
-others for B_f < ~222 Mbps (forwarders too slow, the idle source wins, the Step 2 crossover in another guise);
-with a 250 Mbps source every forwarding topology (line, tree, multipath) is ~56.5 s vs star 168.6 s (H6b).
-Native source + 1 Gbps forwarders: star 6.2 s beats every forwarding topology (14 s): a fast source makes forwarding
-pointless. **Prediction for the rule**: a per-(fragment, destination) assignment to the provider with the smallest
-backlog / egress cap (the Step 2 rule extended to several destinations) produces star-like plans when B_f is small,
-multipath plans when peers hold disjoint fragments and B_f is moderate, and reaches the ingress bound when
-everything is uniform; i.e. it should match the best fixed topology within ~10 % in every condition (H6f).
-H6e: when destination ingress is saturated by one provider (B_f >= B_in), multipath adds nothing (predicted exactly 0).
+Predicted optimal regions **under these assumptions** (B_in = 1 Gbps unless stated):
+- uniform 1 Gbps: line = multipath (ingress-bound, 14.1 s); tree 28.1; star 42.2;
+- B_s = 250 Mbps: every forwarding plan ~56.5 s vs star 168.6 s (forwarding offloads the source, H6b);
+- 222 < B_f < 1000 Mbps: multipath ((2/3) T(B_f)) < line (T(B_f)) < tree (2 T(B_f)); star 42.2 fixed;
+- B_f < ~222 Mbps: star beats all forwarding plans (the Step 2 crossover in another guise);
+- native source, B_f = 1 Gbps: star 6.2 s < multipath 9.4 s < line 14.1 s < tree 28.1 s;
+- B_f >= B_in with one provider saturating the ingress: multipath adds nothing over line (H6e, predicted 0).
+Where this comparison does NOT hold: with per-link caps (e.g. B->C slow while B->D fast) a tree that avoids the slow
+link can beat a multipath plan that uses it; with per-destination deadlines a tree can prioritize one child; multipath
+runs 3 x as many flows (more control-plane scheduling, 3 providers sharing each ingress) and its disjoint placement must
+be decided by the source in advance; if holders already hold overlapping sets, multipath must avoid duplicates. These
+are the reasons the Butterfly-vs-Tree ordering is a hypothesis (H6d) to measure, not a result.
+**Rule prediction (H6f):** a per-(fragment, destination) assignment to the provider with the smallest backlog / egress
+cap should produce star-like plans at small B_f, multipath-like plans when peers hold disjoint fragments and B_f is
+moderate, and the ingress bound when everything is uniform, i.e. match the best fixed plan within ~10 % in every
+condition of the grid. Where it falls short tells us what a reconfiguration mechanism must add.
 
-### D.3 Dynamic re-planning (Experiment C)
+### D.3 Experiment E: topologies under execution mobility A -> B -> C -> D (incomplete restoration at B and C)
 
-Switching cost measured in Phase 1: 0.28-0.32 s control plane + the in-flight fragment of each cancelled flow
-(4 MiB: 0.03 s at 1 Gbps, 0.5 s at 62.5 Mbps). Re-planning pays when the remaining transfer on the old plan exceeds
-that by a margin: with a forwarder dropping from 1 Gbps to 125 Mbps with 50 % of the Sink left, staying costs 56 s,
-re-planning to the idle source costs 7 s + 0.3 s. With the source shared by 4, the same drop is worth 28 - 7 = 21 s.
-A deadline change at C in A->B->C (line, uniform) cannot be helped by adding A->C unless A's egress has slack
-(it has none at B_s = B_in: A->B uses it all); it helps when B_s > B_in or when A->B is already done.
-Predicted: C2 (bandwidth drop) is the only scenario with a large, robust gain; C1 gains exist only with source slack;
-C3 is pre-positioning's attach/prune and belongs to Experiment A; C4 is B + C2 combined.
+Setting: single session (and N = 4 sessions as a second condition), rho = 2 (T_m = 7.02 s; each intermediate owner
+receives about half a Sink before being left at 1 Gbps), per-node caps as in B. Policies (all keep verified fragments
+except restart; they differ in who may forward to the current owner):
 
-## E. Required implementation changes (minimum per hypothesis)
+| policy | providers for the current owner |
+|---|---|
+| restart | source only, progress at abandoned owners discarded (Phase 1 policy) |
+| fixed star | source only, but the owner keeps what it already holds (equals restart on a path without revisits; differs on B->C->D->B) |
+| fixed line | the immediately previous owner forwards what it holds (pipelined); the source sends the rest |
+| fixed tree | the first intermediate owner B is the forwarding hub for every later owner (A->B; B->C; B->D); the source sends what B lacks |
+| fixed butterfly-like | every past holder forwards, disjoint fragment sets split evenly by count among the holders of each fragment; the source sends the rest |
+| OTTER dynamic | backlog-aware provider selection over all holders and the source, re-planned at every move AND on capacity changes / periodically with hysteresis (proposed, E.4) |
+| aware at moves only | the same rule re-planned at moves only (Step 2 policy generalized; the baseline dynamic morphing must beat) |
 
-Network harness (`restore_*`), in order of need:
-1. **Pre-positioning phase** (A): per session, a pre-move window of L s during which an allocation policy sends
+Analytical predictions for the final owner D at 1 Gbps uniform, single session: every policy is ingress-bound at D
+(T_r = 14.35 s, Phase 1 measured 14.8-15.4 s for all non-oracle policies) -> E is uninformative in the uniform case and
+is run only in conditions where it is not:
+- B slow (B_f(B) = 125 Mbps), C and D at 1 Gbps, single session: at the move to C, B holds ~0.5 S. Line: B forwards
+  0.5 S at 125 Mbps -> 56.5 s; star: 14.35 s; tree: same as line (B is the hub); butterfly: B is the only holder -> as
+  line; aware/dynamic: moves fragments to the source -> ~14.35 s. At the move to D: C holds whatever it received (~0.5 S
+  for star/aware), B ~0.57 S (it kept receiving): line (C forwards) 7.3 s + source 7.0 s in parallel -> 14.35 s;
+  tree (B forwards at 125 Mbps) ~56.5 s; butterfly (B and C split their common fragments) worse than line because half
+  of C's fragments go through B; aware: 14.35 s. Predicted order at D: aware = line = star < butterfly < tree.
+- Source shared by N = 4 sessions, all forwarders 1 Gbps: star = restart-like source load; line/butterfly/aware offload
+  the source (Scenario B measured 7.6-10.2 s gains); tree concentrates forwarding at B (B's egress shared by 3 later
+  owners x 4 sessions) -> predicted worst among reuse policies.
+- Mid-run drop of C's egress to 62.5 Mbps while D is being restored from C (dynamic trigger): aware-at-moves keeps
+  the plan (C's remaining 0.3 S at 62.5 Mbps -> 67 s); dynamic re-plans to A/B (~7 s + 0.3 s + one 4 MiB fragment
+  drain at 62.5 Mbps = 0.5 s). This is the one condition in E where dynamic morphing is predicted to beat the
+  moves-only rule by a large margin; the gain is bounded by (remaining bytes at the degraded holder) / (new rate).
+These are the conditions E will use; the full numbers come from the extended model before the run.
+
+### D.4 Dynamic re-planning (Experiment C)
+
+Switching cost measured in Phase 1: 0.28-0.32 s control plane + one in-flight fragment per cancelled flow (4 MiB:
+0.03 s at 1 Gbps, 0.5 s at 62.5 Mbps). Re-planning pays when the remaining transfer under the old plan exceeds that by
+a margin; the only scenarios where that margin is large are mid-restoration slow-downs of a forwarder (C2, and the
+E condition above). A deadline change at C in A->B->C cannot be helped by adding A->C unless A's egress has slack.
+C is built only if B/E and the model identify a condition with >= 15 % gain over "aware at moves only".
+
+## E. Required implementation changes (minimum per hypothesis; none started)
+
+Network harness (`restore_*`):
+1. **Pre-positioning phase** (A): per session, a window of L s before the move during which an allocation policy sends
    fragments to candidates (none / oracle / top-1 / proportional / tail-coverage / all-affordable); the true
-   destination is drawn from a seeded distribution (calibrated) or from a different one (miscalibrated); `holders` =
-   every node that holds verified fragments (not only past owners). ~80 lines in the orchestrator, none in the node.
+   destination is drawn from a seeded distribution (calibrated, or a different one for miscalibration); `holders` =
+   every node holding verified fragments, not only past owners. ~80 lines orchestrator.
 2. **FLOW_ADD** in `restore_node.py` (append fragments to a running flow, as the GPU harness has) so forwarders can
-   pipeline fragments as they arrive (B, C). ~30 lines.
-3. **Dissemination mode** (B): a session with a destination set, each needing the whole Sink, with optional
-   deadlines; fixed topologies star / line / tree / disjoint-multipath as plans; the aware rule generalized to
-   (fragment, destination) pairs with any holder as a provider. ~150 lines orchestrator.
-4. **Time-varying caps and deadlines** (C): a schedule of cap changes applied through `realloc` (rates are pushed
-   to senders already); re-plan trigger on cap change / deadline change / periodic with hysteresis; deadline-miss
-   accounting; switching-cost accounting (cancels, drained bytes, control-plane latency). ~100 lines.
+   pipeline. ~30 lines.
+3. **Dissemination mode + fixed plans** (B, E): a session with a destination set (each needing the whole Sink,
+   optional deadlines); plans star / line / tree / disjoint multipath; the aware rule generalized to (fragment,
+   destination) pairs with any holder as provider; the E policy set (fixed hub tree, even-split butterfly). ~200 lines.
+4. **Time-varying caps, deadlines, event-driven re-plan with hysteresis, switching-cost accounting** (E dynamic, C):
+   a schedule of cap changes applied through `realloc`; re-plan triggers; deadline-miss and re-plan counters. ~120 lines.
 5. **Ingress-aware correction of `reuse_aware`** (H4c): move a fragment off a holder only if the holder's estimate
-   exceeds both the source's and the ingress bound. ~10 lines; to be validated on the Step 2 grid (re-run of the
-   15 aware configurations, 45 runs, ~45 min) before it is used anywhere else.
-6. Per-link capacity matrix: only if a hypothesis needs it (none of A-C does with per-node caps); skip.
-Fluid model: extend with 1, 3, 4 (same code paths) to produce the prediction tables before each run.
-GPU harness (D): port `reuse_aware` and the pre-positioning policy to `mobility_orchestrate.plan` (same logic);
-add full-state migration and cold restart as execution policies (plan E5); ~200 lines.
+   exceeds both the source's and the ingress bound (bytes still to deliver to the owner / its ingress cap). ~10 lines;
+   validated by re-running the 15 aware configurations of the Step 2 grid (45 runs, ~45 min) and checking that the
+   other 14 conditions are unchanged within 1 s and 0.05 Sink.
+Fluid model: extend with 1, 3, 4 (the same planning code) to tabulate predictions before each run.
+GPU harness (D): port `reuse_aware`, the pre-positioning policy and (if kept) the dynamic rule to
+`mobility_orchestrate.plan`; add full-state migration and cold restart as execution policies. ~250 lines.
+Per-link capacity matrix: only if B/E results show a per-link effect matters; skipped by default.
 
-## F. Proposed pre-registered criteria (frozen on approval)
+## F. Proposed pre-registered criteria (frozen on approval; medians unless stated; T_r as defined in D)
 
-Experiment A (network level, 1 Gbps caps unless stated; medians over 10 seeded destination draws x 3 reps):
-- H5a supported if, at k = 3, p = (0.6, 0.3, 0.1), L = 10 s, b = 1, top-1's mean post-move completion is <= 0.75 x
-  no-pre-positioning's (analytical 10.4 vs 14.4 s) and the oracle's is <= 0.35 x.
-- H5b (mean) supported at a condition if proportional or tail-coverage beats top-1's mean by >= 1 s; predicted NOT
-  supported at B_s = 1 Gbps, supported with a native-speed source. H5b (tail) supported if tail-coverage's p90 is
-  lower than top-1's by >= 2 s at L = 20 s, b = 2 (analytical 7.3 vs 8.5 s) without raising the mean by > 1 s.
-- H5c supported if bytes sent to non-chosen candidates never exceed the budget minus bytes at the chosen one, in every
-  run (an accounting identity the harness must satisfy; failure = harness bug).
+Experiment A (network level, 1 Gbps caps unless stated; 10 seeded destination draws x 3 reps per condition):
+- H5a supported if, at p = (0.6, 0.3, 0.1), L = 10 s, b = 1, top-1's mean T_r <= 0.75 x none's (analytical 8.4 vs
+  14.35 s) and the oracle's <= 0.35 x (4.4 s).
+- H5b-mean supported at a condition if proportional or tail-coverage beats top-1's mean T_r by >= 1 s. Predicted:
+  rejected at B_s = 1 Gbps (top-1 ahead by 1.4 s), supported with a native-speed source (4.6 vs 8.4 s).
+- H5b-tail supported if, at L = 20 s, b = 2, tail-coverage's miss probability P(T_r > 7.5 s) over the 30 draws is
+  lower than top-1's by >= 0.2 (analytical 0.1 vs 0.4); its mean penalty is reported (analytical +3.2 s) and is part
+  of the result, not a pass condition.
+- H5c (accounting identity): bytes at non-chosen candidates + bytes at the chosen one <= budget in every run; a
+  violation is a harness bug, not a result.
 - H5d supported if, with N = 4 sessions sharing the source, pre-positioning 0.5 Sink for one session raises the
-  others' makespan by >= 0.5 x 0.5 T_s = 3.5 s (analytical 7 s), and by < 1 s when the source is otherwise idle.
-- H5e (new) supported if, with N = 4, a session whose 0.5 Sink landed at a non-chosen candidate restores >= 0.5 T_s
-  sooner than with nothing pre-positioned (analytical 28 s sooner), while with N = 1 the difference is < 1 s.
-Experiment B (network level, 3 destinations; 3 reps; model predictions tabulated before the run):
-- H6a supported if the best fixed topology differs across the conditions {uniform; B_s = 250; B_f = 125; B_f = 500;
-  native source} (predicted: line/multipath; any forwarding; star; multipath; star).
-- H6b supported if at B_s = 250 every forwarding topology's makespan is <= 0.5 x star's (analytical 56.5 vs 168.6).
-- H6c supported if at B_f = 125 line's and tree's last-destination completion exceed star's by >= 2 x (112 / 225 vs 42).
-- H6d supported if at B_f = 500 multipath's makespan is <= 0.75 x line's (analytical 18.7 vs 28.1); H6e supported if
-  at uniform 1 Gbps multipath is within 1 s of line (both ingress-bound).
-- H6f (the rule) supported if the generalized aware rule's makespan is within 10 % of the best fixed topology in every
-  condition; rejected if it is > 25 % worse in any.
-Experiment C (only if the model predicts >= 15 % makespan or deadline-miss reduction for the chosen scenario):
-- H7 supported if dynamic re-planning reduces deadline misses or makespan by >= 15 % relative to "aware at moves only"
-  in scenario C2 with no more than 2 re-plans per session and no run worse than the baseline by > 1 s.
+  others' makespan by >= 3.5 s (analytical 7.0 s), and by < 1 s when the source is otherwise idle.
+- H5e supported if the D.1b table is reproduced in rank order: at N = 4 with B_h = 1 Gbps a wrongly placed 0.5 Sink
+  reduces T_r by >= 0.5 T_s relative to none (analytical 28 s); at N = 1 by < 1 s; at N = 4 with B_h = 125 Mbps fixed
+  forwarding reduces it by < 1 s while aware reduces it by >= 0.5 T_s (analytical 18.7 s).
+Experiment B (network level, three destinations; 3 reps; model table committed before the run):
+- H6a supported if the best fixed plan differs across {uniform; B_s = 250; B_f = 125; B_f = 500; native source}
+  (predicted line/multipath; any forwarding; star; multipath; star).
+- H6b supported if at B_s = 250 every forwarding plan's makespan <= 0.5 x star's (analytical 56.5 vs 168.6).
+- H6c supported if at B_f = 125 line's and tree's last-destination completion >= 2 x star's (112 / 225 vs 42).
+- H6d supported if at B_f = 500 the disjoint-multipath plan's makespan <= 0.75 x line's (analytical 18.7 vs 28.1) and
+  <= 0.5 x the hub tree's (56.2); rejected at a condition if multipath is worse than tree by > 1 s there (the
+  overheads listed in D.2 would then be real).
+- H6e supported if at uniform 1 Gbps multipath is within 1 s of line.
+- H6f supported if the generalized aware rule's makespan is within 10 % of the best fixed plan in every condition;
+  rejected if > 25 % worse in any (that condition becomes the target for reconfiguration).
+Experiment E (network level; single session and N = 4; 3 reps; conditions of D.3):
+- H8a supported if, in the slow-B condition, aware-at-moves' T_r at D is <= 0.75 x the best fixed forwarding plan's
+  (line/tree/butterfly) and within 1 s of star's; rejected if any fixed plan beats aware by > 1 s.
+- H8b (dynamic value) supported if, in the mid-run C-degradation condition, the dynamic rule's T_r at D is <= 0.5 x
+  aware-at-moves' with <= 2 re-plans and no run worse than aware-at-moves by > 1 s in any other E condition; if H8b
+  fails, dynamic morphing is dropped and M3 is reported as provider selection at moves.
+- H8c (traffic) supported if every reuse policy's source bytes per session <= 1.1 Sinks and restart's >= 1.3.
+Experiment C: only if H8b holds or the model finds another >= 15 % condition; criteria written then.
 Validity for every network run: all fragments verified; paced egress within 1.05 x cap over 10 s; NIC peaks within
 1.15 x cap; four distinct hosts; invalid runs listed and re-run, never dropped.
 
-## G. Pilots (each run and inspected before its sweep)
+## G. Pilots (each inspected before its sweep; go/no-go stated)
 
-- A-pilot: k = 3, p = (0.6, 0.3, 0.1), L = 10, b = 1, policies none / oracle / top-1 / proportional, 3 draws, N = 1:
-  12 runs, ~8 min. Go if the accounting (bytes per candidate, holders forwarding pre-positioned fragments) matches
-  the model within 1 s; no-go = harness fix first.
-- B-pilot: uniform 1 Gbps, star / line / multipath / rule, 1 rep: 4 runs, ~5 min. Go if line and multipath are within
-  1 s of 14.1 s and star within 1 s of 42.2 s.
-- C-pilot: C2 only (B's egress 1 Gbps -> 125 Mbps at 50 % progress), fixed vs re-plan, 1 rep: 2 runs.
-
-## H. Full sweeps and I. costs (network runs ~0.5-2 min each including setup; GPU runs ~2-3 min)
-
-| sweep | grid | runs | wall |
+| step | pilot | runs | go if |
 |---|---|---|---|
-| A1 budget x lookahead | k = 3, p fixed, b in {0, 0.5, 1, 2} x L in {2, 5, 10, 20} x 5 policies x 10 draws | 800 (single-session runs ~25 s) | ~6 h; cut to 3 draws if 10 are not needed (variance is in the draw, so 10 are) |
-| A2 calibration | top-1 probability in {0.4, 0.6, 0.8, 1.0} x calibrated / miscalibrated x top-1 / proportional / coverage, L = 10, b = 1, 10 draws | 240 | ~2 h |
-| A3 contention | N = 4, b in {0, 0.5, 1}, top-1, calibrated 0.6, 3 draws x 3 reps | 27 (N = 4 runs ~60 s) | ~0.5 h |
-| B | 4 fixed + rule x {uniform, B_s 250, B_s 500, B_f 125, B_f 500, native B_in, native B_s} x 3 reps | 105 | ~2 h |
-| C2 | 2 policies x 3 drop levels x 3 reps | 18 | ~0.3 h |
-| D (GPU) | 6 policies x {slow, fast, repeated} x 3 reps | 54 | ~3 h + GPUs free on 4 hosts |
-Model sweeps (8 destinations, finer grids) are free and run first.
+| 1 | H4c fix on the Step 2 aware configurations | 45 (~45 min) | (1, 500) source bytes 1.00 +- 0.02, other 14 conditions unchanged within 1 s / 0.05 Sink |
+| 2 | A-pilot: k = 3, p = (0.6, 0.3, 0.1), L = 10, b = 1, none / oracle / top-1 / proportional, 3 draws, N = 1 | 12 (~8 min) | per-candidate bytes and T_r within 1 s of D.1; pre-positioned fragments at non-chosen candidates are forwarded (H5e path exercised) |
+| 3 | B-pilot: uniform 1 Gbps, star / line / tree / multipath / rule, 1 rep | 5 (~6 min) | line and multipath within 1 s of 14.1 s, tree within 1 s of 28.1, star within 1 s of 42.2 |
+| 6 | E/C-pilot: slow-B and C-degradation conditions, aware-at-moves vs dynamic, 1 rep | 4 | model and run within 1 s; dynamic's re-plan count <= 2 |
+
+## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
+
+| step | work | runs | wall |
+|---|---|---|---|
+| 0 | model correction (this document) + model extension for A/B/E; prediction tables committed | 0 | - |
+| 1 | H4c correction + re-validation | 45 | ~45 min |
+| 2 | A-pilot | 12 | ~8 min |
+| 3 | B-pilot (needs E.2, E.3) | 5 | ~6 min |
+| 4 | A sweep: A1 b in {0, 0.5, 1, 2} x L in {2, 5, 10, 20} x 5 policies x 10 draws (~25 s each); A2 top-1 probability {0.4, 0.6, 0.8, 1.0} x calibrated / miscalibrated x 3 policies x 10 draws; A3 N = 4, b in {0, 0.5, 1} x 3 draws x 3 reps (H5d, H5e) | 800 + 240 + 27 | ~8.5 h; A1 can be cut to the 8 (b, L) cells the pilot shows to be non-degenerate |
+| 5 | B sweep: 4 plans + rule x {uniform, B_s 250, B_s 500, B_f 125, B_f 500, native B_in, native B_s} x 3 reps | 105 | ~2 h |
+| 5b | E sweep: 7 policies x {slow B, N = 4 shared source, C degradation} x 3 reps (+ single/N = 4) | 63-126 | ~2-3 h |
+| 6 | C, only if H8b or the model justifies it | ~18 | ~0.3 h |
+| 7 | D (GPU): 6-7 policies x {slow, fast, repeated} x 3 reps | 54-63 | ~3-4 h with all four GPUs free |
+Model sweeps (8 destinations, finer grids) are free and precede every step.
 
 ## J. Risks and likely negative results
 
-- A: H5b (mean) will probably be rejected at 1 Gbps (linear objective); report it and keep the tail result only if it
-  clears the 2 s margin. Prediction calibration is synthetic (we draw destinations from a stated distribution); the
-  paper must say so and not claim a predictor.
-- B: at uniform capacities all forwarding topologies collapse onto the ingress bound; the interesting content is the
-  crossover map, which the model gives exactly and the testbed confirms at 7 points. Butterfly-like multipath is
-  predicted to beat line only for 222 < B_f < 1000 Mbps and to lose to star below that.
-- C: the gain exists only for mid-restoration bandwidth drops at a forwarder; if the model shows < 15 % the experiment
-  is dropped and M3 stays "re-plan at moves".
-- D: PSNR rejoin adds a constant ~4 s (6 calls) after bind that no topology changes; TTFO is ~0.7 s for every OTTER
-  variant. End-to-end differences will be in bind time and coverage only.
-- Measurement: loopback-validated harness features only; every new feature gets a loopback test at the real
-  412-fragment ratio before touching the testbed (Scenario B v1 was invalidated by exactly such defects).
+- A: H5b-mean is predicted rejected at 1 Gbps (linear objective); the tail gain (miss probability 0.4 -> 0.1) costs
+  3.2 s of mean. Calibration is synthetic (destinations drawn from a stated distribution): the paper must not claim a
+  predictor.
+- B: at uniform capacities all forwarding plans collapse onto the ingress bound; the content is the crossover map,
+  which the testbed confirms at 7 points. Multipath's overheads (3 x flows, shared ingress, placement) may erase its
+  predicted 18.7 vs 28.1 s advantage at B_f = 500; that would reject H6d and favour the simpler plans.
+- E: in the uniform condition every policy ties at D (Phase 1); E's content lives entirely in the heterogeneous and
+  shared-source conditions. If aware-at-moves matches the dynamic rule everywhere except the artificial C-degradation
+  case, M3 reduces to provider selection at moves.
+- C: built only on evidence from B/E; likely dropped.
+- D: PSNR rejoin adds a constant ~4 s after bind that no topology changes; TTFO is ~0.7 s for every OTTER variant;
+  end-to-end differences will be in bind time and coverage only.
+- Measurement: every new harness feature gets a loopback test at the real 412-fragment ratio before the testbed
+  (Scenario B v1 was invalidated by exactly such defects).
 
-## Critical assessment
+## Critical assessment (revised)
 
-1. **Full topology morphing is not scientifically justified by the evidence.** Phase 1, Scenario B and Step 2 show
-   one mechanism doing the work: keep verified fragments where they land and, at each event, assign each missing
-   fragment to the provider with the smallest whole-node backlog over capacity. Star, line, tree and multipath are
-   shapes that rule produces under different capacities (D.2), not mechanisms. Naming four operations (attach,
-   reparent, branch, prune) describes what one re-plan does; it should be presented as such, with "topology" as the
-   evaluation axis (which shape is optimal when) rather than as the contribution.
-2. **Butterfly vs tree:** analytically butterfly-like multipath never loses to tree (a tree shares a forwarder's egress
-   among children; multipath spreads disjoint fragments so every node forwards), and beats line only in the band
-   222 < B_f < 1000 Mbps (its time is (2/3) T(B_f) against line's T(B_f)); it is identical to fragment-level
-  multi-provider delivery that the harness already does
-   into one destination. There is no distinct mechanism to claim, only a distinct regime to map.
-3. **Dynamic adaptation vs overhead:** the switching cost is small (0.3 s + one fragment), so the question is not
-   overhead but whether conditions change within a restoration (14-56 s). Only mid-restoration forwarder slow-downs
-   (C2) are predicted to matter; everything else is already covered by re-planning at moves. Build C only if the
-   model shows >= 15 % for C2.
-4. **Pre-positioning vs routing adaptation:** routing adaptation is worth 12-13 % in narrow regimes (Step 2) and 0 at
-   the ingress bound; pre-positioning is the only lever that moves the ingress bound itself (Phase 1 oracle: 14.8 s ->
-   0.7-11.4 s). It is the more promising latency contribution, and H5e connects it to reuse: under source sharing,
-   speculative bytes are useful wherever they land. Its weakness is that the predictor is synthetic.
-5. **Simplest strongest contribution:** (M1) temporal state decomposition with execution moving ahead of the Sink
-   (measured: 0.7 s first output at every bandwidth); (M2) persistent, progress-preserving restoration whose provider
-   choice is backlog-aware (measured: completes where restart never does under repeated mobility; 1.00 Sink of source
-   traffic; crossover handled); (M3, conditional) budgeted pre-positioning to predicted destinations, evaluated against
-   the oracle and shown to be worth the traffic only under stated conditions. Drop "topology morphing" as a named
-   mechanism; keep the topology study as the evaluation that explains when each shape is optimal and shows the rule
-   reaching the best shape within 10 %.
-
-Recommended order: approve F -> implement E.1, E.2, E.5 (+ model) -> A-pilot -> A1/A2/A3 -> E.3 -> B-pilot -> B ->
-model check for C -> (C2 if justified) -> E (GPU) -> D.
+1. **What is validated:** progress preservation (Phase 1, Scenario B) and backlog-aware provider selection into one
+   destination (Step 2). **What is not:** multi-destination dissemination, forwarding among non-owners, and
+   reconfiguration triggered by anything other than a move. M3 therefore stays provisional; Experiments B and E are
+   designed to decide it, with "aware at moves only" as the baseline any reconfiguration mechanism must beat (H8b).
+2. **Butterfly vs tree:** under the D.2 assumptions the disjoint-multipath plan is never slower than the hub tree,
+   but that statement covers two specific implementations with full-duplex per-node caps, perfect pipelining and
+   disjoint placement; with per-link limits, deadlines, overlapping holdings or control overheads the order can
+   change. H6d is a hypothesis to measure, and its rejection (multipath worse than tree at B_f = 500) is a possible
+   and reportable outcome.
+3. **Dynamic adaptation:** the switching cost is small (0.3 s + one fragment), so the question is whether conditions
+   change within a restoration (14-56 s). The predicted large gains are confined to mid-restoration forwarder
+   degradation; E includes that condition explicitly so that the answer is measured rather than assumed.
+4. **Pre-positioning vs routing:** routing adaptation is worth 12-13 % in narrow regimes and 0 at the ingress bound;
+   pre-positioning is the only lever on the ingress bound itself (Phase 1 oracle 14.8 -> 0.7-11.4 s) and H5e ties it to
+   reuse under source sharing, with the explicit caveat that wrongly placed bytes are valuable only when the holder
+   can forward fast enough. It remains the more promising latency contribution, with a synthetic predictor.
+5. **Simplest defensible contribution today:** M1 (execution ahead of the Sink, measured) + progress-preserving,
+   bottleneck-aware restoration (measured). Whether M3 is "topology morphing" or "provider selection at moves plus
+   budgeted pre-positioning" is decided by H8b and H6f, not by this document.
