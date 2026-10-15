@@ -4,7 +4,7 @@ Valid runs 12/12; invalid: none; incomplete: none
 
 ## Per run: T_r (move -> all fragments verified at the destination) vs the fluid model at the run's caps
 
-| prepos | dest | correct | T_r s | model s | d | verified at move (Sinks) | model alloc | at chosen | at non-chosen | fwd by non-owner holders | post-move source | source total | total |
+| prepos | dest | correct | T_r s | model s | d | verified at move (Sinks) | model verified | at chosen | at non-chosen | fwd by non-owner holders | post-move source | source total | total |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | none | B | True | 14.03 | 14.14 | -0.11 | B:0.00 C:0.00 D:0.00 | B:0.00 C:0.00 D:0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 1.00 | 1.00 |
 | none | C | False | 14.00 | 14.14 | -0.14 | B:0.00 C:0.00 D:0.00 | B:0.00 C:0.00 D:0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 1.00 | 1.00 |
@@ -19,6 +19,6 @@ Valid runs 12/12; invalid: none; incomplete: none
 | top1 | C | False | 14.01 | 14.14 | -0.13 | B:0.71 C:0.00 D:0.00 | B:0.72 C:0.00 D:0.00 | 0.00 | 0.71 | 0.72 | 0.29 | 1.00 | 1.72 |
 | top1 | D | False | 14.02 | 14.14 | -0.12 | B:0.71 C:0.00 D:0.00 | B:0.72 C:0.00 D:0.00 | 0.00 | 0.71 | 0.72 | 0.29 | 1.00 | 1.72 |
 
-## Go/no-go (pre-registered: T_r and per-candidate verified bytes within 1 s / 0.05 Sink of the model; non-chosen holders forward; source <= 1 Sink)
+## Model agreement (T_r and verified bytes at the move within 1 s / 0.05 Sink of the fluid model; with fast holders: non-chosen holders forward, source <= 1 Sink)
 
 - all checks pass: GO

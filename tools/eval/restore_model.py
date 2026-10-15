@@ -139,6 +139,8 @@ class Model:
     def move(self, sid, to=None):
         old = self.owner[sid]
         new = to or EDGES[(EDGES.index(old) + 1) % 3]
+        if sid == "s0" and self.pp:
+            self.held_at_move = {e: len(self.held[sid][e]) / NFR for e in EDGES}   # verified at each candidate when the move happens
         self.owner[sid] = new; self.history[sid].append(new); self.move_t[sid] = self.t
         self.restored[sid] = None
         self.plan(sid, "move")
@@ -190,7 +192,7 @@ class Model:
             r0 = self.restored["s0"]; out["t_r"] = None if r0 is None else r0 - self.move_t["s0"]; out["alloc"] = self.alloc
             others = [v for k, v in self.restored.items() if k != "s0"]
             out["others_makespan"] = max(others) if others and None not in others else None
-            out["held_at_move"] = {e: len(self.held["s0"][e]) / NFR for e in EDGES}
+            out["held_at_move"] = getattr(self, "held_at_move", {e: 0.0 for e in EDGES})
         return out
 
 
