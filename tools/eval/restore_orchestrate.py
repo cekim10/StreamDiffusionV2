@@ -54,6 +54,10 @@ EDGES = ["B", "C", "D"]
 SINK_BYTES = 1725236640
 
 
+def prepos_tag(pp):
+    return f"_pp={pp['policy']}_L={pp['L']:g}_b={pp['b']:g}_d={pp['dest']}_k={pp['draw']}" if pp else ""
+
+
 def maxmin(flows, caps):
     """flows: [(id, src, dst)]; caps: {("out"|"in", node): bps}. Max-min fair rates under per-node caps."""
     rate = {f: 0.0 for f, _, _ in flows}
@@ -78,13 +82,15 @@ def maxmin(flows, caps):
 
 
 class Run:
-    def __init__(self, o, policy, n_sess, moves, rho, rep):
+    def __init__(self, o, policy, n_sess, moves, rho, rep, prepos=None):
         self.o, self.a = o, o.a
         self.policy, self.N, self.moves, self.rho, self.rep = policy, n_sess, moves, rho, rep
+        self.pp = prepos   # Experiment A: {"policy", "probs", "L", "b", "dest", "draw", "tau"} for session s0, else None
         self.tm = self.a.ts / rho
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         mtag = "cont" if moves == 0 else str(moves)
         btag = f"_bh={self.a.holder_mbps:g}" if self.a.holder_mbps else ""
+        btag += prepos_tag(prepos)
         self.run_id = f"policy={policy}_N={n_sess}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_{stamp}"
         self.rel_dir = f"results/evaluation/{self.a.experiment}/{self.run_id}"
         self.dir = REPO_ROOT / self.rel_dir
@@ -102,7 +108,10 @@ class Run:
                 self.caps[(d, node)] = float(v) * 1e6
         self.sids = [f"s{i}" for i in range(n_sess)]
         self.owner = {sid: EDGES[i % 3] for i, sid in enumerate(self.sids)}
+        if self.pp:
+            self.owner["s0"] = "A"   # the pre-positioned session executes at the source until its move
         self.history = {sid: [self.owner[sid]] for sid in self.sids}   # owners in order
+        self.move_t = {sid: None for sid in self.sids}
         self.held = {sid: {e: set() for e in ["A"] + EDGES} for sid in self.sids}
         self.inflight = {sid: defaultdict(set) for sid in self.sids}  # dst -> fids sent, not yet received
         self.skipped = {sid: set() for sid in self.sids}               # fragments a holder was asked for before it had them
@@ -185,8 +194,9 @@ class Run:
         missing = allf - self.held[sid][own] - self.claims(sid, own)
         if not missing:
             return
-        holders = [e for e in reversed(self.history[sid][:-1]) if e != own]
+        holders = [e for e in reversed(self.history[sid][:-1]) if e != own and e != "A"]   # the source is never a "holder"
         holders = list(dict.fromkeys(holders))  # newest first, unique
+        holders += [e for e in EDGES if e != own and e not in holders and self.held[sid][e]]   # pre-positioned, never-owner holders
         # fragments already on their way to a holder (sent, or the one a draining flow is finishing) will be held
         # there shortly: let that holder forward them (queued last) instead of asking the source to send them again
         soon = {h: set(self.inflight[sid][h]) for h in holders}
@@ -305,10 +315,11 @@ class Run:
             elif k == "EVENT":
                 self.ev.log(m["event"], nc.to_orch(m["t"]), **{x: y for x, y in m.items() if x not in ("kind", "event", "t", "label")})
 
-    def move(self, sid):
+    def move(self, sid, to=None):
         old = self.owner[sid]
-        new = EDGES[(EDGES.index(old) + 1) % 3]
+        new = to or EDGES[(EDGES.index(old) + 1) % 3] if old in EDGES else to
         self.owner[sid] = new
+        self.move_t[sid] = time.time()
         self.history[sid].append(new)
         self.owner_since[sid] = time.time()
         self.restored_now[sid] = False
@@ -317,6 +328,46 @@ class Run:
         if len(self.held[sid][new]) == self.nfr():
             self.restored_now[sid] = True
             self.restored[sid].append((time.time(), new)); self.ev.log("restored", session=sid, edge=new, immediate=True)
+
+    # ---------------- Experiment A: pre-positioning before s0's move
+    def prepos_start(self):
+        pp, a, S = self.pp, self.a, self.a.sink_bytes
+        order = sorted(EDGES, key=lambda c: -pp["probs"][EDGES.index(c)])          # candidates by probability, descending
+        prob = {c: pp["probs"][EDGES.index(c)] for c in EDGES}
+        deliv = {c: pp["L"] * self.caps[("in", c)] / 8 / S for c in EDGES}         # Sinks each candidate's ingress admits in L
+        avail = min(pp["b"], pp["L"] * self.caps[("out", "A")] / 8 / S)           # budget, or what the source can send in L
+        x = {c: 0.0 for c in EDGES}
+        pol = pp["policy"]
+        if pol == "oracle":
+            x[pp["dest"]] = min(avail, deliv[pp["dest"]])
+        elif pol == "top1":
+            x[order[0]] = min(avail, deliv[order[0]])
+        elif pol == "greedy":
+            rem = avail
+            for c in order:
+                x[c] = min(rem, deliv[c]); rem -= x[c]
+        elif pol == "proportional":   # probability-proportional share of the affordable amount (TOPOLOGY_PLAN D.1)
+            for c in order:
+                x[c] = min(avail * prob[c], deliv[c])
+        elif pol == "coverage":       # give each candidate enough for T_r <= tau, in probability order, then greedy
+            rem = avail
+            for c in order:
+                need = max(0.0, 1.0 - (pp["tau"] - 0.3) * self.caps[("in", c)] / 8 / S)
+                x[c] = min(need, deliv[c], rem); rem -= x[c]
+            for c in order:
+                add = min(rem, deliv[c] - x[c]); x[c] += add; rem -= add
+        elif pol != "none":
+            raise ValueError(pol)
+        # disjoint fragment sets, so fragments at a non-chosen candidate can still be forwarded to the true destination
+        pool = list(range(self.nfr())); pos = 0
+        self.pp_frag = {}
+        for c in order:
+            n = int(round(x[c] * self.nfr()))
+            self.pp_frag[c] = pool[pos:pos + n]; pos += n
+            self.start_flow("s0", "A", c, self.pp_frag[c], f"prepos {pol}: speculative fragments to candidate {c}")
+        self.pp_alloc = x
+        self.ev.log("prepos", policy=pol, dest=pp["dest"], L=pp["L"], budget=pp["b"], avail_sinks=avail,
+                    alloc_sinks={c: round(v, 4) for c, v in x.items()}, frags={c: len(v) for c, v in self.pp_frag.items()})
 
     # ---------------- run
     def execute(self):
@@ -340,10 +391,15 @@ class Run:
                 self.owner_since[sid] = self.t0
                 self.restored_now[sid] = False
                 self.plan(sid, "start")
-        # move schedule (staggered)
+        if self.pp:
+            with self.lock:
+                self.prepos_start()
+        # move schedule (staggered); entries (t, sid, explicit destination or None = next edge in the cycle)
         sched = []
         horizon = a.horizon_factor * self.N * a.ts + 2 * self.tm if self.moves == 0 else None
         for i, sid in enumerate(self.sids):
+            if self.pp and sid == "s0":
+                sched.append((self.t0 + self.pp["L"], sid, self.pp["dest"])); continue
             k = 1
             while True:
                 t = self.t0 + self.tm * (k + i / self.N)
@@ -351,7 +407,7 @@ class Run:
                     break
                 if horizon is not None and t > self.t0 + horizon:
                     break
-                sched.append((t, sid)); k += 1
+                sched.append((t, sid, None)); k += 1
                 if k > 10000:
                     break
         sched.sort()
@@ -362,9 +418,9 @@ class Run:
         while True:
             now = time.time()
             while sched and sched[0][0] <= now:
-                _, sid = sched.pop(0)
+                _, sid, to = sched.pop(0)
                 with self.lock:
-                    self.move(sid)
+                    self.move(sid, to)
             try:
                 m = self.o.events.get(timeout=0.02)
                 self.handle(m)
@@ -396,7 +452,9 @@ class Run:
             rs = self.restored[sid]
             first = self.rel(rs[0][0]) if rs else None
             # coverage: share of [t0, t_end] during which the current owner holds the whole Sink
-            per.append({"session": sid, "first_restored_s": first, "restorations": len(rs)})
+            mt = self.move_t[sid]
+            t_r = next((self.rel(t) - self.rel(mt) for t, e in rs if mt is not None and t >= mt and e == self.owner[sid]), None)
+            per.append({"session": sid, "first_restored_s": first, "restorations": len(rs), "move_s": None if mt is None else self.rel(mt), "t_r_s": t_r})
         # coverage from the event log (moves and restorations)
         evs = list(csv.DictReader(open(self.dir / "events.csv")))
         for row in per:
@@ -411,7 +469,7 @@ class Run:
                     covered += hi - r
             row["coverage"] = covered / max(1e-9, t_end - self.t0)
         with open(self.dir / "sessions.csv", "w", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=["session", "first_restored_s", "restorations", "coverage"]); w.writeheader(); w.writerows(per)
+            w = csv.DictWriter(fh, fieldnames=["session", "first_restored_s", "restorations", "move_s", "t_r_s", "coverage"]); w.writeheader(); w.writerows(per)
         tot = sum(b for *_, b in self.sent)
         src = sum(b for t, s, d, sid, f, b in self.sent if s == "A")
         link = defaultdict(int)
@@ -441,8 +499,24 @@ class Run:
             vals = [float(r[4]) for r in rows if r[4] and float(r[0]) >= self.t0]
             vtx = [float(r[5]) for r in rows if r[5] and float(r[0]) >= self.t0]
             nic_rx[lb] = {"rx_peak": max(vals) if vals else None, "tx_peak": max(vtx) if vtx else None}
+        prepos = None
+        if self.pp:
+            mt = self.move_t["s0"]
+            sent0 = [(t, s_, d, f, b) for t, s_, d, sid, f, b in self.sent if sid == "s0"]
+            recv0 = [(t, s_, d, f, b) for t, s_, d, sid, f, b, ok, dup_ in self.recv if sid == "s0" and ok and not dup_]
+            at_move = {c: sum(b for t, s_, d, f, b in recv0 if d == c and t <= mt) / S for c in EDGES}
+            prepos = {**{k: v for k, v in self.pp.items()}, "top1": max(EDGES, key=lambda c: self.pp["probs"][EDGES.index(c)]),
+                      "correct": self.pp["dest"] == max(EDGES, key=lambda c: self.pp["probs"][EDGES.index(c)]),
+                      "alloc_sinks": self.pp_alloc, "frags": {c: len(v) for c, v in self.pp_frag.items()},
+                      "sent_before_move_sinks": {c: sum(b for t, s_, d, f, b in sent0 if s_ == "A" and d == c and t <= mt) / S for c in EDGES},
+                      "verified_at_move_sinks": at_move, "at_chosen_sinks": at_move[self.pp["dest"]],
+                      "at_nonchosen_sinks": sum(v for c, v in at_move.items() if c != self.pp["dest"]),
+                      "post_move_source_sinks": sum(b for t, s_, d, f, b in sent0 if s_ == "A" and t > mt) / S,
+                      "forwarded_by_nonowner_holders_sinks": sum(b for t, s_, d, f, b in sent0 if s_ != "A" and s_ not in self.history["s0"][:-1]) / S,
+                      "forwarded_by_past_owners_sinks": sum(b for t, s_, d, f, b in sent0 if s_ != "A" and s_ in self.history["s0"][:-1]) / S,
+                      "move_s": self.rel(mt), "t_r_s": per[0]["t_r_s"]}
         summary = {
-            "run_id": self.run_id, "policy": self.policy, "N": self.N, "moves": self.moves, "rho": self.rho, "tm_s": self.tm, "rep": self.rep,
+            "run_id": self.run_id, "policy": self.policy, "prepos": prepos, "N": self.N, "moves": self.moves, "rho": self.rho, "tm_s": self.tm, "rep": self.rep,
             "sink_bytes": S, "frag_bytes": a.frag_bytes, "caps_mbps": {f"{n}:{d}": v / 1e6 for (d, n), v in self.caps.items()},
             "stop_reason": self.stop_reason, "duration_s": t_end - self.t0,
             "restored_sessions": len(fin), "first_restored": {"median": st.median(fin) if fin else None, "max": max(fin) if fin else None,
@@ -472,6 +546,10 @@ class Run:
                             "" if fl["t_end"] is None else f"{self.rel(fl['t_end']):.3f}", fl["cancelled"],
                             f"{fl['t_drained'] - fl['t_end']:.3f}" if fl.get("t_drained") and fl["t_end"] else "", fl["reason"]])
         ms = summary["makespan_s"]
+        if prepos:
+            print(f"[orch] prepos {prepos['policy']} dest={prepos['dest']} ({'correct' if prepos['correct'] else 'incorrect'}): T_r {prepos['t_r_s'] and round(prepos['t_r_s'], 2)} s, "
+                  f"verified at move {{{', '.join(f'{c}:{v:.2f}' for c, v in prepos['verified_at_move_sinks'].items())}}} S, post-move source {prepos['post_move_source_sinks']:.2f} S, "
+                  f"forwarded by non-owner holders {prepos['forwarded_by_nonowner_holders_sinks']:.2f} S", flush=True)
         print(f"[orch] {self.policy} N={self.N} moves={self.moves or 'cont'} rho={self.rho:g}: restored {len(fin)}/{self.N}, median first {summary['first_restored']['median'] and round(summary['first_restored']['median'], 1)} s, "
               f"makespan {ms and round(ms, 1)} s, coverage {summary['coverage_mean']:.2f}, source {src / S:.2f} S, total {tot / S:.2f} S, unused {unused / S:.2f} S | "
               f"A tx peak {nic_rx['A']['tx_peak']} Mbps, valid {all(v for v in summary['validation'].values())}", flush=True)
@@ -516,6 +594,23 @@ class Orch:
                 pass
 
 
+def prepos_configs(a, rep):
+    """Experiment A configurations for one rep: one per (pre-positioning policy, destination draw); [None] when off."""
+    if not a.prepos:
+        return [None]
+    import random
+    probs = [float(x) for x in a.probs.split(",")]
+    out = []
+    for pol in a.prepos.split(","):
+        for k in range(a.draws):
+            if a.dests:
+                ds = a.dests.split(","); dest = ds[k % len(ds)]
+            else:
+                dest = random.Random(1000 * rep + k).choices(EDGES, weights=probs)[0]
+            out.append({"policy": pol, "probs": probs, "L": a.lookahead, "b": a.budget, "dest": dest, "draw": k, "tau": a.tau})
+    return out
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--nodes", default=None, help="A=host[:ctl[:data]],B=...,C=...,D=... (default elves-01..04)")
@@ -533,6 +628,13 @@ def main():
     p.add_argument("--cap_mbps", type=float, default=1000.0, help="default per-node egress and ingress cap")
     p.add_argument("--caps", default="", help="overrides, e.g. 'B:out=250,D:in=4000'")
     p.add_argument("--holder_mbps", type=float, default=0.0, help="Step 2: cap every edge's egress at this (0 = cap_mbps); tagged bh= in run ids")
+    p.add_argument("--prepos", default="", help="Experiment A: pre-positioning policies for session s0 (none,oracle,top1,greedy,proportional,coverage); '' = off")
+    p.add_argument("--probs", default="0.6,0.3,0.1", help="predicted destination probabilities for B,C,D")
+    p.add_argument("--lookahead", type=float, default=10.0, help="seconds between the start of pre-positioning and s0's move")
+    p.add_argument("--budget", type=float, default=1.0, help="pre-positioning budget in Sinks")
+    p.add_argument("--dests", default="", help="deterministic true destinations, e.g. B,C,D (draw i uses the i-th, cyclic); '' = seeded draw from --probs")
+    p.add_argument("--draws", type=int, default=1, help="destination draws per (prepos policy, rep)")
+    p.add_argument("--tau", type=float, default=7.5, help="tail-coverage target T_r in seconds")
     p.add_argument("--horizon_factor", type=float, default=2.0, help="continuous mode: run for factor * N * T_s + 2 T_m")
     p.add_argument("--deadline_factor", type=float, default=2.0, help="single-move mode: give up after factor * N * T_s + 3 T_m")
     p.add_argument("--mss", type=int, default=DEFAULT_MSS)
@@ -555,12 +657,13 @@ def main():
                 for rho in [float(x) for x in a.rhos.split(",")]:
                     for n in [int(x) for x in a.sessions.split(",")]:
                         for pol in a.policies.split(","):
-                            mtag = "cont" if moves == 0 else str(moves)
-                            btag = f"_bh={a.holder_mbps:g}" if a.holder_mbps else ""
-                            done = [d for d in root.glob(f"policy={pol}_N={n}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_*") if (d / "summary.json").exists()]
-                            if done and not a.no_resume:
-                                print(f"[orch] skip (done): {done[0].name}", flush=True); continue
-                            out.append(Run(o, pol, n, moves, rho, rep).execute())
+                            for pp in prepos_configs(a, rep):
+                                mtag = "cont" if moves == 0 else str(moves)
+                                btag = (f"_bh={a.holder_mbps:g}" if a.holder_mbps else "") + prepos_tag(pp)
+                                done = [d for d in root.glob(f"policy={pol}_N={n}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_*") if (d / "summary.json").exists()]
+                                if done and not a.no_resume:
+                                    print(f"[orch] skip (done): {done[0].name}", flush=True); continue
+                                out.append(Run(o, pol, n, moves, rho, rep, prepos=pp).execute())
     finally:
         o.shutdown()
     (EVAL_ROOT / a.experiment).mkdir(parents=True, exist_ok=True)

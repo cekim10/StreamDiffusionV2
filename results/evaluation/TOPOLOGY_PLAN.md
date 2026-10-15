@@ -336,6 +336,35 @@ Validity for every network run: all fragments verified; paced egress within 1.05
 | 3 | B-pilot: uniform 1 Gbps, star / line / tree / multipath / rule, 1 rep | 5 (~6 min) | line and multipath within 1 s of 14.1 s, tree within 1 s of 28.1, star within 1 s of 42.2 |
 | 6 | E/C-pilot: slow-B and C-degradation conditions, aware-at-moves vs dynamic, 1 rep | 4 | model and run within 1 s; dynamic's re-plan count <= 2 |
 
+## G.1 Pre-run model tables (added before each run; thresholds in F and G unchanged)
+
+A-pilot (Step 2 of H): session s0 executes at A; candidates B, C, D with p = (0.6, 0.3, 0.1); L = 10 s, b = 1 Sink,
+1 Gbps caps; restoration policy `reuse_aware_in`; true destinations fixed to B, C, D (one draw each, so the
+incorrect-prediction forwarding path is exercised for top-1 and proportional). Allocation definitions as implemented
+(`restore_orchestrate.prepos_start`): deliverable per candidate = L x ingress / S; affordable = min(b, L x source
+egress / S); top-1-only fills the most likely candidate; greedy fills candidates in probability order; proportional
+gives each candidate p_i x affordable; coverage gives each candidate 1 - (tau - 0.3) / T_s in probability order then
+greedy; fragment sets are disjoint across candidates. **Model** T_r per true destination (+0.3 s control plane):
+
+```
+pre-positioning, L=10 s, b=1 Sinks, probs [0.6, 0.3, 0.1], restore policy reuse_aware_in, +0.3 s control plane
+      policy | T_r d=B T_r d=C T_r d=D |  mean  miss(>tau)  alloc
+-- N=1, holder egress 1000 Mbps
+        none |    14.14    14.14    14.14 | 14.14  1.00  B:0.00 C:0.00 D:0.00
+      oracle |     4.14     4.14     4.14 |  4.14  0.00  B:0.00 C:0.00 D:0.72
+        top1 |     4.14    14.14    14.14 |  8.14  0.40  B:0.72 C:0.00 D:0.00
+      greedy |     4.14    14.14    14.14 |  8.14  0.40  B:0.72 C:0.00 D:0.00
+proportional |     8.18    11.12    13.12 |  9.56  1.00  B:0.43 C:0.22 D:0.07
+    coverage |     7.54    10.74    14.14 |  9.16  1.00  B:0.48 C:0.25 D:0.00
+```
+
+Expected pilot outcomes: none 14.1 s everywhere; oracle 4.1 s; top-1 4.1 s at B and 14.1 s at C and D **with the whole
+0.72 Sink at B forwarded to the destination by B as a never-owner holder** (T_r unchanged because the ingress binds;
+this is the forwarding-path check, not a latency claim); proportional 8.2 / 11.1 / 13.1 s with 0.29 / 0.50 / 0.65 Sink
+forwarded by the non-chosen candidates. Source bytes exactly 1.00 Sink in every run (pre-positioned fragments are
+never resent). Loopback check at 1/27 scale (64 MiB Sink, 100 Mbps) reproduced every one of these within 0.1 s
+scaled, see `restore_prepos_pilot_notes.md` once the testbed run exists.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |

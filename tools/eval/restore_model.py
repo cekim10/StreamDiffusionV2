@@ -22,10 +22,14 @@ NFR = -(-SINK_BYTES // FLEN)   # 412
 
 
 class Model:
-    def __init__(self, policy, n, moves, tm, caps, dt=0.02):
+    def __init__(self, policy, n, moves, tm, caps, dt=0.02, prepos=None):
         self.policy, self.N, self.moves, self.tm, self.caps, self.dt = policy, n, moves, tm, caps, dt
+        self.pp = prepos
         self.sids = [f"s{i}" for i in range(n)]
         self.owner = {s: EDGES[i % 3] for i, s in enumerate(self.sids)}
+        if prepos:
+            self.owner["s0"] = "A"
+        self.move_t = {}
         self.history = {s: [self.owner[s]] for s in self.sids}
         self.held = {s: {e: set() for e in ["A"] + EDGES} for s in self.sids}
         for s in self.sids:
@@ -63,7 +67,8 @@ class Model:
         missing = allf - self.held[sid][own] - self.claims(sid, own)
         if not missing:
             return
-        holders = list(dict.fromkeys(e for e in reversed(self.history[sid][:-1]) if e != own))
+        holders = list(dict.fromkeys(e for e in reversed(self.history[sid][:-1]) if e != own and e != "A"))
+        holders += [e for e in EDGES if e != own and e not in holders and self.held[sid][e]]
         assign = defaultdict(list)
         if self.policy == "reuse_fixed":
             for f in sorted(missing):
@@ -100,10 +105,41 @@ class Model:
         for src, ids in assign.items():
             self.start(sid, src, own, ids)
 
-    def move(self, sid):
+    def prepos_start(self):
+        pp, S = self.pp, SINK_BYTES
+        order = sorted(EDGES, key=lambda c: -pp["probs"][EDGES.index(c)])
+        prob = {c: pp["probs"][EDGES.index(c)] for c in EDGES}
+        deliv = {c: pp["L"] * self.caps[("in", c)] / 8 / S for c in EDGES}
+        avail = min(pp["b"], pp["L"] * self.caps[("out", "A")] / 8 / S)
+        x = {c: 0.0 for c in EDGES}; pol = pp["policy"]
+        if pol == "oracle":
+            x[pp["dest"]] = min(avail, deliv[pp["dest"]])
+        elif pol == "top1":
+            x[order[0]] = min(avail, deliv[order[0]])
+        elif pol == "greedy":
+            rem = avail
+            for c in order:
+                x[c] = min(rem, deliv[c]); rem -= x[c]
+        elif pol == "proportional":
+            for c in order:
+                x[c] = min(avail * prob[c], deliv[c])
+        elif pol == "coverage":
+            rem = avail
+            for c in order:
+                need = max(0.0, 1.0 - (pp["tau"] - 0.3) * self.caps[("in", c)] / 8 / S)
+                x[c] = min(need, deliv[c], rem); rem -= x[c]
+            for c in order:
+                add = min(rem, deliv[c] - x[c]); x[c] += add; rem -= add
+        pos = 0
+        for c in order:
+            n = int(round(x[c] * NFR))
+            self.start("s0", "A", c, list(range(pos, pos + n))); pos += n
+        self.alloc = x
+
+    def move(self, sid, to=None):
         old = self.owner[sid]
-        new = EDGES[(EDGES.index(old) + 1) % 3]
-        self.owner[sid] = new; self.history[sid].append(new)
+        new = to or EDGES[(EDGES.index(old) + 1) % 3]
+        self.owner[sid] = new; self.history[sid].append(new); self.move_t[sid] = self.t
         self.restored[sid] = None
         self.plan(sid, "move")
         if len(self.held[sid][new]) == NFR:
@@ -112,11 +148,13 @@ class Model:
     def run(self, horizon):
         for s in self.sids:
             self.plan(s, "start")
-        sched = sorted((self.tm * (k + i / self.N), s) for i, s in enumerate(self.sids) for k in range(1, (self.moves or 10000) + 1)
-                       if self.tm * (k + i / self.N) <= horizon)
+        sched = sorted((self.tm * (k + i / self.N), s, None) for i, s in enumerate(self.sids) if not (self.pp and s == "s0")
+                       for k in range(1, (self.moves or 10000) + 1) if self.tm * (k + i / self.N) <= horizon)
+        if self.pp:
+            self.prepos_start(); sched = sorted(sched + [(self.pp["L"], "s0", self.pp["dest"])])
         while self.t < horizon:
             while sched and sched[0][0] <= self.t + 1e-9:
-                self.move(sched.pop(0)[1])
+                _, s, to = sched.pop(0); self.move(s, to)
             if self.moves and all(self.restored[s] is not None for s in self.sids) and not sched:
                 break
             rates = maxmin([(i, fl["src"], fl["dst"]) for i, fl in enumerate(self.flows)], self.caps)
@@ -135,14 +173,14 @@ class Model:
                         self.restored[fl["sid"]] = self.t + self.dt
                 if not fl["left"]:
                     done_flows.append(fl)
-            if done_flows:
+            if done_flows:   # a completed flow needs no re-plan (the orchestrator re-plans only when a provider skipped fragments)
                 self.flows = [fl for fl in self.flows if fl not in done_flows]
-                for fl in done_flows:
-                    if fl["sid"] not in [d["sid"] for d in done_flows[:done_flows.index(fl)]]:
-                        self.plan(fl["sid"], "flow_done")
             self.t += self.dt
         fin = [v for v in self.restored.values() if v is not None]
-        return {"restored": len(fin), "makespan": max(fin) if len(fin) == self.N else None, "source_per_session": self.src_bytes / SINK_BYTES / self.N}
+        out = {"restored": len(fin), "makespan": max(fin) if len(fin) == self.N else None, "source_per_session": self.src_bytes / SINK_BYTES / self.N}
+        if self.pp:
+            r0 = self.restored["s0"]; out["t_r"] = None if r0 is None else r0 - self.move_t["s0"]; out["alloc"] = self.alloc
+        return out
 
 
 def main():
@@ -155,7 +193,33 @@ def main():
     p.add_argument("--moves", type=int, default=1)
     p.add_argument("--ts", type=float, default=14.05)
     p.add_argument("--rho", type=float, default=2)
+    p.add_argument("--prepos", default="", help="Experiment A: pre-positioning policies (none,oracle,top1,greedy,proportional,coverage); prints T_r per true destination")
+    p.add_argument("--probs", default="0.6,0.3,0.1")
+    p.add_argument("--lookahead", type=float, default=10.0)
+    p.add_argument("--budget", type=float, default=1.0)
+    p.add_argument("--tau", type=float, default=7.5)
+    p.add_argument("--restore_policy", default="reuse_aware_in")
+    p.add_argument("--ctrl", type=float, default=0.3, help="control-plane seconds added to every predicted T_r")
     a = p.parse_args()
+    if a.prepos:
+        probs = [float(x) for x in a.probs.split(",")]
+        print(f"pre-positioning, L={a.lookahead:g} s, b={a.budget:g} Sinks, probs {probs}, restore policy {a.restore_policy}, +{a.ctrl} s control plane")
+        print(f"{'policy':>12} | " + " ".join(f"T_r d={c:>1}" for c in EDGES) + " |  mean  miss(>tau)  alloc")
+        for n in [int(x) for x in a.sessions.split(",")]:
+            for bh in [float(x) for x in a.holder_mbps.split(",")]:
+                caps = {("out", "A"): a.source_mbps * 1e6, ("in", "A"): a.in_mbps * 1e6}
+                for e in EDGES:
+                    caps[("out", e)] = bh * 1e6; caps[("in", e)] = a.in_mbps * 1e6
+                print(f"-- N={n}, holder egress {bh:g} Mbps")
+                for pol in a.prepos.split(","):
+                    tr = {}
+                    for d in EDGES:
+                        pp = {"policy": pol, "probs": probs, "L": a.lookahead, "b": a.budget, "dest": d, "tau": a.tau}
+                        r = Model(a.restore_policy, n, 1, a.ts / a.rho, caps, prepos=pp).run(horizon=a.lookahead + 4 * n * a.ts + 3 * a.ts / a.rho)
+                        tr[d] = None if r["t_r"] is None else r["t_r"] + a.ctrl; alloc = r["alloc"]
+                    mean = sum(p_ * tr[d] for p_, d in zip(probs, EDGES)); miss = sum(p_ for p_, d in zip(probs, EDGES) if tr[d] > a.tau)
+                    print(f"{pol:>12} | " + " ".join(f"{tr[d]:8.2f}" for d in EDGES) + f" | {mean:5.2f}  {miss:4.2f}  " + " ".join(f"{c}:{alloc[c]:.2f}" for c in EDGES))
+        return
     pols = a.policies.split(",")
     print(f"{'N':>2} {'B_h':>5} | " + " ".join(f"{pp:>16}" for pp in pols) + "   (makespan s / source Sinks per session)")
     for n in [int(x) for x in a.sessions.split(",")]:
