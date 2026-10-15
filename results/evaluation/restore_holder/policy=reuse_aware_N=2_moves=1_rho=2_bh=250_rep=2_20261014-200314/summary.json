@@ -1,0 +1,113 @@
+{
+ "run_id": "policy=reuse_aware_N=2_moves=1_rho=2_bh=250_rep=2_20261014-200314",
+ "policy": "reuse_aware",
+ "N": 2,
+ "moves": 1,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 2,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 250.0,
+  "C:out": 250.0,
+  "D:out": 250.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "all restored",
+ "duration_s": 30.043349742889404,
+ "restored_sessions": 2,
+ "first_restored": {
+  "median": 28.856049060821533,
+  "max": 29.01972246170044,
+  "all": [
+   28.692375659942627,
+   29.01972246170044
+  ]
+ },
+ "makespan_s": 29.01972246170044,
+ "coverage_mean": 0.039519585966621834,
+ "bytes": {
+  "total_sent": 4486466368,
+  "source_sent": 3475639104,
+  "by_link": {
+   "A->B": 436207616,
+   "A->C": 1888814496,
+   "B->C": 436207616,
+   "A->D": 1150616992,
+   "C->D": 574619648
+  },
+  "unused": 25165824,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 1.300246662973724,
+  "source_per_session": 1.0072934412058394,
+  "unused_per_session": 0.007293441205839449
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  }
+ },
+ "paced_egress_worst_1s_mbps": {
+  "A": 1006.63296,
+  "B": 251.65824,
+  "C": 251.65824,
+  "D": 0.0
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 994.0500480000001,
+  "B": 248.30279679999998,
+  "C": 249.1416576,
+  "D": 0.0
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 1.8,
+   "tx_peak": 1047.2
+  },
+  "B": {
+   "rx_peak": 522.6,
+   "tx_peak": 265.7
+  },
+  "C": {
+   "rx_peak": 1048.2,
+   "tx_peak": 265.0
+  },
+  "D": {
+   "rx_peak": 822.8,
+   "tx_peak": 0.9
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}

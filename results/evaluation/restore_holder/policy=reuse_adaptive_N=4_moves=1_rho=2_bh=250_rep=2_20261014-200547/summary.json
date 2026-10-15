@@ -1,0 +1,116 @@
+{
+ "run_id": "policy=reuse_adaptive_N=4_moves=1_rho=2_bh=250_rep=2_20261014-200547",
+ "policy": "reuse_adaptive",
+ "N": 4,
+ "moves": 1,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 2,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 250.0,
+  "C:out": 250.0,
+  "D:out": 250.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "all restored",
+ "duration_s": 60.6865119934082,
+ "restored_sessions": 4,
+ "first_restored": {
+  "median": 59.25680983066559,
+  "max": 59.66483235359192,
+  "all": [
+   58.445990324020386,
+   59.05392241477966,
+   59.459697246551514,
+   59.66483235359192
+  ]
+ },
+ "makespan_s": 59.66483235359192,
+ "coverage_mean": 0.02521815298223824,
+ "bytes": {
+  "total_sent": 8104711808,
+  "source_sent": 7425234560,
+  "by_link": {
+   "A->B": 2144667040,
+   "A->C": 3383364416,
+   "A->D": 1897203104,
+   "B->C": 339738624,
+   "C->D": 155189248,
+   "D->B": 184549376
+  },
+  "unused": 524288000,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 1.1744348021729936,
+  "source_per_session": 1.075973345894161,
+  "unused_per_session": 0.07597334589416094
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  }
+ },
+ "paced_egress_worst_1s_mbps": {
+  "A": 1017.654528,
+  "B": 251.65824,
+  "C": 251.65824,
+  "D": 251.65824
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 997.6687872,
+  "B": 218.9426688,
+  "C": 124.15139839999999,
+  "D": 147.6395008
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 3.9,
+   "tx_peak": 1066.8
+  },
+  "B": {
+   "rx_peak": 779.7,
+   "tx_peak": 265.8
+  },
+  "C": {
+   "rx_peak": 792.8,
+   "tx_peak": 264.1
+  },
+  "D": {
+   "rx_peak": 781.5,
+   "tx_peak": 265.5
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}

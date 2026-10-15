@@ -1,0 +1,12 @@
+t_wall,t_mono,t_rel,host,event,detail
+1792029219.258676,33278702.515047,0.000000,orchestrator,start,"{""policy"": ""reuse_adaptive"", ""N"": 1, ""moves"": 1, ""rho"": 2.0, ""tm"": 7.025}"
+1792029219.260357,33278702.516719,0.001681,orchestrator,flow_start,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""B"", ""n"": 412, ""rate_bps"": 1000000000.0, ""reason"": ""reuse_adaptive: source sends the rest""}"
+1792029219.264159,33278702.520843,0.005483,orchestrator,flow_connected,"{""t_send"": 1792029219.264195, ""flow"": ""f1_s0_AB"", ""t_recv_start"": 1792029219.2644086, ""t_recv"": 1792029219.2644093}"
+1792029226.284703,33278709.541069,7.026027,orchestrator,move,"{""session"": ""s0"", ""frm"": ""B"", ""to"": ""C""}"
+1792029226.285175,33278709.541536,7.026500,orchestrator,flow_cancel,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""left"": 206}"
+1792029226.287137,33278709.543498,7.028461,orchestrator,flow_start,"{""flow"": ""f2_s0_AC"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""C"", ""n"": 388, ""rate_bps"": 500000000.0, ""reason"": ""reuse_adaptive: source sends the rest""}"
+1792029226.287469,33278709.543829,7.028793,orchestrator,flow_start,"{""flow"": ""f3_s0_BC"", ""session"": ""s0"", ""src"": ""B"", ""dst"": ""C"", ""n"": 24, ""rate_bps"": 62500000.0, ""reason"": ""reuse_adaptive: reuse fragments held at B""}"
+1792029226.291095,33278709.547843,7.032419,orchestrator,flow_connected,"{""t_send"": 1792029226.2916343, ""flow"": ""f3_s0_BC"", ""t_recv_start"": 1792029226.2914047, ""t_recv"": 1792029226.2914064}"
+1792029226.292222,33278709.548957,7.033547,orchestrator,flow_connected,"{""t_send"": 1792029226.292252, ""flow"": ""f2_s0_AC"", ""t_recv_start"": 1792029226.2925172, ""t_recv"": 1792029226.2925186}"
+1792029240.273887,33278723.532484,21.015211,orchestrator,restored,"{""session"": ""s0"", ""edge"": ""C""}"
+1792029240.273887,33278724.533872,21.015211,orchestrator,sink_complete,"{""session"": ""s0"", ""node"": ""C"", ""digest_ok"": true}"

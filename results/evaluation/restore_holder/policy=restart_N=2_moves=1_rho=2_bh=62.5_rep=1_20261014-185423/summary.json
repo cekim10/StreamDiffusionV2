@@ -1,0 +1,111 @@
+{
+ "run_id": "policy=restart_N=2_moves=1_rho=2_bh=62.5_rep=1_20261014-185423",
+ "policy": "restart",
+ "N": 2,
+ "moves": 1,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 1,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 62.5,
+  "C:out": 62.5,
+  "D:out": 62.5,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "all restored",
+ "duration_s": 37.65424370765686,
+ "restored_sessions": 2,
+ "first_restored": {
+  "median": 35.7621533870697,
+  "max": 36.63255524635315,
+  "all": [
+   34.891751527786255,
+   36.63255524635315
+  ]
+ },
+ "makespan_s": 36.63255524635315,
+ "coverage_mean": 0.05024905618465815,
+ "bytes": {
+  "total_sent": 4545186624,
+  "source_sent": 4545186624,
+  "by_link": {
+   "A->B": 440401920,
+   "A->C": 2379548064,
+   "A->D": 1725236640
+  },
+  "unused": 1094713344,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 1.3172646924540161,
+  "source_per_session": 1.3172646924540161,
+  "unused_per_session": 0.31726469245401606
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  }
+ },
+ "paced_egress_worst_1s_mbps": {
+  "A": 1006.63296,
+  "B": 0.0,
+  "C": 0.0,
+  "D": 0.0
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 994.3133439999999,
+  "B": 0.0,
+  "C": 0.0,
+  "D": 0.0
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 3.9,
+   "tx_peak": 1050.7
+  },
+  "B": {
+   "rx_peak": 522.9,
+   "tx_peak": 0.4
+  },
+  "C": {
+   "rx_peak": 1038.4,
+   "tx_peak": 1.7
+  },
+  "D": {
+   "rx_peak": 1025.1,
+   "tx_peak": 2.9
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}

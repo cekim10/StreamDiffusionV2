@@ -1,0 +1,10 @@
+t_wall,t_mono,t_rel,host,event,detail
+1792031089.841847,33280573.098225,0.000000,orchestrator,start,"{""policy"": ""restart"", ""N"": 1, ""moves"": 1, ""rho"": 2.0, ""tm"": 7.025}"
+1792031089.842507,33280573.098868,0.000661,orchestrator,flow_start,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""B"", ""n"": 412, ""rate_bps"": 1000000000.0, ""reason"": ""restart: source sends the whole Sink to the new owner""}"
+1792031089.847440,33280573.104189,0.005593,orchestrator,flow_connected,"{""t_send"": 1792031089.8474834, ""flow"": ""f1_s0_AB"", ""t_recv_start"": 1792031089.8477347, ""t_recv"": 1792031089.847736}"
+1792031096.873122,33280580.129492,7.031275,orchestrator,move,"{""session"": ""s0"", ""frm"": ""B"", ""to"": ""C""}"
+1792031096.873793,33280580.130154,7.031946,orchestrator,flow_cancel,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""left"": 206}"
+1792031096.874975,33280580.131336,7.033128,orchestrator,flow_start,"{""flow"": ""f2_s0_AC"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""C"", ""n"": 412, ""rate_bps"": 500000000.0, ""reason"": ""restart: source sends the whole Sink to the new owner""}"
+1792031096.881752,33280580.138575,7.039906,orchestrator,flow_connected,"{""t_send"": 1792031096.8818004, ""flow"": ""f2_s0_AC"", ""t_recv_start"": 1792031096.8821332, ""t_recv"": 1792031096.882134}"
+1792031110.907449,33280594.166238,21.065603,orchestrator,restored,"{""session"": ""s0"", ""edge"": ""C""}"
+1792031110.907449,33280595.167839,21.065603,orchestrator,sink_complete,"{""session"": ""s0"", ""node"": ""C"", ""digest_ok"": true}"

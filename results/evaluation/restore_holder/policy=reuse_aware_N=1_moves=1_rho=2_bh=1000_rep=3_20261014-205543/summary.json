@@ -1,0 +1,110 @@
+{
+ "run_id": "policy=reuse_aware_N=1_moves=1_rho=2_bh=1000_rep=3_20261014-205543",
+ "policy": "reuse_aware",
+ "N": 1,
+ "moves": 1,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 3,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 1000.0,
+  "C:out": 1000.0,
+  "D:out": 1000.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "all restored",
+ "duration_s": 22.08434748649597,
+ "restored_sessions": 1,
+ "first_restored": {
+  "median": 21.05895185470581,
+  "max": 21.05895185470581,
+  "all": [
+   21.05895185470581
+  ]
+ },
+ "makespan_s": 21.05895185470581,
+ "coverage_mean": 0.046430870874630735,
+ "bytes": {
+  "total_sent": 2593457568,
+  "source_sent": 1725236640,
+  "by_link": {
+   "A->B": 868220928,
+   "B->C": 868220928,
+   "A->C": 857015712
+  },
+  "unused": 0,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 1.503247443202922,
+  "source_per_session": 1.0,
+  "unused_per_session": 0.0
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  }
+ },
+ "paced_egress_worst_1s_mbps": {
+  "A": 989.855744,
+  "B": 494.927872,
+  "C": 0.0,
+  "D": 0.0
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 834.666496,
+  "B": 494.0890112,
+  "C": 0.0,
+  "D": 0.0
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 1.4,
+   "tx_peak": 1039.5
+  },
+  "B": {
+   "rx_peak": 1037.4,
+   "tx_peak": 522.5
+  },
+  "C": {
+   "rx_peak": 1040.1,
+   "tx_peak": 1.1
+  },
+  "D": {
+   "rx_peak": 0.3,
+   "tx_peak": 0.1
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}
