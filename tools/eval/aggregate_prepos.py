@@ -43,16 +43,54 @@ def model_tr(s):
     for k, v in s["caps_mbps"].items():
         node, d = k.split(":"); caps[(d, node)] = v * 1e6
     rm.SINK_BYTES = s["sink_bytes"]; rm.FLEN = s["frag_bytes"]; rm.NFR = -(-s["sink_bytes"] // s["frag_bytes"])
+    os_ = pp.get("others_start", 0.0) or 0.0
     m = rm.Model(s["policy"], s["N"], 1, s["tm_s"], caps, prepos={"policy": pp["policy"], "probs": pp["probs"], "L": pp["L"], "b": pp["b"],
-                                                                 "dest": pp["dest"], "tau": pp["tau"]})
-    r = m.run(horizon=pp["L"] + 4 * s["N"] * s["sink_bytes"] * 8 / caps[("in", "B")] + 30)
-    return (None if r["t_r"] is None else r["t_r"] + CTRL), r["alloc"]
+                                                                 "dest": pp["dest"], "tau": pp["tau"], "others_start": os_})
+    r = m.run(horizon=pp["L"] + os_ + 8 * s["N"] * s["sink_bytes"] * 8 / min(caps[("in", "B")], caps[("out", "B")]) + 30)
+    om = r.get("others_makespan"); om = None if om is None else om + CTRL
+    return (None if r["t_r"] is None else r["t_r"] + CTRL), r["alloc"], om
+
+
+def a3_verdicts(cfg):
+    """Frozen H5d / H5e (TOPOLOGY_PLAN.md F): judged on medians; model values shown beside each."""
+    TS = 14.05
+    R = {(c["N"], c["policy"], c["holder_mbps"], c["others_start"], c["prepos"], c["dest"]): c for c in cfg}
+    g = lambda *k: R.get(k)  # noqa: E731
+    f = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
+    out = ["", "## A3: frozen criteria (medians; model value in brackets)", "",
+           "| clause | configuration | measured | model | threshold | verdict |", "|---|---|---|---|---|---|"]
+    def row(name, cfgtxt, meas, mod, thr_txt, ok):
+        out.append(f"| {name} | {cfgtxt} | {f(meas)} | {f(mod)} | {thr_txt} | {'-' if ok is None else ('PASS' if ok else 'FAIL')} |")
+    # H5d main: others' makespan with top-1 pre-positioning (others at t0) minus none
+    a_, b_ = g(4, "reuse_aware_in", 1000.0, 0.0, "none", "B"), g(4, "reuse_aware_in", 1000.0, 0.0, "top1", "B")
+    if a_ and b_ and a_["others_makespan_median"] is not None and b_["others_makespan_median"] is not None:
+        d = b_["others_makespan_median"] - a_["others_makespan_median"]; dm = (b_["model_others_makespan"] or 0) - (a_["model_others_makespan"] or 0)
+        row("H5d interference", "N=4, others at t0: others' makespan top-1(0.5) - none", d, dm, ">= 3.5 s", d >= 3.5)
+    # H5d idle clause: others start at L (pre-positioning finished before)
+    a_, b_ = g(4, "reuse_aware_in", 1000.0, 10.0, "none", "C"), g(4, "reuse_aware_in", 1000.0, 10.0, "top1", "C")
+    if a_ and b_ and a_["others_makespan_median"] is not None and b_["others_makespan_median"] is not None:
+        d = b_["others_makespan_median"] - a_["others_makespan_median"]; dm = (b_["model_others_makespan"] or 0) - (a_["model_others_makespan"] or 0)
+        row("H5d idle source", "N=4, others at L: others' makespan top-1(0.5) - none", d, dm, "< 1 s", d < 1.0)
+        d = a_["t_r_median"] - b_["t_r_median"]; dm = a_["model_t_r"] - b_["model_t_r"]
+        row("H5e shared source", "N=4, 1 Gbps holders, others at L: T_r none - top-1 -> C (wrong)", d, dm, f">= 0.5 T_s = {0.5 * TS:.1f} s", d >= 0.5 * TS)
+    a_, b_ = g(1, "reuse_aware_in", 1000.0, 0.0, "none", "C"), g(1, "reuse_aware_in", 1000.0, 0.0, "top1", "C")
+    if a_ and b_:
+        d = a_["t_r_median"] - b_["t_r_median"]; dm = a_["model_t_r"] - b_["model_t_r"]
+        row("H5e ingress-bound", "N=1: T_r none - top-1 -> C (wrong)", d, dm, "|d| < 1 s", abs(d) < 1.0)
+    for pol, thr_txt, test in (("reuse_fixed", "< 1 s", lambda d: d < 1.0), ("reuse_aware_in", f">= 0.5 T_s = {0.5 * TS:.1f} s", lambda d: d >= 0.5 * TS)):
+        a_, b_ = g(4, pol, 125.0, 10.0, "none", "C"), g(4, pol, 125.0, 10.0, "top1", "C")
+        if a_ and b_:
+            d = a_["t_r_median"] - b_["t_r_median"]; dm = a_["model_t_r"] - b_["model_t_r"]
+            row(f"H5e slow holder, {pol}", "N=4, 125 Mbps holders, others at L: T_r none - top-1 -> C (wrong)", d, dm, thr_txt, test(d))
+    return out
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--experiment", default="restore_prepos_pilot")
     ap.add_argument("--allow_loopback", action="store_true")
+    ap.add_argument("--a3", action="store_true", help="apply the frozen H5d / H5e criteria (TOPOLOGY_PLAN F) to the A3 grid")
+    ap.add_argument("--ts", type=float, default=14.05, help="T_s used for the 0.5 T_s threshold (measured, 1 Gbps)")
     a = ap.parse_args()
     root = ROOT / "results/evaluation" / a.experiment
     runs, incomplete = load(root)
@@ -61,8 +99,10 @@ def main():
     S = runs[0]["sink_bytes"]
     rows = []
     for r in runs:
-        pp = r["prepos"]; mt, alloc = model_tr(r)
+        pp = r["prepos"]; mt, alloc, mom = model_tr(r)
         rows.append({"run": r["dir"], "prepos": pp["policy"], "dest": pp["dest"], "correct": pp["correct"], "draw": pp["draw"], "rep": r["rep"],
+                     "N": r["N"], "policy": r["policy"], "holder_mbps": r["caps_mbps"]["B:out"], "others_start": pp.get("others_start", 0.0) or 0.0,
+                     "others_makespan_s": pp.get("others_makespan_s"), "model_others_makespan_s": mom,
                      "L_s": pp["L"], "budget_sinks": pp["b"], "t_r_s": pp["t_r_s"], "model_t_r_s": mt,
                      "verified_at_move": {c: round(v, 3) for c, v in pp["verified_at_move_sinks"].items()},
                      "model_alloc": {c: round(v, 3) for c, v in alloc.items()},
@@ -77,10 +117,13 @@ def main():
     G = defaultdict(list)
     for x in rows:
         if x["valid"]:
-            G[(x["prepos"], x["dest"])].append(x)
+            G[(x["N"], x["policy"], x["holder_mbps"], x["others_start"], x["prepos"], x["dest"])].append(x)
     cfg = []
-    for (p, d), xs in sorted(G.items()):
-        cfg.append({"prepos": p, "dest": d, "n": len(xs), "t_r_median": st.median(x["t_r_s"] for x in xs), "model_t_r": xs[0]["model_t_r_s"],
+    for (n_, pol, bh, os_, p, d), xs in sorted(G.items()):
+        om = [x["others_makespan_s"] for x in xs if x["others_makespan_s"] is not None]
+        cfg.append({"N": n_, "policy": pol, "holder_mbps": bh, "others_start": os_, "prepos": p, "dest": d, "n": len(xs),
+                    "t_r_median": st.median(x["t_r_s"] for x in xs), "model_t_r": xs[0]["model_t_r_s"],
+                    "others_makespan_median": st.median(om) if om else None, "model_others_makespan": xs[0]["model_others_makespan_s"],
                     "at_chosen": st.median(x["at_chosen"] for x in xs), "at_nonchosen": st.median(x["at_nonchosen"] for x in xs),
                     "fwd_nonowner": st.median(x["fwd_nonowner"] for x in xs), "post_move_source": st.median(x["post_move_source"] for x in xs),
                     "source_total": st.median(x["source_total"] for x in xs), "total": st.median(x["total"] for x in xs)})
@@ -110,6 +153,8 @@ def main():
             fails.append((x["run"], f"source total {x['source_total']:.3f} > 1 Sink"))
     out += ["", "## Go/no-go (pre-registered: T_r and per-candidate verified bytes within 1 s / 0.05 Sink of the model; non-chosen holders forward; source <= 1 Sink)", ""]
     out += [f"- FAIL {r}: {m}" for r, m in fails] or ["- all checks pass: GO"]
+    if a.a3:
+        out += a3_verdicts(cfg)
     (root / "criteria.md").write_text("\n".join(out) + "\n")
     print("\n".join(out))
 

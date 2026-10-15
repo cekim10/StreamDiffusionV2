@@ -146,15 +146,23 @@ class Model:
             self.restored[sid] = self.t
 
     def run(self, horizon):
+        os_ = (self.pp or {}).get("others_start", 0.0) or 0.0
         for s in self.sids:
-            self.plan(s, "start")
-        sched = sorted((self.tm * (k + i / self.N), s, None) for i, s in enumerate(self.sids) if not (self.pp and s == "s0")
-                       for k in range(1, (self.moves or 10000) + 1) if self.tm * (k + i / self.N) <= horizon)
+            if not (os_ and s != "s0"):
+                self.plan(s, "start")
+        sched = sorted((os_ + self.tm * (k + i / self.N), s, None) for i, s in enumerate(self.sids) if not (self.pp and s == "s0")
+                       for k in range(1, (self.moves or 10000) + 1) if os_ + self.tm * (k + i / self.N) <= horizon)
+        if os_:
+            sched = sorted(sched + [(os_, s, "__start__") for s in self.sids if s != "s0"])
         if self.pp:
             self.prepos_start(); sched = sorted(sched + [(self.pp["L"], "s0", self.pp["dest"])])
         while self.t < horizon:
             while sched and sched[0][0] <= self.t + 1e-9:
-                _, s, to = sched.pop(0); self.move(s, to)
+                _, s, to = sched.pop(0)
+                if to == "__start__":
+                    self.plan(s, "start")
+                else:
+                    self.move(s, to)
             if self.moves and all(self.restored[s] is not None for s in self.sids) and not sched:
                 break
             rates = maxmin([(i, fl["src"], fl["dst"]) for i, fl in enumerate(self.flows)], self.caps)
@@ -180,6 +188,9 @@ class Model:
         out = {"restored": len(fin), "makespan": max(fin) if len(fin) == self.N else None, "source_per_session": self.src_bytes / SINK_BYTES / self.N}
         if self.pp:
             r0 = self.restored["s0"]; out["t_r"] = None if r0 is None else r0 - self.move_t["s0"]; out["alloc"] = self.alloc
+            others = [v for k, v in self.restored.items() if k != "s0"]
+            out["others_makespan"] = max(others) if others and None not in others else None
+            out["held_at_move"] = {e: len(self.held["s0"][e]) / NFR for e in EDGES}
         return out
 
 

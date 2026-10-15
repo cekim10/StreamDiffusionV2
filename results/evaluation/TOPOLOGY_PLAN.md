@@ -365,6 +365,50 @@ forwarded by the non-chosen candidates. Source bytes exactly 1.00 Sink in every 
 never resent). Loopback check at 1/27 scale (64 MiB Sink, 100 Mbps) reproduced every one of these within 0.1 s
 scaled, see `restore_prepos_pilot_notes.md` once the testbed run exists.
 
+A3 (approved after the pilot; arrangement fixed here before the run, thresholds in F unchanged). The frozen H5d and
+H5e clauses assume two different timings, both consistent with their text and with D.1b: **H5d** (interference) needs
+the other sessions to be restoring while s0 pre-positions, so they start at t0 (`--others_start 0`); **H5e** (value of
+wrongly placed fragments) needs the 0.5 Sink to have landed before contention starts, so the others start at s0's move
+(`--others_start 10`, = L). Under contention a pre-positioning flow gets only the 4-way share (250 Mbps), so with
+others active only ~0.18 Sink lands in L = 10 s; the model accounts for this. Grid (3 reps each, L = 10 s, b = 0.5,
+p = 0.6/0.3/0.1, restoration `reuse_aware_in` unless stated; experiment `restore_prepos_a3`, 30 runs, ~40 min):
+H5d: N = 4, others at t0, {none, top-1 -> B}; H5e: N = 4, others at L, 1 Gbps holders, {none -> C, top-1 -> C};
+N = 1, {none -> C, top-1 -> C}; N = 4, others at L, 125 Mbps holders, {reuse_fixed, reuse_aware_in} x {none -> C,
+top-1 -> C}. The "source otherwise idle" clause of H5d is read from the others-at-L runs (the pre-positioning has ended
+before they start). **Model** predictions (+0.3 s control plane):
+
+```
+A3 model table (L = 10 s, p = 0.6/0.3/0.1, restoration reuse_aware_in unless stated, +0.3 s control plane)
+H5d arrangement: others start at t0 (active during pre-positioning); N = 4, holders 1 Gbps
+  b=0     none->B: T_r   45.7  others_makespan   52.3  held@move 1.00 (B 1.00 C 0.00)  source 4.01 S
+  b=0.5   top1->B: T_r   32.4  others_makespan   55.7  held@move 1.00 (B 1.00 C 0.00)  source 4.01 S
+  b=0.5   top1->C: T_r   45.7  others_makespan   55.7  held@move 1.18 (B 0.18 C 1.00)  source 4.01 S
+  b=1     top1->B: T_r   34.2  others_makespan   55.7  held@move 1.00 (B 1.00 C 0.00)  source 4.01 S
+H5e arrangement: others start at s0's move (L); N = 4, holders 1 Gbps
+  b=0     none->C: T_r   55.6  others_makespan   65.7  held@move 1.00 (B 0.00 C 1.00)  source 4.01 S
+  b=0.5   top1->C: T_r   28.0  others_makespan   58.8  held@move 1.50 (B 0.50 C 1.00)  source 4.01 S
+  b=0.5   top1->B: T_r   28.0  others_makespan   58.8  held@move 1.00 (B 1.00 C 0.00)  source 4.01 S
+  b=0.5  oracle->C: T_r   28.0  others_makespan   58.8  held@move 1.00 (B 0.00 C 1.00)  source 4.01 S
+H5e, N = 1 (no others)
+  b=0     none->C: T_r   14.1  others_makespan   None  held@move 1.00 (B 0.00 C 1.00)  source 1.00 S
+  b=0.5   top1->C: T_r   14.1  others_makespan   None  held@move 1.50 (B 0.50 C 1.00)  source 1.00 S
+  b=0.5   top1->B: T_r    7.2  others_makespan   None  held@move 1.00 (B 1.00 C 0.00)  source 1.00 S
+H5e, N = 4, holders 125 Mbps, others start at L
+     reuse_fixed b=0     none->C: T_r   55.6  others_makespan   65.7  held@move 1.00 (B 0.00 C 1.00)  source 4.01 S
+     reuse_fixed b=0.5   top1->C: T_r   80.0  others_makespan   71.5  held@move 1.50 (B 0.50 C 1.00)  source 4.01 S
+  reuse_aware_in b=0     none->C: T_r   55.6  others_makespan   65.7  held@move 1.00 (B 0.00 C 1.00)  source 4.01 S
+  reuse_aware_in b=0.5   top1->C: T_r   48.8  others_makespan   64.0  held@move 1.50 (B 0.50 C 1.00)  source 4.39 S
+```
+
+Model-implied verdicts, written before the run: H5d main clause +3.4 s against a 3.5 s threshold (**borderline FAIL
+predicted**: the frozen analytic 7.0 s counted the whole 0.5 Sink as extra source work, but only 0.18 Sink leaves the
+source during L under the 4-way share and s0's post-move work shrinks by the same amount, so the net delay to the others
+is the share they lose during [0, L]); H5d idle clause: others finish 6.9 s *earlier* (pass); H5e N = 4, 1 Gbps:
+55.6 -> 28.0 s, gain 27.6 s (pass; D.1b predicted 28 s); H5e N = 1: 14.1 vs 14.1 (pass); H5e slow holder: fixed
+55.6 -> 80.0 s, worse (pass of the "< 1 s reduction" clause); aware_in 55.6 -> 48.8 s, 6.8 s against a 7.0 s threshold
+(**borderline FAIL predicted**; D.1b's 18.7 s ignored the other sessions' own moves and the shrinking source share).
+Whatever the run shows is judged against the frozen thresholds; the borderline cases are reported as such.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |

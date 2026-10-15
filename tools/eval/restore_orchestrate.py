@@ -55,7 +55,7 @@ SINK_BYTES = 1725236640
 
 
 def prepos_tag(pp):
-    return f"_pp={pp['policy']}_L={pp['L']:g}_b={pp['b']:g}_d={pp['dest']}_k={pp['draw']}" if pp else ""
+    return (f"_pp={pp['policy']}_L={pp['L']:g}_b={pp['b']:g}_d={pp['dest']}_k={pp['draw']}" + (f"_os={pp['others_start']:g}" if pp.get("others_start") else "")) if pp else ""
 
 
 def maxmin(flows, caps):
@@ -386,23 +386,29 @@ class Run:
             self.o.events.get()
         self.t0 = time.time(); self.ev.set_ref(self.t0)
         self.ev.log("start", self.t0, policy=self.policy, N=self.N, moves=self.moves, rho=self.rho, tm=self.tm)
+        ostart = self.a.others_start if self.pp else 0.0   # A3: other sessions begin restoring at t0 + others_start
         with self.lock:
             for sid in self.sids:
                 self.owner_since[sid] = self.t0
                 self.restored_now[sid] = False
-                self.plan(sid, "start")
+                if not (ostart and sid != "s0"):
+                    self.plan(sid, "start")
         if self.pp:
             with self.lock:
                 self.prepos_start()
+            if ostart:
+                self.ev.log("others_start_scheduled", t=self.t0 + ostart, sessions=[x for x in self.sids if x != "s0"])
         # move schedule (staggered); entries (t, sid, explicit destination or None = next edge in the cycle)
         sched = []
         horizon = a.horizon_factor * self.N * a.ts + 2 * self.tm if self.moves == 0 else None
         for i, sid in enumerate(self.sids):
             if self.pp and sid == "s0":
                 sched.append((self.t0 + self.pp["L"], sid, self.pp["dest"])); continue
+            if ostart:
+                sched.append((self.t0 + ostart, sid, "__start__"))
             k = 1
             while True:
-                t = self.t0 + self.tm * (k + i / self.N)
+                t = self.t0 + ostart + self.tm * (k + i / self.N)
                 if self.moves and k > self.moves:
                     break
                 if horizon is not None and t > self.t0 + horizon:
@@ -420,7 +426,10 @@ class Run:
             while sched and sched[0][0] <= now:
                 _, sid, to = sched.pop(0)
                 with self.lock:
-                    self.move(sid, to)
+                    if to == "__start__":
+                        self.owner_since[sid] = time.time(); self.ev.log("session_start", session=sid, edge=self.owner[sid]); self.plan(sid, "start")
+                    else:
+                        self.move(sid, to)
             try:
                 m = self.o.events.get(timeout=0.02)
                 self.handle(m)
@@ -505,7 +514,10 @@ class Run:
             sent0 = [(t, s_, d, f, b) for t, s_, d, sid, f, b in self.sent if sid == "s0"]
             recv0 = [(t, s_, d, f, b) for t, s_, d, sid, f, b, ok, dup_ in self.recv if sid == "s0" and ok and not dup_]
             at_move = {c: sum(b for t, s_, d, f, b in recv0 if d == c and t <= mt) / S for c in EDGES}
+            others = [r for r in per if r["session"] != "s0"]
             prepos = {**{k: v for k, v in self.pp.items()}, "top1": max(EDGES, key=lambda c: self.pp["probs"][EDGES.index(c)]),
+                      "others_first_restored_s": [r["first_restored_s"] for r in others],
+                      "others_makespan_s": max((r["first_restored_s"] for r in others), default=None) if others and all(r["first_restored_s"] is not None for r in others) else None,
                       "correct": self.pp["dest"] == max(EDGES, key=lambda c: self.pp["probs"][EDGES.index(c)]),
                       "alloc_sinks": self.pp_alloc, "frags": {c: len(v) for c, v in self.pp_frag.items()},
                       "sent_before_move_sinks": {c: sum(b for t, s_, d, f, b in sent0 if s_ == "A" and d == c and t <= mt) / S for c in EDGES},
@@ -607,7 +619,7 @@ def prepos_configs(a, rep):
                 ds = a.dests.split(","); dest = ds[k % len(ds)]
             else:
                 dest = random.Random(1000 * rep + k).choices(EDGES, weights=probs)[0]
-            out.append({"policy": pol, "probs": probs, "L": a.lookahead, "b": a.budget, "dest": dest, "draw": k, "tau": a.tau})
+            out.append({"policy": pol, "probs": probs, "L": a.lookahead, "b": a.budget, "dest": dest, "draw": k, "tau": a.tau, "others_start": a.others_start})
     return out
 
 
@@ -635,6 +647,7 @@ def main():
     p.add_argument("--dests", default="", help="deterministic true destinations, e.g. B,C,D (draw i uses the i-th, cyclic); '' = seeded draw from --probs")
     p.add_argument("--draws", type=int, default=1, help="destination draws per (prepos policy, rep)")
     p.add_argument("--tau", type=float, default=7.5, help="tail-coverage target T_r in seconds")
+    p.add_argument("--others_start", type=float, default=0.0, help="A3: seconds after t0 at which sessions other than s0 start restoring (0 = at t0)")
     p.add_argument("--horizon_factor", type=float, default=2.0, help="continuous mode: run for factor * N * T_s + 2 T_m")
     p.add_argument("--deadline_factor", type=float, default=2.0, help="single-move mode: give up after factor * N * T_s + 3 T_m")
     p.add_argument("--mss", type=int, default=DEFAULT_MSS)
