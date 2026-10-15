@@ -1,0 +1,12 @@
+flow,session,src,dst,n,bytes,t_start_rel,t_end_rel,cancelled,drain_s,reason
+f1_s0_AB,s0,A,B,412,868220928,0.001,7.030,True,0.016,reuse_fixed: source sends the rest
+f2_s0_AC,s0,A,C,205,432013312,7.031,14.057,True,0.016,reuse_fixed: source sends the rest
+f3_s0_BC,s0,B,C,207,432013312,7.032,14.057,True,0.020,reuse_fixed: reuse fragments held at B
+f4_s0_AD,s0,A,D,102,289406976,14.059,21.091,True,0.044,reuse_fixed: source sends the rest
+f5_s0_BD,s0,B,D,105,289406976,14.059,21.091,True,0.108,reuse_fixed: reuse fragments held at B
+f6_s0_CD,s0,C,D,205,289406976,14.060,21.092,True,0.049,reuse_fixed: reuse fragments held at C
+f7_s0_DB,s0,D,B,69,289406976,21.092,26.901,False,,reuse_fixed: reuse fragments held at D
+f8_s0_AB,s0,A,B,33,135595424,21.093,24.432,False,,reuse_fixed: source sends the rest
+f9_s0_CB,s0,C,B,103,432013312,21.093,28.057,False,,reuse_fixed: reuse fragments held at C
+f10_s0_BC,s0,B,C,206,861210016,28.106,35.104,False,,reuse_fixed: reuse fragments held at B
+f11_s0_CD,s0,C,D,205,857015712,35.127,42.093,False,,reuse_fixed: reuse fragments held at C
