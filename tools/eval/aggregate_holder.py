@@ -48,6 +48,7 @@ def main():
     ap.add_argument("--experiment", default="restore_holder")
     ap.add_argument("--no_figures", action="store_true")
     ap.add_argument("--allow_loopback", action="store_true", help="dry-run data: ignore the four-distinct-hosts check")
+    ap.add_argument("--aware_policy", default="reuse_aware", help="policy judged as 'aware' in P0/H4a-c (reuse_aware or reuse_aware_in)")
     ap.add_argument("--ref", default=None, help="reference experiment supplying the policies this one did not run (e.g. restore_holder)")
     a = ap.parse_args()
     root = ROOT / "results/evaluation" / a.experiment
@@ -85,22 +86,22 @@ def main():
     f = lambda v, d=1: "-" if v is None else f"{v:.{d}f}"  # noqa: E731
     ms = lambda p, n, bh: (R.get((p, n, bh)) or {}).get("makespan_median")  # noqa: E731
     sb = lambda p, n, bh: (R.get((p, n, bh)) or {}).get("source_per_session")  # noqa: E731
-    out = [f"# Step 2 criteria ({a.experiment}), medians of valid runs", "",
+    out = [f"# Step 2 criteria ({a.experiment}), medians of valid runs; aware policy judged: {a.aware_policy}", "",
            f"Valid runs {len(valid)}/{len(runs)}; invalid: {invalid or 'none'}; incomplete directories: {incomplete or 'none'}", "",
            "## Makespan (s) and source bytes per session (Sinks); C = pre-registered crossover condition", "",
-           "| N | B_h | C | restart | reuse_fixed | reuse_adaptive | reuse_aware | P0 restart < fixed - 3.5 s | H4a aware <= 0.85 fixed | H4b aware <= 1.05 min(fixed*, restart) | H4c source |",
+           f"| N | B_h | C | restart | reuse_fixed | reuse_adaptive | {a.aware_policy} | P0 restart < fixed - 3.5 s | H4a aware <= 0.85 fixed | H4b aware <= 1.05 min(fixed*, restart) | H4c source |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     fails = defaultdict(list)
     for n in Ns:
         for bh in BHs:
             inC = (n, bh) in CROSS
-            rs, fx, ad, aw = (ms(p, n, bh) for p in ("restart", "reuse_fixed", "reuse_adaptive", "reuse_aware"))
+            rs, fx, ad, aw = (ms(p, n, bh) for p in ("restart", "reuse_fixed", "reuse_adaptive", a.aware_policy))
             if None in (rs, fx, aw):
                 out.append(f"| {n} | {bh:g} | {'yes' if inC else ''} | {f(rs)} | {f(fx)} | {f(ad)} | {f(aw)} | incomplete | | | |"); continue
             p0 = rs <= fx - 0.5 * TM if inC else None
             h4a = aw <= 0.85 * fx if inC else None
             h4b = (aw <= 1.05 * fx if not inC else True) and aw <= 1.05 * rs
-            src_aw, src_fx, src_rs = sb("reuse_aware", n, bh), sb("reuse_fixed", n, bh), sb("restart", n, bh)
+            src_aw, src_fx, src_rs = sb(a.aware_policy, n, bh), sb("reuse_fixed", n, bh), sb("restart", n, bh)
             h4c = (src_aw <= src_fx + 0.05 if not inC else True) and src_aw <= src_rs
             for k, v in (("P0", p0), ("H4a", h4a), ("H4b", h4b), ("H4c", h4c)):
                 if v is False:
@@ -132,7 +133,7 @@ def main():
     import make_background_figures as bg
     import matplotlib.pyplot as plt
     bg.configure_matplotlib()
-    col = {"restart": bg.RED, "reuse_fixed": bg.BLUE, "reuse_adaptive": bg.BLACK, "reuse_aware": bg.ORANGE if hasattr(bg, "ORANGE") else "#e07b00"}
+    col = {"restart": bg.RED, "reuse_fixed": bg.BLUE, "reuse_adaptive": bg.BLACK, "reuse_aware": bg.ORANGE, "reuse_aware_in": "#2a9d3f"}
     for n in Ns:
         for name, key, ylabel, loc in [(f"figE8_makespan_vs_bh_N{n}", lambda r: r["makespan_s"], "Restoration Makespan (s)", "upper right"),
                                        (f"figE9_source_vs_bh_N{n}", lambda r: r["normalized"]["source_per_session"], "Source Bytes / Sink", "upper right")]:
