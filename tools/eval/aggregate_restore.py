@@ -114,10 +114,10 @@ def main():
     import matplotlib.pyplot as plt
     bg.configure_matplotlib()
     col = {"restart": bg.RED, "reuse_fixed": bg.BLUE, "reuse_adaptive": bg.BLACK}
-    figs = [("figE6_makespan_vs_N", 1, lambda r: r["makespan_s"], "Restoration Makespan (s)"),
-            ("figE7_source_bytes_vs_N", 1, lambda r: r["normalized"]["source_per_session"], "Source Bytes / Sink"),
-            ("figE7b_coverage_vs_N", 0, lambda r: r["coverage_mean"], "Continuity Coverage")]
-    for name, mv, key, ylabel in figs:
+    figs = [("figE6_makespan_vs_N", 1, lambda r: r["makespan_s"], "Restoration Makespan (s)", "upper left"),
+            ("figE7_source_bytes_vs_N", 1, lambda r: r["normalized"]["source_per_session"], "Source Bytes / Sink", "upper right"),
+            ("figE7b_coverage_vs_N", 0, lambda r: r["coverage_mean"], "Continuity Coverage", "upper left")]
+    for name, mv, key, ylabel, legend_loc in figs:
         fig = plt.figure(figsize=bg.FIG2A_SIZE)
         ax = fig.add_axes(bg.FIG2A_AXES)
         for p, lab, mk, ls in POL:
@@ -131,7 +131,7 @@ def main():
         ax.set_xscale("log", base=2); ax.set_xticks(Ns); ax.set_xticklabels([str(n) for n in Ns]); ax.minorticks_off()
         bg._fig2a_axis(ax, "Concurrent Sessions (N)")
         ax.set_ylabel(ylabel, fontsize=bg.F2_LABEL); ax.tick_params(axis="y", length=5)
-        ax.legend(loc="upper left", frameon=False, prop={"size": bg.F2_ANNOT - 2, "family": bg.FONT_FAMILY})
+        ax.legend(loc=legend_loc, frameon=False, prop={"size": bg.F2_ANNOT - 2, "family": bg.FONT_FAMILY})
         bg.save(fig, root / "figures" / name, tight=False)
 
 
