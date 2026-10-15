@@ -138,7 +138,7 @@ def main():
                 ax.legend(loc=loc, frameon=False, prop={"size": bg.F2_ANNOT - 4, "family": bg.FONT_FAMILY}, title=f"N = {n}",
                           title_fontsize=bg.F2_ANNOT - 4)
             else:
-                ax.text(0.97, 0.95, f"N = {n}", transform=ax.transAxes, ha="right", va="top", fontsize=bg.F2_ANNOT - 4, family=bg.FONT_FAMILY)
+                ax.text(0.04, 0.10, f"N = {n}", transform=ax.transAxes, ha="left", va="bottom", fontsize=bg.F2_ANNOT - 4, family=bg.FONT_FAMILY)
             bg.save(fig, root / "figures" / name, tight=False)
 
 
