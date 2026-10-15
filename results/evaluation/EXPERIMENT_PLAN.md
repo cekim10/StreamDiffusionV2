@@ -141,3 +141,65 @@ sends exactly 1.00 Sink per session from the source and its single-move makespan
 The v1 data already agreed with every prediction (single move: restart - fixed = 0.0 / 7.5 / 9.6 / 10.0 s at N = 1/2/4/8;
 continuous: restart restored 0 sessions at every N, reuse_fixed all; adaptive worse than fixed at N >= 2), see
 `restore_contention/criteria.md`.
+
+## Experiment 3 Step 2: heterogeneous holder bandwidth (pre-registered 2026-10-14, before any server run)
+
+Question: when should restoration abandon fragment reuse and retransmit from the original source? Scenario B showed
+that unconditional reuse (reuse_fixed) is optimal in source bytes and never beaten by the Scenario B adaptive rule, but
+every holder there had the same 1 Gbps egress as the source. If a holder is slow, retransmitting its fragments from the
+(shared) source can be faster. Step 2 is limited to establishing whether that crossover exists and whether a simple
+bottleneck-aware provider selection captures it without regressing where holders are fast. It decides how OTTER's third
+component is described (Case 1: bottleneck-aware provider selection + progress preservation; Case 2: progress-preserving
+restoration only; Case 3: drop adaptive routing).
+
+Harness: Scenario B harness (restore_node.py, restore_orchestrate.py, run_restore_holder.sh), single move per session,
+rho = 2 (T_m = 7.02 s), source A egress and every ingress 1 Gbps. New independent variable: every edge's egress cap
+B_h in {62.5, 125, 250, 500, 1000} Mbps (what previous holders forward with). N in {1, 2, 4}; N = 8 is omitted because
+the model below predicts no crossover there (the source is too congested for any holder to matter). Policies:
+- restart, reuse_fixed, reuse_adaptive: unchanged from Scenario B (adaptive is kept as the baseline that explains H3b).
+- reuse_aware (new): same holders as reuse_fixed; fragments that only the source holds are assigned to the source
+  first; each held fragment then goes to the provider (newest holder of it, or the source) with the smallest
+  (egress backlog over every session + bytes assigned so far + one fragment) / egress cap, ties to the holder. It never
+  re-plans a session while its flows run, so a holder that goes idle early is not reused (a known limitation).
+3 reps, 60 configurations, 180 runs (~2.5-3 h). Deadline per run: max(2 N T_s, 2 S / B_h) + 3 T_m.
+
+Fluid-model predictions (tools/eval/restore_model.py, written before the runs; the same model reproduces every
+Scenario B v2 single-move median within 0.3 s and the adaptive source bytes within 0.03 Sink):
+
+```
+ N   B_h |          restart      reuse_fixed   reuse_adaptive      reuse_aware   (makespan s / source Sinks per session)
+ 1    62 |       20.9 /1.51      119.3 /1.00       20.9 /1.48       20.9 /1.45
+ 1   125 |       20.9 /1.51       63.2 /1.00       20.9 /1.46       20.9 /1.40
+ 1   250 |       20.9 /1.51       35.1 /1.00       20.9 /1.41       20.9 /1.31
+ 1   500 |       20.9 /1.51       21.1 /1.00       20.9 /1.34       20.9 /1.18
+ 1  1000 |       20.9 /1.51       20.9 /1.00       20.9 /1.26       20.9 /1.01
+ 2    62 |       36.5 /1.32       92.7 /1.00       35.6 /1.28       33.8 /1.21
+ 2   125 |       36.5 /1.32       50.8 /1.00       35.0 /1.25       31.6 /1.12
+ 2   250 |       36.5 /1.32       29.9 /1.00       34.1 /1.20       28.9 /1.01
+ 2   500 |       36.5 /1.32       28.9 /1.00       32.9 /1.15       28.9 /1.00
+ 2  1000 |       36.5 /1.32       28.9 /1.00       32.2 /1.12       28.9 /1.00
+ 4    62 |       65.0 /1.18       83.8 /1.00       63.4 /1.15       57.2 /1.03
+ 4   125 |       65.0 /1.18       55.4 /1.00       61.8 /1.12       55.4 /1.00
+ 4   250 |       65.0 /1.18       55.4 /1.00       60.2 /1.09       55.4 /1.00
+ 4   500 |       65.0 /1.18       55.4 /1.00       58.5 /1.06       55.4 /1.00
+ 4  1000 |       65.0 /1.18       55.4 /1.00       58.0 /1.05       55.4 /1.00
+```
+
+Crossover set C (model: reuse_fixed slower than restart): (N, B_h) in {(1, 62.5), (1, 125), (1, 250), (2, 62.5),
+(2, 125), (4, 62.5)}; the other 9 conditions are the no-crossover set. Regimes: holders fast enough (B_h >= 250 at
+N >= 2) -> reuse_fixed = reuse_aware; holders slow (C) -> fixed loses to restart, aware beats both at N >= 2 and ties
+restart at N = 1 (ingress-bound); holders and source both congested (N = 4, B_h <= 125: edges forward for more than one
+session while the source is shared by four) -> aware's advantage comes from balancing the two backlogs.
+
+Decision criteria (medians of 3 reps; fixed now):
+- P0 crossover exists: in every condition of C, restart's makespan is shorter than reuse_fixed's by >= 0.5 T_m (3.5 s).
+- H4a heterogeneity benefit: in every condition of C, reuse_aware's makespan <= 0.85 x reuse_fixed's (predicted ratios
+  0.18-0.68).
+- H4b no regression: in every no-crossover condition, reuse_aware's makespan <= 1.05 x reuse_fixed's; and in every
+  condition, reuse_aware's makespan <= 1.05 x restart's.
+- H4c source efficiency: in every no-crossover condition, reuse_aware's source bytes per session <= reuse_fixed's + 0.05
+  Sink; in every condition, <= restart's. Source bytes per session and total bytes are reported for all policies.
+- Validity: as Scenario B (every fragment verified, paced egress within 1.05 x cap over 10 s windows, NIC peaks within
+  1.15 x cap); invalid runs are listed and the condition re-run.
+Outcome mapping: Case 1 if P0, H4a and H4b all hold; Case 2 if H4b holds but P0 or H4a fails (no useful crossover);
+Case 3 if H4b fails. H4c qualifies the claim in Case 1 (latency bought with source bytes only where reuse is slower).

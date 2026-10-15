@@ -13,6 +13,8 @@ Policies (decided per session at every move; the Sink content and fragment table
     reuse_fixed    holders keep verified fragments; the newest holder of each missing fragment sends it, A sends the rest
     reuse_adaptive same holders, but each missing fragment goes to the provider (any holder or A) with the earliest
                    estimated finish time, estimated from the provider's queued bytes and its current max-min rate
+    reuse_aware    same holders; a held fragment goes to the source only when every holder of it would finish later
+                   than the source, estimating each provider's finish as its whole egress backlog over its egress cap
 
 Restoration of a session at an edge = all fragments verified there while it is the session's owner ("bound").
 Outputs one run directory per (policy, N, moves, rho, rep) under results/evaluation/restore_contention/ with
@@ -80,13 +82,17 @@ class Run:
         self.tm = self.a.ts / rho
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         mtag = "cont" if moves == 0 else str(moves)
-        self.run_id = f"policy={policy}_N={n_sess}_moves={mtag}_rho={rho:g}_rep={rep}_{stamp}"
+        btag = f"_bh={self.a.holder_mbps:g}" if self.a.holder_mbps else ""
+        self.run_id = f"policy={policy}_N={n_sess}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_{stamp}"
         self.rel_dir = f"results/evaluation/{self.a.experiment}/{self.run_id}"
         self.dir = REPO_ROOT / self.rel_dir
         self.dir.mkdir(parents=True, exist_ok=False)
         (self.dir / "git_commit.txt").write_text(git_commit() + "\n")
         self.ev = EventLog(self.dir / "events.csv", "orchestrator")
         self.caps = {(d, n): self.a.cap_mbps * 1e6 for d in ("out", "in") for n in ["A"] + EDGES}
+        if self.a.holder_mbps:   # Step 2: every edge's egress (what holders forward with) is capped at B_h
+            for e in EDGES:
+                self.caps[("out", e)] = self.a.holder_mbps * 1e6
         for item in (self.a.caps or "").split(","):
             if item:
                 k, v = item.split("=")
@@ -196,6 +202,31 @@ class Run:
                         late[src].append(f); continue
                     src = "A"
                 assign[src].append(f)
+        elif self.policy == "reuse_aware":
+            # bottleneck-aware: each provider's finish estimate is its whole egress backlog (every session's queued bytes)
+            # plus what this plan adds, over its egress cap. Fragments only A holds go to A first, so held fragments see
+            # A's true queue; a held fragment then goes to A only when every holder of it would finish later than A.
+            cand = holders + ["A"]
+            load = {c: 0.0 for c in cand}
+            for fl in self.flows.values():
+                if fl["src"] in load:
+                    if fl["active"]:
+                        load[fl["src"]] += len(fl["left"]) * self.flen
+                    elif fl.get("draining") and fl["left"]:
+                        load[fl["src"]] += self.flen   # a cancelled flow only finishes its in-flight fragment
+            rest = []
+            for f in sorted(missing):
+                inbound = next((h for h in holders if f in soon[h] and f not in self.held[sid][h]), None) if f not in self.skipped[sid] else None
+                if inbound is not None and not any(f in self.held[sid][h] for h in holders):
+                    late[inbound].append(f); continue
+                if not any(f in self.held[sid][h] for h in holders):
+                    assign["A"].append(f); load["A"] += self.flen
+                else:
+                    rest.append(f)
+            for f in rest:
+                opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
+                best = min(opts, key=lambda c: ((load[c] + self.flen) / self.caps[("out", c)], c == "A"))  # ties: prefer a holder
+                assign[best].append(f); load[best] += self.flen
         else:  # reuse_adaptive: earliest estimated finish per fragment, given current queues and max-min rates
             act = [(fl["id"], fl["src"], fl["dst"]) for fl in self.flows.values() if fl["active"] or fl.get("draining")]
             cand = holders + ["A"]
@@ -312,7 +343,9 @@ class Run:
                 if k > 10000:
                     break
         sched.sort()
-        deadline = self.t0 + (horizon if horizon is not None else a.deadline_factor * self.N * a.ts + 3 * self.tm)
+        # single-move deadline: generous enough for a slow holder to forward its share (2 Sinks at the slowest edge egress)
+        slow = 2 * a.sink_bytes * 8 / min(self.caps[("out", e)] for e in EDGES)
+        deadline = self.t0 + (horizon if horizon is not None else max(a.deadline_factor * self.N * a.ts, slow) + 3 * self.tm)
         last_bin = 0
         while True:
             now = time.time()
@@ -477,7 +510,7 @@ def main():
     p.add_argument("--ctl_port", type=int, default=29831)
     p.add_argument("--data_port", type=int, default=29832)
     p.add_argument("--experiment", default="restore_contention_v2")  # v1 (restore_contention) lost early rate updates; kept for reference
-    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive")
+    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware")
     p.add_argument("--sessions", default="1,2,4,8")
     p.add_argument("--moves", default="1,0", help="1 = one move then stay; 0 = continuous mobility until the horizon")
     p.add_argument("--rhos", default="2")
@@ -487,6 +520,7 @@ def main():
     p.add_argument("--frag_bytes", type=int, default=4 << 20)
     p.add_argument("--cap_mbps", type=float, default=1000.0, help="default per-node egress and ingress cap")
     p.add_argument("--caps", default="", help="overrides, e.g. 'B:out=250,D:in=4000'")
+    p.add_argument("--holder_mbps", type=float, default=0.0, help="Step 2: cap every edge's egress at this (0 = cap_mbps); tagged bh= in run ids")
     p.add_argument("--horizon_factor", type=float, default=2.0, help="continuous mode: run for factor * N * T_s + 2 T_m")
     p.add_argument("--deadline_factor", type=float, default=2.0, help="single-move mode: give up after factor * N * T_s + 3 T_m")
     p.add_argument("--mss", type=int, default=DEFAULT_MSS)
@@ -510,7 +544,8 @@ def main():
                     for n in [int(x) for x in a.sessions.split(",")]:
                         for pol in a.policies.split(","):
                             mtag = "cont" if moves == 0 else str(moves)
-                            done = [d for d in root.glob(f"policy={pol}_N={n}_moves={mtag}_rho={rho:g}_rep={rep}_*") if (d / "summary.json").exists()]
+                            btag = f"_bh={a.holder_mbps:g}" if a.holder_mbps else ""
+                            done = [d for d in root.glob(f"policy={pol}_N={n}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_*") if (d / "summary.json").exists()]
                             if done and not a.no_resume:
                                 print(f"[orch] skip (done): {done[0].name}", flush=True); continue
                             out.append(Run(o, pol, n, moves, rho, rep).execute())
