@@ -1,0 +1,12 @@
+t_wall,t_mono,t_rel,host,event,detail
+1792104881.283008,33354364.539379,0.000000,orchestrator,start,"{""policy"": ""reuse_aware_in"", ""N"": 1, ""moves"": 1, ""rho"": 2.0, ""tm"": 7.025}"
+1792104881.283518,33354364.539879,0.000510,orchestrator,flow_start,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""B"", ""n"": 206, ""rate_bps"": 1000000000.0, ""reason"": ""prepos top1: speculative fragments to candidate B""}"
+1792104881.283618,33354364.539978,0.000610,orchestrator,prepos,"{""policy"": ""top1"", ""dest"": ""C"", ""L"": 10.0, ""budget"": 0.5, ""avail_sinks"": 0.5, ""alloc_sinks"": {""B"": 0.5, ""C"": 0.0, ""D"": 0.0}, ""frags"": {""B"": 206, ""C"": 0, ""D"": 0}}"
+1792104881.287577,33354364.544398,0.004569,orchestrator,flow_connected,"{""t_send"": 1792104881.2876186, ""flow"": ""f1_s0_AB"", ""t_recv_start"": 1792104881.2879412, ""t_recv"": 1792104881.287943}"
+1792104891.286901,33354374.543271,10.003894,orchestrator,move,"{""session"": ""s0"", ""frm"": ""A"", ""to"": ""C""}"
+1792104891.289075,33354374.545437,10.006068,orchestrator,flow_start,"{""flow"": ""f2_s0_AC"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""C"", ""n"": 206, ""rate_bps"": 1000000000.0, ""reason"": ""reuse_aware_in: source sends the rest""}"
+1792104891.289617,33354374.545979,10.006609,orchestrator,flow_start,"{""flow"": ""f3_s0_BC"", ""session"": ""s0"", ""src"": ""B"", ""dst"": ""C"", ""n"": 206, ""rate_bps"": 500000000.0, ""reason"": ""reuse_aware_in: reuse fragments held at B""}"
+1792104891.293910,33354374.550564,10.010902,orchestrator,flow_connected,"{""t_send"": 1792104891.2942235, ""flow"": ""f3_s0_BC"", ""t_recv_start"": 1792104891.29411, ""t_recv"": 1792104891.294111}"
+1792104891.295355,33354374.552049,10.012347,orchestrator,flow_connected,"{""t_send"": 1792104891.2953923, ""flow"": ""f2_s0_AC"", ""t_recv_start"": 1792104891.2956035, ""t_recv"": 1792104891.295604}"
+1792104905.266335,33354388.528894,23.983328,orchestrator,restored,"{""session"": ""s0"", ""edge"": ""C""}"
+1792104905.266335,33354389.530263,23.983328,orchestrator,sink_complete,"{""session"": ""s0"", ""node"": ""C"", ""digest_ok"": true}"
