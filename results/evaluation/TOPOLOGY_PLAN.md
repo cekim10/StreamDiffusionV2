@@ -1,8 +1,11 @@
-# OTTER M3 research plan: pre-positioning, transfer topologies, dynamic re-planning (DRAFT v2 for review, 2026-10-15)
+# OTTER M3 research plan: pre-positioning, transfer topologies, dynamic re-planning (v3, criteria frozen 2026-10-15)
 
-Status: audit + experimental design, revised after the first review (v1 commit e3dd1f8). Nothing in this document
-has been run. Criteria in section F are proposals; they become pre-registered at the commit that follows approval and
-are not edited after that. Every number is tagged **measured** (committed artifact), **analytical** (closed-form from
+Status: audit + experimental design, revised after two reviews (v1 e3dd1f8, v2 7d1e916). **The hypotheses and
+criteria in section F are frozen at this commit** and are not edited after results exist; later sections may add
+model tables before a run, never change a threshold. Nothing in sections A-J has been run except the Step 1 loopback
+check noted in E.5. v3 changes: H5b compares allocations under identical constraints (greedy is the optimum; the
+"spreading beats top-1" claim is withdrawn), Experiment E separates restart / progress-preserving star / forwarding
+and adds the revisit path A->B->C->D->B, H8c is a Pareto-frontier criterion. Every number is tagged **measured** (committed artifact), **analytical** (closed-form from
 link capacities, not a run), **model** (fluid simulation `tools/eval/restore_model.py`, to be extended), or
 **proposed** (mechanism not implemented). Progress-Aware Topology Morphing (M3) stays **provisional**: it is neither
 removed nor confirmed until Experiments B and E decide whether reconfiguration adds value beyond provider selection.
@@ -101,15 +104,24 @@ idle after the move in the single-session case).
 
   Top-1 beats proportional by 1.4 s in the mean; at L = 10 s nothing can cover two candidates, so no policy improves
   the tail over top-1.
-- Condition L = 20 s, b = 2 (pre-sendable 1.42 Sinks): top-1 x = (1, 0.42, 0): T_r 0.3 / 8.45 / 14.35, mean 4.2,
-  miss 0.4. Tail coverage: x = (0.5, 0.5, 0.42): T_r 7.3 / 7.3 / 8.45, mean 7.4, miss 0.1. Proportional x = (0.85,
-  0.43, 0.14): T_r 2.4 / 8.3 / 12.4, mean 4.2, miss 0.4. **Predicted trade-off: coverage cuts the miss probability
-  from 0.4 to 0.1 and raises the mean by 3.2 s.** H5b therefore has a mean part (predicted rejected at 1 Gbps) and a
-  tail part (predicted supported, with a stated mean cost).
-- Fast source (native 9.4 Gbps, 1 Gbps edges), L = 10 s, b = 2: each candidate can take 0.71 Sink in parallel (0.71 x 3
-  = 2.1 > b, so the budget binds: x = 0.71 / 0.71 / 0.58): T_r 4.4 / 4.4 / 6.2, mean 4.6, miss 0 — here spreading beats
-  top-1's mean (8.4) because the ingress, not the source, limits each candidate. (predicted: H5b-mean supported only
-  with B_s > B_in.)
+  Allocation policies, all under the same constraints (budget, source egress over L, per-candidate ingress over L):
+  **top-1-only** (everything to the most likely candidate, up to its cap; leftover budget unused), **probability-ordered
+  greedy** (fill candidates in probability order until the budget is spent: the LP optimum for the mean),
+  **probability-proportional** (x_i = min(b p_i, cap)), **tail coverage** (give every candidate 1 - tau / T_s in
+  probability order, then greedy with the rest), plus none and oracle. At L = 10 s, 1 Gbps, greedy = top-1-only (the
+  0.71 Sink the source can send fits one candidate).
+- Condition L = 20 s, b = 2, 1 Gbps (pre-sendable 1.42 Sinks, per-candidate cap 1.0): top-1-only (1, 0, 0): T_r 0.3 /
+  14.35 / 14.35, mean 5.9, miss 0.4; greedy (1, 0.42, 0): 0.3 / 8.45 / 14.35, mean 4.2, miss 0.4; proportional (0.85,
+  0.43, 0.14): 2.4 / 8.3 / 12.4, mean 5.2, miss 0.4; coverage (0.5, 0.5, 0.42): 7.3 / 7.3 / 8.45, mean 7.4, miss 0.1.
+  **Predicted trade-off: coverage cuts the miss probability from 0.4 to 0.1 and raises the mean by 3.2 s over greedy.**
+- Fast source (native 9.4 Gbps, 1 Gbps edges), L = 10 s, b = 2: the source could send 6.7 Sinks in L, so the budget
+  (2) and each candidate's ingress cap (0.71) bind. top-1-only (0.71, 0, 0): mean 8.4, miss 0.4; greedy (0.71, 0.71,
+  0.58): T_r 4.4 / 4.4 / 6.2, mean 4.6, miss 0; proportional (0.71, 0.6, 0.2): 4.4 / 5.9 / 11.5, mean 5.6, miss 0.1;
+  coverage: after 0.5 each the remainder goes greedily -> (0.71, 0.71, 0.58), identical to greedy. So under a fast
+  source the optimal allocation does spread, but it is the probability-ordered greedy, not proportional or coverage;
+  the v1/v2 claim that "spreading beats top-1" compared different conditions and is withdrawn. Predictions: greedy
+  beats top-1-only by 3.8 s when B_s > B_in and by 0 when B_s = B_in (ingress-limit effect); proportional and coverage
+  never beat greedy in the mean in any condition here.
 - H5d: pre-positioning x Sinks for one session while N - 1 others restore through the same source delays their
   makespan by x S / B_s (7.0 s for x = 0.5 at 1 Gbps) in the source-bound regime and by ~0 when the source is idle.
 
@@ -180,17 +192,20 @@ except restart; they differ in who may forward to the current owner):
 
 | policy | providers for the current owner |
 |---|---|
-| restart | source only, progress at abandoned owners discarded (Phase 1 policy) |
-| fixed star | source only, but the owner keeps what it already holds (equals restart on a path without revisits; differs on B->C->D->B) |
-| fixed line | the immediately previous owner forwards what it holds (pipelined); the source sends the rest |
+| restart | source only; progress at abandoned owners is discarded (Phase 1 policy) |
+| progress-preserving star | source only; every node keeps the verified fragments it holds, and an owner receives from the source only what it lacks. **On A->B->C->D without revisits this has the same completion times as restart** (each owner is new and holds nothing); it differs only when an owner is revisited, so E includes the revisit path A->B->C->D->B (rho = 2, four moves), where B already holds ~0.5 Sink from its first ownership. Its byte accounting also differs from restart's (nothing is discarded, so B's fragments count as reusable, not unused) |
+| fixed line | progress-aware forwarding restricted to the immediately previous owner, which forwards what it holds (pipelined); the source sends the rest |
 | fixed tree | the first intermediate owner B is the forwarding hub for every later owner (A->B; B->C; B->D); the source sends what B lacks |
 | fixed butterfly-like | every past holder forwards, disjoint fragment sets split evenly by count among the holders of each fragment; the source sends the rest |
 | OTTER dynamic | backlog-aware provider selection over all holders and the source, re-planned at every move AND on capacity changes / periodically with hysteresis (proposed, E.4) |
 | aware at moves only | the same rule re-planned at moves only (Step 2 policy generalized; the baseline dynamic morphing must beat) |
 
+Three groups, to be kept apart in every figure: (1) no preservation: restart; (2) preservation without forwarding:
+progress-preserving star; (3) progress-aware forwarding: line, tree, butterfly-like, aware-at-moves, dynamic.
 Analytical predictions for the final owner D at 1 Gbps uniform, single session: every policy is ingress-bound at D
 (T_r = 14.35 s, Phase 1 measured 14.8-15.4 s for all non-oracle policies) -> E is uninformative in the uniform case and
-is run only in conditions where it is not:
+is run only in conditions where it is not (plus the revisit path, where star and restart separate: at the fourth move
+B holds ~0.5 Sink, so star's T_r at B is ~7.3 s against restart's 14.35 s at 1 Gbps):
 - B slow (B_f(B) = 125 Mbps), C and D at 1 Gbps, single session: at the move to C, B holds ~0.5 S. Line: B forwards
   0.5 S at 125 Mbps -> 56.5 s; star: 14.35 s; tree: same as line (B is the hub); butterfly: B is the only holder -> as
   line; aware/dynamic: moves fragments to the source -> ~14.35 s. At the move to D: C holds whatever it received (~0.5 S
@@ -228,10 +243,36 @@ Network harness (`restore_*`):
    destination) pairs with any holder as provider; the E policy set (fixed hub tree, even-split butterfly). ~200 lines.
 4. **Time-varying caps, deadlines, event-driven re-plan with hysteresis, switching-cost accounting** (E dynamic, C):
    a schedule of cap changes applied through `realloc`; re-plan triggers; deadline-miss and re-plan counters. ~120 lines.
-5. **Ingress-aware correction of `reuse_aware`** (H4c): move a fragment off a holder only if the holder's estimate
-   exceeds both the source's and the ingress bound (bytes still to deliver to the owner / its ingress cap). ~10 lines;
-   validated by re-running the 15 aware configurations of the Step 2 grid (45 runs, ~45 min) and checking that the
-   other 14 conditions are unchanged within 1 s and 0.05 Sink.
+5. **Ingress-aware correction** (H4c): implemented as a new policy `reuse_aware_in` (the Step 2 policy `reuse_aware`
+   is kept unchanged so the Step 2 data keep their meaning): a held fragment moves to the source only if its best
+   holder's estimate exceeds both the source's estimate and the owner's ingress bound (bytes headed to the owner /
+   its ingress cap). Implemented in `restore_orchestrate.py` and `restore_model.py`; loopback-checked (N = 1, holder at
+   half the link: source bytes 1.12 -> 1.00 at equal makespan). Validation on the testbed: the 15 Step 2 configurations
+   with `reuse_aware_in` (experiment `restore_holder_h4c`, 45 runs, ~45 min), judged against this **model** table
+   (written before the run):
+
+```
+ N   B_h |      reuse_fixed      reuse_aware   reuse_aware_in   (makespan s / source Sinks per session)
+ 1    62 |      119.3 /1.00       20.9 /1.45       20.9 /1.45
+ 1   125 |       63.2 /1.00       20.9 /1.40       20.9 /1.39
+ 1   250 |       35.1 /1.00       20.9 /1.31       20.9 /1.26
+ 1   500 |       21.1 /1.00       20.9 /1.18       20.9 /1.01
+ 1  1000 |       20.9 /1.00       20.9 /1.01       20.9 /1.00
+ 2    62 |       92.7 /1.00       33.8 /1.21       33.7 /1.21
+ 2   125 |       50.8 /1.00       31.6 /1.12       31.3 /1.11
+ 2   250 |       29.9 /1.00       28.9 /1.01       28.9 /1.01
+ 2   500 |       28.9 /1.00       28.9 /1.00       28.9 /1.00
+ 2  1000 |       28.9 /1.00       28.9 /1.00       28.9 /1.00
+ 4    62 |       83.8 /1.00       57.2 /1.03       57.2 /1.03
+ 4   125 |       55.4 /1.00       55.4 /1.00       55.4 /1.00
+ 4   250 |       55.4 /1.00       55.4 /1.00       55.4 /1.00
+ 4   500 |       55.4 /1.00       55.4 /1.00       55.4 /1.00
+ 4  1000 |       55.4 /1.00       55.4 /1.00       55.4 /1.00
+```
+
+   Step 1 passes if every `reuse_aware_in` median is within 1 s and 0.05 Sink of the table, (1, 500) sends <= 1.02
+   Sinks per session, and no condition's makespan is worse than Step 2's `reuse_aware` by > 1 s; the H4a/H4b verdicts
+   are re-evaluated with `reuse_aware_in` in place of `reuse_aware` and must still hold.
 Fluid model: extend with 1, 3, 4 (the same planning code) to tabulate predictions before each run.
 GPU harness (D): port `reuse_aware`, the pre-positioning policy and (if kept) the dynamic rule to
 `mobility_orchestrate.plan`; add full-state migration and cold restart as execution policies. ~250 lines.
@@ -242,11 +283,15 @@ Per-link capacity matrix: only if B/E results show a per-link effect matters; sk
 Experiment A (network level, 1 Gbps caps unless stated; 10 seeded destination draws x 3 reps per condition):
 - H5a supported if, at p = (0.6, 0.3, 0.1), L = 10 s, b = 1, top-1's mean T_r <= 0.75 x none's (analytical 8.4 vs
   14.35 s) and the oracle's <= 0.35 x (4.4 s).
-- H5b-mean supported at a condition if proportional or tail-coverage beats top-1's mean T_r by >= 1 s. Predicted:
-  rejected at B_s = 1 Gbps (top-1 ahead by 1.4 s), supported with a native-speed source (4.6 vs 8.4 s).
-- H5b-tail supported if, at L = 20 s, b = 2, tail-coverage's miss probability P(T_r > 7.5 s) over the 30 draws is
-  lower than top-1's by >= 0.2 (analytical 0.1 vs 0.4); its mean penalty is reported (analytical +3.2 s) and is part
-  of the result, not a pass condition.
+- H5b-mean supported at a condition if proportional or tail-coverage beats probability-ordered greedy's mean T_r by
+  >= 1 s under identical constraints. Predicted: rejected everywhere (greedy is the LP optimum; analytical margins
+  greedy over proportional 1.4 s at 1 Gbps / L = 10, 1.0 s at L = 20, 1.0 s native source).
+- H5b-ingress supported if greedy beats top-1-only's mean T_r by >= 1 s with a native-speed source at L = 10 s, b = 2
+  (analytical 4.6 vs 8.4 s) and by < 1 s at 1 Gbps (identical allocations): the per-candidate ingress limit, not
+  prediction uncertainty, is what makes spreading pay.
+- H5b-tail supported if, at L = 20 s, b = 2, 1 Gbps, tail-coverage's miss probability P(T_r > 7.5 s) over the 30 draws
+  is lower than greedy's by >= 0.2 (analytical 0.1 vs 0.4); its mean penalty is reported (analytical +3.2 s) and is
+  part of the result, not a pass condition.
 - H5c (accounting identity): bytes at non-chosen candidates + bytes at the chosen one <= budget in every run; a
   violation is a harness bug, not a result.
 - H5d supported if, with N = 4 sessions sharing the source, pre-positioning 0.5 Sink for one session raises the
@@ -271,7 +316,13 @@ Experiment E (network level; single session and N = 4; 3 reps; conditions of D.3
 - H8b (dynamic value) supported if, in the mid-run C-degradation condition, the dynamic rule's T_r at D is <= 0.5 x
   aware-at-moves' with <= 2 re-plans and no run worse than aware-at-moves by > 1 s in any other E condition; if H8b
   fails, dynamic morphing is dropped and M3 is reported as provider selection at moves.
-- H8c (traffic) supported if every reuse policy's source bytes per session <= 1.1 Sinks and restart's >= 1.3.
+- H8c (traffic efficiency) is judged on the latency-traffic Pareto frontier, not on a fixed cap: for every E condition
+  the per-policy (T_r at D, source bytes per session, aggregate bytes, redundant bytes) tuples are reported and the
+  Pareto-efficient set identified. Supported if, in the shared-source and revisit conditions, every progress-aware
+  policy sends fewer source bytes per session than restart by >= 0.25 Sink (analytical: restart ~2.0 Sinks at rho = 2
+  as in Phase 1, forwarding policies ~1.0-1.3) AND no progress-aware policy is Pareto-dominated by restart. Source
+  retransmission by a progress-aware policy is not a failure when the policy's T_r is lower than that of every policy
+  with fewer source bytes (it is then on the frontier, as the Step 2 aware policy was).
 Experiment C: only if H8b holds or the model finds another >= 15 % condition; criteria written then.
 Validity for every network run: all fragments verified; paced egress within 1.05 x cap over 10 s; NIC peaks within
 1.15 x cap; four distinct hosts; invalid runs listed and re-run, never dropped.
@@ -280,7 +331,7 @@ Validity for every network run: all fragments verified; paced egress within 1.05
 
 | step | pilot | runs | go if |
 |---|---|---|---|
-| 1 | H4c fix on the Step 2 aware configurations | 45 (~45 min) | (1, 500) source bytes 1.00 +- 0.02, other 14 conditions unchanged within 1 s / 0.05 Sink |
+| 1 | H4c fix (`reuse_aware_in`) on the 15 Step 2 configurations | 45 (~45 min) | every median within 1 s / 0.05 Sink of the E.5 model table; (1, 500) <= 1.02 Sinks; H4a/H4b still hold with `reuse_aware_in` |
 | 2 | A-pilot: k = 3, p = (0.6, 0.3, 0.1), L = 10, b = 1, none / oracle / top-1 / proportional, 3 draws, N = 1 | 12 (~8 min) | per-candidate bytes and T_r within 1 s of D.1; pre-positioned fragments at non-chosen candidates are forwarded (H5e path exercised) |
 | 3 | B-pilot: uniform 1 Gbps, star / line / tree / multipath / rule, 1 rep | 5 (~6 min) | line and multipath within 1 s of 14.1 s, tree within 1 s of 28.1, star within 1 s of 42.2 |
 | 6 | E/C-pilot: slow-B and C-degradation conditions, aware-at-moves vs dynamic, 1 rep | 4 | model and run within 1 s; dynamic's re-plan count <= 2 |

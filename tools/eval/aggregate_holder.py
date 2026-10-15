@@ -21,7 +21,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 TM = 14.05 / 2
 POL = [("restart", "Restart", "o", "solid"), ("reuse_fixed", "Reuse (fixed)", "D", "solid"),
-       ("reuse_adaptive", "Reuse (adaptive)", "^", "dashed"), ("reuse_aware", "Reuse (aware)", "s", "solid")]
+       ("reuse_adaptive", "Reuse (adaptive)", "^", "dashed"), ("reuse_aware", "Reuse (aware)", "s", "solid"),
+       ("reuse_aware_in", "Reuse (aware, ingress)", "v", "dashed")]
 # crossover set from the pre-registered fluid model (reuse_fixed predicted slower than restart)
 CROSS = {(1, 62.5), (1, 125.0), (1, 250.0), (2, 62.5), (2, 125.0), (4, 62.5)}
 
@@ -47,9 +48,14 @@ def main():
     ap.add_argument("--experiment", default="restore_holder")
     ap.add_argument("--no_figures", action="store_true")
     ap.add_argument("--allow_loopback", action="store_true", help="dry-run data: ignore the four-distinct-hosts check")
+    ap.add_argument("--ref", default=None, help="reference experiment supplying the policies this one did not run (e.g. restore_holder)")
     a = ap.parse_args()
     root = ROOT / "results/evaluation" / a.experiment
     runs, incomplete = load(root)
+    if a.ref:   # validation experiments hold one policy; the other policies' runs come from the reference experiment
+        ref_runs, _ = load(ROOT / "results/evaluation" / a.ref)
+        have = {r["policy"] for r in runs}
+        runs += [r for r in ref_runs if r["policy"] not in have]
     skip = {"four_hosts_distinct"} if a.allow_loopback else set()
     invalid = [r["dir"] for r in runs if not all(v for k, v in r["validation"].items() if k not in skip)]
     valid = [r for r in runs if r["dir"] not in invalid]
@@ -103,6 +109,16 @@ def main():
             out.append(f"| {n} | {bh:g} | {'yes' if inC else ''} | {f(rs)} /{f(src_rs, 2)} | {f(fx)} /{f(src_fx, 2)} | {f(ad)} /{f(sb('reuse_adaptive', n, bh), 2)} | "
                        f"{f(aw)} /{f(src_aw, 2)} | {cell(p0)} | {cell(h4a)} | {cell(h4b)} | {cell(h4c)} |")
     out += ["", "(* in the no-crossover set only; everywhere aware must also be within 1.05 x restart)", ""]
+    if any(p == "reuse_aware_in" for p, _, _ in R):
+        out += ["## H4c correction: reuse_aware_in vs reuse_aware (makespan s / source Sinks per session)", "",
+                "| N | B_h | aware | aware_in | d makespan | d source |", "|---|---|---|---|---|---|"]
+        for n in Ns:
+            for bh in BHs:
+                aw, ai = R.get(("reuse_aware", n, bh)), R.get(("reuse_aware_in", n, bh))
+                if aw and ai and aw["makespan_median"] and ai["makespan_median"]:
+                    out.append(f"| {n} | {bh:g} | {f(aw['makespan_median'])} /{f(aw['source_per_session'], 2)} | {f(ai['makespan_median'])} /{f(ai['source_per_session'], 2)} | "
+                               f"{ai['makespan_median'] - aw['makespan_median']:+.1f} | {ai['source_per_session'] - aw['source_per_session']:+.2f} |")
+        out.append("")
     verdict = {k: ("holds" if not fails[k] else f"fails at {sorted(fails[k])}") for k in ("P0", "H4a", "H4b", "H4c")}
     for k, v in verdict.items():
         out.append(f"- {k}: {v}")

@@ -77,7 +77,7 @@ class Model:
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
                 best = min(opts, key=lambda c: ((load[c] + 1) * FLEN / est[c], c == "A"))
                 assign[best].append(f); load[best] += 1
-        else:   # reuse_aware: balance providers' egress backlog (all sessions) over their egress caps; unavoidable source fragments first
+        else:   # reuse_aware(_in): balance providers' egress backlog (all sessions) over their egress caps; unavoidable source fragments first
             cand = holders + ["A"]
             load = {c: 0.0 for c in cand}
             for fl in self.flows:
@@ -86,9 +86,16 @@ class Model:
             only_a = [f for f in sorted(missing) if not any(f in self.held[sid][h] for h in holders)]
             for f in only_a:
                 assign["A"].append(f); load["A"] += FLEN
+            inbound = sum(len(fl["left"]) * FLEN for fl in self.flows if fl["dst"] == own) + len(only_a) * FLEN
             for f in sorted(set(missing) - set(only_a)):
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
-                best = min(opts, key=lambda c: ((load[c] + FLEN) / self.caps[("out", c)], c == "A"))
+                est = lambda c: (load[c] + FLEN) / self.caps[("out", c)]  # noqa: E731
+                if self.policy == "reuse_aware_in":   # H4c: move to the source only past both the source and the ingress bound
+                    inbound += FLEN
+                    hold = min((c for c in opts if c != "A"), key=est)
+                    best = "A" if est(hold) > max(est("A"), inbound / self.caps[("in", own)]) else hold
+                else:
+                    best = min(opts, key=lambda c: (est(c), c == "A"))
                 assign[best].append(f); load[best] += FLEN
         for src, ids in assign.items():
             self.start(sid, src, own, ids)
@@ -144,7 +151,7 @@ def main():
     p.add_argument("--holder_mbps", default="125,250,500,1000")
     p.add_argument("--source_mbps", type=float, default=1000)
     p.add_argument("--in_mbps", type=float, default=1000)
-    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive,reuse_aware")
+    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive,reuse_aware,reuse_aware_in")
     p.add_argument("--moves", type=int, default=1)
     p.add_argument("--ts", type=float, default=14.05)
     p.add_argument("--rho", type=float, default=2)

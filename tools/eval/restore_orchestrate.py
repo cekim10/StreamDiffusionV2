@@ -15,6 +15,8 @@ Policies (decided per session at every move; the Sink content and fragment table
                    estimated finish time, estimated from the provider's queued bytes and its current max-min rate
     reuse_aware    same holders; a held fragment goes to the source only when every holder of it would finish later
                    than the source, estimating each provider's finish as its whole egress backlog over its egress cap
+    reuse_aware_in reuse_aware with the H4c correction: the held fragment moves to the source only if its best holder
+                   would also finish after the owner's ingress bound (bytes headed to the owner / its ingress cap)
 
 Restoration of a session at an edge = all fragments verified there while it is the session's owner ("bound").
 Outputs one run directory per (policy, N, moves, rho, rep) under results/evaluation/restore_contention/ with
@@ -202,7 +204,7 @@ class Run:
                         late[src].append(f); continue
                     src = "A"
                 assign[src].append(f)
-        elif self.policy == "reuse_aware":
+        elif self.policy in ("reuse_aware", "reuse_aware_in"):
             # bottleneck-aware: each provider's finish estimate is its whole egress backlog (every session's queued bytes)
             # plus what this plan adds, over its egress cap. Fragments only A holds go to A first, so held fragments see
             # A's true queue; a held fragment then goes to A only when every holder of it would finish later than A.
@@ -223,9 +225,19 @@ class Run:
                     assign["A"].append(f); load["A"] += self.flen
                 else:
                     rest.append(f)
+            # reuse_aware_in (H4c correction): the owner's ingress bounds every provider, so a held fragment moves to the
+            # source only when its best holder would finish after both the source and the ingress bound
+            inbound = sum(len(fl["left"]) * self.flen for fl in self.flows.values() if fl["active"] and fl["dst"] == own)
+            inbound += sum(len(v) for v in assign.values()) * self.flen
             for f in rest:
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
-                best = min(opts, key=lambda c: ((load[c] + self.flen) / self.caps[("out", c)], c == "A"))  # ties: prefer a holder
+                est = lambda c: (load[c] + self.flen) / self.caps[("out", c)]  # noqa: E731
+                if self.policy == "reuse_aware_in":
+                    inbound += self.flen
+                    hold = min((c for c in opts if c != "A"), key=est)
+                    best = "A" if est(hold) > max(est("A"), inbound / self.caps[("in", own)]) else hold
+                else:
+                    best = min(opts, key=lambda c: (est(c), c == "A"))  # ties: prefer a holder
                 assign[best].append(f); load[best] += self.flen
         else:  # reuse_adaptive: earliest estimated finish per fragment, given current queues and max-min rates
             act = [(fl["id"], fl["src"], fl["dst"]) for fl in self.flows.values() if fl["active"] or fl.get("draining")]
@@ -510,7 +522,7 @@ def main():
     p.add_argument("--ctl_port", type=int, default=29831)
     p.add_argument("--data_port", type=int, default=29832)
     p.add_argument("--experiment", default="restore_contention_v2")  # v1 (restore_contention) lost early rate updates; kept for reference
-    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware")
+    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware,reuse_aware_in")
     p.add_argument("--sessions", default="1,2,4,8")
     p.add_argument("--moves", default="1,0", help="1 = one move then stay; 0 = continuous mobility until the horizon")
     p.add_argument("--rhos", default="2")
