@@ -85,10 +85,38 @@ def a3_verdicts(cfg):
     return out
 
 
+def diag_table(cfg):
+    """Holder-bandwidth diagnostic: per holder egress, T_r with the wrongly placed 0.5 Sink vs none, for both policies."""
+    R = {(c["policy"], c["holder_mbps"], c["prepos"]): c for c in cfg if c["N"] == 4 and c["dest"] == "C"}
+    bhs = sorted({k[1] for k in R})
+    f = lambda v: "-" if v is None else f"{v:.1f}"  # noqa: E731
+    out = ["", "## Holder-bandwidth diagnostic (N = 4, others start at L, 0.5 Sink at B, destination C; medians)", "",
+           "| B_h (Mbps) | fixed: none / top-1 T_r | fixed gain | fixed model gain | aware_in: none / top-1 T_r | aware_in gain | aware_in model gain | provider split for the 0.5 Sink, aware_in (B fwd / A resend) | source Sinks fixed / aware_in | total Sinks fixed / aware_in | others' makespan none / fixed / aware_in |",
+           "|---|---|---|---|---|---|---|---|---|---|---|"]
+    cross = {"reuse_fixed": None, "reuse_aware_in": None}
+    for bh in bhs:
+        nf, tf, na, ta = (R.get(("reuse_fixed", bh, "none")), R.get(("reuse_fixed", bh, "top1")), R.get(("reuse_aware_in", bh, "none")), R.get(("reuse_aware_in", bh, "top1")))
+        if not (nf and tf and na and ta):
+            continue
+        gf, ga = nf["t_r_median"] - tf["t_r_median"], na["t_r_median"] - ta["t_r_median"]
+        gfm, gam = nf["model_t_r"] - tf["model_t_r"], na["model_t_r"] - ta["model_t_r"]
+        if gf > 0 and cross["reuse_fixed"] is None:
+            cross["reuse_fixed"] = bh
+        if ga > 0 and cross["reuse_aware_in"] is None:
+            cross["reuse_aware_in"] = bh
+        out.append(f"| {bh:g} | {f(nf['t_r_median'])} / {f(tf['t_r_median'])} | {gf:+.1f} | {gfm:+.1f} | {f(na['t_r_median'])} / {f(ta['t_r_median'])} | {ga:+.1f} | {gam:+.1f} | "
+                   f"{ta['fwd_nonowner']:.2f} / {ta['post_move_source'] - 0.5:.2f} | {tf['source_total']:.2f} / {ta['source_total']:.2f} | {tf['total']:.2f} / {ta['total']:.2f} | "
+                   f"{f(nf['others_makespan_median'])} / {f(tf['others_makespan_median'])} / {f(ta['others_makespan_median'])} |")
+    out += ["", f"Lowest holder egress in the grid at which the wrongly placed Sink helps: fixed {cross['reuse_fixed']}, aware_in {cross['reuse_aware_in']} Mbps "
+            "(the analytical crossover for fixed forwarding is B_h = x B_s / (N (1 - x)) = 250 Mbps for x = 0.5, N = 4; aware_in should never be worse than none)."]
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--experiment", default="restore_prepos_pilot")
     ap.add_argument("--allow_loopback", action="store_true")
+    ap.add_argument("--diag", action="store_true", help="holder-bandwidth diagnostic table (gain of a wrongly placed 0.5 Sink vs holder egress, fixed vs aware_in)")
     ap.add_argument("--a3", action="store_true", help="apply the frozen H5d / H5e criteria (TOPOLOGY_PLAN F) to the A3 grid")
     ap.add_argument("--ts", type=float, default=14.05, help="T_s used for the 0.5 T_s threshold (measured, 1 Gbps)")
     a = ap.parse_args()
@@ -157,6 +185,8 @@ def main():
     out += [f"- FAIL {r}: {m}" for r, m in fails] or ["- all checks pass: GO"]
     if a.a3:
         out += a3_verdicts(cfg)
+    if a.diag:
+        out += diag_table(cfg)
     (root / "criteria.md").write_text("\n".join(out) + "\n")
     print("\n".join(out))
 

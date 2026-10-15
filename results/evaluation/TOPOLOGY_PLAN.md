@@ -409,6 +409,28 @@ is the share they lose during [0, L]); H5d idle clause: others finish 6.9 s *ear
 (**borderline FAIL predicted**; D.1b's 18.7 s ignored the other sessions' own moves and the shrinking source share).
 Whatever the run shows is judged against the frozen thresholds; the borderline cases are reported as such.
 
+Holder-bandwidth diagnostic (approved after A3; **not pre-registered, reported separately** from A3; experiment
+`restore_holder_diag`, `tools/eval/run_restore_holder_diag.sh`, 60 runs ~75 min): the H5e arrangement (N = 4, others
+start at L = 10 s, 0.5 Sink pre-positioned at B, true destination C) over holder egress {62.5, 125, 250, 500, 1000} Mbps
+x {reuse_fixed, reuse_aware_in} x {none, top-1}, 3 reps. Question: at which holder speed does forwarding the wrongly
+placed fragments stop paying, and does the aware rule pick the right provider across the range. **Model** (written before
+the run):
+
+```
+holder-bandwidth diagnostic, model (N=4, others start at L=10 s, 0.5 Sink pre-positioned at B, true destination C; +0.3 s)
+   B_h | none fixed top1 fixed   gain | none aware top1 aware   gain | source Sinks (none/fixed/aware) | others' makespan (none/fixed/aware)
+  62.5 |       55.6      159.8 -104.2 |       55.6       52.3   +3.3 | 4.01 / 4.01 / 4.49 |   71.5 /  120.3 /   65.3
+   125 |       55.6       80.0  -24.4 |       55.6       48.8   +6.8 | 4.01 / 4.01 / 4.39 |   65.7 /   71.5 /   64.0
+   250 |       55.6       40.2  +15.4 |       55.6       41.8  +13.8 | 4.01 / 4.01 / 4.26 |   65.7 /   58.8 /   62.2
+   500 |       55.6       28.0  +27.6 |       55.6       28.0  +27.6 | 4.01 / 4.01 / 4.01 |   65.7 /   58.8 /   58.8
+  1000 |       55.6       28.0  +27.6 |       55.6       28.0  +27.6 | 4.01 / 4.01 / 4.01 |   65.7 /   58.8 /   58.8
+```
+
+Model-implied expectations: fixed forwarding is harmful below ~250 Mbps (the analytical crossover x B_s / (N (1 - x))
+= 250 Mbps) and equals aware above it; aware_in is never worse than none, resends 0.48 / 0.38 / 0.26 Sink at 62.5 / 125
+/ 250 Mbps and nothing above; **at 250 Mbps aware_in is predicted 1.6 s slower than fixed** (it moves 0.26 Sink to the
+source where pure parallel forwarding would have finished at the same time), a small regression to look for.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |
