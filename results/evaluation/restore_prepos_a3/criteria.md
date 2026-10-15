@@ -1,6 +1,6 @@
 # Experiment A pilot checks (restore_prepos_a3)
 
-Valid runs 29/30; invalid: ['policy=reuse_fixed_N=4_moves=1_rho=2_bh=125_pp=none_L=10_b=0.5_d=C_k=0_os=10_rep=3_20261015-160506']; incomplete: none
+Valid runs 30/31; invalid: ['policy=reuse_fixed_N=4_moves=1_rho=2_bh=125_pp=none_L=10_b=0.5_d=C_k=0_os=10_rep=3_20261015-160506']; incomplete: none
 
 ## Per run: T_r (move -> all fragments verified at the destination) vs the fluid model at the run's caps
 
@@ -33,6 +33,7 @@ Valid runs 29/30; invalid: ['policy=reuse_fixed_N=4_moves=1_rho=2_bh=125_pp=none
 | none | C | False | 55.43 | 55.60 | -0.17 | B:0.00 C:0.00 D:0.00 | B:0.00 C:0.00 D:0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 1.00 | 1.14 |
 | none | C | False | 55.44 | 55.60 | -0.16 | B:0.00 C:0.00 D:0.00 | B:0.00 C:0.00 D:0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 1.00 | 1.14 |
 | none | C | False | 55.50 | 55.60 | -0.10 | B:0.00 C:0.00 D:0.00 | B:0.00 C:0.00 D:0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 1.00 | 1.14 |
+| none | C | False | 55.48 | 55.60 | -0.12 | B:0.00 C:0.00 D:0.00 | B:0.00 C:0.00 D:0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 1.00 | 1.14 |
 | top1 | C | False | 79.89 | 80.04 | -0.15 | B:0.50 C:0.00 D:0.00 | B:0.50 C:0.00 D:0.00 | 0.00 | 0.50 | 0.50 | 0.50 | 1.00 | 1.27 |
 | top1 | C | False | 79.88 | 80.04 | -0.16 | B:0.50 C:0.00 D:0.00 | B:0.50 C:0.00 D:0.00 | 0.00 | 0.50 | 0.50 | 0.50 | 1.00 | 1.27 |
 | top1 | C | False | 79.89 | 80.04 | -0.15 | B:0.50 C:0.00 D:0.00 | B:0.50 C:0.00 D:0.00 | 0.00 | 0.50 | 0.50 | 0.50 | 1.00 | 1.27 |

@@ -10,10 +10,11 @@ slow-holder pair); 3 reps. Raw runs `restore_prepos_a3/`; tables and verdicts `s
 
 ## Run validity
 
-29/30 valid. The invalid run (`reuse_fixed`, 125 Mbps, none, rep 3) saw external traffic of 4.5-6.9 Gbps from
-elves-01 to elves-04 between 24.8 and 33 s of the run (kernel NIC counters; our own flows stayed within their caps,
-paced egress 999.9 Mbps worst at A). Its results are identical to the other two reps (T_r 55.5 s, others 65.5 s) but it
-is excluded from the medians per the frozen rule and the condition is to be re-run (one run). All other runs: every
+30/31 valid. One run (`reuse_fixed`, 125 Mbps, none, rep 3) saw external traffic of 4.5-6.9 Gbps from elves-01 to
+elves-04 between 24.8 and 33 s of the run (kernel NIC counters; our own flows stayed within their caps, paced egress
+999.9 Mbps worst at A). Its results are identical to the other reps (T_r 55.5 s, others 65.5 s) but it is excluded from
+the medians per the frozen rule; the condition was re-run as rep 4 (valid, NIC peaks <= 664 Mbps, T_r 55.5 s, others
+65.5 s), so every configuration has three valid reps. All other runs: every
 fragment verified, paced egress within cap, NIC peaks <= 1064 Mbps, four distinct hosts, no early rate/cancel events.
 Rep spread 0.0-0.2 s everywhere.
 
@@ -96,7 +97,6 @@ were wrong for stated reasons, see below.
 
 ## Follow-ups (not run; proposed)
 
-- Re-run the one invalid configuration (`reuse_fixed`, 125 Mbps, none, rep 4) to restore three valid reps.
 - Diagnostic holder-bandwidth sensitivity for the slow-holder clause (62.5 / 125 / 250 / 500 / 1000 Mbps, aware_in vs
   fixed, H5e arrangement), reported separately from the pre-registered A3 results, to locate the holder speed at which
   a wrong placement stops paying.
