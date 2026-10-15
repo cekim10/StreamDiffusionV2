@@ -134,8 +134,11 @@ def main():
             ax.set_xscale("log", base=2); ax.set_xticks(BHs); ax.set_xticklabels([f"{b:g}" for b in BHs]); ax.minorticks_off()
             bg._fig2a_axis(ax, "Holder Egress (Mbps)")
             ax.set_ylabel(ylabel, fontsize=bg.F2_LABEL); ax.tick_params(axis="y", length=5)
-            ax.legend(loc=loc, frameon=False, prop={"size": bg.F2_ANNOT - 4, "family": bg.FONT_FAMILY}, title=f"N = {n}",
-                      title_fontsize=bg.F2_ANNOT - 4)
+            if name.startswith("figE8"):   # the source-bytes panel of the same N shares this legend
+                ax.legend(loc=loc, frameon=False, prop={"size": bg.F2_ANNOT - 4, "family": bg.FONT_FAMILY}, title=f"N = {n}",
+                          title_fontsize=bg.F2_ANNOT - 4)
+            else:
+                ax.text(0.97, 0.95, f"N = {n}", transform=ax.transAxes, ha="right", va="top", fontsize=bg.F2_ANNOT - 4, family=bg.FONT_FAMILY)
             bg.save(fig, root / "figures" / name, tight=False)
 
 
