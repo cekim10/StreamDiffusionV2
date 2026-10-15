@@ -1,0 +1,13 @@
+t_wall,t_mono,t_rel,host,event,detail
+1792092101.575075,33341584.831446,0.000000,orchestrator,start,"{""policy"": ""reuse_aware_in"", ""N"": 1, ""moves"": 1, ""rho"": 2.0, ""tm"": 7.025}"
+1792092101.575642,33341584.832021,0.000567,orchestrator,flow_start,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""B"", ""n"": 299, ""rate_bps"": 1000000000.0, ""reason"": ""prepos top1: speculative fragments to candidate B""}"
+1792092101.575772,33341584.832132,0.000697,orchestrator,prepos,"{""policy"": ""top1"", ""dest"": ""D"", ""L"": 10.0, ""budget"": 1.0, ""avail_sinks"": 0.7245382871070951, ""alloc_sinks"": {""B"": 0.7245, ""C"": 0.0, ""D"": 0.0}, ""frags"": {""B"": 299, ""C"": 0, ""D"": 0}}"
+1792092101.579391,33341584.836087,0.004316,orchestrator,flow_connected,"{""t_send"": 1792092101.5794253, ""flow"": ""f1_s0_AB"", ""t_recv_start"": 1792092101.5796363, ""t_recv"": 1792092101.5796373}"
+1792092111.577930,33341594.834301,10.002856,orchestrator,move,"{""session"": ""s0"", ""frm"": ""A"", ""to"": ""D""}"
+1792092111.578553,33341594.834914,10.003479,orchestrator,flow_cancel,"{""flow"": ""f1_s0_AB"", ""session"": ""s0"", ""left"": 5}"
+1792092111.580876,33341594.837237,10.005801,orchestrator,flow_start,"{""flow"": ""f2_s0_BD"", ""session"": ""s0"", ""src"": ""B"", ""dst"": ""D"", ""n"": 295, ""rate_bps"": 1000000000.0, ""reason"": ""reuse_aware_in: reuse fragments held at B""}"
+1792092111.581478,33341594.837838,10.006403,orchestrator,flow_start,"{""flow"": ""f3_s0_AD"", ""session"": ""s0"", ""src"": ""A"", ""dst"": ""D"", ""n"": 117, ""rate_bps"": 500000000.0, ""reason"": ""reuse_aware_in: source sends the rest""}"
+1792092111.586306,33341594.842957,10.011231,orchestrator,flow_connected,"{""t_send"": 1792092111.586385, ""flow"": ""f2_s0_BD"", ""t_recv_start"": 1792092111.5865283, ""t_recv"": 1792092111.586529}"
+1792092111.586865,33341594.843616,10.011791,orchestrator,flow_connected,"{""t_send"": 1792092111.5869071, ""flow"": ""f3_s0_AD"", ""t_recv_start"": 1792092111.5871925, ""t_recv"": 1792092111.5871933}"
+1792092125.599001,33341608.861519,24.023926,orchestrator,restored,"{""session"": ""s0"", ""edge"": ""D""}"
+1792092125.599001,33341609.863127,24.023926,orchestrator,sink_complete,"{""session"": ""s0"", ""node"": ""D"", ""digest_ok"": true}"
