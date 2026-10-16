@@ -139,7 +139,7 @@ each meta file. GPU per-bandwidth points use median with p25-p75.
 - Claim: "with a forwarder collapsing mid-restoration, OTTER re-plans twice (0.7 s and 2.7 s after the change) and
   restores in 14.0 s instead of 53.8 s with 1.18 instead of 2.00 Sinks of source traffic compared with restart; with no
   change it makes no re-plan; at a source-share change it gains 10 % (41.6 -> 37.7 s)."
-- Switching costs (table in text): transition 0.01-0.10 s, one 4 MiB fragment drained per re-plan, no duplicates,
+- Switching costs (table in text): transition 0.01-0.10 s, one 4 MiB fragment drained per re-plan, duplicates in 2 of 42 E-pilot runs (one 4 MiB fragment each; 0 in Full E; erratum 2026-10-16),
   detection 0.7 / 2.7 s (two-stage, 2 s window).
 - Negative: idle-provider recovery is not detected (no probing); the share-change gain sits just above the hysteresis
   threshold (dT 3.9-4.3 s vs 3.8-4.1 s).

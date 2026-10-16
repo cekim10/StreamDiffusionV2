@@ -11,4 +11,6 @@
 
 Errata (dated, appended below; results are judged against the frozen text):
 
-- none
+- 2026-10-16: testbed driver versions differ (575.51.03 on elves-01/02, 575.57.08 on elves-03/04); see the Errata section of the
+  preregistration.
+- 2026-10-16: per-frame decode interval degenerate by construction; reported per chunk.

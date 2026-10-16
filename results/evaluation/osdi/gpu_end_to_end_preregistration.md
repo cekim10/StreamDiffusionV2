@@ -258,3 +258,13 @@ baseline setup.
 - Event-driven re-planning competes for CPU with generation on the same host; G9 bounds steady-state cost only.
 - External C/R cross-node restore may fail on driver 575.51.03; reported as a result.
 - t_decode logging adds synchronization points; G9 must be measured with it enabled.
+
+## Errata (dated; appended after the freeze; no criterion, metric or comparison changed)
+
+- 2026-10-16 (D0 hardware audit): section 2 and scope condition 4 say "driver 575.51.03 on all four". Measured: driver 575.51.03 on elves-01 and elves-02 but **575.57.08 on elves-03 and elves-04**; elves-02 shows one L40S, the others two (D0 hardware audit, `results/evaluation/osdi/d0/hw_audit/`). The earlier statement "575.51.03 on all four" (user report, commit f3ad3ca) was wrong.
+  Consequences: (a) external C/R pairs must be same-driver host pairs (elves-01/02 or elves-03/04) or the driver
+  difference is stated with the result; (b) CRIU and cuda-checkpoint are not installed on any host and the account has
+  no sudo and no capabilities, so external C/R needs the administrators (`osdi/d0/cr_readiness/`); (c) GPU-level
+  results continue to report per-node service times, which absorb any driver difference.
+- 2026-10-16: section 6's per-frame decode interval is degenerate by construction (one VAE call decodes every frame of a
+  chunk); the descriptive metric is reported per chunk (`osdi/d0/shared_planner.md`).

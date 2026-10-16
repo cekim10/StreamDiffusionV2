@@ -6,8 +6,8 @@ run's committed summary, without modifying anything:
     - bytes received at node X (every recv row, verified or not) are <= the bytes the orchestrator recorded as sent on
       links into X (summary bytes.by_link), and the shortfall is at most one fragment per flow into X (fragments in
       flight when a flow was cancelled). Every receipt counts: a policy may send the same fragment to the same node more
-      than once (restart under continuous mobility revisits B, C, D and resends the Sink from the start; the node logs
-      those as ok=False repeats). First version (2026-10-16) counted only the first verified arrival per fragment and
+      than once (restart under continuous mobility revisits B, C, D and resends the Sink from the start; the node had
+      dropped the session, so those repeats are logged ok=True). First version (2026-10-16) counted only the first verified arrival per fragment and
       flagged exactly those runs; distinct verified bytes are still reported.
     - per-run coverage: which of B, C, D logs are present.
 

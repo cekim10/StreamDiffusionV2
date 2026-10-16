@@ -383,7 +383,7 @@ def f6():
     meta("eval/F6a_morphing_flow_timeline", rq="RQ5", source={p: str(d.relative_to(ROOT)) for p, d in pick.items()}, measured=True,
          level="network-level, 4 physical hosts (Full E condition 3, rep 1)",
          config="single session B->C->D, rho 2, 1 Gbps; C egress drops to 62.5 Mbps when D holds 50 %; bars = flows into D (flows.csv start/end, bytes sent); faded = cancelled",
-         missing="per-fragment receive timestamps at D live on elves-04 (node_D/fragments.csv was not copied back); a cumulative-progress-by-provider curve needs them")
+         missing="none: per-fragment progress at D by provider is F6c (node_D/fragments.csv recovered in D0)")
     rows = {(r["scenario"], r["policy"]): r for r in rcsv(EV / "restore_epilot_v2/summary_by_config.csv")}
     sc = [("A0", "No change"), ("A1", "Forwarder\ncollapse"), ("A2", "Collapse +\nrecovery"), ("B", "Source-share\nchange")]
     fig, ax = new(wide=True)
@@ -429,12 +429,18 @@ def f6c():
                 continue
             seen.add(r["fragment_id"]); pts[r["src"]].append(float(r["t"]) - t0w)
         n = 412
-        for s_, (lab, col) in srcs.items():
-            ts = pts.get(s_, [])
-            if ts:
-                ax.step([mv[-1]] + ts, [0] + [100.0 * (i + 1) / n for i in range(len(ts))], where="post", color=col, lw=2.2, label=f"from {lab}")
+        # stacked by provider (the flows share D's ingress at nearly equal rates, so separate curves would overlap)
         allt = sorted(t for v in pts.values() for t in v)
-        ax.step([mv[-1]] + allt, [0] + [100.0 * (i + 1) / n for i in range(len(allt))], where="post", color="black", lw=1.6, ls="--", label="total at D")
+        grid = np.array([mv[-1]] + allt)
+        base = np.zeros(len(grid))
+        for s_, (lab, col) in srcs.items():
+            ts = np.array(sorted(pts.get(s_, [])))
+            if not len(ts):
+                continue
+            top = base + 100.0 * np.searchsorted(ts, grid, side="right") / n
+            ax.fill_between(grid, base, top, step="post", color=col, alpha=0.75, lw=0, label=f"from {lab}")
+            base = top
+        ax.step(grid, base, where="post", color="black", lw=1.4, label="total at D")
         for t in cap:
             ax.axvline(t, color=bg.RED, ls="--", lw=1.4)
         for t in rp:
@@ -446,10 +452,10 @@ def f6c():
         ax.set_xlabel("Time (s); dashed red = C egress drop", fontsize=bg.F2_ANNOT); ax.tick_params(labelsize=bg.F2_ANNOT - 2, direction="in")
         info[p] = {"run": str(d.relative_to(ROOT)), "fragments_from": {k: len(v) for k, v in pts.items()}, "restored_s": rest, "final_move_s": mv[-1], "replans_s": rp, "cap_change_s": cap}
     axes[0].set_ylabel("Sink at D (% of fragments)", fontsize=bg.F2_ANNOT)
-    axes[0].legend(frameon=False, prop={"size": bg.F2_ANNOT - 5, "family": bg.FONT_FAMILY}, loc="upper left")
+    axes[0].legend(frameon=True, framealpha=0.9, edgecolor="none", prop={"size": bg.F2_ANNOT - 5, "family": bg.FONT_FAMILY}, loc="upper left")
     bg.save(fig, OUT / "eval/F6c_fragment_progress_by_provider", tight=False)
     meta("eval/F6c_fragment_progress_by_provider", rq="RQ5", source=info, measured=True, level="network-level, 4 physical hosts (Full E condition 3, rep 1)",
-         config="checksum-verified first arrivals of each fragment at D (node_D/fragments.csv recovered from elves-04), by sender",
+         config="checksum-verified first arrivals of each fragment at D (node_D/fragments.csv recovered from elves-04), stacked by sender",
          clock="node D's wall clock minus the orchestrator's start time on elves-01; hosts are NTP-synchronized, the residual offset (ms) is not removed")
 
 

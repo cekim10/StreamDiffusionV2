@@ -72,3 +72,7 @@ abstraction. Open limitation: an idle provider's recovery is not observed (no pr
 
 Full Experiment E under the frozen H8a-c (slow-B, shared-source, C-degradation and revisit conditions with restart,
 progress-preserving star, line, tree, butterfly-like, aware-at-moves, dynamic), then the M3 decision and GPU (D).
+
+> Erratum (2026-10-16, D0 node-log recovery): "no duplicates in any run" is wrong. The aggregator reported per-configuration
+> medians. One run had one duplicated 4 MiB fragment after a re-plan (summary `bytes.duplicate` = 4 MiB, confirmed by the
+> recovered node log): `reuse_dyn` scenario B rep 1 (1 re-plan), fragment 260 A->C. Duplicates were never a validity or pass condition; no outcome changes.

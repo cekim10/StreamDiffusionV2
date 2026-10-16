@@ -88,3 +88,7 @@ oscillation out of six dyn runs.
   (or longer) instead of reverting to the nominal cap; re-run scenario A rep 3's condition.
 - Full E (frozen H8a-c): slow-B, shared-source and C-degradation conditions with restart, star, line, tree,
   butterfly-like, aware-at-moves, dynamic; only after the hysteresis fix.
+
+> Erratum (2026-10-16, D0 node-log recovery): "no duplicates in any run" is wrong. The aggregator reported per-configuration
+> medians. One run had one duplicated 4 MiB fragment after a re-plan (summary `bytes.duplicate` = 4 MiB, confirmed by the
+> recovered node log): `reuse_dyn` scenario A rep 3 (4 re-plans; the oscillating run), fragment 238 C->D. Duplicates were never a validity or pass condition; no outcome changes.

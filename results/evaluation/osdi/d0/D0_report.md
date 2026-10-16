@@ -8,13 +8,48 @@ changed.
 
 | item | status | where |
 |---|---|---|
-| A. Hardware audit | **script ready, needs to run on elves-01** (read-only; no installs, no driver change) | `tools/eval/hw_audit.sh` -> `d0/hw_audit/<host>.txt` |
-| B. Recover node fragment logs, F6c | **scripts ready, needs elves-01** (through the per-host agents, never overwrites a local file, copies only `node_{B,C,D}/fragments.csv`; verification script; F6c activates once `node_D` logs exist) | `tools/eval/recover_node_logs.sh`, `tools/eval/verify_node_logs.py`, `plot_paper_figures.py --only F6` |
+| A. Hardware audit | **done** (read-only, through the agents); findings below | `d0/hw_audit/<host>.txt` |
+| B. Recover node fragment logs, F6c | **done**: 1947 files (649 per node, 12 experiments) recovered, 0 failures; F6c generated | `d0/node_log_recovery.md`, `paper_figures/eval/F6c_*` |
 | C. Shared planner | **done** | `tools/eval/restore_planner.py`; summary in `shared_planner.md` |
 | D. Network regression | **PASS** (decision equivalence) with two loopback-timing differences explained below | `tools/eval/test_restore_planner.py`, `run_planner_regression.sh`, `compare_planner_regression.py`; `planner_equivalence_seed2.txt`, `network_regression_loopback.md` |
 | E. GPU integration | **done for the D0 shakedown scope**; dry-run validated | `mobility_orchestrate.py`, `mobility_node.py`, `run_gpu_dryrun.sh` |
 | F. GPU correctness shakedown | **not run (needs the GPUs)**; commands below | `tools/eval/run_d0_shakedown.sh` |
-| G. External C/R readiness | **script ready, needs elves-01** (read-only) | `tools/eval/cr_readiness.sh` -> `d0/cr_readiness/<host>.txt` |
+| G. External C/R readiness | **done: BLOCKED** (no CRIU, no cuda-checkpoint, no sudo, CapEff 0 on all hosts) | `d0/cr_readiness/<host>.txt` |
+
+## A. Hardware audit (2026-10-16 15:28, read-only)
+
+| host | GPUs (L40S) | driver | GPU 0 at audit | kernel | NIC (up) | torch |
+|---|---|---|---|---|---|---|
+| elves-01 | 2 | 575.51.03 | idle (GPU 1: another user's job, 29 GB, 97 %) | 6.8.0-84 | enp193s0f0np0 10 Gb/s, MTU 9200 | 2.6.0+cu124 |
+| elves-02 | 1 | 575.51.03 | idle | 6.8.0-138 | same | same |
+| elves-03 | 2 | **575.57.08** | **another user's job, 28 GB, 100 %** (GPU 1 too) | 6.8.0-84 | same | same |
+| elves-04 | 2 | **575.57.08** | idle | 6.8.0-64 | same | same |
+
+All: Python 3.10.22, torch 2.6.0+cu124 (CUDA 12.4, cuDNN 9.1), 1.5 TB RAM, >= 4.4 TB free in /home; nvcc only on
+elves-02 (12.0, unused); no sudo. Two corrections to earlier records: the driver is not 575.51.03 on all four hosts
+(elves-03/04 run 575.57.08; dated errata in the preregistration, `prereg_freeze.md`, `evaluation_plan.md`,
+`external_baseline_audit.md`), and elves-02 has one GPU. Neither affects OTTER's transfer path (tensor bytes over TCP);
+per-node service times are measured at node start and reported. **Contention:** elves-03 GPU 0 (node C) was in use by
+another user; the shakedown script now waits until GPU 0 is idle on all four hosts and all repos are on one commit
+before every run (`d0_remote.py gpu_idle`), and stops after 30 min.
+
+## B. Node logs and F6c
+
+`recover_node_logs.sh` copied 649 `fragments.csv` per node (B, C, D) through the agents; nothing local was overwritten.
+`verify_node_logs.py`: every receipt at X <= bytes sent into X and short by at most one fragment per flow; 0 failures.
+The first version counted only the first verified arrival per fragment and flagged 72 files (24 restart runs under
+continuous mobility in Scenario B, where revisited owners receive the Sink again after the drop) plus 3 files (Full E
+restart, B received twice); all receipts are now counted and the change is dated in the script. F6c (Full E condition
+3, rep 1): fragments at D stacked by sender; at moves A/B/C = 101/155/156 fragments, restored 67.8 s; event-driven
+176/155/81 after 2 re-plans, restored 28.0 s.
+
+## G. External C/R readiness
+
+No host has CRIU, the CRIU CUDA plugin or cuda-checkpoint; the account has no sudo and CapEff = 0 (CRIU needs root or
+CAP_CHECKPOINT_RESTORE + CAP_SYS_ADMIN); `ptrace_scope` = 1. Per the instructions nothing was installed. The external
+baseline is blocked until the administrators install CRIU (>= 4.0 with the CUDA plugin) and grant the capability; the
+cuda-checkpoint binary alone is a user-space download but cannot dump the process tree without CRIU. Same-driver pairs
+for a cross-node restore test: elves-01/02 (575.51.03) or elves-03/04 (575.57.08); none has the >= 580 migration API.
 
 ## D. Network regression
 
@@ -37,7 +72,9 @@ changed.
    (timing) differences, not behaviour changes. On the testbed at 1 Gbps a window holds ~60 fragments (E-pilot v2:
    0 re-plans in 3 controls).
    Note (not changed, to preserve the validated harness): the network harness can count one duplicate fragment when a
-   re-plan races the cancelled flow's last send; observed once at loopback, 0 times in the 126 physical E runs.
+   re-plan races the cancelled flow's last send; observed once at loopback and, per the recovered node logs, in 2 of the
+   126 physical E runs (one 4 MiB fragment each, E-pilot and E-pilot v2, both counted in their summaries; 0 in Full E).
+   The E-pilot notes said "no duplicates in any run" (the aggregator showed medians); dated errata appended there.
 
 ## E. GPU integration (dry-run validated)
 
@@ -87,7 +124,9 @@ from the never-owner candidate.
 
 ## Remaining blockers before the full Experiment D sweep
 
-1. Testbed runs of A, B, F, G above (hardware facts, recovered logs, GPU shakedown, C/R readiness).
+1. GPU shakedown (F) on the testbed, after GPU 0 on elves-03 is free.
+2a. External C/R: administrators must install CRIU + CUDA plugin and grant capabilities (G); otherwise the external
+   comparison is reported as not runnable.
 2. Not implemented (prereg section 8): full migration and cold restart as repeated-mobility execution policies
    (scenario B), revisit paths (G), hybrid scenario E, OTTER cold-destination (A, external comparison), external C/R
    integration. Without them scenarios A (partly), B (partly), E, G and the external comparison cannot run.
@@ -102,5 +141,6 @@ from the never-owner candidate.
 
 **NO-GO.** The shared planner is regression-verified and integrated for the D0 shakedown scope, but the GPU shakedown has
 not run, and four of the seven preregistered scenarios need execution policies or modes that are not implemented
-(blocker 2). Recommended next step: run the testbed scripts (A, B, F, G), review the shakedown, then implement the
+(blocker 2), and the external baseline is blocked by missing CRIU and privileges (2a). Recommended next step: run the
+shakedown when elves-03 GPU 0 is free, review it, then implement the
 blocker-2 items with the same dry-run + shakedown discipline before requesting approval for the sweep.

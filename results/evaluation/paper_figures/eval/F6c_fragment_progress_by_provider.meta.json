@@ -1,0 +1,42 @@
+{
+ "rq": "RQ5",
+ "source": {
+  "reuse_aware_in": {
+   "run": "results/evaluation/restore_fulle/policy=reuse_aware_in_N=1_moves=2_rho=2_ev=Dge0.5Cout62.5_rep=1_20261016-105718",
+   "fragments_from": {
+    "A": 101,
+    "C": 156,
+    "B": 155
+   },
+   "restored_s": 67.843815,
+   "final_move_s": 14.066025,
+   "replans_s": [],
+   "cap_change_s": [
+    21.125561
+   ]
+  },
+  "reuse_dyn": {
+   "run": "results/evaluation/restore_fulle/policy=reuse_dyn_N=1_moves=2_rho=2_ev=Dge0.5Cout62.5_rep=1_20261016-105827",
+   "fragments_from": {
+    "B": 155,
+    "A": 176,
+    "C": 81
+   },
+   "restored_s": 28.028482,
+   "final_move_s": 14.05346,
+   "replans_s": [
+    21.859994,
+    23.895767
+   ],
+   "cap_change_s": [
+    21.111336
+   ]
+  }
+ },
+ "measured": true,
+ "level": "network-level, 4 physical hosts (Full E condition 3, rep 1)",
+ "config": "checksum-verified first arrivals of each fragment at D (node_D/fragments.csv recovered from elves-04), stacked by sender",
+ "clock": "node D's wall clock minus the orchestrator's start time on elves-01; hosts are NTP-synchronized, the residual offset (ms) is not removed",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "fc6e57de8dfe14e4c6e8671e6bfbefd5b2018196"
+}
