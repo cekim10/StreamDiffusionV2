@@ -169,11 +169,12 @@ each meta file. GPU per-bandwidth points use median with p25-p75.
 |---|---|---|
 | F8a output interval percentiles, single migration @1 Gbps | **M** `eval/F8a_output_interval_single_migration` (GPU) | p50/p95/p99/max of chunk-output intervals, 240 samples per policy |
 | F8b TTFO / bind / rejoin per scenario A-G | MISSING (Experiment D) | |
-| F8c frame-latency CDF, jitter, deadline miss rate | MISSING (Experiment D) | |
+| F8c decode-interval CDF, jitter, decode-deadline miss rate (proxy) | MISSING (Experiment D; needs t_decode logging) | descriptive only; no frame-delivery / SLO-compliance claim unless a consumer with defined delivery semantics is implemented (prereg v2, section 6) |
 | F8d continuity coverage under repeated mobility | MISSING (Experiment D) | |
 | F8e throughput (chunks/s) per scenario | MISSING (Experiment D) | |
 
-- Hypothesis (preregistered in `gpu_end_to_end_preregistration.md`).
+- Hypotheses G1-G9 in `gpu_end_to_end_preregistration.md` (DRAFT v2, not yet frozen). Chunk completion, frame decode
+  completion and frame delivery are distinct timestamps; only the first two are planned.
 - F8a caution: one chunk = one model call; frame-level metrics need Experiment D's definitions.
 
 ## F9. Overhead and scalability (RQ8)

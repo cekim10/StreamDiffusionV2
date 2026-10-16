@@ -1,125 +1,199 @@
-# Experiment D: GPU end-to-end evaluation - preregistration (DRAFT for review, 2026-10-16)
+# Experiment D: GPU end-to-end evaluation - preregistration (DRAFT v2 for review, 2026-10-16)
 
-Status: design only. Nothing here has run. Hypotheses and thresholds in section 7 are frozen at the commit that
-follows the review and are not edited after results exist. The existing GPU results (single handoff, continuity
-timeline, Phase 1 repeated mobility) are inputs to the predictions, not part of this experiment.
+Status: design only. Nothing here has run. **Not frozen.** G1-G9 (section 7) are frozen only at the commit that
+follows the reviewer's approval, and are not edited after results exist. v1 (commit 7800261) is superseded; every change
+is listed in `prereg_v2_changes.md`. The existing GPU results (single handoff, continuity timeline, Phase 1 repeated
+mobility) and the network-level results are inputs to the predictions, not part of this experiment.
+
+## 0. Relation to earlier frozen hypotheses
+
+Experiment D re-measures some network-level effects on GPU; it does **not** re-test, reinterpret or replace any earlier
+frozen hypothesis. The following outcomes stand as recorded, whatever Experiment D shows: H1 (progress loss in bytes:
+yes; latency clause ill-posed), H2 (latency rejected; traffic supported), H3a supported, H3b rejected, P0/H4a/H4b
+supported, H4c failed at (N=1, 500 Mbps) then the corrected rule met every Step 1 pass condition, A-pilot GO, H5d FAIL,
+H5e 3 of 4 clauses PASS (slow-holder aware clause FAIL by 0.2 s), H6a-e supported, H6f supported on the four tested
+conditions only, **H8a NOT SUPPORTED, H8b SUPPORTED, H8c NOT SUPPORTED AS WRITTEN**. A G-hypothesis that agrees or
+disagrees with one of them is reported as a GPU observation next to the network-level outcome, not as a revision of it.
 
 ## 1. Question
 
-Does the complete OTTER system (M1 + M2 + M3) improve migration interruption and visual continuity of real
+Does the complete OTTER system (M1 + M2 + M3) reduce migration interruption and preserve visual continuity of real
 StreamDiffusionV2 generation on the physical testbed, under single, repeated, mispredicted, contended, degraded and
 revisiting mobility, and at what GPU and network cost? (RQ7, RQ8; GPU confirmation of RQ3, RQ5, RQ6.)
 
-## 2. Hardware, network, workload
+## 2. Hardware, network, workload, state-consistency scope
 
-- Hosts elves-01..04, one NVIDIA L40S each (GPU 0); A = elves-01 (initial owner and Sink source), B, C, D = elves-02..04.
-  GPU must be idle (0 % util, < 1 GiB used by others) before each run (`tools/eval/gpu_watch.py`); a run with another
-  process on GPU 0 is invalid.
+- Hosts elves-01..04, two NVIDIA L40S each, driver 575.51.03 on all four (confirmed 2026-10-16); experiments use GPU 0
+  only (GPU 1 belongs to other users). A = elves-01 (initial owner and Sink source); B, C, D = elves-02..04. GPU 0 must be
+  idle (0 % utilization, < 1 GiB used by others) before each run (`tools/eval/gpu_watch.py`), otherwise the run is invalid.
 - Network: per-node egress and ingress shaped to 1 Gbps (max-min fair token buckets, as in all prior runs) and an
   unshaped condition (~9.4 Gbps); TCP_MAXSEG 1400 on every socket; kernel NIC counters sampled at 1 Hz on every host.
-- Workload: StreamDiffusionV2, dog clip, prompt "A dog walks on the grass, realistic", seed 0, k = 2, 4 MiB fragments
-  (412 per Sink), migration trigger at source chunk 30; generalization set (scenarios A and B only): bird and boxing
-  clips, seeds 0-1. Reference: the uninterrupted same-seed run on the same GPU model (bit-exact; PSNR 99 dB).
-- One generation session per GPU: a session allocates 25.8-25.9 GiB peak (single-handoff runs), so an L40S (48 GB)
-  holds one session. Scenario E's contending sessions are therefore network-level sessions (see 4.E).
+- Workload: StreamDiffusionV2 (PyTorch 2.6.0+cu124), dog clip, prompt "A dog walks on the grass, realistic", seed 0,
+  k = 2, 4 MiB fragments (412 per Sink), trigger at source chunk 30. Generalization set (**scenario A only**, see the
+  scope below): bird and boxing clips, seeds 0-1. Reference: the uninterrupted same-seed run on the same GPU model
+  (bit-exact; PSNR reported as 99 dB).
+- One generation session per GPU: a session allocates 25.8-25.9 GiB peak (single-handoff runs); an L40S (48 GB)
+  holds one. Scenario E therefore uses hybrid contention (section 4).
+- **State-consistency scope.** The evaluation is restricted to restoration of the single Sink version frozen at the
+  trigger: the source serializes the Sink once at chunk 30; every fragment carries session id + Sink version (SHA-256
+  prefix); receivers reject mismatched fragments; the whole-Sink digest is re-checked before bind; adaptive Sink
+  refresh is frozen at every destination until it binds; RoPE positions are re-rotated at bind. Consequences:
+  (i) repeated-mobility scenarios (B, E, F, G) use the dog workload only, which has no adaptive promotions over the
+  measured window (audit in EXPERIMENT_PLAN.md); (ii) at rho = 2 and 4 no intermediate owner binds before being left
+  (T_m < T_s), so no owner can create a new version that holders would then hold stale fragments of; (iii) the
+  generalization clips (which do promote after bind) are used only in single-move scenario A; (iv) a run that logs
+  any `fragment_rejected_version`, a digest mismatch, or a promotion at an owner before the session's final bind is
+  flagged, excluded from every G criterion, and reported with its count. A new-version / re-fetch path is not
+  implemented and is a stated limitation; no result here speaks to Sinks that change during restoration.
 
-## 3. Policies (identical transport, fragment table, Sink version, schedule; they differ only where stated)
+## 3. Policies (identical transport, fragment table, Sink version and move schedule; they differ only where stated)
 
 | name | execution at a move | Sink restoration | placement |
 |---|---|---|---|
 | Full migration | stop, transfer 6.02 GiB of GPU state, resume | inside the transfer | - |
 | Cold restart | resume at once with fresh caches from the prompt | none (stream diverges) | - |
-| M1 only | resume after 2.67 MiB of immediate state | source sends the whole Sink to each new owner; progress at abandoned owners discarded (= restart restoration) | - |
-| M1 + M2 | as M1 | verified fragments preserved; newest holder forwards; source sends the rest (`split` / wavefront) | - |
-| M1 + M2 + placement | as M1 | as M1 + M2 | top-1 placement with budget b and lookahead L |
-| Full OTTER | as M1 | bottleneck-aware fragment assignment re-planned at moves and on measured changes (`reuse_dyn`, E-pilot v2 thresholds unchanged) | top-1 placement |
-| External A, B | per their mechanism (see `external_baseline_audit.md`) | inside their checkpoint | - |
+| M1 only | resume after 2.67 MiB of immediate state | source sends the whole Sink to each new owner; fragments at abandoned owners discarded (= Phase 1 `restart`) | - |
+| M1 + M2 | as M1 | verified fragments preserved; newest holder forwards; source sends the rest (= Phase 1 `split`) | - |
+| OTTER at moves | as M1 | M1 + M2 + bottleneck-aware fragment assignment re-planned at moves only (`reuse_aware_in`) | as the scenario says |
+| OTTER event-driven | as M1 | as OTTER at moves + re-planning on measured throughput changes (`reuse_dyn`, E-pilot v2 thresholds unchanged) | as the scenario says |
+| External C/R (cuda-checkpoint + CRIU; GCR adapted) | per their mechanism (see `external_baseline_audit.md`) | inside their checkpoint image | - |
 
-Oracle (`direct`, destination known from t = 0, no budget) is reported as an upper bound where meaningful.
+"Full OTTER" = OTTER event-driven with top-1 placement where the scenario provides a prediction (C, D); in scenarios
+without a prediction (A, B, E, F, G) placement is disabled for every policy, so Full OTTER = OTTER event-driven there.
+Oracle (`direct`: destination known from t = 0, no budget) is reported as an upper bound where meaningful.
 
 ## 4. Scenarios
 
 | id | mobility | network | policies | reps |
 |---|---|---|---|---|
-| A | single A -> B | 1 Gbps, native | all + external | 3 (5 if IQR > 10 % of median) |
-| B | repeated A -> B -> C -> D at rho = 2 and 4 | 1 Gbps | all except external (unless they support repeated moves) | 3 |
-| C | single move; correct placement (true destination = top-1) | 1 Gbps; L = 10 s, b = 1 Sink, p = 0.6/0.3/0.1 | M1+M2, M1+M2+placement, Full OTTER, oracle | 3 |
+| A | single A -> B | 1 Gbps, native | Full migration, Cold restart, M1 only, OTTER event-driven; OTTER cold-destination (sensitivity, section 5); external C/R (both comparisons) | 3 (5 if IQR > 10 % of median) |
+| B | repeated A -> B -> C -> D at rho = 2 and 4 | 1 Gbps | Full migration, Cold restart, M1 only, M1 + M2, OTTER at moves, OTTER event-driven | 3 |
+| C | single move; correct placement (true destination = top-1) | 1 Gbps; L = 10 s, b = 1 Sink, p = 0.6/0.3/0.1 | M1 + M2 (no placement), M1 + M2 + top-1, Full OTTER, oracle | 3 |
 | D | single move; incorrect placement (true destination = second candidate) | as C | as C | 3 |
-| E | repeated (rho 2) for the GPU session + 3 network-level sessions restoring from A at the same time | 1 Gbps, A egress shared by 4 | M1 only, M1+M2, Full OTTER | 3 |
-| F | repeated (rho 2); C's egress drops to 62.5 Mbps when D holds 50 % of the Sink | 1 Gbps then degraded | M1 only, M1+M2, Full OTTER (+ OTTER at moves as an ablation) | 3 |
-| G | revisit A -> B -> C -> D -> B (rho 2) | 1 Gbps | M1 only, M1+M2, Full OTTER | 3 |
+| E | **hybrid GPU/network contention**: one GPU generation session moving A -> B -> C -> D at rho 2, plus three network-level restoration sessions (no generation; `restore_node.py`, real-size Sinks) restoring from the same source host A at the same time | 1 Gbps, A's egress shared by the four restorations | M1 only, M1 + M2, OTTER event-driven | 3 |
+| F | repeated (rho 2); C's egress drops to 62.5 Mbps when D holds 50 % of the Sink | 1 Gbps then degraded | **OTTER event-driven and OTTER at moves (primary)**; M1 + M2 and M1 only (secondary) | 3 |
+| G | revisit A -> B -> C -> D -> B (rho 2) | 1 Gbps | M1 only, M1 + M2, OTTER at moves, OTTER event-driven | 3 |
 
-Scenario E is hybrid by necessity (section 2): the contending sessions run `restore_node.py` sessions with real-size
-Sinks from elves-01 at the same time as the GPU session, and only the GPU session's metrics are reported.
+Scenario E is never described as four GPU generation sessions: only one session generates; G6 and every GPU metric in
+E refer to that session; the three network-level sessions' fragment-completion times are reported separately.
 
 ## 5. Fairness and timing boundaries
 
-- Destination preparation is identical for every policy: the destination process is started, the model weights are
-  loaded, CUDA is initialized and a 250-call warm-up is run *before* the trigger; none of this is timed. External
-  baselines get the same: if their restore requires a process image that contains the weights, the run is reported
-  twice, "as designed" (weights inside the checkpoint) and, where the system allows it, with weights preloaded.
+- **OTTER and the in-repo baselines (warm destination):** the destination process is started, the model weights are
+  loaded, CUDA is initialized and a 250-call warm-up is run *before* the trigger; none of this is timed. This holds for
+  Full migration, Cold restart, M1 only, M1 + M2, OTTER at moves / event-driven.
+- **External C/R, two separate comparisons** (never merged into one number):
+  1. *As designed*: the destination host has the same binary, libraries, model files on disk and the NVIDIA driver in
+     persistence mode, but no running process; the checkpoint image (process memory including weights held in host
+     memory, staged GPU memory, CUDA state) is dumped at the trigger, transferred over the same shaped link, and
+     restored. Timed from trigger to first output; dump, transfer and restore are also reported separately. Compared
+     against **OTTER cold-destination** (scenario A sensitivity: the destination starts the process and loads the
+     weights after the trigger, then OTTER's M1 handoff), so both sides pay process creation and weight loading.
+  2. *Warm destination*: only possible where the system can restore into a destination that already holds the
+     weights or a prepared process; if a system cannot (CRIU recreates the process), this comparison is reported as
+     not applicable for it, and the image transfer + restore time excluding weights is reported as a lower bound,
+     labelled as such. Compared against OTTER warm-destination.
+  Cross-node restore with cuda-checkpoint on driver 575.51.03 is unverified (its GPU-migration API needs 580); if
+  restore on another host fails, the external rows report the failure and the same-node C/R time plus measured image
+  transfer time, labelled "not a cross-node migration".
 - Trigger: the orchestrator issues the move when the source finishes chunk 30 (orchestrator clock; per-node offsets from
   the clock-sync handshake are recorded). The same wall-clock move schedule is used for every policy in a scenario.
-- Timing boundaries: TTFO = trigger -> first chunk output at the new owner; Sink verified = last fragment checksummed;
-  Sink bind-ready = first output generated with the transferred Sink bound; rejoin = first chunk >= 35 dB after bind.
-  Network bytes are counted at the senders' token buckets and cross-checked against NIC counters.
-- State consistency: the Sink is serialized once at the trigger chunk; every fragment carries session id + Sink version
-  (SHA-256 prefix); receivers reject mismatched fragments; the whole-Sink digest is re-checked before bind; adaptive
-  Sink refresh is frozen at every destination until bind; RoPE positions are re-rotated at bind. The dog workload has
-  no adaptive promotions (audited); a new-version path is not implemented and is a stated limitation.
+- Timing boundaries (all relative to the trigger, or to the final move in repeated scenarios):
+  TTFO = first chunk completed at the new owner; Sink verified = last fragment checksummed at the owner;
+  Sink bind-ready = first chunk completed with the transferred Sink bound; rejoin = first chunk >= 35 dB after bind.
 
 ## 6. Metrics
 
-| metric | definition | unit |
-|---|---|---|
-| TTFO | trigger -> first output at the destination | s |
-| Sink bind-ready | trigger (or final move) -> first output on the bound Sink | s |
-| Rejoin | first chunk >= 35 dB PSNR to the reference after bind | s |
-| Quality trajectory | PSNR / SSIM per chunk after the trigger | dB |
-| Throughput | output chunks per second over [trigger, trigger + 60 s] | chunks/s |
-| Output interval | time between consecutive chunk outputs (first = trigger -> first output) | s |
-| Inter-frame latency P50/P95/P99 | interval between consecutive decoded frames, each timestamped at decode completion (new logging; not derived by dividing chunk intervals) | s |
-| Jitter | P99 - P50 of the inter-frame interval | s |
-| Deadline miss rate | share of frames whose inter-frame interval exceeds 1.5 x the median interval of the uninterrupted reference run (threshold fixed now) | % |
-| Continuity coverage | share of output chunks in [trigger, end] at >= 35 dB | % |
-| Network | source bytes, aggregate bytes, discarded bytes per Sink | Sinks |
-| GPU | peak `memory_allocated`, `memory_reserved`, utilization (1 Hz NVML) at source and destination | GiB, % |
-| Re-planning | count, detection delay, transition delay, drained bytes | -, s, MiB |
+Timestamps (three distinct events per output, all on the generating host's clock, offset-corrected):
+- **t_chunk**: chunk completion = the model call returns and the GPU stream is synchronized (exists today).
+- **t_decode(f)**: frame decode completion = VAE decode of frame f finished and synchronized (new logging).
+- **t_deliver(f)**: frame delivery = frame f's bytes handed to and acknowledged by a consumer process. **No consumer
+  exists in the harness today.** Until one is implemented with defined semantics (transport, buffering, playout clock),
+  no delivery or frame-level SLO metric is reported and no SLO-compliance claim is made.
 
-## 7. Hypotheses and criteria (frozen on approval; medians over reps)
+| metric | definition | unit | status |
+|---|---|---|---|
+| TTFO | trigger -> first t_chunk at the new owner | s | hypothesis (G1) |
+| Sink bind-ready | trigger (or final move) -> first t_chunk with the Sink bound | s | hypotheses |
+| Rejoin delay (wall clock) | t_chunk of the first chunk >= 35 dB after bind minus t_chunk of the first bound chunk | s | G2 |
+| Rejoin calls | number of generation calls from the first bound chunk to the first chunk >= 35 dB | calls | G2 |
+| Quality trajectory | PSNR / SSIM per chunk after the trigger | dB | descriptive |
+| Throughput | chunks completed per second over [trigger, trigger + 60 s] | chunks/s | descriptive |
+| Chunk interval | t_chunk differences (first = trigger -> first chunk) and its P50 / P95 / P99 / max | s | descriptive |
+| Decode interval | t_decode differences between consecutive frames, P50 / P95 / P99, jitter = P99 - P50 | s | descriptive |
+| Decode-deadline miss rate (proxy) | share of frames whose decode interval exceeds 1.5 x the median decode interval of the uninterrupted reference run | % | descriptive; explicitly not an SLO |
+| Continuity coverage | share of chunks in [trigger, end] at >= 35 dB | % | descriptive |
+| Source bytes | bytes sent by the original source A for this session / Sink size; split into **pre-move (placement)** and **post-move (restoration)**; **total source = pre-move + post-move** | Sinks | G3, G5 |
+| Aggregate bytes | all bytes sent on all links for this session (source + forwarding) / Sink size | Sinks | G3 (reported), G5 |
+| Discarded bytes | bytes delivered to an owner that neither bound nor forwarded them (Phase 1 definition a) / Sink size | Sinks | G3 |
+| Verified progress reused | fragments verified at an abandoned owner that were later forwarded or bound, divided by fragments verified at abandoned owners | fraction | G3 |
+| Forwarded by holders | bytes sent by non-source nodes to the owner / Sink size | Sinks | G5 |
+| GPU | peak `memory_allocated`, `memory_reserved`, utilization (1 Hz NVML) at source and destination | GiB, % | G9 |
+| Re-planning | count, detection delay, transition delay, drained bytes, duplicates | -, s, MiB | G7 |
 
-- G1 (A, interruption): OTTER's TTFO <= 1.0 s at 1 Gbps and native, and <= 0.1 x full migration's at 1 Gbps.
-  Predicted from the single-handoff runs: 0.71 s vs 53.8 s.
-- G2 (A, continuity): OTTER's rejoin - bind <= 6 s at both bandwidths. Predicted 4.1 s.
-- G3 (B, progress): at rho = 2 and 4, M1+M2's source bytes <= 1.1 Sinks per session while M1-only's >= 1.4; its Sink
-  bind-ready after the final move within 1 s of M1-only's (both ingress-bound; Phase 1: 15.3 vs 15.3 s at rho 2).
-- G4 (C, correct placement): bind-ready after the move <= no-placement's - 0.5 x (x_placed x T_s), x_placed = Sink
-  fraction verified at the destination at the move. Predicted ~5 s vs ~15 s at 1 Gbps.
-- G5 (D, incorrect placement): bind-ready within 1.5 s of no placement and source bytes <= 1.02 Sinks (the misplaced
-  fragments are forwarded, not resent). Predicted equal (ingress-bound).
-- G6 (E, contention): Full OTTER's and M1+M2's bind-ready after the final move <= M1-only's - 3.5 s (0.5 T_m).
-  Predicted from Scenario B (net): ~10 s.
-- G7 (F, degradation): Full OTTER's bind-ready after the final move <= 0.5 x M1+M2's. Predicted from Full E cond. 3
-  (net): 14.0 vs 62.8 s (line-like forwarding from C) plus the bind step.
-- G8 (G, revisit): every progress-preserving policy's bind-ready at B <= 0.6 x M1-only's. Predicted 7.4 vs 14.4 s.
-- G9 (overhead): steady-state chunk service time with OTTER enabled and no migration within 2 % of unmodified
-  generation; destination peak allocated within 1 % across policies (single handoff: 25.8-25.9 GiB).
-- External baselines are compared descriptively (no pass threshold): TTFO, bytes, rejoin, success / failure.
-- Run validity: all fragments verified; digest match; NIC peaks <= 1.15 x cap; paced egress <= 1.05 x cap over 10 s;
-  four distinct hosts on one commit; GPUs idle before the run; reference available. Invalid runs are listed and
-  re-run, never dropped.
+## 7. Hypotheses and criteria (NOT YET FROZEN; medians over valid reps)
+
+Predictions come from committed measurements (GPU where available, otherwise network-level) and are written before
+the run; network-level predictions add the GPU bind step (~0.3-0.4 s at 1 Gbps, continuity notes).
+
+- **G1 (A, interruption):** OTTER event-driven's TTFO <= 1.0 s at 1 Gbps and native, and <= 0.1 x Full migration's at
+  1 Gbps. Prediction (single handoff, GPU): 0.71 s vs 53.8 s.
+- **G2 (A, continuity recovery):** at both bandwidths, OTTER's rejoin delay <= 6.0 s wall clock **and** rejoin calls
+  <= 8. Both values are reported for every run. Prediction (GPU): 4.1 s and 6 calls at 1 Gbps; 6 calls at every
+  bandwidth in the single-handoff table.
+- **G3 (B, progress preservation; consistent with Phase 1):** at rho = 2 and 4, all of
+  (a) source bytes: M1 + M2 <= 1.10 Sinks per session and M1 only >= 1.40 (Phase 1: split 1.06 / 1.02, restart 2.01 / 1.51);
+  (b) discarded bytes: M1 + M2 <= 0.10 Sink and M1 only >= 0.40 (Phase 1: 0.07 / 0.04 vs 1.01 / 0.51);
+  (c) verified progress reused: M1 + M2 >= 0.85 and M1 only = 0 by construction (Phase 1, derived rather than measured
+  directly: 1 - discarded / bytes delivered to intermediate owners = 1 - 0.07/1.02 ~ 0.93 at rho 2, 1 - 0.04/0.51 ~ 0.92
+  at rho 4);
+  (d) Sink bind-ready after the final move: M1 + M2 within 1.0 s of M1 only (both ingress-bound; Phase 1: 15.3 vs
+  15.3 s at rho 2, 14.8 vs 15.4 s at rho 4).
+  Aggregate bytes are reported and **not** a pass condition: Phase 1 measured them equal at rho >= 2 (2.02 vs 2.01,
+  1.51 vs 1.51), because forwarding a held fragment costs the same link bytes as sending it from the source. The
+  hypothesis is that preservation removes discarded work and source load, not total traffic or single-ingress latency.
+- **G4 (C, correct placement):** bind-ready after the move <= no-placement's - 0.5 x (x_placed x T_s), with x_placed
+  the Sink fraction verified at the destination at the move. Prediction (A-pilot, net): x_placed 0.71; 4.0 vs 14.0 s
+  (+ bind step).
+- **G5 (D, incorrect placement):** with x_placed = Sink fraction verified at the wrong candidate at the move, all of
+  (a) bind-ready within 1.5 s of no placement; (b) **total source bytes** (pre-move placement + post-move restoration)
+  <= 1.02 Sinks; (c) post-move source bytes <= (1 - x_placed) + 0.02; (d) forwarded by holders >= 0.9 x x_placed.
+  Pre-move, post-move and aggregate bytes are reported separately (aggregate is expected at 1 + x_placed: the misplaced
+  fraction crosses two links). Prediction (A-pilot, net): pre 0.71, post 0.29, total 1.00, forwarded 0.72, aggregate
+  1.72; bind-ready equal to no placement (ingress-bound).
+- **G6 (E, hybrid GPU/network contention):** for the one GPU generation session, M1 + M2's and OTTER event-driven's
+  Sink bind-ready after the final move <= M1 only's - 3.5 s (0.5 T_m). Prediction (Scenario B v2, net, N = 4 one move):
+  9.7 s lower. The claim is limited to source-egress contention created by network-level sessions; it says nothing
+  about four concurrent GPU generations.
+- **G7 (F, mid-restoration degradation):** primary: OTTER event-driven's Sink bind-ready after the final move <= 0.5 x
+  OTTER at moves', with <= 2 re-plans and 0 duplicates; and in scenarios B and G (no change) OTTER event-driven makes
+  0 re-plans and is within 1.0 s of OTTER at moves. Secondary (reported, not a pass condition): OTTER event-driven vs
+  M1 + M2 and vs M1 only. Prediction (Full E cond. 3, net): 14.0 vs 53.8 s (at moves), 62.8 s (line-like M1 + M2
+  forwarding from C), 14.0 s (M1 only, idle source), each + bind step.
+- **G8 (G, revisit):** every progress-preserving policy's Sink bind-ready at the revisited B <= 0.6 x M1 only's.
+  Prediction (Full E cond. 4, net): 7.0 vs 14.0 s + bind step; 0.50 Sink still at B on return.
+- **G9 (overhead):** steady-state chunk service time with OTTER enabled and no migration within 2 % of unmodified
+  generation (same GPU, same seed, 3 reps of 200 chunks); destination peak `memory_allocated` within 1 % across
+  in-repo policies (single handoff: 25.8-25.9 GiB).
+- **External C/R:** descriptive only (no pass threshold), in the two comparisons of section 5: TTFO, dump / transfer /
+  restore times, bytes, rejoin, success or failure with the error.
+- **Run validity:** all fragments verified; digest match; NIC peaks <= 1.15 x cap; paced egress <= 1.05 x cap over 10 s;
+  four distinct hosts on one commit; GPU 0 idle before the run; reference available; no version events (section 2).
+  Invalid runs are listed and re-run, never dropped.
 
 ## 8. Implementation required before any run (not started)
 
 1. Move the restoration planners (`reuse_aware_in`, `reuse_dyn`, pre-positioning) out of `restore_orchestrate.py`
-   into a module shared with `mobility_orchestrate.py`, so the GPU and network harnesses run the same decision code.
-2. GPU harness: cap events, measured-throughput re-planning hooks, revisit paths, placement window before a move.
-3. Full migration and cold restart as repeated-mobility execution policies (exist only in the single-handoff harness).
-4. Per-frame output timestamps (decode completion) for inter-frame latency, jitter and deadline misses.
-5. Hybrid scenario E: launch `restore_node.py` sessions alongside the GPU nodes (separate ports), shared token buckets
-   at the source host.
-6. Copy every node's `fragments.csv` back to the run directory.
-7. External baselines per the audit.
+   into a module shared with `mobility_orchestrate.py`; regression-check it against the network-level pilots.
+2. GPU harness: cap events, measured-throughput re-planning hooks, revisit paths, placement window before a move,
+   the "OTTER at moves" policy.
+3. Full migration and cold restart as repeated-mobility execution policies.
+4. t_decode logging per frame (t_chunk exists); a consumer process for t_deliver only if delivery metrics are kept.
+5. Hybrid scenario E: `restore_node.py` sessions alongside the GPU nodes (separate ports), shared token buckets at A.
+6. Metrics: pre-move vs post-move source bytes, verified-progress-reused, rejoin calls, version-event counters.
+7. OTTER cold-destination variant (process start + weight load after the trigger) for scenario A.
+8. Copy every node's `fragments.csv` back to the run directory.
+9. External C/R per the audit, after a two-host restore test on driver 575.51.03.
 
 Each item gets a loopback / single-host test and a one-run-per-policy shakedown (inspected) before the sweep.
 
@@ -127,21 +201,21 @@ Each item gets a loopback / single-host test and a one-run-per-policy shakedown 
 
 | scenario | runs (3 reps) |
 |---|---|
-| A | 6 policies x 2 bandwidths + external (2 x 2) = 16 x 3 = 48 |
-| B | 5 x 2 rho = 10 x 3 = 30 |
+| A | (4 in-repo + OTTER cold-destination) x 2 bandwidths = 10 x 3 = 30; external C/R 2 systems x 2 comparisons x 2 bandwidths = 8 x 3 = 24 |
+| B | 6 x 2 rho = 12 x 3 = 36 |
 | C, D | 4 x 2 = 8 x 3 = 24 |
 | E | 3 x 3 = 9 |
 | F | 4 x 3 = 12 |
-| G | 3 x 3 = 9 |
-| generalization (A, B on 2 more clips x 2 seeds, OTTER and the strongest baseline) | ~48 |
-Total ~180 GPU runs at 2-3 min each after a ~3 min node start: ~8-10 h of exclusive use of four GPUs, plus external
-baselines' setup.
+| G | 4 x 3 = 12 |
+| generalization (scenario A only; 2 clips x 2 seeds; OTTER event-driven and Full migration; 1 Gbps) | 8 x 3 = 24 |
+| G9 steady state | 2 x 3 = 6 |
+Total ~177 GPU runs at 2-3 min each after a ~3 min node start: ~8-10 h of exclusive use of four GPU 0s, plus external
+baseline setup.
 
 ## 10. Risks
 
-- GPU sharing with other users on elves-03/04 (GPU 1 is used by others): must not touch GPU 0; checked per run.
-- Scenario E is hybrid; it must not be described as four GPU sessions.
-- Event-driven re-planning on GPU interacts with generation load on the same host (CPU contention for the sender
-  threads); the steady-state overhead run (G9) bounds it.
-- External baselines may fail outright on cross-node restore; that is reported as a result, with the error.
-- Per-frame timestamps change the logging path; G9 checks it does not change service time.
+- Other users on GPU 1 of every host: never touch it; GPU 0 idle check per run.
+- Scenario E is hybrid; any description as four GPU sessions is wrong.
+- Event-driven re-planning competes for CPU with generation on the same host; G9 bounds steady-state cost only.
+- External C/R cross-node restore may fail on driver 575.51.03; reported as a result.
+- t_decode logging adds synchronization points; G9 must be measured with it enabled.
