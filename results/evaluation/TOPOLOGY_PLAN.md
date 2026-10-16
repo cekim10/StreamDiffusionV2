@@ -477,6 +477,19 @@ fragment; all four nodes on the same commit. Note for the later B sweep: the mod
 beat every fixed family at B_f = 500 Mbps (17.1 vs 18.9 s) and to match star at B_f = 125 Mbps (42.3 vs 41.8 s) by
 retransmitting 1.19 Sinks from the source; those are predictions, not results.
 
+Heterogeneous B subset (approved after the B-pilot; experiment `restore_dissem_hetero`, `tools/eval/run_restore_dissem_hetero.sh`,
+45 runs ~1 h): conditions (1) B_f = 500 Mbps, (2) B_f = 125 Mbps, (3) B_s = 250 Mbps, each with the five plans x 3 reps;
+all other caps 1 Gbps. The 15 model predictions are the three heterogeneous blocks of the table above (recorded before
+the run). Objective: does the bottleneck-aware fragment assignment match or beat the best fixed plan in each regime.
+Verdicts are reported **over the tested subset only**: H6a (best fixed plan differs across the three conditions:
+predicted multipath / star / any-forwarding), H6b (at B_s = 250 every forwarding plan <= 0.5 x star: 55.6 vs 166.2),
+H6c (at B_f = 125 line and tree >= 2 x star: 111 / 222 vs 42), H6d (at B_f = 500 multipath <= 0.75 x line and <= 0.5 x
+tree: 18.9 vs 28.0 / 55.6), H6f-subset (aware within 10 % of the best fixed plan in all three: predicted 17.1 vs 18.9,
+42.3 vs 41.8, 55.6 vs 55.6). H6e uses the pilot's uniform runs (multipath within 1 s of line: measured 14.0 vs 14.1).
+**H6f over the full grid stays open** unless the remaining conditions are run. Mechanism note to keep in the reading:
+at B_f = 500 the aware plan is predicted to beat the best fixed family by sending 1.20 Sinks from the source (0.20 of
+retransmission), i.e. it is a fragment-level assignment with source retransmission, not a choice among the families.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |
