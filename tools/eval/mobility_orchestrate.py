@@ -15,6 +15,10 @@ Policies (sink routing; execution always moves A -> B -> C -> D):
     split       Ours: completed fragments stay valid wherever they are; every holder execution has left sends
                 the fragments the new owner lacks (one claim per fragment), the source sends only the rest
     direct      oracle lower bound: the source sends to the final owner from time zero
+    reuse_aware_in  OTTER at moves: bottleneck-aware fragment assignment from tools/eval/restore_planner.py (D0)
+    reuse_dyn       OTTER event-driven: reuse_aware_in + re-planning on measured throughput (E-pilot v2 thresholds)
+D0 options: --caps / --cap_events (per-node caps, changes the planners are not told about), --path (explicit owner
+sequence), --prepos (placement window before the move, the source keeps generating), decode timestamps per chunk.
 
     python tools/eval/mobility_orchestrate.py --measure_ts --bws 1000 2500 5000 native        # Step 1
     python tools/eval/mobility_orchestrate.py --bw 1000 --ts 14.2 --rhos 2 --policies all      # shakedown
@@ -29,7 +33,7 @@ import queue
 import sys
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 
@@ -43,10 +47,14 @@ import numpy as np  # noqa: E402
 from agents import connect_all, parse_hosts  # noqa: E402
 from common import DEFAULT_MSS, EVAL_ROOT, CsvLog, EventLog, clock_sync_client, git_commit  # noqa: E402
 from proto_handoff import MB, recv_msg, send_msg  # noqa: E402
+from restore_planner import assign_providers, dyn_decide, holder_order, parse_cap_events, prepos_alloc  # noqa: E402
+from restore_planner import maxmin as maxmin_caps  # noqa: E402
 
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
-POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct"}
+POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct",
+                "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)"}
+AWARE = ("reuse_aware_in", "reuse_dyn")
 REJOIN_DB = 35.0
 
 
@@ -141,22 +149,46 @@ def maxmin_rates(flows: list[tuple[str, str, str]], cap_bps: float) -> dict[str,
 
 # ----------------------------------------------------------------------------- one run
 class Run:
-    def __init__(self, orch, policy: str, bw_mbps: float, tm: float, rho, rep: int, hops: int):
+    def __init__(self, orch, policy: str, bw_mbps: float, tm: float, rho, rep: int, hops: int, path=None, prepos=None):
         self.o = orch; self.a = orch.a
         self.policy, self.bw, self.tm, self.rho, self.rep = policy, bw_mbps, tm, rho, rep
-        self.edges = EDGES[:hops + 1]
+        self.edges = list(path) if path else EDGES[:hops + 1]
+        assert self.edges[0] == "A" and len(set(self.edges)) == len(self.edges), "path must start at A and not revisit (revisit is not supported in D0)"
         self.final = self.edges[-1]
+        self.pp = prepos   # {"policy", "probs" (B, C, D), "L", "b", "dest", "tau"} or None
+        self.candidates = [e for e in EDGES if e != "A"] if prepos else []
+        self.nodes_used = list(dict.fromkeys(self.edges + self.candidates))
         bw_tag = "native" if bw_mbps <= 0 else f"{bw_mbps:g}"
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         rho_tag = "none" if rho is None else f"{rho:g}"
-        self.run_id = f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}_rep={rep}_{stamp}"
+        tags = ("" if not path else "_path=" + "".join(self.edges)) + ("" if not prepos else f"_pp={prepos['policy']}_L={prepos['L']:g}_b={prepos['b']:g}") \
+            + ("" if not self.a.cap_events else "_ev=" + self.a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge"))
+        self.run_id = f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}_{stamp}"
+        # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
+        if bw_mbps > 0:
+            self.caps = {(d, n): bw_mbps * 1e6 for d in ("out", "in") for n in EDGES}
+            for item in (self.a.caps or "").split(","):
+                if item:
+                    k, v = item.split("="); node, d = k.split(":"); self.caps[(d, node)] = float(v) * 1e6
+        else:
+            self.caps = None   # unshaped
+        self.known_caps = dict(self.caps) if self.caps else {(d, n): self.a.physical_cap_mbps * 1e6 for d in ("out", "in") for n in EDGES}
+        self.caps0 = dict(self.caps) if self.caps else None
+        self.cap_events = parse_cap_events(self.a.cap_events)
+        self.cap_changes = []
+        self.flow_rx: dict[str, deque] = defaultdict(deque)   # flow id -> (t, bytes) verified at the destination
+        self.rate_est: dict = {}
+        self.last_plan_t = 0.0
+        self.dyn_last = 0.0
+        self.replans: list[dict] = []
+        self.pp_alloc = self.pp_frag = None
         self.rel = f"results/evaluation/{self.a.experiment}/{self.run_id}"
         self.dir = REPO_ROOT / self.rel
         self.dir.mkdir(parents=True, exist_ok=False)
         (self.dir / "git_commit.txt").write_text(git_commit() + "\n")
         self.ev = EventLog(self.dir / "events.csv", "orchestrator")
         self.frag_csv = CsvLog(self.dir / "fragments.csv", ["t_rel", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok", "dup", "classification"])
-        self.metric_csv = CsvLog(self.dir / "metrics.csv", ["call", "t_out_rel", "owner", "owner_idx", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "lag_hops", "gpu_mem_alloc_mb", "sink_slot_pos"])
+        self.metric_csv = CsvLog(self.dir / "metrics.csv", ["call", "t_out_rel", "owner", "owner_idx", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "lag_hops", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode_rel", "n_frames"])
         self.pcur_csv = CsvLog(self.dir / "p_current.csv", ["t_rel", "owner", "p_current", "held_A", "held_B", "held_C", "held_D"])
         self.flow_csv = CsvLog(self.dir / "flows.csv", ["flow", "src", "dst", "t_start_rel", "t_end_rel", "n_frags", "bytes", "rate_bps_last", "cancelled", "reason"])
         self.trace = open(self.dir / "trace.txt", "w")
@@ -209,18 +241,24 @@ class Run:
         self.pcur_csv.row(t_rel=f"{self.rel_t(t):.4f}", owner=self.owner, p_current=f"{len(self.holders[self.owner]) / n:.4f}", **{f"held_{e}": len(self.holders.get(e, ())) for e in EDGES})
 
     # ---------------- flows
-    def start_flow(self, src: str, dst: str, frag_ids: list[int], closed: bool, reason: str):
+    def rates(self, act):
+        if self.caps:
+            return maxmin_caps(act, self.caps)
+        return maxmin_rates(act, self.bw * 1e6)   # bw <= 0: unshaped (all zero = no token bucket)
+
+    def start_flow(self, src: str, dst: str, frag_ids: list[int], closed: bool, reason: str, keep_order: bool = False):
         if not frag_ids and closed:
             return None
         self.nflow += 1
         fid = f"f{self.nflow}_{src}{dst}"
         nd = self.o.node_spec[dst]
+        order = list(frag_ids) if keep_order else sorted(frag_ids)
         fl = {"id": fid, "src": src, "dst": dst, "queued": set(frag_ids), "queue_left": set(frag_ids), "closed": closed, "active": True, "rate_bps": 0.0,
-              "t_start": time.time(), "t_end": None, "bytes": 0, "n_sent": 0, "cancelled": False, "reason": reason}
+              "t_start": time.time(), "t_end": None, "bytes": 0, "n_sent": 0, "cancelled": False, "reason": reason, "order": order}
         self.flows[fid] = fl
         act = [(f["id"], f["src"], f["dst"]) for f in self.flows.values() if f["active"]]
-        fl["rate_bps"] = maxmin_rates(act, self.bw * 1e6)[fid]
-        self.node(src).call("FLOW_START", flow_id=fid, dst=dst, dst_host=nd["host"], dst_port=nd["data"], frag_ids=sorted(frag_ids), closed=closed, rate_bps=fl["rate_bps"])
+        fl["rate_bps"] = self.rates(act)[fid]
+        self.node(src).call("FLOW_START", flow_id=fid, dst=dst, dst_host=nd["host"], dst_port=nd["data"], frag_ids=order, closed=closed, rate_bps=fl["rate_bps"])
         self.ev.log("flow_start", flow=fid, src=src, dst=dst, n=len(frag_ids), closed=closed, rate_bps=fl["rate_bps"], reason=reason)
         self.realloc()
         return fl
@@ -229,7 +267,7 @@ class Run:
         new = [x for x in frag_ids if x not in fl["queued"]]
         if not new and (closed == fl["closed"]):
             return
-        fl["queued"].update(new); fl["queue_left"].update(new); fl["closed"] = closed
+        fl["queued"].update(new); fl["queue_left"].update(new); fl["closed"] = closed; fl.setdefault("order", []).extend(sorted(new))
         self.node(fl["src"]).call("FLOW_ADD", flow_id=fl["id"], frag_ids=sorted(new), closed=closed)
 
     def cancel_flow(self, fl: dict, reason: str):
@@ -237,6 +275,7 @@ class Run:
             return
         r = self.node(fl["src"]).call("FLOW_CANCEL", flow_id=fl["id"])
         fl["active"] = False; fl["cancelled"] = True; fl["t_end"] = time.time(); self.n_cancelled += 1
+        fl["sent_by_node"] = set(r.get("sent", []))
         self.ev.log("flow_cancel", flow=fl["id"], src=fl["src"], dst=fl["dst"], sent=len(r.get("sent", [])), left=len(fl["queue_left"]), reason=reason)
         self.realloc()
 
@@ -247,7 +286,7 @@ class Run:
     def realloc(self):
         """Re-run the max-min allocation over the active flows and push every changed rate to its sender."""
         act = [(f["id"], f["src"], f["dst"]) for f in self.flows.values() if f["active"]]
-        rates = maxmin_rates(act, self.bw * 1e6)
+        rates = self.rates(act)
         for f_id, _, _ in act:
             fl = self.flows[f_id]
             if abs(rates[f_id] - fl["rate_bps"]) > 0.01 * max(1.0, fl["rate_bps"]):
@@ -264,6 +303,8 @@ class Run:
 
     # ---------------- policy planning
     def plan(self, reason: str):
+        if self.policy in AWARE:
+            return self.plan_aware(reason)
         pol, n_all = self.policy, set(range(len(self.manifest["frags"])))
         owner = self.owner
         decision = []
@@ -325,6 +366,114 @@ class Run:
                         decision.append(f"{src}->{owner} {len(ids)} fragments ({mb:.0f} MiB){' already delivered to ' + src + ', reused' if src != 'A' else ' not yet anywhere else'}")
         return "; ".join(decision)
 
+    def plan_aware(self, reason: str):
+        """OTTER at moves / event-driven: provider assignment by the shared planner (tools/eval/restore_planner.py) at
+        the start, at moves, and when a flow ends with fragments still missing at the owner (same triggers as the
+        network harness). Per-fragment arrivals do not re-plan."""
+        if reason not in ("start", "move", "flow_done"):
+            return ""
+        owner, flen = self.owner, self.manifest["frag_bytes"]
+        n_all = set(range(len(self.manifest["frags"])))
+        for fl in list(self.flows.values()):
+            if fl["active"] and fl["dst"] != owner:
+                self.cancel_flow(fl, "owner moved: retarget remaining fragments (progress kept)")
+        missing = n_all - self.holders[owner] - self.active_claims(owner)
+        self.last_plan_t = time.time()
+        if not missing:
+            return ""
+        history = self.edges[:self.owner_idx + 1]
+        held = {e: self.holders.get(e, set()) for e in EDGES}
+        holders = holder_order(history, owner, held, [e for e in EDGES if e != "A"])
+        soon = {h: set(self.in_flight.get(h, set())) - held[h] for h in holders}
+        backlog = defaultdict(float)
+        for fl in self.flows.values():
+            if fl["active"]:
+                backlog[fl["src"]] += len(fl["queue_left"]) * flen
+        inbound = sum(len(fl["queue_left"]) * flen for fl in self.flows.values() if fl["active"] and fl["dst"] == owner)
+        assign, late = assign_providers(self.policy, missing=missing, own=owner, holders=holders, held=held, soon=soon, skipped=set(),
+                                        backlog=backlog, inbound_bytes=inbound, known_caps=self.known_caps, flen=flen, history=history)
+        decision = []
+        for src in sorted(set(assign) | set(late)):
+            ids = assign.get(src, []) + late.get(src, [])
+            self.start_flow(src, owner, ids, True, f"{self.policy}: " + ("reuse fragments held at " + src if src != "A" else "source sends the rest"), keep_order=True)
+            decision.append(f"{src}->{owner} {len(ids)} fragments")
+        return "; ".join(decision)
+
+    def tick(self, now: float):
+        """Cap events (the emulated network changes; planners are not told) and event-driven re-planning checks."""
+        n = len(self.manifest["frags"])
+        for evn in self.cap_events:
+            if evn.get("fired") or not self.caps:
+                continue
+            fire = (now - self.t0 >= evn["at"]) if evn["kind"] == "t" else (len(self.holders.get(evn["node"], ())) >= evn["frac"] * n)
+            if fire:
+                evn["fired"] = True
+                self.caps[(evn["dir"], evn["cap_node"])] = evn["mbps"] * 1e6
+                self.cap_changes.append((now, evn["cap_node"], evn["dir"], evn["mbps"]))
+                self.ev.log("cap_change", now, node=evn["cap_node"], dir=evn["dir"], mbps=evn["mbps"], trigger=evn["spec"])
+                self.realloc()
+        if self.policy == "reuse_dyn" and now - self.dyn_last >= self.a.dyn_period:
+            self.dyn_last = now
+            self.dyn_check(now)
+
+    def dyn_check(self, now: float):
+        a, owner, flen = self.a, self.owner, self.manifest["frag_bytes"]
+        if now - self.last_plan_t < a.dyn_warmup:
+            return
+        act = [fl for fl in self.flows.values() if fl["active"] and fl["dst"] == owner and fl["queue_left"]]
+        if not act:
+            return
+        rate = {}
+        for fl in act:
+            q = self.flow_rx.get(fl["id"])
+            if not q:
+                return   # not enough measurement yet
+            while q and q[0][0] < now - a.dyn_window:
+                q.popleft()
+            rate[fl["src"]] = rate.get(fl["src"], 0.0) + (sum(b for _, b in q) / a.dyn_window if q else 0.0)
+        view = [{"src": fl["src"], "left": fl["queue_left"], "order": [f for f in fl["order"] if f in fl["queue_left"]] or sorted(fl["queue_left"]), "fl": fl} for fl in act]
+        held = {e: self.holders.get(e, set()) for e in EDGES}
+        d = dyn_decide(sid="s0", own=owner, act=view, rate=rate, rate_est=self.rate_est, now=now, held=held, known_caps=self.known_caps, flen=flen,
+                       nodes=list(EDGES), window=a.dyn_window, ctrl=a.dyn_ctrl, eps=a.dyn_eps, rel=a.dyn_rel)
+        if d is None:
+            return
+        t_dec = time.time()
+        q = d["q"]
+        for v in d["qflows"]:
+            fl = v["fl"]
+            self.cancel_flow(fl, f"replan: bottleneck {q} (eta {d['eta_cur']:.1f} -> {d['eta_new']:.1f} s)")
+            # fragments the sender reports as sent (its FRAG_SENT may still be queued here) are in flight, not unclaimed
+            for f in fl.get("sent_by_node", set()) & fl["queue_left"]:
+                fl["queue_left"].discard(f); self.in_flight[fl["dst"]].add(f)
+        new_flows = []
+        for p_, ids in d["assign"].items():
+            ex = next((fl for fl in self.flows.values() if fl["active"] and fl["src"] == p_ and fl["dst"] == owner and p_ != q), None)
+            if ex is not None:
+                self.add_to_flow(ex, ids, True); new_flows.append(ex["id"])
+            else:
+                fl = self.start_flow(p_, owner, sorted(ids), True, f"replan: {len(ids)} fragments moved from {q}", keep_order=True)
+                new_flows.append(fl["id"] if fl else None)
+        self.last_plan_t = t_dec
+        rec = {"t_s": self.rel_t(t_dec), "owner": owner, "from": q, "to": {p_: len(v) for p_, v in d["assign"].items()}, "moved_fragments": sum(len(v) for v in d["assign"].values()),
+               "eta_cur_s": d["eta_cur"], "eta_new_s": d["eta_new"], "dT_s": d["dT"], "c_switch_s": d["c_switch"], "margin_s": d["margin"],
+               "measured_rate_mbps": {k: v * 8 / 1e6 for k, v in rate.items()}, "cap_est_mbps": {k: v * 8 / 1e6 for k, v in d["cap_est"].items()}, "cap_est_stale": d["stale"],
+               "cap_change_t_s": self.rel_t(self.cap_changes[-1][0]) if self.cap_changes else None, "new_flows": new_flows}
+        self.replans.append(rec)
+        self.ev.log("replan", t_dec, **rec)
+        # a cancelled flow may stop before its head fragment: assign anything still unclaimed by the same rules
+        self.plan_aware("flow_done")
+
+    def prepos_start(self):
+        """Placement before the move (M3): the source sends the allocation to the candidates while it keeps generating."""
+        caps = self.caps or self.known_caps
+        x, frags, avail, order = prepos_alloc(self.pp, caps, self.manifest["nbytes"], len(self.manifest["frags"]), self.candidates)
+        self.pp_alloc, self.pp_frag = x, frags
+        for c in order:
+            if frags[c]:
+                self.start_flow("A", c, frags[c], True, f"prepos {self.pp['policy']}: speculative fragments to candidate {c}")
+        self.ev.log("prepos", policy=self.pp["policy"], dest=self.pp["dest"], L=self.pp["L"], budget=self.pp["b"], avail_sinks=avail,
+                    alloc_sinks={c: round(v, 4) for c, v in x.items()}, frags={c: len(v) for c, v in frags.items()})
+
     # ---------------- event handling
     def handle(self, m: dict):
         kind = m.get("kind")
@@ -342,12 +491,22 @@ class Run:
             self.node_events.append({"node": lb, "event": m["event"], "t": t, **det})
             if m["event"] == "sink_bind":
                 self.bound[lb] = t
+            if self.policy in AWARE and self.manifest is not None and self.t0 is not None:
+                fl = self.flows.get(det.get("flow"))
+                if m["event"] == "flow_skip_not_held" and fl is not None:
+                    # the holder did not have it yet: release the claim so the next plan can assign it again
+                    fl["queue_left"].discard(det.get("fragment_id")); fl["n_skipped"] = fl.get("n_skipped", 0) + 1
+                if m["event"] == "flow_end":
+                    if fl is not None and fl["active"]:
+                        self.end_flow(fl)
+                    self.plan_aware("flow_done")
             return
         if kind == "METRIC":
             t = nc.to_orch(m["t_out"])
             lag = EDGES.index(lb) - max([EDGES.index(e) for e in self.bound] + [0])
             row = {"call": m["call"], "t_out_rel": self.rel_t(t), "owner": lb, "owner_idx": EDGES.index(lb), "chunk_s": m["chunk_s"], "psnr": m["psnr"], "ssim": m["ssim"], "missing": m["missing"],
-                   "sink_bound": m["sink_bound"], "lag_hops": lag, "gpu_mem_alloc_mb": m["gpu_mem_alloc_mb"], "sink_slot_pos": m["sink_slot_pos"]}
+                   "sink_bound": m["sink_bound"], "lag_hops": lag, "gpu_mem_alloc_mb": m["gpu_mem_alloc_mb"], "sink_slot_pos": m["sink_slot_pos"],
+                   "t_decode_rel": self.rel_t(nc.to_orch(m.get("t_decode"))) if m.get("t_decode") else None, "n_frames": m.get("n_frames")}
             self.metrics.append(row)
             self.metric_csv.row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
             return
@@ -368,6 +527,8 @@ class Run:
                    "ok": bool(m["ok"]), "dup": bool(m["dup"]), "rejected": m.get("rejected")}
             self.recv.append(rec)
             self.in_flight[lb].discard(m["fragment_id"])
+            if rec["ok"] and not rec["dup"]:
+                self.flow_rx[m["flow_id"]].append((rec["t_end"], m["bytes"]))
             if rec["ok"] and not rec["dup"]:
                 self.holders[lb].add(m["fragment_id"]); self.physical[lb].add(m["fragment_id"])
                 if lb == self.owner:
@@ -404,24 +565,34 @@ class Run:
         policy = self.policy
         self.log(f"=== run {self.run_id}: {POLICY_LABEL[policy]}, bw {self.bw or 'native'} Mbps, T_m {self.tm if self.tm < 1e8 else 'inf'} s, rho {self.rho}, path {'->'.join(self.edges)} ===")
         session_id = self.run_id
-        for lb in self.edges:
+        for lb in self.nodes_used:
             self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=session_id, t0=None)
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
         self.manifest = prep["manifest"]
         self.holders = {e: set() for e in EDGES}; self.holders["A"] = set(range(len(self.manifest["frags"])))
         self.physical = {e: set() for e in EDGES}; self.physical["A"] = set(self.holders["A"])
-        for lb in self.edges[1:]:
+        for lb in self.nodes_used[1:]:
             self.node(lb).call("MANIFEST", manifest=self.manifest, timeout=600)
         self.drain(0.5)
         # ---- migration start
         self.t0 = time.time(); self.ev.set_ref(self.t0)
-        self.ev.log("migration_start", self.t0, policy=policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, sink_version=self.manifest["sink_version"], sink_nbytes=self.manifest["nbytes"], n_frags=len(self.manifest["frags"]))
-        self.handoff("A", "B", 1)
+        self.ev.log("migration_start", self.t0, policy=policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, sink_version=self.manifest["sink_version"], sink_nbytes=self.manifest["nbytes"], n_frags=len(self.manifest["frags"]),
+                    path=self.edges, prepos=self.pp, cap_events=a.cap_events, caps_mbps=None if not self.caps else {f"{n}:{d}": v / 1e6 for (d, n), v in self.caps.items()})
+        if self.pp:
+            # placement window: the source keeps generating while it places fragments at the candidates; the move to the
+            # true destination happens L seconds after the trigger
+            self.node("A").call("EXEC_START")
+            self.prepos_start()
+            t_move = self.t0 + self.pp["L"]
+            while time.time() < t_move:
+                self.drain(0.05); self.tick(time.time())
+        self.handoff("A", self.edges[1], 1)
         d = self.plan("start")
-        self.trace_state("move A->B (migration start)", d)
+        self.trace_state(f"move A->{self.edges[1]} (first move)", d)
         n_moves = len(self.edges) - 2
         next_move = 1
-        final_move_t = self.t0 if n_moves == 0 else None
+        # the move boundary is the handoff request (not the end of the post-move planning RPCs)
+        final_move_t = self.moves[-1]["t_req"] if n_moves == 0 else None
         t_rejoin_final = None
         stop_at = None
         deadline = self.t0 + a.max_run_s
@@ -429,6 +600,7 @@ class Run:
         while True:
             self.drain(0.05)
             now = time.time()
+            self.tick(now)
             if now - last_pcur >= 1.0:
                 self.p_current_row(now); last_pcur = now
             if next_move <= n_moves and now >= self.t0 + next_move * self.tm:
@@ -437,7 +609,7 @@ class Run:
                 d = self.plan("move")
                 self.trace_state(f"move {frm}->{to}" + (" (final move)" if next_move == n_moves else ""), d)
                 if next_move == n_moves:
-                    final_move_t = time.time()
+                    final_move_t = self.moves[-1]["t_req"]
                 next_move += 1
             # end conditions: rejoin at the final owner + tail calls, or deadline
             if final_move_t is not None and t_rejoin_final is None:
@@ -456,7 +628,7 @@ class Run:
             if fl["active"]:
                 self.cancel_flow(fl, "run end")
         self.drain(1.0)
-        ends = {lb: self.node(lb).call("RUN_END", timeout=300) for lb in self.edges}
+        ends = {lb: self.node(lb).call("RUN_END", timeout=300) for lb in self.nodes_used}
         self.drain(0.5)
         for lb, e in ends.items():
             if e.get("network_csv"):
@@ -536,7 +708,7 @@ class Run:
                               n_frags=fl["n_sent"], bytes=fl["bytes"], rate_bps_last=f"{fl['rate_bps']:.0f}", cancelled=fl["cancelled"], reason=fl["reason"])
         # validation
         owners_seq = ["A"] + [m["to"] for m in self.moves]
-        hosts = {lb: self.node(lb).hello.get("host") for lb in self.edges}
+        hosts = {lb: self.node(lb).hello.get("host") for lb in self.nodes_used}
         resume_ts = {e["node"]: e["t"] for e in self.node_events if e["event"] == "resume"}
         single_owner = all(m["t_stop"] <= resume_ts.get(m["to"], float("inf")) for m in self.moves)
         links_used = sorted(link_bytes)
@@ -549,7 +721,7 @@ class Run:
         complete_t = {e["node"]: e["t"] for e in self.node_events if e["event"] == "sink_complete"}
         fwd_before_complete = {n: (n not in complete_t or t < complete_t[n]) for n, t in first_fwd.items()}
         validation = {
-            "four_hosts_distinct": len(set(hosts.values())) == len(self.edges),
+            "four_hosts_distinct": len(set(hosts.values())) == len(self.nodes_used),
             "owner_sequence": owners_seq, "ownership_changed": owners_seq == self.edges,
             "single_owner": single_owner,
             # restart: only the source ever sends and nothing delivered to an abandoned owner is reused
@@ -571,7 +743,36 @@ class Run:
             "continuity_comparable_to_phase1": (float(np.mean(after_rejoin)) >= 35.0) if after_rejoin else None,
             "stop_reason": self.stop_reason,
         }
+        # ---- D0 accounting (preregistration v3, section 6)
+        t_mv = tfm if tfm is not None else self.t0
+        src_pre = sum(s["bytes"] for s in self.sent if s["src"] == "A" and s["t_start"] < t_mv)
+        src_post = sum(s["bytes"] for s in self.sent if s["src"] == "A" and s["t_start"] >= t_mv)
+        ok_first = [r for r in self.recv if r["ok"] and not r["dup"]]
+        b_fwd = sum(r["bytes"] for r in ok_first if r["dst"] == fin and r["src"] != "A")
+        abandoned = [e for e in self.edges[1:-1]]
+        verified_at = {e: {r["fid"] for r in ok_first if r["dst"] == e} for e in self.nodes_used if e != "A"}
+        V = set().union(*(verified_at[e] for e in abandoned)) if abandoned else set()
+        reused = {r["fid"] for r in ok_first if r["dst"] == fin and r["src"] in abandoned} & V
+        # retained: fragments verified at an owner before it was abandoned that the policy still holds there at the end
+        t_left = {m_["from"]: m_["t_req"] for m_ in self.moves}
+        retained = {}
+        for e in abandoned:
+            before = {r["fid"] for r in ok_first if r["dst"] == e and r["t_end"] <= t_left.get(e, float("inf"))}
+            retained[e] = (len(before & self.holders.get(e, set())) / len(before)) if before else None
+        x_at_move = {e: len({r["fid"] for r in ok_first if r["dst"] == e and r["t_end"] <= t_mv}) / len(man["frags"]) for e in self.nodes_used if e != "A"}
+        version_events = sum(1 for e in self.node_events if e["event"] in ("fragment_rejected_version", "sink_version_mismatch")) + sum(1 for r in self.recv if r["rejected"])
+        d0 = {"t_move_final_rel_s": self.rel_t(t_mv),
+              "source_bytes_pre_move_sinks": src_pre / S, "source_bytes_post_move_sinks": src_post / S, "source_bytes_total_sinks": (src_pre + src_post) / S,
+              "holder_forwarded_sinks": b_fwd / S, "aggregate_network_sinks": total_sent / S,
+              "x_verified_at_move": x_at_move,
+              "verified_progress_retained": retained,
+              "verified_progress_reused": (len(reused) / len(V)) if V else None, "verified_at_abandoned_owners": len(V),
+              "version_events": version_events, "replans": self.replans, "n_replans": len(self.replans),
+              "cap_changes": [(self.rel_t(t), n, d, v) for t, n, d, v in self.cap_changes], "prepos": None if not self.pp else {**self.pp, "alloc_sinks": self.pp_alloc, "frags": {c: len(v) for c, v in (self.pp_frag or {}).items()}},
+              "decode_rows": sum(1 for m in self.metrics if m.get("t_decode_rel") is not None)}
+        validation["version_events_zero"] = version_events == 0
         summary = {
+            "d0": d0,
             "run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep, "path": self.edges, "hosts": hosts,
             "sink_bytes": S, "n_frags": len(man["frags"]), "frag_bytes": man["frag_bytes"], "sink_version": man["sink_version"],
             "t_final_move_rel_s": self.rel_t(tfm), "moves": [{k: (self.rel_t(v) if k.startswith("t_") else v) for k, v in m.items()} for m in self.moves],
@@ -598,7 +799,7 @@ class Run:
                                                           "frag_bytes": a.frag_bytes, "migration_chunk": a.migration_chunk, "tail_calls": a.tail_calls, "max_run_s": a.max_run_s, "mss": a.mss,
                                                           "transport": "tcp+tcp_maxseg+per-flow token bucket; per-node egress/ingress caps = link bw (max-min fair)", "nodes": self.o.node_spec,
                                                           "args": vars(a)}, indent=1, default=str))
-        (self.dir / "host_info.json").write_text(json.dumps({lb: {"hello": {k: v for k, v in self.node(lb).hello.items() if k != "kind"}, "clock_sync": self.node(lb).sync} for lb in self.edges}, indent=1, default=str))
+        (self.dir / "host_info.json").write_text(json.dumps({lb: {"hello": {k: v for k, v in self.node(lb).hello.items() if k != "kind"}, "clock_sync": self.node(lb).sync} for lb in self.nodes_used}, indent=1, default=str))
         self.frag_csv.close(); self.metric_csv.close(); self.pcur_csv.close(); self.flow_csv.close()
         L = summary["latency_after_final_move_s"]
         self.log(f"{POLICY_LABEL[self.policy]} @ {self.bw or 'native'} Mbps rho {self.rho}: after final move: first output {L['first_output'] and round(L['first_output'], 2)} s, "
@@ -683,6 +884,17 @@ def main():
     ap.add_argument("--connect_timeout", type=float, default=2400.0)
     ap.add_argument("--keep_nodes", action="store_true", help="leave node processes running at the end")
     ap.add_argument("--dry_run", action="store_true", help="protocol test against dry-run nodes; results go to results/evaluation/_dryrun_<experiment>")
+    # D0 (shared planner integration)
+    ap.add_argument("--path", type=str, default="", help="explicit owner sequence, e.g. A,C (overrides --hops); no revisits")
+    ap.add_argument("--caps", type=str, default="", help="per-node cap overrides in Mbps, e.g. 'C:out=62.5'")
+    ap.add_argument("--cap_events", type=str, default="", help="'t=20:C:out=62.5' or 'D>=0.5:C:out=62.5' (planners are not told)")
+    ap.add_argument("--dyn_period", type=float, default=0.5); ap.add_argument("--dyn_window", type=float, default=2.0)
+    ap.add_argument("--dyn_warmup", type=float, default=2.0); ap.add_argument("--dyn_eps", type=float, default=2.0)
+    ap.add_argument("--dyn_rel", type=float, default=0.10); ap.add_argument("--dyn_ctrl", type=float, default=0.3)
+    ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")
+    ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")
+    ap.add_argument("--lookahead", type=float, default=10.0)
+    ap.add_argument("--budget", type=float, default=1.0)
     a = ap.parse_args()
     a.mss = a.mss or None
     if a.dry_run:
@@ -722,7 +934,12 @@ def main():
             for rep in range(1, a.reps + 1):
                 for tm, rho in tms:
                     for pol in pols:
-                        r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops)
+                        path = [x for x in a.path.split(",") if x] or None
+                        pp = None
+                        if a.prepos:
+                            assert path and len(path) == 2, "--prepos needs --path A,<dest>"
+                            pp = {"policy": a.prepos, "probs": [float(x) for x in a.probs.split(",")], "L": a.lookahead, "b": a.budget, "dest": path[1], "tau": 7.5}
+                        r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops, path=path, prepos=pp)
                         results.append(r.execute())
             (EVAL_ROOT / a.experiment).mkdir(parents=True, exist_ok=True)
     finally:

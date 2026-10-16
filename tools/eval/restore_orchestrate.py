@@ -49,55 +49,15 @@ from agents import connect_all, parse_hosts  # noqa: E402
 from common import DEFAULT_MSS, EVAL_ROOT, EventLog, git_commit  # noqa: E402
 from mobility_orchestrate import NodeConn, parse_nodes  # noqa: E402
 from proto_handoff import send_msg  # noqa: E402
+from restore_planner import (DISSEM_PLANS, assign_providers, dissem_assign, dyn_decide, holder_order, maxmin,  # noqa: E402,F401
+                             parse_cap_events, prepos_alloc)
 
 EDGES = ["B", "C", "D"]
 SINK_BYTES = 1725236640
 
 
-def parse_cap_events(spec):
-    """'t=20:C:out=62.5' (at 20 s) or 'D>=0.5:C:out=62.5' (when D holds 50 % of s0's Sink): set C's egress cap to 62.5 Mbps."""
-    out = []
-    for item in (spec or "").split(";"):
-        item = item.strip()
-        if not item:
-            continue
-        trig, node, capv = item.split(":")
-        d, v = capv.split("=")
-        e = {"spec": item, "cap_node": node, "dir": d, "mbps": float(v), "fired": False}
-        if trig.startswith("t="):
-            e["kind"] = "t"; e["at"] = float(trig[2:])
-        else:
-            n, frac = trig.split(">=")
-            e["kind"] = "progress"; e["node"] = n; e["frac"] = float(frac)
-        out.append(e)
-    return out
-
-
 def prepos_tag(pp):
     return (f"_pp={pp['policy']}_L={pp['L']:g}_b={pp['b']:g}_d={pp['dest']}_k={pp['draw']}" + (f"_os={pp['others_start']:g}" if pp.get("others_start") else "")) if pp else ""
-
-
-def maxmin(flows, caps):
-    """flows: [(id, src, dst)]; caps: {("out"|"in", node): bps}. Max-min fair rates under per-node caps."""
-    rate = {f: 0.0 for f, _, _ in flows}
-    if not flows:
-        return rate
-    resid = dict(caps)
-    frozen = set()
-    while len(frozen) < len(flows):
-        act = [(f, s, d) for f, s, d in flows if f not in frozen]
-        load = defaultdict(int)
-        for _, s, d in act:
-            load[("out", s)] += 1; load[("in", d)] += 1
-        inc = min(resid[k] / n for k, n in load.items())
-        for f, _, _ in act:
-            rate[f] += inc
-        for k, n in load.items():
-            resid[k] -= inc * n
-        for f, s, d in act:
-            if resid[("out", s)] <= 1e-3 or resid[("in", d)] <= 1e-3:
-                frozen.add(f)
-    return rate
 
 
 class Run:
@@ -236,105 +196,26 @@ class Run:
         missing = allf - self.held[sid][own] - self.claims(sid, own)
         if not missing:
             return
-        holders = [e for e in reversed(self.history[sid][:-1]) if e != own and e != "A"]   # the source is never a "holder"
-        holders = list(dict.fromkeys(holders))  # newest first, unique
-        holders += [e for e in EDGES if e != own and e not in holders and self.held[sid][e]]   # pre-positioned, never-owner holders
+        holders = holder_order(self.history[sid], own, self.held[sid], EDGES)
         # fragments already on their way to a holder (sent, or the one a draining flow is finishing) will be held
         # there shortly: let that holder forward them (queued last) instead of asking the source to send them again
         soon = {h: set(self.inflight[sid][h]) for h in holders}
         for fl in self.flows.values():
             if fl.get("draining") and fl["sid"] == sid and fl["dst"] in soon and fl["left"]:
                 soon[fl["dst"]].add(next(f for f in fl["order"] if f in fl["left"]))
-        assign = defaultdict(list)
-        late = defaultdict(list)
-        if self.policy == "reuse_fixed":
-            for f in sorted(missing):
-                src = next((h for h in holders if f in self.held[sid][h]), None)
-                if src is None:
-                    src = next((h for h in holders if f in soon[h]), None) if f not in self.skipped[sid] else None
-                    if src is not None:
-                        late[src].append(f); continue
-                    src = "A"
-                assign[src].append(f)
-        elif self.policy in ("pp_star", "fixed_line", "fixed_tree", "fixed_butterfly"):
-            # Experiment E fixed plans (TOPOLOGY_PLAN G.1 "Full E"): every one keeps the owner's own verified fragments
-            # and never drops fragments at abandoned edges; they differ in which past holders may forward.
-            #   pp_star        nobody forwards: the source sends every missing fragment
-            #   fixed_line     only the immediately previous owner forwards what it holds
-            #   fixed_tree     only the first edge the session visited (the hub) forwards what it holds
-            #   fixed_butterfly every past holder forwards; a fragment held by several is given to the one with the
-            #                  fewest fragments assigned so far (even split by count, no bandwidth knowledge)
-            # None of them uses future destinations or future bandwidth; the history is the past ownership sequence.
-            past = [e for e in self.history[sid][:-1] if e != "A"]
-            if self.policy == "pp_star":
-                allowed = []
-            elif self.policy == "fixed_line":
-                allowed = [past[-1]] if past and past[-1] != own else []
-            elif self.policy == "fixed_tree":
-                allowed = [past[0]] if past and past[0] != own else []
-            else:
-                allowed = [h for h in holders]
-            count = {h: 0 for h in allowed}
-            for f in sorted(missing):
-                have = [h for h in allowed if f in self.held[sid][h]]
-                if have:
-                    src = min(have, key=lambda h: (count[h], h)); count[src] += 1
-                    assign[src].append(f); continue
-                inbound = next((h for h in allowed if f in soon[h]), None) if f not in self.skipped[sid] else None
-                if inbound is not None:
-                    late[inbound].append(f); continue
-                assign["A"].append(f)
-        elif self.policy in ("reuse_aware", "reuse_aware_in", "reuse_dyn"):
-            # bottleneck-aware: each provider's finish estimate is its whole egress backlog (every session's queued bytes)
-            # plus what this plan adds, over its egress cap. Fragments only A holds go to A first, so held fragments see
-            # A's true queue; a held fragment then goes to A only when every holder of it would finish later than A.
-            cand = holders + ["A"]
-            load = {c: 0.0 for c in cand}
-            for fl in self.flows.values():
-                if fl["src"] in load:
-                    if fl["active"]:
-                        load[fl["src"]] += len(fl["left"]) * self.flen
-                    elif fl.get("draining") and fl["left"]:
-                        load[fl["src"]] += self.flen   # a cancelled flow only finishes its in-flight fragment
-            rest = []
-            for f in sorted(missing):
-                inbound = next((h for h in holders if f in soon[h] and f not in self.held[sid][h]), None) if f not in self.skipped[sid] else None
-                if inbound is not None and not any(f in self.held[sid][h] for h in holders):
-                    late[inbound].append(f); continue
-                if not any(f in self.held[sid][h] for h in holders):
-                    assign["A"].append(f); load["A"] += self.flen
-                else:
-                    rest.append(f)
-            # reuse_aware_in (H4c correction): the owner's ingress bounds every provider, so a held fragment moves to the
-            # source only when its best holder would finish after both the source and the ingress bound
-            inbound = sum(len(fl["left"]) * self.flen for fl in self.flows.values() if fl["active"] and fl["dst"] == own)
-            inbound += sum(len(v) for v in assign.values()) * self.flen
-            for f in rest:
-                opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
-                est = lambda c: (load[c] + self.flen) / self.known_caps[("out", c)]  # noqa: E731
-                if self.policy in ("reuse_aware_in", "reuse_dyn"):
-                    inbound += self.flen
-                    hold = min((c for c in opts if c != "A"), key=est)
-                    best = "A" if est(hold) > max(est("A"), inbound / self.known_caps[("in", own)]) else hold
-                else:
-                    best = min(opts, key=lambda c: (est(c), c == "A"))  # ties: prefer a holder
-                assign[best].append(f); load[best] += self.flen
-        else:  # reuse_adaptive: earliest estimated finish per fragment, given current queues and max-min rates
-            act = [(fl["id"], fl["src"], fl["dst"]) for fl in self.flows.values() if fl["active"] or fl.get("draining")]
-            cand = holders + ["A"]
-            # estimated rate of a new flow provider -> own if it were added now
-            est = {}
-            for c in cand:
-                probe = act + [("__probe__", c, own)]
-                est[c] = max(1.0, maxmin(probe, self.caps)["__probe__"])
-            load = {c: 0 for c in cand}
-            for f in sorted(missing):
-                inbound = next((h for h in holders if f in soon[h] and f not in self.held[sid][h]), None) if f not in self.skipped[sid] else None
-                if inbound is not None and not any(f in self.held[sid][h] for h in holders):
-                    late[inbound].append(f); continue
-                opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
-                best = min(opts, key=lambda c: ((load[c] + 1) * self.flen * 8 / est[c], c == "A"))  # ties: prefer a holder
-                assign[best].append(f); load[best] += 1
+        # whole-node egress backlog (every session) and bytes already headed to the owner, for the aware rules
+        backlog = defaultdict(float)
+        for fl in self.flows.values():
+            if fl["active"]:
+                backlog[fl["src"]] += len(fl["left"]) * self.flen
+            elif fl.get("draining") and fl["left"]:
+                backlog[fl["src"]] += self.flen   # a cancelled flow only finishes its in-flight fragment
+        inbound_bytes = sum(len(fl["left"]) * self.flen for fl in self.flows.values() if fl["active"] and fl["dst"] == own)
+        act = [(fl["id"], fl["src"], fl["dst"]) for fl in self.flows.values() if fl["active"] or fl.get("draining")]
+        assign, late = assign_providers(
+            self.policy, missing=missing, own=own, holders=holders, held=self.held[sid], soon=soon, skipped=self.skipped[sid],
+            backlog=backlog, inbound_bytes=inbound_bytes, known_caps=self.known_caps, flen=self.flen, history=self.history[sid],
+            probe_rate=lambda c: maxmin(act + [("__probe__", c, own)], self.caps)["__probe__"])
         for src in set(assign) | set(late):
             ids = assign.get(src, []) + late.get(src, [])   # in-flight fragments last: they arrive while the rest is sent
             self.start_flow(sid, src, own, ids, f"{self.policy}: {'reuse fragments held at ' + src if src != 'A' else 'source sends the rest'}",
@@ -428,59 +309,19 @@ class Run:
         act = [fl for fl in self.flows.values() if fl["active"] and fl["sid"] == sid and fl["dst"] == own and fl["left"]]
         if len(act) == 0:
             return
-        # current ETA per provider from measured throughput; a provider with no verified bytes in the window counts as stalled
-        eta, rate = {}, {}
+        # measured verified throughput per provider toward the owner; a provider with nothing in the window counts as stalled
+        rate = {}
         for fl in act:
             r = self.measured_rate(fl["id"], now)
             if r is None:
                 return   # not enough measurement yet
             rate[fl["src"]] = rate.get(fl["src"], 0.0) + r
-        rem = defaultdict(int)
-        for fl in act:
-            rem[fl["src"]] += len(fl["left"]) * self.flen
-        for p_, b in rem.items():
-            eta[p_] = b / rate[p_] if rate[p_] > 0 else float("inf")
-        q = max(eta, key=eta.get)
-        eta_cur = eta[q]
-        if eta_cur == float("inf"):
-            eta_cur = 1e6
-        # capacity estimates: the latest valid measurement toward this owner (refreshed while the provider sends; kept, not
-        # reset to nominal, while it is idle; flagged stale when older than the window); nominal only if never measured
-        for n, r in rate.items():
-            if r > 0:
-                self.rate_est[(sid, n)] = (r, now)
-        cap_est, stale = {}, {}
-        for n in ["A"] + EDGES:
-            if (sid, n) in self.rate_est:
-                cap_est[n], tm = self.rate_est[(sid, n)]
-                stale[n] = now - tm > self.a.dyn_window
-            else:
-                cap_est[n], stale[n] = self.known_caps[("out", n)], None
-        qflows = [fl for fl in act if fl["src"] == q]
-        head = {next((f for f in fl["order"] if f in fl["left"]), None) for fl in qflows} - {None}   # in flight: let it drain
-        movable = set().union(*(fl["left"] for fl in qflows)) - head
-        if not movable:
+        d = dyn_decide(sid=sid, own=own, act=act, rate=rate, rate_est=self.rate_est, now=now, held=self.held[sid], known_caps=self.known_caps,
+                       flen=self.flen, nodes=["A"] + EDGES, window=self.a.dyn_window, ctrl=self.a.dyn_ctrl, eps=self.a.dyn_eps, rel=self.a.dyn_rel)
+        if d is None:
             return
-        # re-assign the bottleneck's remaining fragments with the aware rule over estimated capacities; other flows keep their work
-        load = {n: 0.0 for n in ["A"] + EDGES}
-        for fl in act:
-            if fl["src"] != q:
-                load[fl["src"]] += len(fl["left"]) * self.flen
-        load[q] += len(head) * self.flen
-        inbound = sum(len(fl["left"]) for fl in act) * self.flen
-        assign = defaultdict(list)
-        for f in sorted(movable):
-            opts = [c for c in ["A"] + EDGES if c != own and (c == "A" or f in self.held[sid][c])]
-            best = min(opts, key=lambda c: ((load[c] + self.flen) / cap_est[c], c == "A"))
-            assign[best].append(f); load[best] += self.flen
-        eta_new = max((load[n] / cap_est[n] for n in load if load[n] > 0), default=0.0)
-        eta_new = max(eta_new, inbound / self.known_caps[("in", own)])
-        drain = self.flen / max(rate[q], 1.0) if head else 0.0
-        c_switch = self.a.dyn_ctrl + drain
-        dT = eta_cur - eta_new
-        margin = max(self.a.dyn_eps, self.a.dyn_rel * eta_cur)   # absolute (one measurement window) or relative (above rate quantization)
-        if dT <= c_switch + margin or set(assign) == {q}:
-            return
+        q, assign, head, qflows = d["q"], d["assign"], d["head"], d["qflows"]
+        eta_cur, eta_new, c_switch, drain, dT, margin, cap_est, stale = (d[k] for k in ("eta_cur", "eta_new", "c_switch", "drain", "dT", "margin", "cap_est", "stale"))
         # apply: cancel the bottleneck's flows (their in-flight fragment drains), extend or start the others
         t_dec = time.time()
         bytes_before = sum(fl["bytes"] for fl in qflows)
@@ -526,39 +367,12 @@ class Run:
 
     # ---------------- Experiment A: pre-positioning before s0's move
     def prepos_start(self):
-        pp, a, S = self.pp, self.a, self.a.sink_bytes
-        order = sorted(EDGES, key=lambda c: -pp["probs"][EDGES.index(c)])          # candidates by probability, descending
-        prob = {c: pp["probs"][EDGES.index(c)] for c in EDGES}
-        deliv = {c: pp["L"] * self.caps[("in", c)] / 8 / S for c in EDGES}         # Sinks each candidate's ingress admits in L
-        avail = min(pp["b"], pp["L"] * self.caps[("out", "A")] / 8 / S)           # budget, or what the source can send in L
-        x = {c: 0.0 for c in EDGES}
-        pol = pp["policy"]
-        if pol == "oracle":
-            x[pp["dest"]] = min(avail, deliv[pp["dest"]])
-        elif pol == "top1":
-            x[order[0]] = min(avail, deliv[order[0]])
-        elif pol == "greedy":
-            rem = avail
-            for c in order:
-                x[c] = min(rem, deliv[c]); rem -= x[c]
-        elif pol == "proportional":   # probability-proportional share of the affordable amount (TOPOLOGY_PLAN D.1)
-            for c in order:
-                x[c] = min(avail * prob[c], deliv[c])
-        elif pol == "coverage":       # give each candidate enough for T_r <= tau, in probability order, then greedy
-            rem = avail
-            for c in order:
-                need = max(0.0, 1.0 - (pp["tau"] - 0.3) * self.caps[("in", c)] / 8 / S)
-                x[c] = min(need, deliv[c], rem); rem -= x[c]
-            for c in order:
-                add = min(rem, deliv[c] - x[c]); x[c] += add; rem -= add
-        elif pol != "none":
-            raise ValueError(pol)
+        pp, pol = self.pp, self.pp["policy"]
+        x, frags, avail, order = prepos_alloc(pp, self.caps, self.a.sink_bytes, self.nfr(), EDGES)
         # disjoint fragment sets, so fragments at a non-chosen candidate can still be forwarded to the true destination
-        pool = list(range(self.nfr())); pos = 0
         self.pp_frag = {}
         for c in order:
-            n = int(round(x[c] * self.nfr()))
-            self.pp_frag[c] = pool[pos:pos + n]; pos += n
+            self.pp_frag[c] = frags[c]
             self.start_flow("s0", "A", c, self.pp_frag[c], f"prepos {pol}: speculative fragments to candidate {c}")
         self.pp_alloc = x
         self.ev.log("prepos", policy=pol, dest=pp["dest"], L=pp["L"], budget=pp["b"], avail_sinks=avail,
@@ -778,49 +592,6 @@ class Run:
         return summary
 
 
-DISSEM_PLANS = ["star", "line", "tree", "multipath", "aware"]
-
-
-def dissem_assign(plan, nfr, flen, caps):
-    """Experiment B: provider of every (fragment, destination) pair for one Sink held at A and needed at B, C, D.
-    star: A sends everything. line: A->B->C->D, each node forwards to its successor. tree: A->B, B->{C, D}.
-    multipath (butterfly-like): A sends disjoint thirds to B, C, D (fragment f to EDGES[f mod 3]); each node forwards its
-    third to the other two. aware: greedy over fragments; for each fragment the destinations are served in order of their
-    assigned ingress load (ties rotate with f), each from the eligible provider (A, or a node already scheduled to hold
-    the fragment) with the smallest (assigned egress bytes + one fragment) / egress cap -- uses only the caps, the
-    planner's own assignments and fragment availability."""
-    prov = {}
-    if plan == "star":
-        for f in range(nfr):
-            for d in EDGES:
-                prov[(f, d)] = "A"
-    elif plan == "line":
-        chain = ["A"] + EDGES
-        for f in range(nfr):
-            for i, d in enumerate(EDGES, start=1):
-                prov[(f, d)] = chain[i - 1]
-    elif plan == "tree":
-        for f in range(nfr):
-            prov[(f, "B")] = "A"; prov[(f, "C")] = "B"; prov[(f, "D")] = "B"
-    elif plan == "multipath":
-        for f in range(nfr):
-            own = EDGES[f % 3]
-            for d in EDGES:
-                prov[(f, d)] = "A" if d == own else own
-    elif plan == "aware":
-        load = {n: 0.0 for n in ["A"] + EDGES}
-        inload = {d: 0.0 for d in EDGES}
-        for f in range(nfr):
-            will = ["A"]
-            for d in sorted(EDGES, key=lambda d: (inload[d], (EDGES.index(d) - f) % 3)):
-                cands = [p for p in will if p != d]
-                p = min(cands, key=lambda p: ((load[p] + flen) / caps[("out", p)], p == "A"))
-                prov[(f, d)] = p; load[p] += flen; inload[d] += flen; will.append(d)
-    else:
-        raise ValueError(plan)
-    return prov
-
-
 class DissemRun(Run):
     """Experiment B: one Sink (session s0 at A) delivered and verified at every edge, under a fixed plan or the aware
     assignment; forwarders pipeline (FLOW_ADD as fragments are verified)."""
@@ -898,7 +669,7 @@ class DissemRun(Run):
         self.t0 = time.time(); self.ev.set_ref(self.t0)
         self.ev.log("start", self.t0, plan=self.plan_name, caps={f"{n}:{d}": v / 1e6 for (d, n), v in self.caps.items()})
         with self.lock:
-            self.prov = dissem_assign(self.plan_name, self.nfr(), self.flen, self.caps)
+            self.prov = dissem_assign(self.plan_name, self.nfr(), self.flen, self.caps, EDGES)
             by = defaultdict(list)
             for (f, d), p in self.prov.items():
                 by[(p, d)].append(f)

@@ -77,6 +77,15 @@ class GpuRuntime:
         self.args = args
         self.session = None
         self.snap = None
+        self.decodes = []   # (t_decode_wall, n_frames) of each VAE decode call since the last step() (D0 instrumentation)
+        orig = self.pm._timed_stream_decode
+
+        def timed_decode(denoised_pred, _orig=orig):
+            video = _orig(denoised_pred)
+            torch.cuda.synchronize(self.device)
+            self.decodes.append((time.time(), int(video.shape[1])))
+            return video
+        self.pm._timed_stream_decode = timed_decode
 
     def mem(self, tag: str):
         torch = self.torch
@@ -152,6 +161,7 @@ class GpuRuntime:
         return shifted
 
     def step(self, c: int):
+        self.decodes = []
         t0 = time.perf_counter()
         fr = self.runner.step(self.session, c)
         self.torch.cuda.synchronize(self.device)
@@ -184,6 +194,7 @@ class FakeRuntime:
         self.k = 2
         self.bound = False
         self.have_fast = False
+        self.decodes = []
 
     def baseline(self, M, N):
         return self.service_s
@@ -223,6 +234,7 @@ class FakeRuntime:
 
     def step(self, c):
         time.sleep(self.service_s)
+        self.decodes = [(time.time(), 4)]
         ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
         return True, float(ps), 0.9 if self.bound else 0.6, self.service_s, [0, 1, 6]
 
@@ -302,7 +314,7 @@ class Node:
         rd = REPO_ROOT / h["run_rel"] / f"node_{self.label}"
         rd.mkdir(parents=True, exist_ok=True)
         ev = EventLog(rd / "events.csv", self.me, h["t0"] if h.get("t0") else None)
-        metrics = CsvLog(rd / "metrics.csv", ["call", "t_out", "owner", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "gpu_mem_alloc_mb", "sink_slot_pos"])
+        metrics = CsvLog(rd / "metrics.csv", ["call", "t_out", "owner", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode", "n_frames"])
         frag_log = CsvLog(rd / "fragments.csv", ["t", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok"])
         sampler = ResourceSampler(rd / "network.csv", self.me, self.a.gpu_id if not self.a.dry_run else None, self.a.iface); sampler.start()
         self.run = {"id": h["run_id"], "dir": rd, "ev": ev, "metrics": metrics, "frag_log": frag_log, "sampler": sampler, "session_id": h["session_id"],
@@ -423,6 +435,18 @@ class Node:
     def cmd_status(self, h):
         r = self.run
         return {"have": len(r["have"]) if r else 0, "owner": bool(r and r["owner"]), "call": r["call"] if r else None, "flows": [f for f, fl in self.flows.items() if fl["thread"].is_alive()]}
+
+    def cmd_exec_start(self, h):
+        """Owner that has not started generating (the source after SOURCE_PREP): start generating now. Used when the
+        move happens later (placement lookahead). The Sink snapshot taken at the trigger stays the transferred version;
+        the handoff will serialize the live in-flight/meta state."""
+        r = self.run
+        assert r["owner"], "not the execution owner"
+        r.pop("live_snap", None)
+        r["stop_owner"] = False; r["first_out_t"] = None
+        r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
+        self.event("exec_start", call=r["call"])
+        return {"call": r["call"]}
 
     def cmd_exec_stop(self, h):
         r = self.run
@@ -622,8 +646,10 @@ class Node:
                 r["first_out_t"] = t_out; self.event("first_output", t_out, call=c)
             if r["bound_call"] is not None and r["rejoin_call"] is None and ps is not None and ps >= REJOIN_DB:
                 r["rejoin_call"] = c; self.event("rejoin", t_out, call=c, calls_after_bind=c - r["bound_call"], psnr=ps)
+            dec = list(self.rt.decodes)
             row = {"call": c, "t_out": t_out, "owner": self.label, "chunk_s": dt, "psnr": ps, "ssim": ss, "missing": not produced,
-                   "sink_bound": r["bound_call"] is not None and c >= r["bound_call"], "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), "sink_slot_pos": pos}
+                   "sink_bound": r["bound_call"] is not None and c >= r["bound_call"], "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), "sink_slot_pos": pos,
+                   "t_decode": dec[-1][0] if dec else None, "n_frames": sum(n for _, n in dec)}
             r["metrics"].row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
             self.send("METRIC", **row)
             r["call"] = c + 1

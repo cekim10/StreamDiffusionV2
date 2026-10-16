@@ -404,6 +404,55 @@ def f6():
          note="A1 'at moves' bar comes from Full E condition 3 (same condition, same harness version); E-pilot v2 did not rerun it")
 
 
+def f6c():
+    """Measured fragment progress at the final owner D by provider (needs node_D/fragments.csv recovered from elves-04)."""
+    runs = sorted(EV.glob("restore_fulle/policy=*_N=1_moves=2_rho=2_ev=*_rep=1_*"))
+    pick = {p: next((d for d in runs if d.name.startswith(f"policy={p}_")), None) for p in ("reuse_aware_in", "reuse_dyn")}
+    missing = [str(d.relative_to(ROOT)) for d in pick.values() if d is None or not (d / "node_D" / "fragments.csv").exists()]
+    if missing:
+        print(f"  F6c skipped: node_D/fragments.csv not recovered for {missing}")
+        return
+    fig, axes = plt.subplots(1, 2, figsize=WIDE, sharey=True)
+    fig.subplots_adjust(left=0.08, right=0.99, bottom=0.2, top=0.88, wspace=0.06)
+    srcs = {"A": ("source A", bg.RED), "B": ("holder B", "#2a9d8f"), "C": ("holder C", bg.ORANGE)}
+    info = {}
+    for ax, (p, d) in zip(axes, pick.items()):
+        evs = list(csv.DictReader(open(d / "events.csv")))
+        t0w = float(next(e for e in evs if e["event"] == "start")["t_wall"])
+        rel = lambda name: [float(e["t_rel"]) for e in evs if e["event"] == name]  # noqa: E731
+        mv, cap, rp = rel("move"), rel("cap_change"), rel("replan")
+        rest = next((float(e["t_rel"]) for e in evs if e["event"] == "restored" and '"D"' in e["detail"]), None)
+        rows = [r for r in csv.DictReader(open(d / "node_D" / "fragments.csv")) if r["event"] == "recv" and r["ok"] == "True"]
+        seen, pts = set(), defaultdict(list)
+        for r in sorted(rows, key=lambda r: float(r["t"])):
+            if r["fragment_id"] in seen:
+                continue
+            seen.add(r["fragment_id"]); pts[r["src"]].append(float(r["t"]) - t0w)
+        n = 412
+        for s_, (lab, col) in srcs.items():
+            ts = pts.get(s_, [])
+            if ts:
+                ax.step([mv[-1]] + ts, [0] + [100.0 * (i + 1) / n for i in range(len(ts))], where="post", color=col, lw=2.2, label=f"from {lab}")
+        allt = sorted(t for v in pts.values() for t in v)
+        ax.step([mv[-1]] + allt, [0] + [100.0 * (i + 1) / n for i in range(len(allt))], where="post", color="black", lw=1.6, ls="--", label="total at D")
+        for t in cap:
+            ax.axvline(t, color=bg.RED, ls="--", lw=1.4)
+        for t in rp:
+            ax.axvline(t, color=bg.BLUE, ls=":", lw=1.8)
+        if rest:
+            ax.axvline(rest, color="black", lw=1.0)
+        ax.set_xlim(mv[-1] - 0.5, (rest or allt[-1]) + 2); ax.set_ylim(0, 102)
+        ax.set_title(POLICY[p][0] + (f" ({len(rp)} re-plans, dotted)" if rp else ""), fontsize=bg.F2_ANNOT, family=bg.FONT_FAMILY)
+        ax.set_xlabel("Time (s); dashed red = C egress drop", fontsize=bg.F2_ANNOT); ax.tick_params(labelsize=bg.F2_ANNOT - 2, direction="in")
+        info[p] = {"run": str(d.relative_to(ROOT)), "fragments_from": {k: len(v) for k, v in pts.items()}, "restored_s": rest, "final_move_s": mv[-1], "replans_s": rp, "cap_change_s": cap}
+    axes[0].set_ylabel("Sink at D (% of fragments)", fontsize=bg.F2_ANNOT)
+    axes[0].legend(frameon=False, prop={"size": bg.F2_ANNOT - 5, "family": bg.FONT_FAMILY}, loc="upper left")
+    bg.save(fig, OUT / "eval/F6c_fragment_progress_by_provider", tight=False)
+    meta("eval/F6c_fragment_progress_by_provider", rq="RQ5", source=info, measured=True, level="network-level, 4 physical hosts (Full E condition 3, rep 1)",
+         config="checksum-verified first arrivals of each fragment at D (node_D/fragments.csv recovered from elves-04), by sender",
+         clock="node D's wall clock minus the orchestrator's start time on elves-01; hosts are NTP-synchronized, the residual offset (ms) is not removed")
+
+
 # ======================================================================================== F7 proactive placement
 def f7():
     rows = rcsv(EV / "restore_prepos_pilot/summary_by_config.csv")
@@ -545,7 +594,7 @@ def f9b():
          caution="allocator peak, not reserved memory or utilization; source-side and multi-session overheads not measured")
 
 
-GROUPS = {"F1": f1, "F2": f2, "F3": f3, "F4": f4, "F5": f5, "F6": f6, "F7": f7, "F8": f8, "F9": lambda: (f9(), f9b()), "D": design}
+GROUPS = {"F1": f1, "F2": f2, "F3": f3, "F4": f4, "F5": f5, "F6": lambda: (f6(), f6c()), "F7": f7, "F8": f8, "F9": lambda: (f9(), f9b()), "D": design}
 
 
 def main():
