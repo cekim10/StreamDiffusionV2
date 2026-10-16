@@ -1,0 +1,47 @@
+## host
+elves-03
+6.8.0-84-generic
+2026-10-16T15:28:38-07:00
+## gpus
+index, name, uuid, memory.total [MiB], memory.used [MiB], utilization.gpu [%], driver_version, persistence_mode
+0, NVIDIA L40S, GPU-7596a60a-e182-e33d-492f-d582f2f7bbef, 46068 MiB, 28121 MiB, 100 %, 575.57.08, Enabled
+1, NVIDIA L40S, GPU-ba3a67fc-2245-bcff-bfbf-b6e09edf12cb, 46068 MiB, 28965 MiB, 95 %, 575.57.08, Enabled
+## gpu processes (any user)
+gpu_uuid, pid, process_name, used_gpu_memory [MiB]
+GPU-7596a60a-e182-e33d-492f-d582f2f7bbef, 3512318, python, 28080 MiB
+GPU-ba3a67fc-2245-bcff-bfbf-b6e09edf12cb, 3512450, python, 28924 MiB
+## driver
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  575.57.08  Release Build  (dvs-builder@U22-I3-H04-01-5)  Sat May 24 07:03:13 UTC 2025
+GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04) 
+## cuda toolkit
+nvcc: not on PATH
+## python / torch (repo venv if present)
+python 3.10.22
+torch 2.6.0+cu124 cuda 12.4 cudnn 90100
+devices ['NVIDIA L40S', 'NVIDIA L40S']
+## network interfaces (MTU, state, speed)
+docker0 mtu=1500 state=down speed=-1 Mb/s
+enp193s0f0np0 mtu=9200 state=up speed=10000 Mb/s
+enp193s0f1np1 mtu=1500 state=down speed=? Mb/s
+ens5f0np0 mtu=1500 state=down speed=? Mb/s
+ens5f1np1 mtu=1500 state=down speed=? Mb/s
+enxb6cd3a973b02 mtu=1500 state=down speed=? Mb/s
+## addresses
+lo 127.0.0.1/8
+enp193s0f0np0 169.233.7.42/27
+docker0 172.17.0.1/16
+## disk
+Filesystem      Size  Used Avail Use% Mounted on
+tank/home       6.9T  723G  6.2T  11% /home
+/dev/md1p1      869G   45G  780G   6% /
+## memory
+               total        used        free      shared  buff/cache   available
+Mem:            1511         826         431          32         293         684
+## criu / cuda-checkpoint
+criu: not installed
+cuda-checkpoint: not on PATH
+## privileges (non-interactive check)
+sudo: not available without a password
+uid=294417(ckim151) gid=294417(ckim151) groups=294417(ckim151),988(docker),1495491881(au-faculty-staff),1495491882(au-students),1495492584(proofpoint-sync),1495492795(au-adobe-creative-cloud),1495493814(au-ms-non-equ),1495495666(au-employee-student),1495496254(au-adobe-student),1495497177(svelves),1495497178(svelves01),1495497179(svelves02),1495497213(svelves03),1495497214(svelves04),1495497912(au-entra-id-sync),1495497921(au-transact-eligible)
+## load
+ 15:28:40 up 387 days, 40 min,  9 users,  load average: 2.77, 1.92, 0.81
