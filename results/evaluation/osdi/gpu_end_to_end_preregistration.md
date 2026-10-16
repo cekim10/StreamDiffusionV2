@@ -1,7 +1,20 @@
-# Experiment D: GPU end-to-end evaluation - preregistration (DRAFT v3 for review, 2026-10-16)
+# Experiment D: GPU end-to-end evaluation - preregistration (v3, FROZEN 2026-10-16)
 
-Status: design only. Nothing here has run. **Not frozen.** G1-G9 (section 7) are frozen only at the commit that
-follows the reviewer's approval, and are not edited after results exist. v1 (7800261) and v2 (5267075) are superseded;
+**FROZEN.** G1-G9 (section 7) are frozen exactly as written in v3 (reviewed at commit 490ac98, approved 2026-10-16).
+The freeze commit hash and date are recorded in `prereg_freeze.md`. No threshold, metric definition or comparison
+group in sections 2-7 may change after this point; a later correction is added as a dated erratum below the freeze
+record, and results are always judged against the frozen text. Scope conditions fixed at the freeze:
+1. Frame-delivery SLO claims are out of scope (no consumer process); chunk-output latency is the primary latency metric.
+2. Decode-level metrics (t_decode intervals, jitter, decode-deadline proxy) are descriptive.
+3. External C/R comparisons are descriptive and never part of a primary speedup claim.
+4. Cross-node C/R must be verified empirically on driver 575.51.03 before any external run; until then no external
+   system counts as a successful migration baseline; failures go to the compatibility table.
+5. Repeated mobility assumes a stable Sink version during a restoration.
+6. Concurrent Sink-version evolution is unsupported and not claimed.
+7. All earlier frozen network-level hypotheses and outcomes (section 0) are preserved unchanged, in particular
+   H8a NOT SUPPORTED and H8c NOT SUPPORTED AS WRITTEN.
+
+Status: design frozen; nothing here has run. v1 (7800261) and v2 (5267075) are superseded;
 changes are listed in `prereg_v2_changes.md` (v1 -> v2) and `prereg_v3_changes.md` (v2 -> v3). The existing GPU results (single handoff, continuity timeline, Phase 1 repeated
 mobility) and the network-level results are inputs to the predictions, not part of this experiment.
 
