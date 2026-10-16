@@ -158,6 +158,7 @@ class Run:
         self.cap_changes = []                          # (t, node, dir, mbps)
         self.cap_events = parse_cap_events(self.a.cap_events)
         self.dyn_last_check = 0.0
+        self.rate_est = {}                             # (sid, node) -> (bytes/s, t_measured): last valid throughput toward sid's owner
 
     # ---------------- helpers
     def make_run_id(self, policy, n_sess, mtag, rho, btag, rep, stamp):
@@ -415,10 +416,18 @@ class Run:
         eta_cur = eta[q]
         if eta_cur == float("inf"):
             eta_cur = 1e6
-        # capacity estimates: measured throughput for providers now sending to this owner, the known nominal cap otherwise
-        cap_est = {}
+        # capacity estimates: the latest valid measurement toward this owner (refreshed while the provider sends; kept, not
+        # reset to nominal, while it is idle; flagged stale when older than the window); nominal only if never measured
+        for n, r in rate.items():
+            if r > 0:
+                self.rate_est[(sid, n)] = (r, now)
+        cap_est, stale = {}, {}
         for n in ["A"] + EDGES:
-            cap_est[n] = rate[n] if n in rate and rate[n] > 0 else self.known_caps[("out", n)]
+            if (sid, n) in self.rate_est:
+                cap_est[n], tm = self.rate_est[(sid, n)]
+                stale[n] = now - tm > self.a.dyn_window
+            else:
+                cap_est[n], stale[n] = self.known_caps[("out", n)], None
         qflows = [fl for fl in act if fl["src"] == q]
         head = {next((f for f in fl["order"] if f in fl["left"]), None) for fl in qflows} - {None}   # in flight: let it drain
         movable = set().union(*(fl["left"] for fl in qflows)) - head
@@ -441,7 +450,8 @@ class Run:
         drain = self.flen / max(rate[q], 1.0) if head else 0.0
         c_switch = self.a.dyn_ctrl + drain
         dT = eta_cur - eta_new
-        if dT <= c_switch + self.a.dyn_eps or dT < self.a.dyn_rel * eta_cur or set(assign) == {q}:
+        margin = max(self.a.dyn_eps, self.a.dyn_rel * eta_cur)   # absolute (one measurement window) or relative (above rate quantization)
+        if dT <= c_switch + margin or set(assign) == {q}:
             return
         # apply: cancel the bottleneck's flows (their in-flight fragment drains), extend or start the others
         t_dec = time.time()
@@ -465,7 +475,7 @@ class Run:
         rec = {"t_s": self.rel(t_dec), "session": sid, "owner": own, "from": q, "to": {p_: len(ids) for p_, ids in assign.items()},
                "moved_fragments": sum(len(v) for v in assign.values()), "eta_cur_s": eta_cur, "eta_new_s": eta_new, "dT_s": dT,
                "c_switch_s": c_switch, "drain_est_s": drain, "measured_rate_mbps": {n: r * 8 / 1e6 for n, r in rate.items()},
-               "cap_est_mbps": {n: v * 8 / 1e6 for n, v in cap_est.items()}, "new_flows": new_flows,
+               "cap_est_mbps": {n: v * 8 / 1e6 for n, v in cap_est.items()}, "cap_est_stale": stale, "margin_s": margin, "new_flows": new_flows,
                "cancelled_flows": [fl["id"] for fl in qflows], "cancelled_bytes_before": bytes_before,
                "cap_change_t_s": self.rel(self.cap_changes[-1][0]) if self.cap_changes else None}
         self.replans.append(rec)
@@ -1042,8 +1052,8 @@ def main():
     p.add_argument("--dyn_period", type=float, default=0.5, help="reuse_dyn: seconds between re-plan checks")
     p.add_argument("--dyn_window", type=float, default=2.0, help="reuse_dyn: throughput measurement window (s)")
     p.add_argument("--dyn_warmup", type=float, default=2.0, help="reuse_dyn: no re-plan within this time after a move or a re-plan")
-    p.add_argument("--dyn_eps", type=float, default=1.0, help="reuse_dyn: hysteresis margin added to the switching cost (s)")
-    p.add_argument("--dyn_rel", type=float, default=0.10, help="reuse_dyn: minimum relative ETA improvement")
+    p.add_argument("--dyn_eps", type=float, default=2.0, help="reuse_dyn: absolute hysteresis margin (s) = one measurement window; v1 pilot used 1.0")
+    p.add_argument("--dyn_rel", type=float, default=0.10, help="reuse_dyn: relative margin (fraction of the current ETA); the switch needs dT > C_switch + max(eps, rel * ETA)")
     p.add_argument("--dyn_ctrl", type=float, default=0.3, help="reuse_dyn: control-plane cost assumed per switch (s, Phase 1 measurement)")
     p.add_argument("--others_start", type=float, default=0.0, help="A3: seconds after t0 at which sessions other than s0 start restoring (0 = at t0)")
     p.add_argument("--horizon_factor", type=float, default=2.0, help="continuous mode: run for factor * N * T_s + 2 T_m")

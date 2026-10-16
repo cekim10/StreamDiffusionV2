@@ -27,8 +27,9 @@ class Model:
         self.pp = prepos
         self.known_caps = dict(caps)            # what planners believe; live cap changes are not revealed
         self.cap_events = parse_cap_events(cap_events)
-        self.dyn = {"period": 0.5, "window": 2.0, "warmup": 2.0, "eps": 1.0, "rel": 0.10, "ctrl": 0.3, **(dyn or {})}
+        self.dyn = {"period": 0.5, "window": 2.0, "warmup": 2.0, "eps": 2.0, "rel": 0.10, "ctrl": 0.3, **(dyn or {})}
         self.last_plan_t = {}; self.replans = []; self.cap_change_t = None; self.dyn_next = 0.0; self.pending_start = []
+        self.rate_est = {}   # (sid, node) -> (bytes/s, t): last valid measurement, kept while idle
         self.sids = [f"s{i}" for i in range(n)]
         self.owner = {s: EDGES[i % 3] for i, s in enumerate(self.sids)}
         if prepos:
@@ -154,7 +155,10 @@ class Model:
             rate[fl["src"]] = rate.get(fl["src"], 0.0) + rates[i] / 8; rem[fl["src"]] = rem.get(fl["src"], 0) + len(fl["left"]) * FLEN
         eta = {p: (rem[p] / rate[p] if rate[p] > 0 else 1e6) for p in rem}
         q = max(eta, key=eta.get); eta_cur = eta[q]
-        cap_est = {n: (rate[n] if n in rate and rate[n] > 0 else self.known_caps[("out", n)]) for n in ["A"] + EDGES}
+        for n, r in rate.items():
+            if r > 0:
+                self.rate_est[(sid, n)] = (r, self.t)
+        cap_est = {n: (self.rate_est[(sid, n)][0] if (sid, n) in self.rate_est else self.known_caps[("out", n)]) for n in ["A"] + EDGES}
         qflows = [fl for _, fl in act if fl["src"] == q]
         head = {next((f for f in fl["order"] if f in fl["left"]), None) for fl in qflows} - {None}
         movable = set().union(*(fl["left"] for fl in qflows)) - head
@@ -175,7 +179,7 @@ class Model:
         drain = FLEN / max(rate[q], 1.0) if head else 0.0
         c_switch = self.dyn["ctrl"] + drain
         dT = eta_cur - eta_new
-        if dT <= c_switch + self.dyn["eps"] or dT < self.dyn["rel"] * eta_cur or set(assign) == {q}:
+        if dT <= c_switch + max(self.dyn["eps"], self.dyn["rel"] * eta_cur) or set(assign) == {q}:
             return
         for fl in qflows:   # the bottleneck's flows drain their in-flight fragment and end
             fl["left"] = set(head) & fl["left"]; fl["draining"] = True

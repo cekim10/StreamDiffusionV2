@@ -535,6 +535,42 @@ fixed forwarding 81.8 s. In B the dynamic rule is predicted 1.8 s better than fi
 aware with one re-plan (it moves 27 fragments from the source back to B as the source's share changes). Not a success
 criterion: the pilot measures; the full-E criteria (H8a-c) stay as frozen in F for the later run.
 
+E-pilot v2 (hysteresis correction, approved after the v1 pilot; experiment `restore_epilot_v2`,
+`tools/eval/run_restore_epilot_v2.sh`, 21 runs ~25 min; the v1 pilot `restore_epilot` is kept unchanged). Two changes
+to `reuse_dyn`, fixed before the run: (1) a provider's capacity estimate is its latest valid throughput measurement
+toward the owner and is **kept while the provider is idle** (flagged stale after one window, logged per re-plan) instead
+of reverting to the nominal cap, which caused the v1 oscillation; nominal is used only for never-measured providers;
+(2) the switch condition is dT > C_switch + max(eps_abs, eps_rel x ETA_current) with **eps_abs = 2.0 s** (one measurement
+window: a gain shorter than the window cannot be separated from measurement timing) and **eps_rel = 0.10** (above the
+~7 % rate quantization of 4 MiB fragments in a 2 s window at 250 Mbps). Rationale is stated so the thresholds are not
+read as tuned to the outcome. Known trade-off, written before the run: the v1 pre-collapse marginal re-plan (dT 1.8 s)
+is suppressed, the collapse re-plan (dT 28-45 s) is kept, and scenario B's re-plan (measured dT 3.5-4.0 s against a
+threshold of ~3.9-4.1 s) is **borderline and may be forgone in some reps**; if so, the 9 % gain at the crossover is the
+price of a trigger that stays above measurement noise. Scenarios: A1 collapse (as v1), A0 no-collapse control (expect 0
+re-plans and T_r equal to move-only aware), A2 collapse then recovery of C to 1 Gbps 5 s later (expect one re-plan and
+no return to C: with the idle estimate kept, recovery is not detected while C is idle; harmless here because the source
+is as fast, and stated as the limitation of "keep the last measurement"), B as v1. **Model**:
+
+```
+E-pilot v2 model (hysteresis: dT > C_switch + max(2.0 s, 0.10 ETA); idle estimates kept), +0.3 s on T_r
+-- A1 collapse
+   reuse_aware_in: T_r 53.9 s, source 1.00 S, replans 0
+        reuse_dyn: T_r 14.2 s, source 1.18 S, replans 1
+      t=21.2 from C to {'C': 12, 'A': 74} eta 46.7->7.3 dT 39.4 c_switch 0.84
+-- A0 control (no event)
+   reuse_aware_in: T_r 14.1 s, source 1.00 S, replans 0
+        reuse_dyn: T_r 14.1 s, source 1.00 S, replans 0
+-- A2 recovery (collapse, back to 1 Gbps 5 s later)
+   reuse_aware_in: T_r 14.9 s, source 1.00 S, replans 0
+        reuse_dyn: T_r 14.1 s, source 1.18 S, replans 1
+      t=21.2 from C to {'C': 12, 'A': 74} eta 46.7->7.3 dT 39.4 c_switch 0.84
+-- B source-share change (N=4, holders 250, 0.5 Sink at B, dest C, others at L)
+      reuse_fixed: T_r 40.2 s, others 58.8 s, source 4.01 S, replans 0
+   reuse_aware_in: T_r 41.8 s, others 62.2 s, source 4.26 S, replans 0
+        reuse_dyn: T_r 38.1 s, others 61.3 s, source 4.19 S, replans 1
+      t=17.5 dT 3.9 c_switch 0.43
+```
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |
