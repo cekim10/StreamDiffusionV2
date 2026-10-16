@@ -1,8 +1,8 @@
-# Experiment D: GPU end-to-end evaluation - preregistration (DRAFT v2 for review, 2026-10-16)
+# Experiment D: GPU end-to-end evaluation - preregistration (DRAFT v3 for review, 2026-10-16)
 
 Status: design only. Nothing here has run. **Not frozen.** G1-G9 (section 7) are frozen only at the commit that
-follows the reviewer's approval, and are not edited after results exist. v1 (commit 7800261) is superseded; every change
-is listed in `prereg_v2_changes.md`. The existing GPU results (single handoff, continuity timeline, Phase 1 repeated
+follows the reviewer's approval, and are not edited after results exist. v1 (7800261) and v2 (5267075) are superseded;
+changes are listed in `prereg_v2_changes.md` (v1 -> v2) and `prereg_v3_changes.md` (v2 -> v3). The existing GPU results (single handoff, continuity timeline, Phase 1 repeated
 mobility) and the network-level results are inputs to the predictions, not part of this experiment.
 
 ## 0. Relation to earlier frozen hypotheses
@@ -45,6 +45,12 @@ revisiting mobility, and at what GPU and network cost? (RQ7, RQ8; GPU confirmati
   any `fragment_rejected_version`, a digest mismatch, or a promotion at an owner before the session's final bind is
   flagged, excluded from every G criterion, and reported with its count. A new-version / re-fetch path is not
   implemented and is a stated limitation; no result here speaks to Sinks that change during restoration.
+- **Explicit evaluation assumption (stated in the paper):** *repeated-mobility evaluation assumes a stable Sink version
+  for the duration of a restoration; OTTER's preservation and reuse of verified fragments (M2) and its provider
+  assignment, placement and re-planning (M3) are evaluated only within one Sink version.* Concurrent Sink-version
+  evolution (a promotion that invalidates fragments held elsewhere, followed by re-planning and transfer of the new
+  version) is not supported and not claimed. How often promotions occur on other workloads during a restoration window
+  is an open measurement, not part of Experiment D.
 
 ## 3. Policies (identical transport, fragment table, Sink version and move schedule; they differ only where stated)
 
@@ -82,20 +88,27 @@ E refer to that session; the three network-level sessions' fragment-completion t
 - **OTTER and the in-repo baselines (warm destination):** the destination process is started, the model weights are
   loaded, CUDA is initialized and a 250-call warm-up is run *before* the trigger; none of this is timed. This holds for
   Full migration, Cold restart, M1 only, M1 + M2, OTTER at moves / event-driven.
-- **External C/R, two separate comparisons** (never merged into one number):
-  1. *As designed*: the destination host has the same binary, libraries, model files on disk and the NVIDIA driver in
-     persistence mode, but no running process; the checkpoint image (process memory including weights held in host
-     memory, staged GPU memory, CUDA state) is dumped at the trigger, transferred over the same shaped link, and
-     restored. Timed from trigger to first output; dump, transfer and restore are also reported separately. Compared
-     against **OTTER cold-destination** (scenario A sensitivity: the destination starts the process and loads the
-     weights after the trigger, then OTTER's M1 handoff), so both sides pay process creation and weight loading.
-  2. *Warm destination*: only possible where the system can restore into a destination that already holds the
-     weights or a prepared process; if a system cannot (CRIU recreates the process), this comparison is reported as
-     not applicable for it, and the image transfer + restore time excluding weights is reported as a lower bound,
-     labelled as such. Compared against OTTER warm-destination.
-  Cross-node restore with cuda-checkpoint on driver 575.51.03 is unverified (its GPU-migration API needs 580); if
-  restore on another host fails, the external rows report the failure and the same-node C/R time plus measured image
-  transfer time, labelled "not a cross-node migration".
+- **Two comparison groups, reported in separate figures/tables and never combined into one speedup claim:**
+  1. **Primary migration comparison (warm destination, in-repo).** OTTER (warm destination), Full migration (warm
+     destination), Cold restart (warm destination), and the M1/M2/M3 ablations. All headline OTTER numbers (G1-G9)
+     come from this group only.
+  2. **External system comparison (deployment as designed).**
+     - *External C/R as designed*: the destination host has the same binary, libraries, model files on disk and the
+       NVIDIA driver in persistence mode, but no running process; the checkpoint image (process memory including
+       weights held in host memory, staged GPU memory, CUDA state) is dumped at the trigger, transferred over the same
+       shaped link, and restored; timed from trigger to first output, with dump / transfer / restore reported separately.
+     - *OTTER cold destination*: the destination starts the process and loads the weights after the trigger, then OTTER's
+       M1 handoff runs; this is the OTTER configuration comparable to C/R as designed (both pay process creation and
+       weight loading).
+     - *External C/R lower bound, where applicable*: image transfer + restore time excluding the weights, labelled as a
+       lower bound, for systems that cannot restore into a warm destination (CRIU recreates the process).
+     OTTER warm-destination timings are never divided by, or plotted on the same speedup axis as, as-designed C/R
+     timings.
+  3. **Compatibility results.** Cross-node restore with cuda-checkpoint on driver 575.51.03 is unverified (its
+     GPU-migration API needs 580). If a system fails to restore on another host, the failure (system, configuration,
+     error) goes to a separate compatibility table; it is not plotted on the performance axes next to systems that
+     completed a migration. Where same-node C/R plus a measured image transfer is reported instead, it is labelled
+     "not a cross-node migration" and kept in the external group.
 - Trigger: the orchestrator issues the move when the source finishes chunk 30 (orchestrator clock; per-node offsets from
   the clock-sync handshake are recorded). The same wall-clock move schedule is used for every policy in a scenario.
 - Timing boundaries (all relative to the trigger, or to the final move in repeated scenarios):
@@ -123,11 +136,15 @@ Timestamps (three distinct events per output, all on the generating host's clock
 | Decode interval | t_decode differences between consecutive frames, P50 / P95 / P99, jitter = P99 - P50 | s | descriptive |
 | Decode-deadline miss rate (proxy) | share of frames whose decode interval exceeds 1.5 x the median decode interval of the uninterrupted reference run | % | descriptive; explicitly not an SLO |
 | Continuity coverage | share of chunks in [trigger, end] at >= 35 dB | % | descriptive |
-| Source bytes | bytes sent by the original source A for this session / Sink size; split into **pre-move (placement)** and **post-move (restoration)**; **total source = pre-move + post-move** | Sinks | G3, G5 |
-| Aggregate bytes | all bytes sent on all links for this session (source + forwarding) / Sink size | Sinks | G3 (reported), G5 |
+| Pre-move source bytes B_pre | bytes sent by the original source A for this session before the move (placement) / Sink size | Sinks | G5 |
+| Post-move source bytes B_post | bytes sent by A for this session after the move (restoration) / Sink size | Sinks | G3, G5 |
+| Total source bytes | B_source,total = B_pre + B_post | Sinks | G3, G5 |
+| Holder-forwarded bytes B_fwd | bytes received and checksum-verified at the owner whose sender is not A (orchestrator `fragments.csv`, `recv` rows: `src` != A, `ok` = True, `dup` = False) / Sink size | Sinks | G5 |
+| Aggregate network bytes | B_network,total = B_source,total + B_fwd + bytes forwarded to non-owners (all links) / Sink size | Sinks | reported (G3, G5) |
 | Discarded bytes | bytes delivered to an owner that neither bound nor forwarded them (Phase 1 definition a) / Sink size | Sinks | G3 |
-| Verified progress reused | fragments verified at an abandoned owner that were later forwarded or bound, divided by fragments verified at abandoned owners | fraction | G3 |
-| Forwarded by holders | bytes sent by non-source nodes to the owner / Sink size | Sinks | G5 |
+| Verified progress retained | fragments checksum-verified at an owner at the moment it is abandoned that are still held (not dropped) at the next move, divided by fragments verified there | fraction | descriptive |
+| Verified progress reused | distinct fragments verified at an abandoned owner that the final owner received and verified from an abandoned owner (`recv` rows at the final owner with `src` in the abandoned owners), divided by distinct fragments verified at abandoned owners | fraction | descriptive |
+| x (placement) | fraction of the Sink's fragments fully received **and checksum-verified** at the misplaced holder at or before the move trigger (`recv` rows with `ok` = True and t <= t_move); fragments in flight at the trigger are excluded | fraction | G4, G5 |
 | GPU | peak `memory_allocated`, `memory_reserved`, utilization (1 Hz NVML) at source and destination | GiB, % | G9 |
 | Re-planning | count, detection delay, transition delay, drained bytes, duplicates | -, s, MiB | G7 |
 
@@ -144,23 +161,31 @@ the run; network-level predictions add the GPU bind step (~0.3-0.4 s at 1 Gbps, 
 - **G3 (B, progress preservation; consistent with Phase 1):** at rho = 2 and 4, all of
   (a) source bytes: M1 + M2 <= 1.10 Sinks per session and M1 only >= 1.40 (Phase 1: split 1.06 / 1.02, restart 2.01 / 1.51);
   (b) discarded bytes: M1 + M2 <= 0.10 Sink and M1 only >= 0.40 (Phase 1: 0.07 / 0.04 vs 1.01 / 0.51);
-  (c) verified progress reused: M1 + M2 >= 0.85 and M1 only = 0 by construction (Phase 1, derived rather than measured
-  directly: 1 - discarded / bytes delivered to intermediate owners = 1 - 0.07/1.02 ~ 0.93 at rho 2, 1 - 0.04/0.51 ~ 0.92
-  at rho 4);
-  (d) Sink bind-ready after the final move: M1 + M2 within 1.0 s of M1 only (both ingress-bound; Phase 1: 15.3 vs
+  (c) Sink bind-ready after the final move: M1 + M2 within 1.0 s of M1 only (both ingress-bound; Phase 1: 15.3 vs
   15.3 s at rho 2, 14.8 vs 15.4 s at rho 4).
-  Aggregate bytes are reported and **not** a pass condition: Phase 1 measured them equal at rho >= 2 (2.02 vs 2.01,
-  1.51 vs 1.51), because forwarding a held fragment costs the same link bytes as sending it from the source. The
+  Descriptive (no pass threshold): verified progress retained and verified progress reused (section 6). For reference,
+  reused is directly measurable from the Phase 1 per-fragment logs (`repeated_mobility/policy=split_*/fragments.csv`,
+  read-only analysis 2026-10-16): 0.974-0.983 at rho 2 (3 sweep reps + the shakedown rep) and 0.961-0.967 at rho 4;
+  restart 0 by construction. These are reported next to the Experiment D values, not used as a criterion.
+  Aggregate network bytes are reported and **not** a pass condition: Phase 1 measured them equal at rho >= 2 (2.02 vs
+  2.01, 1.51 vs 1.51), because forwarding a held fragment costs the same link bytes as sending it from the source. The
   hypothesis is that preservation removes discarded work and source load, not total traffic or single-ingress latency.
-- **G4 (C, correct placement):** bind-ready after the move <= no-placement's - 0.5 x (x_placed x T_s), with x_placed
-  the Sink fraction verified at the destination at the move. Prediction (A-pilot, net): x_placed 0.71; 4.0 vs 14.0 s
+- **G4 (C, correct placement):** bind-ready after the move <= no-placement's - 0.5 x (x x T_s), with x the fraction of
+  the Sink fully received and checksum-verified at the (correct) destination at or before the move trigger. Prediction (A-pilot, net): x_placed 0.71; 4.0 vs 14.0 s
   (+ bind step).
-- **G5 (D, incorrect placement):** with x_placed = Sink fraction verified at the wrong candidate at the move, all of
-  (a) bind-ready within 1.5 s of no placement; (b) **total source bytes** (pre-move placement + post-move restoration)
-  <= 1.02 Sinks; (c) post-move source bytes <= (1 - x_placed) + 0.02; (d) forwarded by holders >= 0.9 x x_placed.
-  Pre-move, post-move and aggregate bytes are reported separately (aggregate is expected at 1 + x_placed: the misplaced
-  fraction crosses two links). Prediction (A-pilot, net): pre 0.71, post 0.29, total 1.00, forwarded 0.72, aggregate
-  1.72; bind-ready equal to no placement (ingress-bound).
+- **G5 (D, incorrect placement):** with x = fraction of the Sink fully received and checksum-verified at the misplaced
+  holder at or before the move trigger (in-flight fragments excluded), all of
+  (a) bind-ready within 1.5 s of no placement;
+  (b) B_source,total = B_pre + B_post <= 1.02 Sinks;
+  (c) B_post <= (1 - x) + 0.02;
+  (d) B_fwd >= 0.9 x x. This clause is a pass criterion because B_fwd is measured directly from per-fragment `recv`
+  records at the owner that carry the sender (`src`) and checksum result (`ok`), as the GPU harness already logs them
+  (`repeated_mobility/*/fragments.csv`); if a run lacks those records for any fragment, (d) is reported as not
+  evaluable for that run rather than inferred.
+  Reported separately in every run: B_pre, B_post, B_source,total, B_fwd, B_network,total (expected 1 + x: the
+  misplaced fraction crosses two links). These accounting identities hold only if each pre-positioned fragment is
+  delivered to the owner once; duplicates are counted and reported. Prediction (A-pilot, net): B_pre 0.71, x 0.71,
+  B_post 0.29, B_source,total 1.00, B_fwd 0.72, B_network,total 1.72; bind-ready equal to no placement (ingress-bound).
 - **G6 (E, hybrid GPU/network contention):** for the one GPU generation session, M1 + M2's and OTTER event-driven's
   Sink bind-ready after the final move <= M1 only's - 3.5 s (0.5 T_m). Prediction (Scenario B v2, net, N = 4 one move):
   9.7 s lower. The claim is limited to source-egress contention created by network-level sessions; it says nothing
@@ -175,8 +200,9 @@ the run; network-level predictions add the GPU bind step (~0.3-0.4 s at 1 Gbps, 
 - **G9 (overhead):** steady-state chunk service time with OTTER enabled and no migration within 2 % of unmodified
   generation (same GPU, same seed, 3 reps of 200 chunks); destination peak `memory_allocated` within 1 % across
   in-repo policies (single handoff: 25.8-25.9 GiB).
-- **External C/R:** descriptive only (no pass threshold), in the two comparisons of section 5: TTFO, dump / transfer /
-  restore times, bytes, rejoin, success or failure with the error.
+- **External C/R:** descriptive only (no pass threshold), in the external-system group of section 5 (C/R as designed,
+  OTTER cold destination, C/R lower bound where applicable): TTFO, dump / transfer / restore times, bytes, rejoin;
+  failures go to the compatibility table. No primary-claim speedup is computed against external systems.
 - **Run validity:** all fragments verified; digest match; NIC peaks <= 1.15 x cap; paced egress <= 1.05 x cap over 10 s;
   four distinct hosts on one commit; GPU 0 idle before the run; reference available; no version events (section 2).
   Invalid runs are listed and re-run, never dropped.
