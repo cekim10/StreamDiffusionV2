@@ -3,9 +3,12 @@
 run's committed summary, without modifying anything:
 
     - every recovered file parses and its `recv` rows name this node as `dst`;
-    - bytes received and verified at node X (ok rows, first arrival of each (session, fragment)) are <= the bytes the
-      orchestrator recorded as sent on links into X (summary bytes.by_link), and the shortfall is at most one fragment
-      per flow into X (fragments in flight when a flow was cancelled);
+    - bytes received at node X (every recv row, verified or not) are <= the bytes the orchestrator recorded as sent on
+      links into X (summary bytes.by_link), and the shortfall is at most one fragment per flow into X (fragments in
+      flight when a flow was cancelled). Every receipt counts: a policy may send the same fragment to the same node more
+      than once (restart under continuous mobility revisits B, C, D and resends the Sink from the start; the node logs
+      those as ok=False repeats). First version (2026-10-16) counted only the first verified arrival per fragment and
+      flagged exactly those runs; distinct verified bytes are still reported.
     - per-run coverage: which of B, C, D logs are present.
 
 Writes results/evaluation/osdi/d0/node_log_recovery.md; exits non-zero if any present file fails.
@@ -24,7 +27,7 @@ EV = ROOT / "results/evaluation"
 
 
 def main():
-    exps = defaultdict(lambda: {"runs": 0, "complete": 0, "files": 0, "fail": 0})
+    exps = defaultdict(lambda: {"runs": 0, "complete": 0, "files": 0, "fail": 0, "distinct": 0, "repeat": 0})
     fails = []
     for run in sorted(list(EV.glob("restore_*/policy=*")) + list(EV.glob("restore_*/plan=*"))):
         if not (run / "summary.json").exists():
@@ -47,11 +50,12 @@ def main():
                 fails.append((run.name, X, f"unreadable: {exc}")); e["fail"] += 1; continue
             if any(r["dst"] != X for r in rows):
                 fails.append((run.name, X, "recv rows with another destination")); e["fail"] += 1; continue
-            seen = set(); got = 0
+            seen = set(); got = sum(int(r["bytes"]) for r in rows)
             for r in rows:
                 key = (r["session"], r["fragment_id"])
                 if r["ok"] == "True" and key not in seen:
-                    seen.add(key); got += int(r["bytes"])
+                    seen.add(key); e["distinct"] += int(r["bytes"])
+            e["repeat"] += sum(1 for r in rows if r["ok"] != "True")
             sent = sum(v for k, v in by_link.items() if k.endswith("->" + X))
             nflows = sum(1 for fl in flows if fl["dst"] == X)
             if got > sent or sent - got > max(1, nflows) * frag:
@@ -59,8 +63,8 @@ def main():
         e["complete"] += present == 3
     out = ["# D0: recovered per-fragment node logs", "",
            "Read-only check of `node_{B,C,D}/fragments.csv` copied back from elves-02..04 (`tools/eval/recover_node_logs.sh`).", "",
-           "| experiment | runs | runs with B, C and D logs | files | failing files |", "|---|---|---|---|---|"]
-    out += [f"| {k} | {v['runs']} | {v['complete']} | {v['files']} | {v['fail']} |" for k, v in sorted(exps.items())]
+           "| experiment | runs | runs with B, C and D logs | files | failing files | distinct verified GiB | repeat or rejected receipts |", "|---|---|---|---|---|---|---|"]
+    out += [f"| {k} | {v['runs']} | {v['complete']} | {v['files']} | {v['fail']} | {v['distinct'] / 2**30:.1f} | {v['repeat']} |" for k, v in sorted(exps.items())]
     out += ["", f"Failures: {len(fails)}"] + [f"- {r} node {x}: {m}" for r, x, m in fails[:50]]
     p = EV / "osdi/d0/node_log_recovery.md"; p.parent.mkdir(parents=True, exist_ok=True); p.write_text("\n".join(out) + "\n")
     print("\n".join(out))
