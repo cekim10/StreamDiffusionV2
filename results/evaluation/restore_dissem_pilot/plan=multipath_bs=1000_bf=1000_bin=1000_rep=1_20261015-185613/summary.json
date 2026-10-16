@@ -1,0 +1,152 @@
+{
+ "run_id": "plan=multipath_bs=1000_bf=1000_bin=1000_rep=1_20261015-185613",
+ "plan": "multipath",
+ "rep": 1,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 1000.0,
+  "C:out": 1000.0,
+  "D:out": 1000.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "all destinations complete",
+ "duration_s": 15.047083377838135,
+ "completion_s": {
+  "B": 14.013935327529907,
+  "C": 13.979485034942627,
+  "D": 14.021454334259033
+ },
+ "makespan_s": 14.021454334259033,
+ "destinations_complete": 3,
+ "bytes": {
+  "total_sent": 5175709920,
+  "source_sent": 1725236640,
+  "by_link": {
+   "A->B": 575997344,
+   "A->D": 574619648,
+   "A->C": 574619648,
+   "B->C": 575997344,
+   "B->D": 575997344,
+   "D->B": 574619648,
+   "D->C": 574619648,
+   "C->B": 574619648,
+   "C->D": 574619648
+  },
+  "egress_by_node": {
+   "A": 1725236640,
+   "B": 1151994688,
+   "D": 1149239296,
+   "C": 1149239296
+  },
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_sinks": 3.0,
+  "source_sinks": 1.0,
+  "egress_sinks_by_node": {
+   "A": 1.0,
+   "B": 0.667731406399994,
+   "D": 0.666134296800003,
+   "C": 0.666134296800003
+  }
+ },
+ "assignment": {
+  "A->B": 138,
+  "B->C": 138,
+  "B->D": 138,
+  "C->B": 137,
+  "A->C": 137,
+  "C->D": 137,
+  "D->B": 137,
+  "D->C": 137,
+  "A->D": 137
+ },
+ "first_forward_s": {
+  "B": 0.2001631259918213,
+  "D": 0.22882938385009766,
+  "C": 0.28479766845703125
+ },
+ "pipelined": {
+  "B": true,
+  "D": true,
+  "C": true
+ },
+ "missing_fragments": {
+  "B": 0,
+  "C": 0,
+  "D": 0
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  }
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 996.5666304,
+  "B": 664.3777536,
+  "C": 664.3777536,
+  "D": 664.3777536
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 2.0,
+   "tx_peak": 1049.7
+  },
+  "B": {
+   "rx_peak": 1055.6,
+   "tx_peak": 704.0
+  },
+  "C": {
+   "rx_peak": 1051.9,
+   "tx_peak": 699.8
+  },
+  "D": {
+   "rx_peak": 1049.6,
+   "tx_peak": 701.0
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "node_commits": {
+  "A": "47872188c46de5c543d84cd72d0f04138c2b2b21",
+  "B": "47872188c46de5c543d84cd72d0f04138c2b2b21",
+  "C": "47872188c46de5c543d84cd72d0f04138c2b2b21",
+  "D": "47872188c46de5c543d84cd72d0f04138c2b2b21"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "no_duplicates": true,
+  "all_destinations_complete": true,
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "nic_within_cap": true,
+  "paced_egress_within_cap": true,
+  "forwarders_pipelined": true
+ }
+}
