@@ -13,7 +13,7 @@ changed.
 | C. Shared planner | **done** | `tools/eval/restore_planner.py`; summary in `shared_planner.md` |
 | D. Network regression | **PASS** (decision equivalence) with two loopback-timing differences explained below | `tools/eval/test_restore_planner.py`, `run_planner_regression.sh`, `compare_planner_regression.py`; `planner_equivalence_seed2.txt`, `network_regression_loopback.md` |
 | E. GPU integration | **done for the D0 shakedown scope**; dry-run validated | `mobility_orchestrate.py`, `mobility_node.py`, `run_gpu_dryrun.sh` |
-| F. GPU correctness shakedown | **not run (needs the GPUs)**; commands below | `tools/eval/run_d0_shakedown.sh` |
+| F. GPU correctness shakedown | **PASS** (9/9 runs, all pre-written conditions); one finding for G5 below | `d0/shakedown_check.md`, `tools/eval/check_d0_shakedown.py` |
 | G. External C/R readiness | **done: BLOCKED** (no CRIU, no cuda-checkpoint, no sudo, CapEff 0 on all hosts) | `d0/cr_readiness/<host>.txt` |
 
 ## A. Hardware audit (2026-10-16 15:28, read-only)
@@ -122,9 +122,32 @@ verified Sink and rejoins >= 35 dB; 0 version events; 0 duplicates; no fragment 
 event-driven re-plans in the degradation run and not in the repeated run; incorrect placement shows holder forwarding
 from the never-owner candidate.
 
+### Shakedown result (2026-10-16 15:50-16:22, commit a363411, GPU 0 idle on all four hosts)
+
+All 9 runs pass every condition above (`shakedown_check.md`): Sink verified with the source digest and bound, rejoin
+39.2-42.6 dB, 0 version events, 0 duplicates, NIC peaks <= 1049 Mbps, event-driven re-plans 2 in the degradation run
+and 0 in the repeated run, never-owner B forwards 0.50 Sink under incorrect placement. Per-node service times
+553-559 ms per chunk on all hosts (no contention, no visible effect of the two driver versions). First output after
+the final move 0.68-1.07 s (handoff-request boundary). Restart retains 0 of its verified progress; the preserving
+policies reuse 0.977-0.984 of it (0.761 for event-driven under degradation, which moves C's fragments to the source).
+
+**Finding (incorrect placement, frozen G5).** A sends 0.71 Sink to B; the session moves to C. At the move the planner
+gives B its 294 held fragments and A the other 118; both flows share C's 1 Gbps ingress (~490 Mbps each). 2.3 s later
+the event-driven rule estimates B's remaining time as 263 fragments at the measured 487 Mbps = 18.2 s and moves 88
+fragments to A (ETA 12.1 s). The estimate assumes measured rates persist; B's rate doubles when A's flow ends, so the
+original plan was already ingress-bound at ~13.8 s, and the Sink was verified 14.3 s after the move either way. The
+re-plan changes no latency and adds 0.22 Sink of source traffic. Read against G5 (scenario D includes Full OTTER =
+event-driven + top-1), this single correctness run would give (a) bound 14.94 vs 14.85 s without placement: pass;
+(b) B_source,total 1.23 > 1.02; (c) B_post 0.51 > 0.31; (d) B_fwd 0.50 < 0.9 x 0.71 = 0.64. The decision code is
+the frozen E-pilot v2 rule, moved verbatim (decision-equivalent to the network harness). This is one shakedown run,
+not an Experiment D result, recorded here before any sweep data. No code or criterion was changed.
+
+Other single-run previews (not outcomes): G4-like 4.30 s vs 14.85 - 0.5 x 0.72 x 14.05 = 9.8 s; G7-like event-driven
+15.79 s vs 0.5 x 51.06 s at moves, 2 re-plans; no-change event-driven 0 re-plans, 15.15 vs 14.51 s at moves.
+
 ## Remaining blockers before the full Experiment D sweep
 
-1. GPU shakedown (F) on the testbed, after GPU 0 on elves-03 is free.
+1. Decision on the G5 finding (keep the frozen rule and report, or a dated amendment before any sweep data).
 2a. External C/R: administrators must install CRIU + CUDA plugin and grant capabilities (G); otherwise the external
    comparison is reported as not runnable.
 2. Not implemented (prereg section 8): full migration and cold restart as repeated-mobility execution policies
@@ -139,8 +162,9 @@ from the never-owner candidate.
 
 ## GO / NO-GO for the full Experiment D sweep
 
-**NO-GO.** The shared planner is regression-verified and integrated for the D0 shakedown scope, but the GPU shakedown has
-not run, and four of the seven preregistered scenarios need execution policies or modes that are not implemented
-(blocker 2), and the external baseline is blocked by missing CRIU and privileges (2a). Recommended next step: run the
-shakedown when elves-03 GPU 0 is free, review it, then implement the
-blocker-2 items with the same dry-run + shakedown discipline before requesting approval for the sweep.
+**NO-GO.** Network regression PASS and GPU correctness PASS, so the gate reaches "sweep review". The sweep cannot start
+yet: four of the seven preregistered scenarios need execution policies or modes that are not implemented (blocker 2),
+the external baseline is blocked by missing CRIU and privileges (2a), and the G5 finding needs a decision (1).
+Recommended: keep the frozen rule and criteria and report G5 as measured (likely a negative result for Full OTTER, with
+this cause); implement the blocker-2 items with the same dry-run + shakedown discipline; ask the administrators about
+CRIU; then request approval for the sweep.
