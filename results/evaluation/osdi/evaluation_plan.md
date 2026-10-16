@@ -60,8 +60,9 @@ effort dominates (see audit); A1 reduced ~4 h net-level; A2 ~2 h net-level; B fu
 
 Feasible: NVIDIA cuda-checkpoint + CRIU (CUDA plugin; cross-node by image transfer + device map, same chip type).
 Requires adaptation: GCR (FAST '26; single-node artifact, sm_80 build, replacement libcuda, no license). Infeasible
-with public code: PhoenixOS (CUDA 11.3; cross-node path unreleased), Cricket, Singularity. First action: record the
-NVIDIA driver version on elves-01..04 (not in any artifact; decides cuda-checkpoint feasibility).
+with public code: PhoenixOS (CUDA 11.3; cross-node path unreleased), Cricket, Singularity. Driver 575.51.03 (one host
+confirmed 2026-10-16): cuda-checkpoint's cross-GPU migration API needs 580, so cross-node restore is unverified on the
+testbed; first action is a two-host empirical restore test (or a driver upgrade decision with the administrators).
 
 ## Highest-risk items
 

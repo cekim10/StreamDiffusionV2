@@ -6,8 +6,17 @@ from the cited source on 2026-10-16; "unverified" marks what could not be confir
 counted as an external baseline. Nothing was installed or run.
 
 **Testbed facts that matter here** (from `single_handoff/*/host_info.json`): PyTorch 2.6.0+cu124, CUDA 12.4, L40S on
-both ends. **The NVIDIA driver version is not recorded** in any artifact; it decides cuda-checkpoint feasibility
-(>= 550; >= 580 for `--device-map`) and must be checked (`nvidia-smi`) before any integration work.
+both ends. **NVIDIA driver 575.51.03** (reported by the user on 2026-10-16 from one host with two L40S; the other three
+hosts still to be confirmed). Per the cuda-checkpoint README (re-read 2026-10-16): basic checkpoint/restore needs
+>= 550; 570 adds CRIU 4.0 process-tree integration, NVML support and the lock timeout; **"GPU migration" (restoring
+onto different physical GPUs) is a 580 feature not present in 570**, and the README lists only container partial
+passthrough as "also present in some 575 drivers". So on 575.51.03 cuda-checkpoint + CRIU can checkpoint and restore
+on the same GPU, but restoring on a different node's GPU has no supported path; whether a same-model GPU on another
+node restores without the migration API is **unverified** (issue #54 reports failure restoring to a different GPU
+index without a device map on 595). Options: (a) test it empirically on two hosts before committing; (b) ask the
+administrators for a driver >= 580 on all four hosts (shared machines: other users' jobs, a reboot, and a change of
+the measured environment - all prior GPU results were taken on 575); (c) report the baseline as same-node C/R plus
+measured transfer time of its image, labelled as such.
 
 ## Per-candidate findings
 
@@ -116,7 +125,9 @@ initialized; C/R images contain the model weights (OTTER's destination preloads 
 
 ## Highest-risk integration problems
 
-1. Driver version on elves-01..04 is unknown; < 550 makes cuda-checkpoint impossible, < 580 removes the device-map path.
+1. Driver 575.51.03 (one host confirmed): checkpoint/restore is supported, the cross-GPU migration API (580) is not;
+   cross-node restore must be tested empirically, or the driver upgraded on all hosts (environment change), or the
+   baseline reported as same-node C/R + measured image transfer.
 2. CRIU must handle the generation process's open TCP control/data sockets (or they must be closed before dump).
 3. Root/CAP_CHECKPOINT_RESTORE on shared machines.
 4. GCR's replacement-libcuda interposition with PyTorch 2.6 and the sm_80 -> sm_89 port.
