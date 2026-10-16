@@ -56,6 +56,13 @@ SUPPORTED AS WRITTEN.**
 Experiment D ~180 GPU runs (~8-10 h exclusive GPUs); steady-state overhead ~1 h; external baselines: integration
 effort dominates (see audit); A1 reduced ~4 h net-level; A2 ~2 h net-level; B full grid ~2 h net-level.
 
+## External baselines (from `external_baseline_audit.md`)
+
+Feasible: NVIDIA cuda-checkpoint + CRIU (CUDA plugin; cross-node by image transfer + device map, same chip type).
+Requires adaptation: GCR (FAST '26; single-node artifact, sm_80 build, replacement libcuda, no license). Infeasible
+with public code: PhoenixOS (CUDA 11.3; cross-node path unreleased), Cricket, Singularity. First action: record the
+NVIDIA driver version on elves-01..04 (not in any artifact; decides cuda-checkpoint feasibility).
+
 ## Highest-risk items
 
 1. External C/R systems restoring a CUDA process on a different physical node with a different GPU instance (see audit).
