@@ -1,0 +1,16 @@
+{
+ "rq": "RQ2/RQ7",
+ "source": "results/evaluation/continuity/fig7_data.csv (one rep per policy, 1 Gbps)",
+ "measured": true,
+ "config": "elves-01 -> elves-02, 1 Gbps, dog seed 0 k=2; PSNR of each generated chunk vs the uninterrupted same-seed run (99 dB = bit-exact, clipped at 52)",
+ "events": {
+  "first_output": 0.7125,
+  "sink_ready": 14.3931,
+  "sink_bind": 14.7829,
+  "rejoin_35dB": 18.8872
+ },
+ "error_bars": "none (single representative rep; per-bandwidth medians in F2b)",
+ "missing": "no multi-rep band; full migration is bit-exact after 53.8 s (clipped)",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "800598a25b829b2777d7bdb79559b97e27e85515"
+}

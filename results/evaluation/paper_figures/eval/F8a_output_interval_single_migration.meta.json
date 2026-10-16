@@ -1,0 +1,15 @@
+{
+ "rq": "RQ7",
+ "source": "results/evaluation/single_handoff/policy=*_bw=1000_rep=*/metrics.csv",
+ "measured": true,
+ "config": "GPU, elves-01 -> elves-02, 1 Gbps, 3 reps x 80 output chunks after the trigger at the destination; interval = time between consecutive chunk outputs, first = trigger -> first output",
+ "n_samples": {
+  "full": 240,
+  "replay": 240,
+  "cold": 240,
+  "ours": 240
+ },
+ "caution": "one chunk = one model call (several frames); per-frame latency, jitter and deadline misses need the Experiment D definitions; repeated / concurrent / degraded scenarios not measured on GPU",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "800598a25b829b2777d7bdb79559b97e27e85515"
+}

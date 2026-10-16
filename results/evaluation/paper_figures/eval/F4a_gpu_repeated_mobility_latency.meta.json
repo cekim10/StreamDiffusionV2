@@ -1,0 +1,11 @@
+{
+ "rq": "RQ3",
+ "source": "results/evaluation/repeated_mobility/figures/mobility_table.csv",
+ "measured": true,
+ "config": "GPU, physical: A->B->C->D on elves-01..04, 1 Gbps per-node caps, T_s 14.05 s, 3 reps per (policy, rho)",
+ "metric": "continuity-ready = first output on the bound Sink after the final move",
+ "error_bars": "min-max over 3 reps",
+ "reading": "all non-oracle policies are ingress-bound (~15 s) at a single destination; progress preservation shows in bytes (F4b)",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "800598a25b829b2777d7bdb79559b97e27e85515"
+}

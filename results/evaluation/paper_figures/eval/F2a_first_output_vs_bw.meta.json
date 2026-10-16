@@ -1,0 +1,11 @@
+{
+ "rq": "RQ2",
+ "source": "results/evaluation/single_handoff/summary_by_policy_bw.csv (+ summary_runs.csv)",
+ "config": "elves-01 -> elves-02, L40S, dog clip seed 0 k=2, migration at chunk 30, MSS 1400, token-bucket shaping; 3 reps per point; *native = unshaped 9.4 Gbps",
+ "measured": true,
+ "error_bars": "p25-p75 over 3 reps",
+ "metric": "first output = first generated chunk at the destination after the migration trigger (NOT Sink bind, NOT visual rejoin)",
+ "missing": "external baselines (GCR/PhoenixOS/cuda-checkpoint) not run",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "800598a25b829b2777d7bdb79559b97e27e85515"
+}

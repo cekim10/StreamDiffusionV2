@@ -1,0 +1,13 @@
+{
+ "rq": "RQ5",
+ "source": {
+  "reuse_aware_in": "results/evaluation/restore_fulle/policy=reuse_aware_in_N=1_moves=2_rho=2_ev=Dge0.5Cout62.5_rep=1_20261016-105718",
+  "reuse_dyn": "results/evaluation/restore_fulle/policy=reuse_dyn_N=1_moves=2_rho=2_ev=Dge0.5Cout62.5_rep=1_20261016-105827"
+ },
+ "measured": true,
+ "level": "network-level, 4 physical hosts (Full E condition 3, rep 1)",
+ "config": "single session B->C->D, rho 2, 1 Gbps; C egress drops to 62.5 Mbps when D holds 50 %; bars = flows into D (flows.csv start/end, bytes sent); faded = cancelled",
+ "missing": "per-fragment receive timestamps at D live on elves-04 (node_D/fragments.csv was not copied back); a cumulative-progress-by-provider curve needs them",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "800598a25b829b2777d7bdb79559b97e27e85515"
+}

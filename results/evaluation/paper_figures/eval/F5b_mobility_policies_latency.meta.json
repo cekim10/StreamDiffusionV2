@@ -1,0 +1,16 @@
+{
+ "rq": "RQ4/RQ5",
+ "source": "results/evaluation/restore_fulle/summary_by_config.csv",
+ "measured": true,
+ "level": "network-level, 4 physical hosts, 84 runs",
+ "config": "slow-B: B egress 125 Mbps; shared source: N=4; C degradation: C egress 1G->62.5M when D holds 50 %; revisit B->C->D->B; rho 2; 3 reps",
+ "frozen_verdicts": {
+  "H8a": "NOT SUPPORTED",
+  "H8b": "SUPPORTED",
+  "H8c": "NOT SUPPORTED AS WRITTEN"
+ },
+ "error_bars": "min-max over 3 reps (latency panel)",
+ "metric": "T_r = final move -> all fragments verified at the final owner (network fragment completion, NOT GPU Sink binding)",
+ "plot_script": "tools/eval/plot_paper_figures.py",
+ "plot_commit": "800598a25b829b2777d7bdb79559b97e27e85515"
+}
