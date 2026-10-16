@@ -571,6 +571,80 @@ E-pilot v2 model (hysteresis: dT > C_switch + max(2.0 s, 0.10 ETA); idle estimat
       t=17.5 dT 3.9 c_switch 0.43
 ```
 
+Full E (approved after E-pilot v2; experiment `restore_fulle`, `tools/eval/run_restore_fulle.sh`, 84 runs ~2 h; criteria
+H8a-c in F unchanged). Question: under repeated execution mobility, is progress worth preserving (restart vs the
+rest), is bottleneck-aware assignment needed (fixed plans vs aware-at-moves), and is reacting between moves worth it
+(aware-at-moves vs dynamic)? Not a re-run of the static topology comparison (B settled that).
+**Policy semantics, fixed before implementation** (all seven see the same information: the session's past ownership
+sequence, verified holdings, the nominal caps known at the start; none sees future destinations or future cap changes;
+only `reuse_dyn` additionally measures throughput at run time):
+- `restart`: at every move the fragments at abandoned edges are dropped; the source sends the whole Sink to the owner.
+- `pp_star` (progress-preserving star): nothing is dropped and the owner keeps what it already holds (this matters only
+  on a revisit); the source sends every missing fragment; no edge forwards. "Preserved" means kept where it landed and
+  reused when the execution returns there, not forwarded elsewhere.
+- `fixed_line`: as pp_star, plus the immediately previous owner forwards what it holds (fragments in flight to it are
+  forwarded once they land); the source sends the rest.
+- `fixed_tree`: as pp_star, plus the first edge the session visited (the hub) forwards what it holds to every later
+  owner; the source sends the rest. When the hub is the owner again (revisit to B) it equals pp_star.
+- `fixed_butterfly`: as pp_star, plus every past holder forwards; a fragment held by several holders goes to the holder
+  with the fewest fragments assigned so far in this plan (even split by count; no bandwidth knowledge); the source sends
+  what no holder has.
+- `reuse_aware_in` (M2): every holder may forward; providers chosen by whole-node backlog over known cap with the
+  ingress bound (Step 2 / Step 1 rule), at moves only.
+- `reuse_dyn` (M3 candidate): `reuse_aware_in` at moves plus the E-pilot v2 re-planner (unchanged thresholds).
+Conditions: (1) slow-B: B egress 125 Mbps, single session, moves B -> C -> D; (2) shared source: N = 4, all 1 Gbps,
+two moves per session, staggered; (3) C degradation: single session, two moves, C egress -> 62.5 Mbps when D holds 50 %
+(E-pilot condition); (4) revisit: single session, moves B -> C -> D -> B. Revisit metrics recorded at every move
+(`move` event: fragments held at the new owner, held elsewhere, revisit flag) and per period (restoration time at each
+owner): fraction of the Sink still at B on return, fragments still needed, source retransmission, aggregate traffic,
+T_r at the final owner. H8c: the Pareto frontier over (T_r, source Sinks, total Sinks) per condition is reported
+regardless of the frozen pass condition; the point is which policies are dominated and by whom.
+**Model** for the 28 configurations (written before the run; the model's "tot/S" column counts fragments still held
+at edges at the end and is not the traffic measure; the harness reports sent bytes):
+
+```
+Full E model (+0.3 s on T_r): T_r = final move -> restored at the final owner (median over sessions for N=4); makespan; source and total Sinks per session; replans; for (4) fraction held at B on return
+condition                                                           policy |    T_r  makespan |  src/S  tot/S | replans | held@B on return
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                         restart |   14.1      28.2 |   2.02   1.00 |       0 | -
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                         pp_star |   14.1      28.2 |   2.02   2.01 |       0 | -
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                      fixed_line |   14.1      28.2 |   1.45   2.01 |       0 | -
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                      fixed_tree |   56.4      70.5 |   1.45   2.01 |       0 | -
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                 fixed_butterfly |   52.9      67.0 |   1.00   2.01 |       0 | -
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                  reuse_aware_in |   14.1      28.2 |   1.38   2.01 |       0 | -
+1 slow-B (B egress 125 Mbps), N=1, B->C->D                       reuse_dyn |   14.1      28.2 |   1.38   2.01 |       0 | -
+2 shared source, N=4, two moves each                               restart |   54.7      72.3 |   1.30   1.00 |       0 | -
+2 shared source, N=4, two moves each                               pp_star |   54.7      72.3 |   1.30   1.30 |       0 | -
+2 shared source, N=4, two moves each                            fixed_line |   39.0      55.7 |   1.00   1.47 |       0 | -
+2 shared source, N=4, two moves each                            fixed_tree |   46.0      62.7 |   1.13   1.47 |       0 | -
+2 shared source, N=4, two moves each                       fixed_butterfly |   38.8      55.7 |   1.00   1.47 |       0 | -
+2 shared source, N=4, two moves each                        reuse_aware_in |   39.0      55.7 |   1.00   1.47 |       0 | -
+2 shared source, N=4, two moves each                             reuse_dyn |   39.0      55.7 |   1.00   1.47 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D           restart |   14.1      28.2 |   2.02   1.00 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D           pp_star |   14.1      28.2 |   2.02   2.01 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D        fixed_line |   63.5      77.6 |   1.26   2.01 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D        fixed_tree |   14.1      28.2 |   1.26   2.01 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D   fixed_butterfly |   53.9      67.9 |   1.00   2.01 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D    reuse_aware_in |   53.9      67.9 |   1.00   2.01 |       0 | -
+3 C degradation (C -> 62.5 Mbps at D 50 %), N=1, B->C->D         reuse_dyn |   14.2      28.2 |   1.18   2.01 |       1 | -
+4 revisit, N=1, B->C->D->B                                         restart |   14.1      35.2 |   2.53   1.00 |       0 | 0.00
+4 revisit, N=1, B->C->D->B                                         pp_star |    7.1      28.2 |   2.02   2.01 |       0 | 0.51
+4 revisit, N=1, B->C->D->B                                      fixed_line |    7.1      28.2 |   1.51   2.01 |       0 | 0.51
+4 revisit, N=1, B->C->D->B                                      fixed_tree |    7.1      28.2 |   1.51   2.01 |       0 | 0.51
+4 revisit, N=1, B->C->D->B                                 fixed_butterfly |    7.1      28.2 |   1.01   2.01 |       0 | 0.51
+4 revisit, N=1, B->C->D->B                                  reuse_aware_in |    7.1      28.2 |   1.01   2.01 |       0 | 0.51
+4 revisit, N=1, B->C->D->B                                       reuse_dyn |    7.1      28.2 |   1.01   2.01 |       0 | 0.51
+```
+
+Model-implied expectations against the frozen clauses, written before the run: **H8a is predicted to FAIL as
+written**: at the final owner D the fixed line forwards from the fast previous owner C, so line = aware = star =
+14.1 s and "aware <= 0.75 x the best fixed forwarding plan" cannot hold (D.3 itself predicted "aware = line = star at
+D"; the clause was written inconsistently with that prediction). The slow holder costs line at the intermediate owner
+C (per-period latency), which is where aware-at-moves differs; both are reported. Tree (hub B) and butterfly, which
+forward from the slow B, are predicted at 56 and 53 s. **H8b is predicted to hold** (dynamic 14.2 vs aware 53.9 s with
+one re-plan; not worse elsewhere). **H8c is predicted to hold** (shared source: restart 1.30 vs 1.00-1.13 Sinks;
+revisit: restart 2.53 vs 1.01-2.02, every progress-aware policy restores at B in 7.1 s with 0.51 Sink still there vs
+restart 14.1 s). The thresholds stay as frozen; the H8a outcome is reported as a failure of the clause's premise.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |

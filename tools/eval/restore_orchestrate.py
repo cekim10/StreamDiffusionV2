@@ -256,6 +256,34 @@ class Run:
                         late[src].append(f); continue
                     src = "A"
                 assign[src].append(f)
+        elif self.policy in ("pp_star", "fixed_line", "fixed_tree", "fixed_butterfly"):
+            # Experiment E fixed plans (TOPOLOGY_PLAN G.1 "Full E"): every one keeps the owner's own verified fragments
+            # and never drops fragments at abandoned edges; they differ in which past holders may forward.
+            #   pp_star        nobody forwards: the source sends every missing fragment
+            #   fixed_line     only the immediately previous owner forwards what it holds
+            #   fixed_tree     only the first edge the session visited (the hub) forwards what it holds
+            #   fixed_butterfly every past holder forwards; a fragment held by several is given to the one with the
+            #                  fewest fragments assigned so far (even split by count, no bandwidth knowledge)
+            # None of them uses future destinations or future bandwidth; the history is the past ownership sequence.
+            past = [e for e in self.history[sid][:-1] if e != "A"]
+            if self.policy == "pp_star":
+                allowed = []
+            elif self.policy == "fixed_line":
+                allowed = [past[-1]] if past and past[-1] != own else []
+            elif self.policy == "fixed_tree":
+                allowed = [past[0]] if past and past[0] != own else []
+            else:
+                allowed = [h for h in holders]
+            count = {h: 0 for h in allowed}
+            for f in sorted(missing):
+                have = [h for h in allowed if f in self.held[sid][h]]
+                if have:
+                    src = min(have, key=lambda h: (count[h], h)); count[src] += 1
+                    assign[src].append(f); continue
+                inbound = next((h for h in allowed if f in soon[h]), None) if f not in self.skipped[sid] else None
+                if inbound is not None:
+                    late[inbound].append(f); continue
+                assign["A"].append(f)
         elif self.policy in ("reuse_aware", "reuse_aware_in", "reuse_dyn"):
             # bottleneck-aware: each provider's finish estimate is its whole egress backlog (every session's queued bytes)
             # plus what this plan adds, over its egress cap. Fragments only A holds go to A first, so held fragments see
@@ -489,7 +517,8 @@ class Run:
         self.history[sid].append(new)
         self.owner_since[sid] = time.time()
         self.restored_now[sid] = False
-        self.ev.log("move", session=sid, frm=old, to=new)
+        self.ev.log("move", session=sid, frm=old, to=new, held_at_new=len(self.held[sid][new]) if new in self.held[sid] else 0,
+                    held_elsewhere={e: len(self.held[sid][e]) for e in EDGES if e != new}, revisit=new in self.history[sid][:-1])
         self.plan(sid, "move")   # restart forgets every edge's fragments here, so only reuse can restore immediately
         if len(self.held[sid][new]) == self.nfr():
             self.restored_now[sid] = True
@@ -1027,7 +1056,7 @@ def main():
     p.add_argument("--ctl_port", type=int, default=29831)
     p.add_argument("--data_port", type=int, default=29832)
     p.add_argument("--experiment", default="restore_contention_v2")  # v1 (restore_contention) lost early rate updates; kept for reference
-    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware,reuse_aware_in,reuse_dyn")
+    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware,reuse_aware_in,reuse_dyn,pp_star,fixed_line,fixed_tree,fixed_butterfly")
     p.add_argument("--sessions", default="1,2,4,8")
     p.add_argument("--moves", default="1,0", help="1 = one move then stay; 0 = continuous mobility until the horizon")
     p.add_argument("--rhos", default="2")

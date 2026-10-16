@@ -30,6 +30,7 @@ class Model:
         self.dyn = {"period": 0.5, "window": 2.0, "warmup": 2.0, "eps": 2.0, "rel": 0.10, "ctrl": 0.3, **(dyn or {})}
         self.last_plan_t = {}; self.replans = []; self.cap_change_t = None; self.dyn_next = 0.0; self.pending_start = []
         self.rate_est = {}   # (sid, node) -> (bytes/s, t): last valid measurement, kept while idle
+        self.moves_log = []; self.restored_log = []
         self.sids = [f"s{i}" for i in range(n)]
         self.owner = {s: EDGES[i % 3] for i, s in enumerate(self.sids)}
         if prepos:
@@ -79,6 +80,18 @@ class Model:
         if self.policy == "reuse_fixed":
             for f in sorted(missing):
                 assign[next((h for h in holders if f in self.held[sid][h]), "A")].append(f)
+        elif self.policy in ("pp_star", "fixed_line", "fixed_tree", "fixed_butterfly"):   # Experiment E fixed plans (same semantics as the harness)
+            past = [e for e in self.history[sid][:-1] if e != "A"]
+            allowed = [] if self.policy == "pp_star" else ([past[-1]] if self.policy == "fixed_line" and past and past[-1] != own else
+                                                           [past[0]] if self.policy == "fixed_tree" and past and past[0] != own else
+                                                           list(holders) if self.policy == "fixed_butterfly" else [])
+            count = {h: 0 for h in allowed}
+            for f in sorted(missing):
+                have = [h for h in allowed if f in self.held[sid][h]]
+                if have:
+                    src = min(have, key=lambda h: (count[h], h)); count[src] += 1; assign[src].append(f)
+                else:
+                    assign["A"].append(f)
         elif self.policy == "reuse_adaptive":   # the Scenario B rule: probe max-min rate of a new flow, per-session load
             act = [(i, fl["src"], fl["dst"]) for i, fl in enumerate(self.flows)]
             cand = holders + ["A"]
@@ -198,6 +211,7 @@ class Model:
         new = to or EDGES[(EDGES.index(old) + 1) % 3]
         if sid == "s0" and self.pp:
             self.held_at_move = {e: len(self.held[sid][e]) / NFR for e in EDGES}   # verified at each candidate when the move happens
+        self.moves_log.append({"t": self.t, "sid": sid, "to": new, "held_at_new": len(self.held[sid][new]) / NFR, "revisit": new in self.history[sid]})
         self.owner[sid] = new; self.history[sid].append(new); self.move_t[sid] = self.t
         self.restored[sid] = None
         self.plan(sid, "move")
@@ -249,7 +263,7 @@ class Model:
                     fl["left"].discard(f)
                     self.held[fl["sid"]][fl["dst"]].add(f)
                     if fl["dst"] == self.owner[fl["sid"]] and len(self.held[fl["sid"]][fl["dst"]]) == NFR and self.restored[fl["sid"]] is None:
-                        self.restored[fl["sid"]] = self.t + self.dt
+                        self.restored[fl["sid"]] = self.t + self.dt; self.restored_log.append({"t": self.t + self.dt, "sid": fl["sid"], "at": fl["dst"]})
                 if not fl["left"]:
                     done_flows.append(fl)
             if done_flows:   # a completed flow needs no re-plan (the orchestrator re-plans only when a provider skipped fragments)
@@ -257,7 +271,8 @@ class Model:
             self.t += self.dt
         fin = [v for v in self.restored.values() if v is not None]
         out = {"restored": len(fin), "makespan": max(fin) if len(fin) == self.N else None, "source_per_session": self.src_bytes / SINK_BYTES / self.N,
-               "replans": self.replans, "cap_change_t": self.cap_change_t, "restored_t": dict(self.restored), "move_t": dict(self.move_t)}
+               "replans": self.replans, "cap_change_t": self.cap_change_t, "restored_t": dict(self.restored), "move_t": dict(self.move_t),
+               "moves_log": self.moves_log, "restored_log": self.restored_log, "total_sinks": sum(len(fl_) for fl_ in []) }
         if self.pp:
             r0 = self.restored["s0"]; out["t_r"] = None if r0 is None else r0 - self.move_t["s0"]; out["alloc"] = self.alloc
             others = [v for k, v in self.restored.items() if k != "s0"]
