@@ -1,0 +1,14 @@
+flow,session,src,dst,n,bytes,t_start_rel,t_end_rel,cancelled,drain_s,reason
+f1_s0_AB,s0,A,B,206,864026624,0.000,7.020,False,,prepos top1: speculative fragments to candidate B
+f2_s0_AC,s0,A,C,309,230686720,10.012,17.345,True,0.168,reuse_dyn: source sends the rest
+f3_s0_BC,s0,B,C,133,557842432,10.012,33.596,False,,reuse_dyn: reuse fragments held at B
+f4_s1_AC,s1,A,C,412,272629760,10.013,18.783,True,0.099,reuse_dyn: source sends the rest
+f5_s2_AD,s2,A,D,412,327155712,10.015,20.545,True,0.068,reuse_dyn: source sends the rest
+f6_s3_AB,s3,A,B,412,381681664,10.016,22.298,True,0.089,reuse_dyn: source sends the rest
+f7_s0_AC,s0,A,C,225,940901792,17.345,47.670,False,,replan: 225 fragments moved from A (eta 36.6 -> 32.3 s)
+f8_s1_AD,s1,A,D,347,1452606880,18.785,61.069,False,,reuse_dyn: source sends the rest
+f9_s1_CD,s1,C,D,65,272629760,18.786,27.605,False,,reuse_dyn: reuse fragments held at C
+f10_s2_AB,s2,A,B,334,1398080928,20.546,61.060,False,,reuse_dyn: source sends the rest
+f11_s2_DB,s2,D,B,78,327155712,20.547,31.060,False,,reuse_dyn: reuse fragments held at D
+f12_s3_AC,s3,A,C,321,1343554976,22.299,61.060,False,,reuse_dyn: source sends the rest
+f13_s3_BC,s3,B,C,91,381681664,22.300,40.200,False,,reuse_dyn: reuse fragments held at B
