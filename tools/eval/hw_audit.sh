@@ -1,6 +1,6 @@
 #!/bin/bash
-# D0 hardware audit (read-only: no installs, no driver changes). Run on elves-01; it audits itself and, over ssh,
-# elves-02..04, writing results/evaluation/osdi/d0/hw_audit/<host>.txt.
+# D0 hardware audit (read-only: no installs, no driver changes). Run on elves-01; it audits itself and, through the
+# per-host agents, elves-02..04, writing results/evaluation/osdi/d0/hw_audit/<host>.txt.
 #   REMOTE_USER=ckim151 REMOTE_REPO=StreamDiffusionV2 tools/eval/hw_audit.sh
 set -uo pipefail
 ROOT_DIR="$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)"; cd "$ROOT_DIR"
@@ -24,6 +24,6 @@ echo "## load"; uptime
 PRB
 PROBE="${PROBE//REPO/$R}"
 bash -c "$PROBE" > "$OUT/$(hostname -s).txt" 2>&1; echo "wrote $OUT/$(hostname -s).txt"
-for h in elves-02 elves-03 elves-04; do
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$U@$h.be.ucsc.edu" "bash -s" <<< "$PROBE" > "$OUT/$h.txt" 2>&1 && echo "wrote $OUT/$h.txt" || echo "ssh to $h failed (see $OUT/$h.txt)"
-done
+PY="${PY:-$ROOT_DIR/.venv/bin/python}"; [ -x "$PY" ] || PY=python3
+# elves-02..04 through the per-host agents (no ssh between the testbed hosts)
+"$PY" tools/eval/d0_remote.py probe hw_audit "$PROBE"

@@ -9,7 +9,7 @@ changed.
 | item | status | where |
 |---|---|---|
 | A. Hardware audit | **script ready, needs to run on elves-01** (read-only; no installs, no driver change) | `tools/eval/hw_audit.sh` -> `d0/hw_audit/<host>.txt` |
-| B. Recover node fragment logs, F6c | **scripts ready, needs elves-01** (rsync `--ignore-existing`, copies only `node_{B,C,D}/fragments.csv`; verification script; F6c activates once `node_D` logs exist) | `tools/eval/recover_node_logs.sh`, `tools/eval/verify_node_logs.py`, `plot_paper_figures.py --only F6` |
+| B. Recover node fragment logs, F6c | **scripts ready, needs elves-01** (through the per-host agents, never overwrites a local file, copies only `node_{B,C,D}/fragments.csv`; verification script; F6c activates once `node_D` logs exist) | `tools/eval/recover_node_logs.sh`, `tools/eval/verify_node_logs.py`, `plot_paper_figures.py --only F6` |
 | C. Shared planner | **done** | `tools/eval/restore_planner.py`; summary in `shared_planner.md` |
 | D. Network regression | **PASS** (decision equivalence) with two loopback-timing differences explained below | `tools/eval/test_restore_planner.py`, `run_planner_regression.sh`, `compare_planner_regression.py`; `planner_equivalence_seed2.txt`, `network_regression_loopback.md` |
 | E. GPU integration | **done for the D0 shakedown scope**; dry-run validated | `mobility_orchestrate.py`, `mobility_node.py`, `run_gpu_dryrun.sh` |
