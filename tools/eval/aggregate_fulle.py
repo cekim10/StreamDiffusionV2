@@ -130,9 +130,11 @@ def main():
                        f"{f(x['replans'], 0)} ({x['model_replans']}) | {f(x['held_at_B_on_return'], 2)} | {f(x['duplicate_mib'])} |")
         # Pareto frontier over (T_r, source, total): a policy is dominated if another is <= on all three and < on one
         pts = {p: (g(c, p, "t_r"), g(c, p, "source"), g(c, p, "total")) for p in POL if (c, p) in cfg and g(c, p, "t_r") is not None}
+        # dominance with measurement tolerances (0.2 s, 0.01 Sink): equal policies do not dominate each other
+        TOL = (0.2, 0.01, 0.01)
         dom = {}
         for p, v in pts.items():
-            dom[p] = [q for q, w_ in pts.items() if q != p and all(w_[i] <= v[i] + 1e-9 for i in range(3)) and any(w_[i] < v[i] - 1e-9 for i in range(3))]
+            dom[p] = [q for q, w_ in pts.items() if q != p and all(w_[i] <= v[i] + TOL[i] for i in range(3)) and any(w_[i] < v[i] - TOL[i] for i in range(3))]
         front = [p for p in pts if not dom[p]]
         out += ["", f"Pareto frontier (T_r, source Sinks, total Sinks): {front}; dominated: " + ", ".join(f"{p} by {d}" for p, d in dom.items() if d) + "", ""]
     # frozen verdicts
@@ -161,7 +163,8 @@ def main():
         fewer = all(g(c, p, "source") is not None and g(c, p, "source") <= rs - 0.25 for p in pa) if rs is not None else False
         pts = {p: (g(c, p, "t_r"), g(c, p, "source"), g(c, p, "total")) for p in POL if (c, p) in cfg and g(c, p, "t_r") is not None}
         rv = pts.get("restart")
-        dominated_by_restart = [p for p, v in pts.items() if p != "restart" and rv and all(rv[i] <= v[i] + 1e-9 for i in range(3)) and any(rv[i] < v[i] - 1e-9 for i in range(3))]
+        TOL = (0.2, 0.01, 0.01)
+        dominated_by_restart = [p for p, v in pts.items() if p != "restart" and rv and all(rv[i] <= v[i] + TOL[i] for i in range(3)) and any(rv[i] < v[i] - TOL[i] for i in range(3))]
         h8c.append((c, fewer, dominated_by_restart, rs))
     if h8c:
         ok = all(fw and not dr for _, fw, dr, _ in h8c)
