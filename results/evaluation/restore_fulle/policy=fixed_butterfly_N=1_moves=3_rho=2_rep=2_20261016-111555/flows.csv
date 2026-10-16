@@ -1,0 +1,10 @@
+flow,session,src,dst,n,bytes,t_start_rel,t_end_rel,cancelled,drain_s,reason
+f1_s0_AB,s0,A,B,412,864026624,0.001,7.030,True,0.015,fixed_butterfly: source sends the rest
+f2_s0_AC,s0,A,C,206,436207616,7.031,14.069,True,0.033,fixed_butterfly: source sends the rest
+f3_s0_BC,s0,B,C,206,432013312,7.032,14.069,True,0.011,fixed_butterfly: reuse fragments held at B
+f4_s0_AD,s0,A,D,102,289406976,14.070,21.095,True,0.022,fixed_butterfly: source sends the rest
+f5_s0_BD,s0,B,D,155,289406976,14.071,21.095,True,0.110,fixed_butterfly: reuse fragments held at B
+f6_s0_CD,s0,C,D,155,289406976,14.071,21.096,True,0.030,fixed_butterfly: reuse fragments held at C
+f7_s0_AB,s0,A,B,33,135595424,21.096,24.392,False,,fixed_butterfly: source sends the rest
+f8_s0_DB,s0,D,B,77,322961408,21.097,27.439,False,,fixed_butterfly: reuse fragments held at D
+f9_s0_CB,s0,C,B,96,402653184,21.097,28.086,False,,fixed_butterfly: reuse fragments held at C

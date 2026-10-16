@@ -1,0 +1,9 @@
+flow,session,src,dst,n,bytes,t_start_rel,t_end_rel,cancelled,drain_s,reason
+f1_s0_AB,s0,A,B,412,868220928,0.001,7.039,True,0.015,reuse_dyn: source sends the rest
+f2_s0_BC,s0,B,C,207,432013312,7.041,14.054,True,0.008,reuse_dyn: reuse fragments held at B
+f3_s0_AC,s0,A,C,205,436207616,7.041,14.054,True,0.054,reuse_dyn: source sends the rest
+f4_s0_BD,s0,B,D,155,650117120,14.057,27.338,False,,reuse_dyn: reuse fragments held at B
+f5_s0_AD,s0,A,D,176,735380896,14.057,28.028,False,,reuse_dyn: source sends the rest
+f6_s0_CD,s0,C,D,156,297795584,14.057,21.860,True,0.578,reuse_dyn: reuse fragments held at C
+f7_s0_CD,s0,C,D,40,16777216,21.860,23.896,True,0.804,replan: 40 fragments moved from C (eta 12.3 -> 6.6 s)
+f8_s0_CD,s0,C,D,6,25165824,23.896,27.529,False,,replan: 6 fragments moved from C (eta 24.7 -> 4.8 s)

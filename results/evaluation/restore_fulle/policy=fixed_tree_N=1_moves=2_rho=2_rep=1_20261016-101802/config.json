@@ -1,0 +1,73 @@
+{
+ "args": {
+  "nodes": null,
+  "ctl_port": 29831,
+  "data_port": 29832,
+  "experiment": "restore_fulle",
+  "policies": "restart,pp_star,fixed_line,fixed_tree,fixed_butterfly,reuse_aware_in,reuse_dyn",
+  "sessions": "1",
+  "moves": "2",
+  "rhos": "2",
+  "ts": 14.05,
+  "reps": 3,
+  "sink_bytes": 1725236640,
+  "frag_bytes": 4194304,
+  "cap_mbps": 1000.0,
+  "caps": "B:out=125",
+  "holder_mbps": 0.0,
+  "prepos": "",
+  "probs": "0.6,0.3,0.1",
+  "lookahead": 10.0,
+  "budget": 1.0,
+  "dests": "",
+  "draws": 1,
+  "tau": 7.5,
+  "dissem": "",
+  "source_mbps": 0.0,
+  "in_mbps": 0.0,
+  "cap_events": "",
+  "dyn_period": 0.5,
+  "dyn_window": 2.0,
+  "dyn_warmup": 2.0,
+  "dyn_eps": 2.0,
+  "dyn_rel": 0.1,
+  "dyn_ctrl": 0.3,
+  "others_start": 0.0,
+  "horizon_factor": 2.0,
+  "deadline_factor": 2.0,
+  "mss": 1400,
+  "iface": null,
+  "launch": true,
+  "no_resume": false,
+  "agent_hosts": null,
+  "py": "auto"
+ },
+ "policy": "fixed_tree",
+ "N": 1,
+ "moves": 2,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "nodes": {
+  "A": {
+   "host": "elves-01.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  },
+  "B": {
+   "host": "elves-02.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  },
+  "C": {
+   "host": "elves-03.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  },
+  "D": {
+   "host": "elves-04.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  }
+ },
+ "transport": "tcp+tcp_maxseg+per-flow token bucket, max-min fair per-node caps"
+}
