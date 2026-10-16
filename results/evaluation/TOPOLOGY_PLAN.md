@@ -490,6 +490,51 @@ tree: 18.9 vs 28.0 / 55.6), H6f-subset (aware within 10 % of the best fixed plan
 at B_f = 500 the aware plan is predicted to beat the best fixed family by sending 1.20 Sinks from the source (0.20 of
 retransmission), i.e. it is a fragment-level assignment with source retransmission, not a choice among the families.
 
+E-pilot (approved after the B subset; experiment `restore_epilot`, `tools/eval/run_restore_epilot.sh`, 21 runs ~40 min).
+Question: does event-driven re-planning add value beyond re-planning at moves (M2)? Mechanism under test
+(`reuse_dyn`, E.4): the move-time policy is `reuse_aware_in`; every 0.5 s the orchestrator measures each active flow's
+verified throughput over a 2 s window, computes the current ETA per provider (remaining bytes / measured rate), and
+re-assigns the bottleneck provider's remaining fragments (its in-flight fragment excepted) with the aware rule over
+estimated capacities (measured throughput for providers currently sending, the nominal cap known at plan time
+otherwise); it switches only if dT = ETA_current - ETA_replanned > C_switch + eps, with C_switch = 0.3 s (Phase 1
+control-plane measurement) + one fragment at the cancelled flow's measured rate, eps = 1 s, a minimum relative gain
+of 10 %, and no re-plan within 2 s of a move or a previous re-plan (hysteresis). The planner never reads the live caps:
+cap changes alter the emulated network only. Verified fragments are never resent; re-assigned fragments join an
+existing active flow with FLOW_ADD or start a new flow (a finished flow rejects FLOW_ADD and the fragments are
+re-issued). Switching costs recorded per re-plan: detection delay (cap change -> decision), transition delay (decision
+-> first fragment from a new provider), drained bytes (what the cancelled flow still sent), duplicates, re-plan count.
+Scenarios: **A** single session, rho = 2, moves B -> C -> D; when D holds 50 % of the Sink, C's egress drops from 1 Gbps
+to 62.5 Mbps (a stress test, stated as such); policies restart, reuse_fixed, reuse_aware_in, reuse_dyn. **B** the
+holder-diagnostic arrangement at the crossover (N = 4, holders 250 Mbps, 0.5 Sink at B, destination C, others start
+at s0's move); policies reuse_fixed, reuse_aware_in, reuse_dyn. 3 reps. Pilot validity: the usual checks (pacing is
+judged against the larger of the initial and final cap for the node whose cap changes, and the post-change pacing is
+read from events.csv), all nodes on one commit; pilot metrics: T_r at the final owner, others' makespan (B), source
+and total bytes, re-plans, detection / transition delays, drained and duplicate bytes. Loopback at 1/6.4 scale:
+scenario A aware_in 67.7 s vs dyn 43.5 s with 2 re-plans (detection 1.2 s, transition 0.31 s); scenario B fixed 62.0 /
+aware_in 64.9 / dyn 57.4 s with 1 re-plan. **Model** (written before the run):
+
+```
+E-pilot model predictions (+0.3 s control plane on T_r)
+Scenario A: single session, rho 2, moves B->C->D; when D holds 50 %, C egress 1 Gbps -> 62.5 Mbps
+         restart: T_r at D 14.1 s (final move at 14.0 s), cap change at 21.0 s, source 2.02 S, replans 0
+     reuse_fixed: T_r at D 81.8 s (final move at 14.0 s), cap change at 21.0 s, source 1.00 S, replans 0
+  reuse_aware_in: T_r at D 53.9 s (final move at 14.0 s), cap change at 21.0 s, source 1.00 S, replans 0
+       reuse_dyn: T_r at D 14.2 s (final move at 14.0 s), cap change at 21.0 s, source 1.18 S, replans 1
+      replan t=21.2 from C to {'C': 12, 'A': 74} eta 46.7->7.3 dT 39.4 c_switch 0.84 detect 0.2
+Scenario B: N=4, holders 250 Mbps, 0.5 Sink at B (wrong), destination C, others start at L=10 s
+     reuse_fixed: T_r 40.2 s, others' makespan 58.8 s, source 4.01 S, replans 0
+  reuse_aware_in: T_r 41.8 s, others' makespan 62.2 s, source 4.26 S, replans 0
+       reuse_dyn: T_r 38.4 s, others' makespan 61.3 s, source 4.20 S, replans 1
+      replan t=17.0 from A to {'A': 229, 'B': 27} eta 34.5->30.9 dT 3.6 c_switch 0.43
+```
+
+Model-implied reading to be checked: in A, restart is the best policy (the source is idle and unaffected by C's
+collapse: 14.1 s) and the dynamic rule reaches the same time (14.2 s) by moving 74 of C's 86 remaining fragments to the
+source 0.2 s after the change, at 1.18 Sinks of source traffic against restart's 2.02; move-only aware pays 53.9 s and
+fixed forwarding 81.8 s. In B the dynamic rule is predicted 1.8 s better than fixed and 3.4 s better than move-only
+aware with one re-plan (it moves 27 fragments from the source back to B as the source's share changes). Not a success
+criterion: the pilot measures; the full-E criteria (H8a-c) stay as frozen in F for the later run.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |

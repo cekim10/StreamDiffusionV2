@@ -15,16 +15,20 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from restore_orchestrate import EDGES, SINK_BYTES, dissem_assign, maxmin  # noqa: E402
+from restore_orchestrate import EDGES, SINK_BYTES, dissem_assign, maxmin, parse_cap_events  # noqa: E402
 
 FLEN = 4 << 20
 NFR = -(-SINK_BYTES // FLEN)   # 412
 
 
 class Model:
-    def __init__(self, policy, n, moves, tm, caps, dt=0.02, prepos=None):
-        self.policy, self.N, self.moves, self.tm, self.caps, self.dt = policy, n, moves, tm, caps, dt
+    def __init__(self, policy, n, moves, tm, caps, dt=0.02, prepos=None, cap_events="", dyn=None):
+        self.policy, self.N, self.moves, self.tm, self.caps, self.dt = policy, n, moves, tm, dict(caps), dt
         self.pp = prepos
+        self.known_caps = dict(caps)            # what planners believe; live cap changes are not revealed
+        self.cap_events = parse_cap_events(cap_events)
+        self.dyn = {"period": 0.5, "window": 2.0, "warmup": 2.0, "eps": 1.0, "rel": 0.10, "ctrl": 0.3, **(dyn or {})}
+        self.last_plan_t = {}; self.replans = []; self.cap_change_t = None; self.dyn_next = 0.0; self.pending_start = []
         self.sids = [f"s{i}" for i in range(n)]
         self.owner = {s: EDGES[i % 3] for i, s in enumerate(self.sids)}
         if prepos:
@@ -56,6 +60,7 @@ class Model:
     def plan(self, sid, reason):
         own = self.owner[sid]
         allf = set(range(NFR))
+        self.last_plan_t[sid] = self.t
         if self.policy == "restart":
             self.cancel(sid, keep_dst=own if reason == "flow_done" else None)
             if reason == "move":
@@ -82,7 +87,7 @@ class Model:
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
                 best = min(opts, key=lambda c: ((load[c] + 1) * FLEN / est[c], c == "A"))
                 assign[best].append(f); load[best] += 1
-        else:   # reuse_aware(_in): balance providers' egress backlog (all sessions) over their egress caps; unavoidable source fragments first
+        else:   # reuse_aware(_in|dyn): balance providers' egress backlog (all sessions) over their egress caps; unavoidable source fragments first
             cand = holders + ["A"]
             load = {c: 0.0 for c in cand}
             for fl in self.flows:
@@ -94,11 +99,11 @@ class Model:
             inbound = sum(len(fl["left"]) * FLEN for fl in self.flows if fl["dst"] == own) + len(only_a) * FLEN
             for f in sorted(set(missing) - set(only_a)):
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
-                est = lambda c: (load[c] + FLEN) / self.caps[("out", c)]  # noqa: E731
-                if self.policy == "reuse_aware_in":   # H4c: move to the source only past both the source and the ingress bound
+                est = lambda c: (load[c] + FLEN) / self.known_caps[("out", c)]  # noqa: E731
+                if self.policy in ("reuse_aware_in", "reuse_dyn"):   # H4c: move to the source only past both the source and the ingress bound
                     inbound += FLEN
                     hold = min((c for c in opts if c != "A"), key=est)
-                    best = "A" if est(hold) > max(est("A"), inbound / self.caps[("in", own)]) else hold
+                    best = "A" if est(hold) > max(est("A"), inbound / self.known_caps[("in", own)]) else hold
                 else:
                     best = min(opts, key=lambda c: (est(c), c == "A"))
                 assign[best].append(f); load[best] += FLEN
@@ -136,6 +141,54 @@ class Model:
             self.start("s0", "A", c, list(range(pos, pos + n))); pos += n
         self.alloc = x
 
+    def dyn_check(self, sid, rates):
+        """Event-driven re-planning with perfect rate measurement (the model's view of 'measured' is the current max-min rate)."""
+        own = self.owner[sid]
+        if self.t - self.last_plan_t.get(sid, -1e9) < self.dyn["warmup"]:
+            return
+        act = [(i, fl) for i, fl in enumerate(self.flows) if fl["sid"] == sid and fl["dst"] == own and fl["left"] and not fl.get("draining")]
+        if not act:
+            return
+        rate, rem = {}, {}
+        for i, fl in act:
+            rate[fl["src"]] = rate.get(fl["src"], 0.0) + rates[i] / 8; rem[fl["src"]] = rem.get(fl["src"], 0) + len(fl["left"]) * FLEN
+        eta = {p: (rem[p] / rate[p] if rate[p] > 0 else 1e6) for p in rem}
+        q = max(eta, key=eta.get); eta_cur = eta[q]
+        cap_est = {n: (rate[n] if n in rate and rate[n] > 0 else self.known_caps[("out", n)]) for n in ["A"] + EDGES}
+        qflows = [fl for _, fl in act if fl["src"] == q]
+        head = {next((f for f in fl["order"] if f in fl["left"]), None) for fl in qflows} - {None}
+        movable = set().union(*(fl["left"] for fl in qflows)) - head
+        if not movable:
+            return
+        load = {n: 0.0 for n in ["A"] + EDGES}
+        for _, fl in act:
+            if fl["src"] != q:
+                load[fl["src"]] += len(fl["left"]) * FLEN
+        load[q] += len(head) * FLEN
+        inbound = sum(len(fl["left"]) for _, fl in act) * FLEN
+        assign = defaultdict(list)
+        for f in sorted(movable):
+            opts = [c for c in ["A"] + EDGES if c != own and (c == "A" or f in self.held[sid][c])]
+            best = min(opts, key=lambda c: ((load[c] + FLEN) / cap_est[c], c == "A"))
+            assign[best].append(f); load[best] += FLEN
+        eta_new = max(max((load[n] / cap_est[n] for n in load if load[n] > 0), default=0.0), inbound / self.known_caps[("in", own)])
+        drain = FLEN / max(rate[q], 1.0) if head else 0.0
+        c_switch = self.dyn["ctrl"] + drain
+        dT = eta_cur - eta_new
+        if dT <= c_switch + self.dyn["eps"] or dT < self.dyn["rel"] * eta_cur or set(assign) == {q}:
+            return
+        for fl in qflows:   # the bottleneck's flows drain their in-flight fragment and end
+            fl["left"] = set(head) & fl["left"]; fl["draining"] = True
+        for p_, ids in assign.items():
+            ex = next((fl for _, fl in act if fl["src"] == p_ and p_ != q), None)
+            if ex is not None:
+                ex["left"] |= set(ids); ex["order"] = ex["order"] + sorted(ids)
+            else:
+                self.pending_start.append((self.t + self.dyn["ctrl"], {"sid": sid, "src": p_, "dst": own, "order": sorted(ids), "left": set(ids), "prog": 0.0}))
+        self.last_plan_t[sid] = self.t
+        self.replans.append({"t": self.t, "from": q, "to": {p_: len(v) for p_, v in assign.items()}, "eta_cur": eta_cur, "eta_new": eta_new, "dT": dT, "c_switch": c_switch,
+                             "detection_delay": None if self.cap_change_t is None else self.t - self.cap_change_t})
+
     def move(self, sid, to=None):
         old = self.owner[sid]
         new = to or EDGES[(EDGES.index(old) + 1) % 3]
@@ -167,7 +220,19 @@ class Model:
                     self.move(s, to)
             if self.moves and all(self.restored[s] is not None for s in self.sids) and not sched:
                 break
+            for evn in self.cap_events:   # network changes (planners are not told)
+                if not evn.get("fired") and ((evn["kind"] == "t" and self.t >= evn["at"]) or (evn["kind"] == "progress" and len(self.held["s0"][evn["node"]]) >= evn["frac"] * NFR)):
+                    evn["fired"] = True; self.caps[(evn["dir"], evn["cap_node"])] = evn["mbps"] * 1e6; self.cap_change_t = self.t
+            # delayed starts of re-planned flows (control-plane cost)
+            for st_t, fl in list(self.pending_start):
+                if self.t >= st_t:
+                    self.flows.append(fl); self.pending_start.remove((st_t, fl))
             rates = maxmin([(i, fl["src"], fl["dst"]) for i, fl in enumerate(self.flows)], self.caps)
+            if self.policy == "reuse_dyn" and self.t >= self.dyn_next:
+                self.dyn_next = self.t + self.dyn["period"]
+                for s in self.sids:
+                    self.dyn_check(s, rates)
+                rates = maxmin([(i, fl["src"], fl["dst"]) for i, fl in enumerate(self.flows)], self.caps)
             done_flows = []
             for i, fl in enumerate(self.flows):
                 b = rates[i] / 8 * self.dt
@@ -187,7 +252,8 @@ class Model:
                 self.flows = [fl for fl in self.flows if fl not in done_flows]
             self.t += self.dt
         fin = [v for v in self.restored.values() if v is not None]
-        out = {"restored": len(fin), "makespan": max(fin) if len(fin) == self.N else None, "source_per_session": self.src_bytes / SINK_BYTES / self.N}
+        out = {"restored": len(fin), "makespan": max(fin) if len(fin) == self.N else None, "source_per_session": self.src_bytes / SINK_BYTES / self.N,
+               "replans": self.replans, "cap_change_t": self.cap_change_t, "restored_t": dict(self.restored), "move_t": dict(self.move_t)}
         if self.pp:
             r0 = self.restored["s0"]; out["t_r"] = None if r0 is None else r0 - self.move_t["s0"]; out["alloc"] = self.alloc
             others = [v for k, v in self.restored.items() if k != "s0"]

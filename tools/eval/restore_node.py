@@ -204,6 +204,9 @@ class Node:
                 self.pending_add.setdefault(h["flow_id"], []).append((list(h.get("frag_ids", [])), bool(h.get("closed", False))))
                 self.stats["add_before_start"] += 1
                 return {"pending": True}
+        if not fl["thread"].is_alive():   # the flow already finished: the orchestrator must start a new flow for these fragments
+            self.send("EVENT", event="flow_add_rejected", t=time.time(), flow=fl["id"], session=fl["sid"], dst=fl["dst"], frag_ids=list(h.get("frag_ids", [])))
+            return {"rejected": True}
         with fl["cond"]:
             fl["queue"].extend(int(x) for x in h.get("frag_ids", []))
             if h.get("closed"):

@@ -36,7 +36,7 @@ import statistics as st
 import sys
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 
@@ -52,6 +52,25 @@ from proto_handoff import send_msg  # noqa: E402
 
 EDGES = ["B", "C", "D"]
 SINK_BYTES = 1725236640
+
+
+def parse_cap_events(spec):
+    """'t=20:C:out=62.5' (at 20 s) or 'D>=0.5:C:out=62.5' (when D holds 50 % of s0's Sink): set C's egress cap to 62.5 Mbps."""
+    out = []
+    for item in (spec or "").split(";"):
+        item = item.strip()
+        if not item:
+            continue
+        trig, node, capv = item.split(":")
+        d, v = capv.split("=")
+        e = {"spec": item, "cap_node": node, "dir": d, "mbps": float(v), "fired": False}
+        if trig.startswith("t="):
+            e["kind"] = "t"; e["at"] = float(trig[2:])
+        else:
+            n, frac = trig.split(">=")
+            e["kind"] = "progress"; e["node"] = n; e["frac"] = float(frac)
+        out.append(e)
+    return out
 
 
 def prepos_tag(pp):
@@ -91,6 +110,8 @@ class Run:
         mtag = "cont" if moves == 0 else str(moves)
         btag = f"_bh={self.a.holder_mbps:g}" if self.a.holder_mbps else ""
         btag += prepos_tag(prepos)
+        if self.a.cap_events:
+            btag += "_ev=" + self.a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge")
         self.run_id = self.make_run_id(policy, n_sess, mtag, rho, btag, rep, stamp)
         self.rel_dir = f"results/evaluation/{self.a.experiment}/{self.run_id}"
         self.dir = REPO_ROOT / self.rel_dir
@@ -128,6 +149,15 @@ class Run:
         self.sent = []
         self.recv = []
         self.lock = threading.RLock()
+        # E.4: runtime measurement and event-driven re-planning (policy reuse_dyn)
+        self.flow_rx = defaultdict(lambda: deque())   # flow id -> (t, bytes) of fragments verified at the destination
+        self.known_caps = dict(self.caps)              # what the planner believes (snapshot at plan time, never the live caps)
+        self.caps0 = dict(self.caps)                   # initial network caps (validation uses the larger of initial and final)
+        self.last_plan_t = {sid: 0.0 for sid in self.sids}
+        self.replans = []                              # dicts: decision time, dT, costs, moved fragments, provider from/to
+        self.cap_changes = []                          # (t, node, dir, mbps)
+        self.cap_events = parse_cap_events(self.a.cap_events)
+        self.dyn_last_check = 0.0
 
     # ---------------- helpers
     def make_run_id(self, policy, n_sess, mtag, rho, btag, rep, stamp):
@@ -189,6 +219,7 @@ class Run:
 
     # ---------------- policy
     def plan(self, sid, reason):
+        self.last_plan_t[sid] = time.time()
         own = self.owner[sid]
         allf = set(range(self.nfr()))
         if self.policy == "restart":
@@ -224,7 +255,7 @@ class Run:
                         late[src].append(f); continue
                     src = "A"
                 assign[src].append(f)
-        elif self.policy in ("reuse_aware", "reuse_aware_in"):
+        elif self.policy in ("reuse_aware", "reuse_aware_in", "reuse_dyn"):
             # bottleneck-aware: each provider's finish estimate is its whole egress backlog (every session's queued bytes)
             # plus what this plan adds, over its egress cap. Fragments only A holds go to A first, so held fragments see
             # A's true queue; a held fragment then goes to A only when every holder of it would finish later than A.
@@ -251,11 +282,11 @@ class Run:
             inbound += sum(len(v) for v in assign.values()) * self.flen
             for f in rest:
                 opts = [c for c in cand if c == "A" or f in self.held[sid][c]]
-                est = lambda c: (load[c] + self.flen) / self.caps[("out", c)]  # noqa: E731
-                if self.policy == "reuse_aware_in":
+                est = lambda c: (load[c] + self.flen) / self.known_caps[("out", c)]  # noqa: E731
+                if self.policy in ("reuse_aware_in", "reuse_dyn"):
                     inbound += self.flen
                     hold = min((c for c in opts if c != "A"), key=est)
-                    best = "A" if est(hold) > max(est("A"), inbound / self.caps[("in", own)]) else hold
+                    best = "A" if est(hold) > max(est("A"), inbound / self.known_caps[("in", own)]) else hold
                 else:
                     best = min(opts, key=lambda c: (est(c), c == "A"))  # ties: prefer a holder
                 assign[best].append(f); load[best] += self.flen
@@ -303,6 +334,7 @@ class Run:
                 t = nc.to_orch(m["t_end"])
                 self.recv.append((t, m["src"], dst, sid, f, m["bytes"], m["ok"], m["dup"]))
                 self.inflight[sid][dst].discard(f)
+                self.flow_rx[m.get("flow_id")].append((t, m["bytes"]))
                 if m["ok"]:
                     self.held[sid][dst].add(f)
                     self.skipped[sid].discard(f)   # it has landed: holders may forward it again
@@ -324,6 +356,120 @@ class Run:
                 self.ev.log("sink_complete", nc.to_orch(m["t"]), session=m["session"], node=m["label"], digest_ok=m["digest_ok"])
             elif k == "EVENT":
                 self.ev.log(m["event"], nc.to_orch(m["t"]), **{x: y for x, y in m.items() if x not in ("kind", "event", "t", "label")})
+                if m["event"] == "flow_add_rejected" and m.get("frag_ids"):   # the flow had finished: carry the fragments in a new flow
+                    fl = self.flows.get(m["flow"])
+                    if fl:
+                        fl["left"] -= set(m["frag_ids"])
+                    self.start_flow(m["session"], m["label"], m["dst"], list(m["frag_ids"]), "replan: fragments re-issued after a finished flow rejected FLOW_ADD", keep_order=True)
+
+    # ---------------- E.4: cap events, measurement, event-driven re-planning
+    def tick(self, now):
+        for evn in self.cap_events:
+            if evn.get("fired"):
+                continue
+            fire = False
+            if evn["kind"] == "t":
+                fire = now - self.t0 >= evn["at"]
+            else:   # progress trigger: node holds >= frac of the Sink for session s0
+                fire = len(self.held["s0"][evn["node"]]) >= evn["frac"] * self.nfr()
+            if fire:
+                evn["fired"] = True
+                self.caps[(evn["dir"], evn["cap_node"])] = evn["mbps"] * 1e6   # the network changes; planners are not told
+                self.cap_changes.append((now, evn["cap_node"], evn["dir"], evn["mbps"]))
+                self.realloc()
+                self.ev.log("cap_change", now, node=evn["cap_node"], dir=evn["dir"], mbps=evn["mbps"], trigger=evn["spec"])
+        if self.policy == "reuse_dyn" and now - self.dyn_last_check >= self.a.dyn_period:
+            self.dyn_last_check = now
+            for sid in self.sids:
+                self.dyn_check(sid, now)
+
+    def measured_rate(self, flow_id, now):
+        """Bytes verified at the destination over the last dyn_window seconds, in bytes/s (None if nothing yet)."""
+        q = self.flow_rx.get(flow_id)
+        if not q:
+            return None
+        while q and q[0][0] < now - self.a.dyn_window:
+            q.popleft()
+        return sum(b for _, b in q) / self.a.dyn_window if q else 0.0
+
+    def dyn_check(self, sid, now):
+        own = self.owner[sid]
+        if now - self.last_plan_t[sid] < self.a.dyn_warmup:
+            return
+        act = [fl for fl in self.flows.values() if fl["active"] and fl["sid"] == sid and fl["dst"] == own and fl["left"]]
+        if len(act) == 0:
+            return
+        # current ETA per provider from measured throughput; a provider with no verified bytes in the window counts as stalled
+        eta, rate = {}, {}
+        for fl in act:
+            r = self.measured_rate(fl["id"], now)
+            if r is None:
+                return   # not enough measurement yet
+            rate[fl["src"]] = rate.get(fl["src"], 0.0) + r
+        rem = defaultdict(int)
+        for fl in act:
+            rem[fl["src"]] += len(fl["left"]) * self.flen
+        for p_, b in rem.items():
+            eta[p_] = b / rate[p_] if rate[p_] > 0 else float("inf")
+        q = max(eta, key=eta.get)
+        eta_cur = eta[q]
+        if eta_cur == float("inf"):
+            eta_cur = 1e6
+        # capacity estimates: measured throughput for providers now sending to this owner, the known nominal cap otherwise
+        cap_est = {}
+        for n in ["A"] + EDGES:
+            cap_est[n] = rate[n] if n in rate and rate[n] > 0 else self.known_caps[("out", n)]
+        qflows = [fl for fl in act if fl["src"] == q]
+        head = {next((f for f in fl["order"] if f in fl["left"]), None) for fl in qflows} - {None}   # in flight: let it drain
+        movable = set().union(*(fl["left"] for fl in qflows)) - head
+        if not movable:
+            return
+        # re-assign the bottleneck's remaining fragments with the aware rule over estimated capacities; other flows keep their work
+        load = {n: 0.0 for n in ["A"] + EDGES}
+        for fl in act:
+            if fl["src"] != q:
+                load[fl["src"]] += len(fl["left"]) * self.flen
+        load[q] += len(head) * self.flen
+        inbound = sum(len(fl["left"]) for fl in act) * self.flen
+        assign = defaultdict(list)
+        for f in sorted(movable):
+            opts = [c for c in ["A"] + EDGES if c != own and (c == "A" or f in self.held[sid][c])]
+            best = min(opts, key=lambda c: ((load[c] + self.flen) / cap_est[c], c == "A"))
+            assign[best].append(f); load[best] += self.flen
+        eta_new = max((load[n] / cap_est[n] for n in load if load[n] > 0), default=0.0)
+        eta_new = max(eta_new, inbound / self.known_caps[("in", own)])
+        drain = self.flen / max(rate[q], 1.0) if head else 0.0
+        c_switch = self.a.dyn_ctrl + drain
+        dT = eta_cur - eta_new
+        if dT <= c_switch + self.a.dyn_eps or dT < self.a.dyn_rel * eta_cur or set(assign) == {q}:
+            return
+        # apply: cancel the bottleneck's flows (their in-flight fragment drains), extend or start the others
+        t_dec = time.time()
+        bytes_before = sum(fl["bytes"] for fl in qflows)
+        for fl in qflows:
+            fl["active"] = False; fl["cancelled"] = True; fl["t_end"] = t_dec; fl["draining"] = True; fl["replanned"] = True
+            fl["left"] = set(head) & fl["left"]
+            self.node(q).cast("FLOW_CANCEL", flow_id=fl["id"])
+        self.realloc()
+        new_flows = []
+        for p_, ids in assign.items():
+            ex = next((fl for fl in act if fl["src"] == p_ and fl["active"] and p_ != q), None)
+            if ex is not None:
+                ex["left"] |= set(ids); ex["n"] += len(ids)
+                self.node(p_).cast("FLOW_ADD", flow_id=ex["id"], frag_ids=sorted(ids), closed=True)
+                new_flows.append(ex["id"])
+            else:
+                fl = self.start_flow(sid, p_, own, sorted(ids), f"replan: {len(ids)} fragments moved from {q} (eta {eta_cur:.1f} -> {eta_new:.1f} s)", keep_order=True)
+                new_flows.append(fl["id"])
+        self.last_plan_t[sid] = t_dec
+        rec = {"t_s": self.rel(t_dec), "session": sid, "owner": own, "from": q, "to": {p_: len(ids) for p_, ids in assign.items()},
+               "moved_fragments": sum(len(v) for v in assign.values()), "eta_cur_s": eta_cur, "eta_new_s": eta_new, "dT_s": dT,
+               "c_switch_s": c_switch, "drain_est_s": drain, "measured_rate_mbps": {n: r * 8 / 1e6 for n, r in rate.items()},
+               "cap_est_mbps": {n: v * 8 / 1e6 for n, v in cap_est.items()}, "new_flows": new_flows,
+               "cancelled_flows": [fl["id"] for fl in qflows], "cancelled_bytes_before": bytes_before,
+               "cap_change_t_s": self.rel(self.cap_changes[-1][0]) if self.cap_changes else None}
+        self.replans.append(rec)
+        self.ev.log("replan", t_dec, **rec)
 
     def move(self, sid, to=None):
         old = self.owner[sid]
@@ -428,7 +574,8 @@ class Run:
                     break
         sched.sort()
         # single-move deadline: generous enough for a slow holder to forward its share (2 Sinks at the slowest edge egress)
-        slow = 2 * a.sink_bytes * 8 / min(self.caps[("out", e)] for e in EDGES)
+        slowest = min([self.caps[("out", e)] for e in EDGES] + [e["mbps"] * 1e6 for e in self.cap_events])   # cap events included
+        slow = 2 * a.sink_bytes * 8 / slowest
         deadline = self.t0 + (horizon if horizon is not None else max(a.deadline_factor * self.N * a.ts, slow) + 3 * self.tm)
         last_bin = 0
         while True:
@@ -440,6 +587,8 @@ class Run:
                         self.owner_since[sid] = time.time(); self.ev.log("session_start", session=sid, edge=self.owner[sid]); self.plan(sid, "start")
                     else:
                         self.move(sid, to)
+            with self.lock:
+                self.tick(now)
             try:
                 m = self.o.events.get(timeout=0.02)
                 self.handle(m)
@@ -537,8 +686,18 @@ class Run:
                       "forwarded_by_nonowner_holders_sinks": sum(b for t, s_, d, f, b in sent0 if s_ != "A" and s_ not in self.history["s0"][:-1]) / S,
                       "forwarded_by_past_owners_sinks": sum(b for t, s_, d, f, b in sent0 if s_ != "A" and s_ in self.history["s0"][:-1]) / S,
                       "move_s": self.rel(mt), "t_r_s": per[0]["t_r_s"]}
+        # E.4 switching costs: detection (cap change -> decision), transition (decision -> first byte from a new provider),
+        # drained bytes (from cancelled flows after the decision), duplicates
+        dyn = {"replans": self.replans, "n_replans": len(self.replans), "cap_changes": [(self.rel(t), n, d, v) for t, n, d, v in self.cap_changes]}
+        for rec in dyn["replans"]:
+            t_dec = rec["t_s"]
+            rec["detection_delay_s"] = None if rec["cap_change_t_s"] is None else t_dec - rec["cap_change_t_s"]
+            firsts = [self.rel(t) for t, s_, d, sid, f, b in self.sent if sid == rec["session"] and d == rec["owner"] and s_ in rec["to"] and self.rel(t) > t_dec]
+            rec["transition_delay_s"] = (min(firsts) - t_dec) if firsts else None
+            rec["drained_bytes"] = sum(self.flows[i]["bytes"] for i in rec["cancelled_flows"]) - rec["cancelled_bytes_before"]   # what the cancelled flows still sent
+        dyn["duplicate_bytes"] = sum(b for *_, b, ok, dup_ in self.recv if dup_)
         summary = {
-            "run_id": self.run_id, "policy": self.policy, "prepos": prepos, "N": self.N, "moves": self.moves, "rho": self.rho, "tm_s": self.tm, "rep": self.rep,
+            "run_id": self.run_id, "policy": self.policy, "prepos": prepos, "dyn": dyn, "N": self.N, "moves": self.moves, "rho": self.rho, "tm_s": self.tm, "rep": self.rep,
             "sink_bytes": S, "frag_bytes": a.frag_bytes, "caps_mbps": {f"{n}:{d}": v / 1e6 for (d, n), v in self.caps.items()},
             "stop_reason": self.stop_reason, "duration_s": t_end - self.t0,
             "restored_sessions": len(fin), "first_restored": {"median": st.median(fin) if fin else None, "max": max(fin) if fin else None,
@@ -554,10 +713,11 @@ class Run:
             "validation": {"all_fragments_verified": all(ok for *_, ok, dup in self.recv),
                            "four_hosts_distinct": len({self.node(lb).hello.get("host") for lb in ["A"] + EDGES}) == 4,
                            "nodes_same_commit": len({self.node(lb).hello.get("commit") for lb in ["A"] + EDGES} | {git_commit().split()[0]}) == 1,
-                           "nic_within_cap": all(v["rx_peak"] is None or v["rx_peak"] <= 1.15 * self.caps[("in", lb)] / 1e6 for lb, v in nic_rx.items()),
-                           "source_nic_within_cap": nic_rx["A"]["tx_peak"] is None or nic_rx["A"]["tx_peak"] <= 1.15 * self.caps[("out", "A")] / 1e6,
-                           # paced payload per node within 1.05 x its egress cap in every 10 s window (exact count at the token bucket)
-                           "paced_egress_within_cap": all((e.get("egress_worst_10s_mbps") or 0) <= 1.05 * self.caps[("out", lb)] / 1e6 for lb, e in ends.items())},
+                           "nic_within_cap": all(v["rx_peak"] is None or v["rx_peak"] <= 1.15 * max(self.caps[("in", lb)], self.caps0[("in", lb)]) / 1e6 for lb, v in nic_rx.items()),
+                           "source_nic_within_cap": nic_rx["A"]["tx_peak"] is None or nic_rx["A"]["tx_peak"] <= 1.15 * max(self.caps[("out", "A")], self.caps0[("out", "A")]) / 1e6,
+                           # paced payload per node within 1.05 x its egress cap in every 10 s window (exact count at the token bucket);
+                           # with cap events the whole-run check uses the larger cap, the post-change pacing is checked from events.csv
+                           "paced_egress_within_cap": all((e.get("egress_worst_10s_mbps") or 0) <= 1.05 * max(self.caps[("out", lb)], self.caps0[("out", lb)]) / 1e6 for lb, e in ends.items())},
         }
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
         (self.dir / "config.json").write_text(json.dumps({"args": vars(a), "policy": self.policy, "N": self.N, "moves": self.moves, "rho": self.rho, "tm_s": self.tm,
@@ -857,7 +1017,7 @@ def main():
     p.add_argument("--ctl_port", type=int, default=29831)
     p.add_argument("--data_port", type=int, default=29832)
     p.add_argument("--experiment", default="restore_contention_v2")  # v1 (restore_contention) lost early rate updates; kept for reference
-    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware,reuse_aware_in")
+    p.add_argument("--policies", default="restart,reuse_fixed,reuse_adaptive", help="any of restart,reuse_fixed,reuse_adaptive,reuse_aware,reuse_aware_in,reuse_dyn")
     p.add_argument("--sessions", default="1,2,4,8")
     p.add_argument("--moves", default="1,0", help="1 = one move then stay; 0 = continuous mobility until the horizon")
     p.add_argument("--rhos", default="2")
@@ -878,6 +1038,13 @@ def main():
     p.add_argument("--dissem", default="", help="Experiment B: dissemination plans to run (star,line,tree,multipath,aware); '' = off")
     p.add_argument("--source_mbps", type=float, default=0.0, help="cap A's egress (0 = cap_mbps)")
     p.add_argument("--in_mbps", type=float, default=0.0, help="cap every edge's ingress (0 = cap_mbps)")
+    p.add_argument("--cap_events", default="", help="E.4 network changes, ';'-separated: 't=20:C:out=62.5' or 'D>=0.5:C:out=62.5' (planners are not told)")
+    p.add_argument("--dyn_period", type=float, default=0.5, help="reuse_dyn: seconds between re-plan checks")
+    p.add_argument("--dyn_window", type=float, default=2.0, help="reuse_dyn: throughput measurement window (s)")
+    p.add_argument("--dyn_warmup", type=float, default=2.0, help="reuse_dyn: no re-plan within this time after a move or a re-plan")
+    p.add_argument("--dyn_eps", type=float, default=1.0, help="reuse_dyn: hysteresis margin added to the switching cost (s)")
+    p.add_argument("--dyn_rel", type=float, default=0.10, help="reuse_dyn: minimum relative ETA improvement")
+    p.add_argument("--dyn_ctrl", type=float, default=0.3, help="reuse_dyn: control-plane cost assumed per switch (s, Phase 1 measurement)")
     p.add_argument("--others_start", type=float, default=0.0, help="A3: seconds after t0 at which sessions other than s0 start restoring (0 = at t0)")
     p.add_argument("--horizon_factor", type=float, default=2.0, help="continuous mode: run for factor * N * T_s + 2 T_m")
     p.add_argument("--deadline_factor", type=float, default=2.0, help="single-move mode: give up after factor * N * T_s + 3 T_m")
@@ -913,6 +1080,8 @@ def main():
                             for pp in prepos_configs(a, rep):
                                 mtag = "cont" if moves == 0 else str(moves)
                                 btag = (f"_bh={a.holder_mbps:g}" if a.holder_mbps else "") + prepos_tag(pp)
+                                if a.cap_events:
+                                    btag += "_ev=" + a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge")
                                 done = [d for d in root.glob(f"policy={pol}_N={n}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_*") if (d / "summary.json").exists()]
                                 if done and not a.no_resume:
                                     print(f"[orch] skip (done): {done[0].name}", flush=True); continue
