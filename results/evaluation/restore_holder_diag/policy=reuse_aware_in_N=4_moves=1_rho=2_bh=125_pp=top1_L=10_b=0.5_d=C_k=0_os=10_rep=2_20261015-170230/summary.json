@@ -1,0 +1,165 @@
+{
+ "run_id": "policy=reuse_aware_in_N=4_moves=1_rho=2_bh=125_pp=top1_L=10_b=0.5_d=C_k=0_os=10_rep=2_20261015-170230",
+ "policy": "reuse_aware_in",
+ "prepos": {
+  "policy": "top1",
+  "probs": [
+   0.6,
+   0.3,
+   0.1
+  ],
+  "L": 10.0,
+  "b": 0.5,
+  "dest": "C",
+  "draw": 0,
+  "tau": 7.5,
+  "others_start": 10.0,
+  "top1": "B",
+  "others_first_restored_s": [
+   63.768505811691284,
+   63.69865846633911,
+   63.76821732521057
+  ],
+  "others_makespan_s": 63.768505811691284,
+  "correct": false,
+  "alloc_sinks": {
+   "B": 0.5,
+   "C": 0.0,
+   "D": 0.0
+  },
+  "frags": {
+   "B": 206,
+   "C": 0,
+   "D": 0
+  },
+  "sent_before_move_sinks": {
+   "B": 0.5008162961343089,
+   "C": 0.0,
+   "D": 0.0
+  },
+  "verified_at_move_sinks": {
+   "B": 0.5008162961343089,
+   "C": 0.0,
+   "D": 0.0
+  },
+  "at_chosen_sinks": 0.0,
+  "at_nonchosen_sinks": 0.5008162961343089,
+  "post_move_source_sinks": 0.8760114995007293,
+  "forwarded_by_nonowner_holders_sinks": 0.12398850049927064,
+  "forwarded_by_past_owners_sinks": 0.0,
+  "move_s": 10.00304388999939,
+  "t_r_s": 48.65635132789612
+ },
+ "N": 4,
+ "moves": 1,
+ "rho": 2.0,
+ "tm_s": 7.025,
+ "rep": 2,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 125.0,
+  "C:out": 125.0,
+  "D:out": 125.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "all restored",
+ "duration_s": 64.79315686225891,
+ "restored_sessions": 4,
+ "first_restored": {
+  "median": 63.73343789577484,
+  "max": 63.768505811691284,
+  "all": [
+   58.65939521789551,
+   63.768505811691284,
+   63.69865846633911,
+   63.76821732521057
+  ]
+ },
+ "makespan_s": 63.768505811691284,
+ "coverage_mean": 0.035797960380133345,
+ "bytes": {
+  "total_sent": 8750634624,
+  "source_sent": 7551063680,
+  "by_link": {
+   "A->B": 2639594912,
+   "A->D": 1783956896,
+   "A->C": 3127511872,
+   "B->C": 595591168,
+   "C->D": 272629760,
+   "D->B": 331350016
+  },
+  "unused": 650117120,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 1.2680339643145997,
+  "source_per_session": 1.0942069489087596,
+  "unused_per_session": 0.09420694890875955
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0
+  }
+ },
+ "paced_egress_worst_1s_mbps": {
+  "A": 1006.63296,
+  "B": 134.217728,
+  "C": 125.82912,
+  "D": 125.82912
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 998.244352,
+  "B": 125.82911999999999,
+  "C": 124.9902592,
+  "D": 124.9902592
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 5.1,
+   "tx_peak": 1057.7
+  },
+  "B": {
+   "rx_peak": 1037.0,
+   "tx_peak": 138.3
+  },
+  "C": {
+   "rx_peak": 663.8,
+   "tx_peak": 137.1
+  },
+  "D": {
+   "rx_peak": 639.3,
+   "tx_peak": 137.0
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}
