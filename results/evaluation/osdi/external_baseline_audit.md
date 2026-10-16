@@ -6,8 +6,7 @@ from the cited source on 2026-10-16; "unverified" marks what could not be confir
 counted as an external baseline. Nothing was installed or run.
 
 **Testbed facts that matter here** (from `single_handoff/*/host_info.json`): PyTorch 2.6.0+cu124, CUDA 12.4, L40S on
-both ends. **NVIDIA driver 575.51.03** (reported by the user on 2026-10-16 from one host with two L40S; the other three
-hosts still to be confirmed). Per the cuda-checkpoint README (re-read 2026-10-16): basic checkpoint/restore needs
+both ends. **NVIDIA driver 575.51.03 on all four hosts** (reported by the user on 2026-10-16; two L40S per host). Per the cuda-checkpoint README (re-read 2026-10-16): basic checkpoint/restore needs
 >= 550; 570 adds CRIU 4.0 process-tree integration, NVML support and the lock timeout; **"GPU migration" (restoring
 onto different physical GPUs) is a 580 feature not present in 570**, and the README lists only container partial
 passthrough as "also present in some 575 drivers". So on 575.51.03 cuda-checkpoint + CRIU can checkpoint and restore
@@ -125,7 +124,7 @@ initialized; C/R images contain the model weights (OTTER's destination preloads 
 
 ## Highest-risk integration problems
 
-1. Driver 575.51.03 (one host confirmed): checkpoint/restore is supported, the cross-GPU migration API (580) is not;
+1. Driver 575.51.03 on all four hosts: checkpoint/restore is supported, the cross-GPU migration API (580) is not;
    cross-node restore must be tested empirically, or the driver upgraded on all hosts (environment change), or the
    baseline reported as same-node C/R + measured image transfer.
 2. CRIU must handle the generation process's open TCP control/data sockets (or they must be closed before dump).
