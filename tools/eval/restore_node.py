@@ -68,6 +68,14 @@ def frag_table(nbytes: int, fbytes: int) -> list[int]:
     return lens
 
 
+def _git_commit():
+    try:
+        import subprocess
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)), capture_output=True, text=True, timeout=10).stdout.strip() or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
 class Node:
     def __init__(self, a):
         self.a, self.label, self.me = a, a.label, socket.gethostname()
@@ -80,7 +88,8 @@ class Node:
         # Keep them and apply at start instead of dropping them (dropping let flows exceed their max-min share).
         self.pending_rate: dict[str, float] = {}
         self.pending_cancel: set = set()
-        self.stats = {"rate_before_start": 0, "cancel_before_start": 0}
+        self.pending_add: dict[str, list] = {}   # FLOW_ADD that arrived before its FLOW_START
+        self.stats = {"rate_before_start": 0, "cancel_before_start": 0, "add_before_start": 0}
         self.egress_hist: dict[int, int] = {}
         self.hist_lock = threading.Lock()
         self.run_dir = None
@@ -100,7 +109,8 @@ class Node:
         while True:
             self.ctl = tcp_accept(srv, self.a.mss)
             clock_sync_server(self.ctl)
-            self.send("HELLO", host=self.me, host_info=host_info(None), mss_effective=effective_mss(self.ctl), mss_warnings=list(MSS_WARNINGS), pid=os.getpid())
+            self.send("HELLO", host=self.me, host_info=host_info(None), mss_effective=effective_mss(self.ctl), mss_warnings=list(MSS_WARNINGS), pid=os.getpid(),
+                      commit=_git_commit())
             try:
                 while True:
                     hdr, _ = recv_msg(self.ctl)
@@ -125,8 +135,8 @@ class Node:
         for fl in list(self.flows.values()):
             fl["cancel"] = True
         self.flows, self.sess = {}, {}
-        self.pending_rate, self.pending_cancel = {}, set()
-        self.stats = {"rate_before_start": 0, "cancel_before_start": 0}
+        self.pending_rate, self.pending_cancel, self.pending_add = {}, set(), {}
+        self.stats = {"rate_before_start": 0, "cancel_before_start": 0, "add_before_start": 0}
         self.egress_hist = {}
         self.run_dir = REPO_ROOT / h["run_rel"] / f"node_{self.label}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -172,14 +182,33 @@ class Node:
                 return {"cancelled_before_start": True}
             if h["flow_id"] in self.pending_rate:
                 h["rate_bps"] = self.pending_rate.pop(h["flow_id"])
+        # an open flow (closed=False) keeps its connection and waits for FLOW_ADD: fragments are forwarded as they are
+        # verified here, which is what pipelined forwarding needs
         fl = {"id": h["flow_id"], "sid": h["session"], "dst": h["dst"], "host": h["dst_host"], "port": int(h["dst_port"]),
-              "queue": list(h["frag_ids"]), "cancel": False,
+              "queue": list(h["frag_ids"]), "cancel": False, "closed": bool(h.get("closed", True)), "cond": threading.Condition(),
               "throttle": CountingThrottle(float(h["rate_bps"]), self.egress_hist, self.hist_lock) if float(h["rate_bps"]) > 0 else None,
               "lock": threading.Lock(), "sent": 0, "bytes": 0}
         with self.lock:
+            for ids, closed in self.pending_add.pop(fl["id"], []):
+                fl["queue"].extend(ids); fl["closed"] = fl["closed"] or closed
             self.flows[fl["id"]] = fl
         fl["thread"] = threading.Thread(target=self._sender, args=(fl,), daemon=True)
         fl["thread"].start()
+        return {}
+
+    def cmd_flow_add(self, h):
+        """Append fragments to a running flow (and close it when closed=True); kept if the flow has not started yet."""
+        with self.lock:
+            fl = self.flows.get(h["flow_id"])
+            if fl is None:
+                self.pending_add.setdefault(h["flow_id"], []).append((list(h.get("frag_ids", [])), bool(h.get("closed", False))))
+                self.stats["add_before_start"] += 1
+                return {"pending": True}
+        with fl["cond"]:
+            fl["queue"].extend(int(x) for x in h.get("frag_ids", []))
+            if h.get("closed"):
+                fl["closed"] = True
+            fl["cond"].notify_all()
         return {}
 
     def cmd_flow_set_rate(self, h):
@@ -238,8 +267,13 @@ class Node:
             self.send("EVENT", event="flow_connect_failed", t=time.time(), flow=fl["id"], error=repr(exc)); return
         t_conn = time.time()
         self.send("EVENT", event="flow_connected", t=t_conn, flow=fl["id"])
-        while fl["queue"] and not fl["cancel"]:
-            fid = int(fl["queue"].pop(0))
+        while not fl["cancel"]:
+            with fl["cond"]:
+                while not fl["queue"] and not fl["closed"] and not fl["cancel"]:
+                    fl["cond"].wait(0.05)
+                if not fl["queue"]:
+                    break
+                fid = int(fl["queue"].pop(0))
             with self.lock:
                 held = fid in s["have"]
             if not held:

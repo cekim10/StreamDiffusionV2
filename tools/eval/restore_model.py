@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from restore_orchestrate import EDGES, SINK_BYTES, maxmin  # noqa: E402
+from restore_orchestrate import EDGES, SINK_BYTES, dissem_assign, maxmin  # noqa: E402
 
 FLEN = 4 << 20
 NFR = -(-SINK_BYTES // FLEN)   # 412
@@ -196,6 +196,47 @@ class Model:
         return out
 
 
+class DissemModel:
+    """Experiment B fluid model: one Sink at A to B, C, D under a plan from dissem_assign; forwarders can only send
+    fragments they already hold (a stalled flow keeps its max-min share, as the orchestrator counts open flows)."""
+
+    def __init__(self, plan, caps, dt=0.02):
+        self.plan, self.caps, self.dt = plan, caps, dt
+        self.held = {n: set() for n in ["A"] + EDGES}; self.held["A"] = set(range(NFR))
+        prov = dissem_assign(plan, NFR, FLEN, caps)
+        by = defaultdict(list)
+        for (f, d), p in prov.items():
+            by[(p, d)].append(f)
+        self.flows = [{"src": p, "dst": d, "order": sorted(fs), "left": set(fs), "prog": 0.0} for (p, d), fs in sorted(by.items())]
+        self.src_bytes = 0.0; self.t = 0.0; self.done = {d: None for d in EDGES}
+
+    def run(self, horizon=600.0):
+        while self.t < horizon and any(v is None for v in self.done.values()):
+            rates = maxmin([(i, fl["src"], fl["dst"]) for i, fl in enumerate(self.flows)], self.caps)
+            for i, fl in enumerate(self.flows):
+                # a forwarder sends whichever of its assigned fragments it already holds (FLOW_ADD order = arrival order)
+                sendable = lambda: next((x for x in fl["order"] if x in fl["left"] and x in self.held[fl["src"]]), None)  # noqa: E731
+                if sendable() is None:
+                    continue   # nothing sendable yet (pipelining stall; the flow keeps its share, as in the harness)
+                b = rates[i] / 8 * self.dt
+                if fl["src"] == "A":
+                    self.src_bytes += b
+                fl["prog"] += b
+                while fl["prog"] >= FLEN:
+                    head = sendable()
+                    if head is None:
+                        fl["prog"] = 0.0; break
+                    fl["prog"] -= FLEN; fl["left"].discard(head); self.held[fl["dst"]].add(head)
+                    if len(self.held[fl["dst"]]) == NFR and self.done[fl["dst"]] is None:
+                        self.done[fl["dst"]] = self.t + self.dt
+            self.flows = [fl for fl in self.flows if fl["left"]]
+            self.t += self.dt
+        fin = [v for v in self.done.values() if v is not None]
+        tot = sum(len(v) for v in self.held.values()) - NFR   # copies delivered
+        return {"completion": dict(self.done), "makespan": max(fin) if len(fin) == 3 else None, "source_sinks": self.src_bytes / SINK_BYTES,
+                "total_sinks": tot / NFR}
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--sessions", default="1,2,4")
@@ -213,7 +254,21 @@ def main():
     p.add_argument("--tau", type=float, default=7.5)
     p.add_argument("--restore_policy", default="reuse_aware_in")
     p.add_argument("--ctrl", type=float, default=0.3, help="control-plane seconds added to every predicted T_r")
+    p.add_argument("--dissem", default="", help="Experiment B plans (star,line,tree,multipath,aware): per-destination completion under --source_mbps / --holder_mbps / --in_mbps")
     a = p.parse_args()
+    if a.dissem:
+        print(f"{'plan':>10} | {'B':>7} {'C':>7} {'D':>7} | makespan | source S | total S   (B_s / B_f / B_in Mbps, +{a.ctrl} s control plane)")
+        for bh in [float(x) for x in a.holder_mbps.split(",")]:
+            caps = {("out", "A"): a.source_mbps * 1e6, ("in", "A"): a.in_mbps * 1e6}
+            for e in EDGES:
+                caps[("out", e)] = bh * 1e6; caps[("in", e)] = a.in_mbps * 1e6
+            print(f"-- B_s {a.source_mbps:g} / B_f {bh:g} / B_in {a.in_mbps:g}")
+            for plan in a.dissem.split(","):
+                r = DissemModel(plan, caps).run()
+                c = {d: (None if v is None else v + a.ctrl) for d, v in r["completion"].items()}
+                f = lambda v: "   none" if v is None else f"{v:7.1f}"  # noqa: E731
+                print(f"{plan:>10} | {f(c['B'])} {f(c['C'])} {f(c['D'])} | {f(None if r['makespan'] is None else r['makespan'] + a.ctrl)} | {r['source_sinks']:8.2f} | {r['total_sinks']:7.2f}")
+        return
     if a.prepos:
         probs = [float(x) for x in a.probs.split(",")]
         print(f"pre-positioning, L={a.lookahead:g} s, b={a.budget:g} Sinks, probs {probs}, restore policy {a.restore_policy}, +{a.ctrl} s control plane")

@@ -91,7 +91,7 @@ class Run:
         mtag = "cont" if moves == 0 else str(moves)
         btag = f"_bh={self.a.holder_mbps:g}" if self.a.holder_mbps else ""
         btag += prepos_tag(prepos)
-        self.run_id = f"policy={policy}_N={n_sess}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_{stamp}"
+        self.run_id = self.make_run_id(policy, n_sess, mtag, rho, btag, rep, stamp)
         self.rel_dir = f"results/evaluation/{self.a.experiment}/{self.run_id}"
         self.dir = REPO_ROOT / self.rel_dir
         self.dir.mkdir(parents=True, exist_ok=False)
@@ -101,6 +101,11 @@ class Run:
         if self.a.holder_mbps:   # Step 2: every edge's egress (what holders forward with) is capped at B_h
             for e in EDGES:
                 self.caps[("out", e)] = self.a.holder_mbps * 1e6
+        if getattr(self.a, "source_mbps", 0):
+            self.caps[("out", "A")] = self.a.source_mbps * 1e6
+        if getattr(self.a, "in_mbps", 0):
+            for e in EDGES:
+                self.caps[("in", e)] = self.a.in_mbps * 1e6
         for item in (self.a.caps or "").split(","):
             if item:
                 k, v = item.split("=")
@@ -125,6 +130,9 @@ class Run:
         self.lock = threading.RLock()
 
     # ---------------- helpers
+    def make_run_id(self, policy, n_sess, mtag, rho, btag, rep, stamp):
+        return f"policy={policy}_N={n_sess}_moves={mtag}_rho={rho:g}{btag}_rep={rep}_{stamp}"
+
     def node(self, lb):
         return self.o.nodes[lb]
 
@@ -145,8 +153,8 @@ class Run:
                     self.node(fl["src"]).cast("FLOW_SET_RATE", flow_id=fid, rate_bps=rates[fid])
         return rates
 
-    def start_flow(self, sid, src, dst, fids, reason, keep_order=False):
-        if not fids:
+    def start_flow(self, sid, src, dst, fids, reason, keep_order=False, closed=True):
+        if not fids and closed:
             return
         self.nflow += 1
         fid_ = f"f{self.nflow}_{sid}_{src}{dst}"
@@ -156,10 +164,12 @@ class Run:
         self.realloc()
         nd = self.o.node_spec[dst]
         self.node(src).cast("FLOW_START", flow_id=fid_, session=sid, dst=dst, dst_host=nd["host"], dst_port=nd["data"],
-                            frag_ids=list(fids) if keep_order else sorted(fids), rate_bps=fl["rate"])
+                            frag_ids=list(fids) if keep_order else sorted(fids), rate_bps=fl["rate"], closed=closed)
+        fl["closed"] = closed
         fl["order"] = list(fids) if keep_order else sorted(fids)
         fl["started"] = True
-        self.ev.log("flow_start", flow=fid_, session=sid, src=src, dst=dst, n=len(fids), rate_bps=fl["rate"], reason=reason)
+        self.ev.log("flow_start", flow=fid_, session=sid, src=src, dst=dst, n=len(fids), rate_bps=fl["rate"], reason=reason, closed=closed)
+        return fl
 
     def cancel_flows(self, sid, keep_dst=None):
         for fl in list(self.flows.values()):
@@ -543,6 +553,7 @@ class Run:
             "nic": nic_rx, "hosts": {lb: self.node(lb).hello.get("host") for lb in ["A"] + EDGES},
             "validation": {"all_fragments_verified": all(ok for *_, ok, dup in self.recv),
                            "four_hosts_distinct": len({self.node(lb).hello.get("host") for lb in ["A"] + EDGES}) == 4,
+                           "nodes_same_commit": len({self.node(lb).hello.get("commit") for lb in ["A"] + EDGES} | {git_commit().split()[0]}) == 1,
                            "nic_within_cap": all(v["rx_peak"] is None or v["rx_peak"] <= 1.15 * self.caps[("in", lb)] / 1e6 for lb, v in nic_rx.items()),
                            "source_nic_within_cap": nic_rx["A"]["tx_peak"] is None or nic_rx["A"]["tx_peak"] <= 1.15 * self.caps[("out", "A")] / 1e6,
                            # paced payload per node within 1.05 x its egress cap in every 10 s window (exact count at the token bucket)
@@ -565,6 +576,223 @@ class Run:
         print(f"[orch] {self.policy} N={self.N} moves={self.moves or 'cont'} rho={self.rho:g}: restored {len(fin)}/{self.N}, median first {summary['first_restored']['median'] and round(summary['first_restored']['median'], 1)} s, "
               f"makespan {ms and round(ms, 1)} s, coverage {summary['coverage_mean']:.2f}, source {src / S:.2f} S, total {tot / S:.2f} S, unused {unused / S:.2f} S | "
               f"A tx peak {nic_rx['A']['tx_peak']} Mbps, valid {all(v for v in summary['validation'].values())}", flush=True)
+        return summary
+
+
+DISSEM_PLANS = ["star", "line", "tree", "multipath", "aware"]
+
+
+def dissem_assign(plan, nfr, flen, caps):
+    """Experiment B: provider of every (fragment, destination) pair for one Sink held at A and needed at B, C, D.
+    star: A sends everything. line: A->B->C->D, each node forwards to its successor. tree: A->B, B->{C, D}.
+    multipath (butterfly-like): A sends disjoint thirds to B, C, D (fragment f to EDGES[f mod 3]); each node forwards its
+    third to the other two. aware: greedy over fragments; for each fragment the destinations are served in order of their
+    assigned ingress load (ties rotate with f), each from the eligible provider (A, or a node already scheduled to hold
+    the fragment) with the smallest (assigned egress bytes + one fragment) / egress cap -- uses only the caps, the
+    planner's own assignments and fragment availability."""
+    prov = {}
+    if plan == "star":
+        for f in range(nfr):
+            for d in EDGES:
+                prov[(f, d)] = "A"
+    elif plan == "line":
+        chain = ["A"] + EDGES
+        for f in range(nfr):
+            for i, d in enumerate(EDGES, start=1):
+                prov[(f, d)] = chain[i - 1]
+    elif plan == "tree":
+        for f in range(nfr):
+            prov[(f, "B")] = "A"; prov[(f, "C")] = "B"; prov[(f, "D")] = "B"
+    elif plan == "multipath":
+        for f in range(nfr):
+            own = EDGES[f % 3]
+            for d in EDGES:
+                prov[(f, d)] = "A" if d == own else own
+    elif plan == "aware":
+        load = {n: 0.0 for n in ["A"] + EDGES}
+        inload = {d: 0.0 for d in EDGES}
+        for f in range(nfr):
+            will = ["A"]
+            for d in sorted(EDGES, key=lambda d: (inload[d], (EDGES.index(d) - f) % 3)):
+                cands = [p for p in will if p != d]
+                p = min(cands, key=lambda p: ((load[p] + flen) / caps[("out", p)], p == "A"))
+                prov[(f, d)] = p; load[p] += flen; inload[d] += flen; will.append(d)
+    else:
+        raise ValueError(plan)
+    return prov
+
+
+class DissemRun(Run):
+    """Experiment B: one Sink (session s0 at A) delivered and verified at every edge, under a fixed plan or the aware
+    assignment; forwarders pipeline (FLOW_ADD as fragments are verified)."""
+
+    def __init__(self, o, plan, rep):
+        self.plan_name = plan
+        super().__init__(o, "dissem_" + plan, 1, 1, 1.0, rep)
+        self.done_t = {d: None for d in EDGES}
+        self.pend = defaultdict(set)     # (provider, destination) -> fragments still to be added to that flow
+        self.fwd_flow = {}               # (provider, destination) -> flow id
+
+    def make_run_id(self, policy, n_sess, mtag, rho, btag, rep, stamp):
+        c = self.caps if hasattr(self, "caps") else None
+        return f"plan={self.plan_name}_bs={self.a.source_mbps or self.a.cap_mbps:g}_bf={self.a.holder_mbps or self.a.cap_mbps:g}_bin={self.a.in_mbps or self.a.cap_mbps:g}_rep={rep}_{stamp}"
+
+    def plan(self, sid, reason):
+        return   # no re-planning in Experiment B
+
+    def handle(self, m):
+        k = m.get("kind")
+        if k == "NODE_LOST":
+            raise RuntimeError(f"node {m['label']} lost: {m.get('error')}")
+        nc = self.node(m["label"])
+        with self.lock:
+            if k == "FRAG_SENT":
+                fl = self.flows.get(m["flow_id"])
+                self.sent.append((nc.to_orch(m["t_end"]), m["label"], m["dst"], m["session"], m["fragment_id"], m["bytes"]))
+                if fl:
+                    fl["left"].discard(m["fragment_id"]); fl["bytes"] += m["bytes"]
+            elif k == "FRAG_SKIP":
+                fl = self.flows.get(m["flow_id"])
+                self.skipped["s0"].add(m["fragment_id"])
+                if fl:
+                    fl["left"].discard(m["fragment_id"]); fl["n_skipped"] = fl.get("n_skipped", 0) + 1
+            elif k == "FRAG_RECV":
+                f, dst = m["fragment_id"], m["label"]
+                t = nc.to_orch(m["t_end"])
+                self.recv.append((t, m["src"], dst, "s0", f, m["bytes"], m["ok"], m["dup"]))
+                if m["ok"] and not m["dup"]:
+                    self.held["s0"][dst].add(f)
+                    if len(self.held["s0"][dst]) == self.nfr() and self.done_t[dst] is None:
+                        self.done_t[dst] = t; self.ev.log("destination_complete", t, destination=dst)
+                    for d in EDGES:   # pipelined forwarding: the verified fragment goes downstream now
+                        key = (dst, d)
+                        if f in self.pend[key]:
+                            self.pend[key].discard(f)
+                            fl = self.flows[self.fwd_flow[key]]
+                            fl["left"].add(f); fl["n"] += 1
+                            self.node(dst).cast("FLOW_ADD", flow_id=fl["id"], frag_ids=[f], closed=not self.pend[key])
+                            if not self.pend[key]:
+                                fl["closed"] = True
+            elif k == "FLOW_DONE":
+                fl = self.flows.get(m["flow_id"])
+                if fl and fl["active"]:
+                    fl["active"] = False; fl["t_end"] = nc.to_orch(m["t"])
+                    self.realloc()
+            elif k == "SINK_COMPLETE":
+                self.ev.log("sink_complete", nc.to_orch(m["t"]), session=m["session"], node=m["label"], digest_ok=m["digest_ok"])
+            elif k == "EVENT":
+                self.ev.log(m["event"], nc.to_orch(m["t"]), **{x: y for x, y in m.items() if x not in ("kind", "event", "t", "label")})
+
+    def execute(self):
+        a = self.a
+        print(f"[orch] === {self.run_id} ===", flush=True)
+        for lb in ["A"] + EDGES:
+            self.node(lb).call("RUN_BEGIN", run_rel=self.rel_dir)
+        r = self.node("A").call("SOURCE_SETUP", sessions=["s0"], sink_bytes=a.sink_bytes, frag_bytes=a.frag_bytes, timeout=1800)
+        man = r["manifests"]
+        self.lens = man["s0"]["lens"]; self.flen = a.frag_bytes
+        for e in EDGES:
+            self.node(e).call("MANIFESTS", manifests=man, timeout=600)
+        self.held["s0"]["A"] = set(range(self.nfr()))
+        while not self.o.events.empty():
+            self.o.events.get()
+        self.t0 = time.time(); self.ev.set_ref(self.t0)
+        self.ev.log("start", self.t0, plan=self.plan_name, caps={f"{n}:{d}": v / 1e6 for (d, n), v in self.caps.items()})
+        with self.lock:
+            self.prov = dissem_assign(self.plan_name, self.nfr(), self.flen, self.caps)
+            by = defaultdict(list)
+            for (f, d), p in self.prov.items():
+                by[(p, d)].append(f)
+            for (p, d), fids in sorted(by.items()):
+                if p == "A":
+                    self.start_flow("s0", "A", d, sorted(fids), f"{self.plan_name}: source -> {d}")
+                else:   # open flow; fragments are added as they are verified at p
+                    self.pend[(p, d)] = set(fids)
+                    fl = self.start_flow("s0", p, d, [], f"{self.plan_name}: {p} forwards to {d} as fragments arrive", keep_order=True, closed=False)
+                    fl["n"] = 0; self.fwd_flow[(p, d)] = fl["id"]
+            self.ev.log("plan", plan=self.plan_name, flows={f"{p}->{d}": len(v) for (p, d), v in by.items()})
+        slowest = min(self.caps.values())
+        deadline = self.t0 + 4 * a.sink_bytes * 8 / slowest + 30
+        while True:
+            try:
+                m = self.o.events.get(timeout=0.02)
+                self.handle(m)
+            except queue.Empty:
+                pass
+            if all(self.done_t[d] is not None for d in EDGES):
+                self.stop_reason = "all destinations complete"; break
+            if time.time() >= deadline:
+                self.stop_reason = "deadline"; break
+        for fl in list(self.flows.values()):
+            if fl["active"]:
+                fl["active"] = False; self.node(fl["src"]).cast("FLOW_CANCEL", flow_id=fl["id"])
+        time.sleep(1.0)
+        while not self.o.events.empty():
+            self.handle(self.o.events.get())
+        ends = {lb: self.node(lb).call("RUN_END", timeout=300) for lb in ["A"] + EDGES}
+        for lb, e in ends.items():
+            if e.get("network_csv"):
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                (self.dir / f"node_{lb}" / "network.csv").write_text(e["network_csv"])
+        return self.finish_dissem(ends, deadline)
+
+    def finish_dissem(self, ends, deadline):
+        a = self.a; S = a.sink_bytes
+        t_end = min(time.time(), deadline)
+        comp = {d: (None if self.done_t[d] is None else self.rel(self.done_t[d])) for d in EDGES}
+        fin = [v for v in comp.values() if v is not None]
+        tot = sum(b for *_, b in self.sent); src = sum(b for t, s_, d, sid, f, b in self.sent if s_ == "A")
+        link = defaultdict(int); egress = defaultdict(int)
+        for t, s_, d, sid, f, b in self.sent:
+            link[f"{s_}->{d}"] += b; egress[s_] += b
+        dup = sum(b for *_, b, ok, dup_ in self.recv if dup_)
+        missing = {d: self.nfr() - len(self.held["s0"][d]) for d in EDGES}
+        nic = {}
+        for lb, e in ends.items():
+            rows = [l.split(",") for l in (e.get("network_csv") or "").splitlines()[1:] if l.strip()]
+            vals = [float(r[4]) for r in rows if r[4] and float(r[0]) >= self.t0]
+            vtx = [float(r[5]) for r in rows if r[5] and float(r[0]) >= self.t0]
+            nic[lb] = {"rx_peak": max(vals) if vals else None, "tx_peak": max(vtx) if vtx else None}
+        # pipelining check: first forwarded fragment left a forwarder before that forwarder held the whole Sink
+        fwd_first = {}
+        for t, s_, d, sid, f, b in sorted(self.sent):
+            if s_ != "A" and s_ not in fwd_first:
+                fwd_first[s_] = self.rel(t)
+        pipelined = {p: (comp[p] is None or fwd_first[p] < comp[p]) for p in fwd_first}
+        by = defaultdict(int)
+        for (f, d), p in self.prov.items():
+            by[f"{p}->{d}"] += 1
+        summary = {
+            "run_id": self.run_id, "plan": self.plan_name, "rep": self.rep, "sink_bytes": S, "frag_bytes": a.frag_bytes,
+            "caps_mbps": {f"{n}:{d}": v / 1e6 for (d, n), v in self.caps.items()}, "stop_reason": self.stop_reason, "duration_s": t_end - self.t0,
+            "completion_s": comp, "makespan_s": max(fin) if len(fin) == 3 else None, "destinations_complete": len(fin),
+            "bytes": {"total_sent": tot, "source_sent": src, "by_link": dict(link), "egress_by_node": dict(egress), "duplicate": dup},
+            "normalized": {"total_sinks": tot / S, "source_sinks": src / S, "egress_sinks_by_node": {k: v / S for k, v in egress.items()}},
+            "assignment": dict(by), "first_forward_s": fwd_first, "pipelined": pipelined, "missing_fragments": missing,
+            "node_stats": {lb: e.get("stats") for lb, e in ends.items()},
+            "paced_egress_worst_10s_mbps": {lb: e.get("egress_worst_10s_mbps") for lb, e in ends.items()},
+            "nic": nic, "hosts": {lb: self.node(lb).hello.get("host") for lb in ["A"] + EDGES},
+            "node_commits": {lb: self.node(lb).hello.get("commit") for lb in ["A"] + EDGES},
+            "validation": {"all_fragments_verified": all(ok for *_, ok, dup_ in self.recv),
+                           "no_duplicates": dup == 0, "all_destinations_complete": len(fin) == 3,
+                           "four_hosts_distinct": len({self.node(lb).hello.get("host") for lb in ["A"] + EDGES}) == 4,
+                           "nodes_same_commit": len({self.node(lb).hello.get("commit") for lb in ["A"] + EDGES} | {git_commit().split()[0]}) == 1,
+                           "nic_within_cap": all(v["rx_peak"] is None or v["rx_peak"] <= 1.15 * self.caps[("in", lb)] / 1e6 for lb, v in nic.items()),
+                           "paced_egress_within_cap": all((e.get("egress_worst_10s_mbps") or 0) <= 1.05 * self.caps[("out", lb)] / 1e6 for lb, e in ends.items()),
+                           "forwarders_pipelined": all(pipelined.values()) if pipelined else True},
+        }
+        (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
+        (self.dir / "config.json").write_text(json.dumps({"args": vars(a), "plan": self.plan_name, "nodes": self.o.node_spec,
+                                                          "transport": "tcp+tcp_maxseg+per-flow token bucket, max-min fair per-node caps, FLOW_ADD pipelining"}, indent=1, default=str))
+        with open(self.dir / "flows.csv", "w", newline="") as fh:
+            w = csv.writer(fh); w.writerow(["flow", "src", "dst", "n", "bytes", "t_start_rel", "t_end_rel", "closed_at_start", "reason"])
+            for fl in self.flows.values():
+                w.writerow([fl["id"], fl["src"], fl["dst"], fl["n"], fl["bytes"], f"{self.rel(fl['t_start']):.3f}", "" if fl["t_end"] is None else f"{self.rel(fl['t_end']):.3f}",
+                            fl.get("closed"), fl["reason"]])
+        c = summary["completion_s"]
+        print(f"[orch] {self.plan_name}: completion B {c['B'] and round(c['B'], 1)} C {c['C'] and round(c['C'], 1)} D {c['D'] and round(c['D'], 1)} s, "
+              f"makespan {summary['makespan_s'] and round(summary['makespan_s'], 1)} s, source {src / S:.2f} S, total {tot / S:.2f} S, dup {dup / S:.2f} S, "
+              f"pipelined {pipelined}, valid {all(summary['validation'].values())}", flush=True)
         return summary
 
 
@@ -647,6 +875,9 @@ def main():
     p.add_argument("--dests", default="", help="deterministic true destinations, e.g. B,C,D (draw i uses the i-th, cyclic); '' = seeded draw from --probs")
     p.add_argument("--draws", type=int, default=1, help="destination draws per (prepos policy, rep)")
     p.add_argument("--tau", type=float, default=7.5, help="tail-coverage target T_r in seconds")
+    p.add_argument("--dissem", default="", help="Experiment B: dissemination plans to run (star,line,tree,multipath,aware); '' = off")
+    p.add_argument("--source_mbps", type=float, default=0.0, help="cap A's egress (0 = cap_mbps)")
+    p.add_argument("--in_mbps", type=float, default=0.0, help="cap every edge's ingress (0 = cap_mbps)")
     p.add_argument("--others_start", type=float, default=0.0, help="A3: seconds after t0 at which sessions other than s0 start restoring (0 = at t0)")
     p.add_argument("--horizon_factor", type=float, default=2.0, help="continuous mode: run for factor * N * T_s + 2 T_m")
     p.add_argument("--deadline_factor", type=float, default=2.0, help="single-move mode: give up after factor * N * T_s + 3 T_m")
@@ -665,6 +896,15 @@ def main():
     out = []
     try:
         root = EVAL_ROOT / a.experiment
+        if a.dissem:
+            for rep in range(1, a.reps + 1):
+                for plan in a.dissem.split(","):
+                    tag = f"plan={plan}_bs={a.source_mbps or a.cap_mbps:g}_bf={a.holder_mbps or a.cap_mbps:g}_bin={a.in_mbps or a.cap_mbps:g}_rep={rep}_"
+                    done = [d for d in root.glob(tag + "*") if (d / "summary.json").exists()]
+                    if done and not a.no_resume:
+                        print(f"[orch] skip (done): {done[0].name}", flush=True); continue
+                    out.append(DissemRun(o, plan, rep).execute())
+            raise SystemExit(0)
         for rep in range(1, a.reps + 1):
             for moves in [int(x) for x in a.moves.split(",")]:
                 for rho in [float(x) for x in a.rhos.split(",")]:
@@ -677,6 +917,8 @@ def main():
                                 if done and not a.no_resume:
                                     print(f"[orch] skip (done): {done[0].name}", flush=True); continue
                                 out.append(Run(o, pol, n, moves, rho, rep, prepos=pp).execute())
+    except SystemExit:
+        pass
     finally:
         o.shutdown()
     (EVAL_ROOT / a.experiment).mkdir(parents=True, exist_ok=True)

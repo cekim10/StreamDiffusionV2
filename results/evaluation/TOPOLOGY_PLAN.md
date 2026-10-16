@@ -431,6 +431,52 @@ Model-implied expectations: fixed forwarding is harmful below ~250 Mbps (the ana
 / 250 Mbps and nothing above; **at 250 Mbps aware_in is predicted 1.6 s slower than fixed** (it moves 0.26 Sink to the
 source where pure parallel forwarding would have finished at the same time), a small regression to look for.
 
+B-pilot (approved after the holder diagnostic; Step 3 of H). Harness: `restore_node.py` gained FLOW_ADD / open flows
+(a forwarder's flow is opened at t0 and fragments are appended the moment they are verified at the forwarder) and
+reports its git commit in HELLO; `restore_orchestrate.py` gained the dissemination mode (`--dissem`, `DissemRun`,
+`dissem_assign`: one Sink at A to B, C, D; plans star / line / tree / multipath / aware as (fragment, destination) ->
+provider tables; validation adds no-duplicates, all-destinations-complete, forwarders-pipelined, nodes-same-commit).
+Loopback regression after the change: Step 2 (13.5 / 8.1 / 8.2 s), pre-positioning pilot (T_r 5.43 s, 0.69 Sink
+forwarded) and A3 (11.2 s) values unchanged; dissemination at 1/27 scale: star 16.2, line 6.0, tree 11.0, multipath 6.4,
+aware 6.5 s (analytical 16.2 / 5.5+lag / 10.8 / 5.5+lag / 5.5+lag), every forwarder pipelined, no duplicates.
+The aware rule here uses only the caps, its own assignment queue and fragment availability (D.2 / E.3); it is computed
+once at t0. **Model** (`restore_model.py --dissem`, +0.3 s), uniform 1 Gbps for the pilot and three heterogeneous
+points for later reference (same code, not run physically yet):
+
+```
+      plan |       B       C       D | makespan | source S | total S   (B_s / B_f / B_in Mbps, +0.3 s control plane)
+-- B_s 1000 / B_f 1000 / B_in 1000
+      star |    41.8    41.8    41.8 |    41.8 |     3.01 |    3.00
+      line |    14.1    14.2    14.2 |    14.2 |     1.00 |    3.00
+      tree |    14.1    28.0    28.0 |    28.0 |     1.00 |    3.00
+ multipath |    14.2    14.2    14.2 |    14.2 |     1.00 |    3.00
+     aware |    14.2    14.3    14.2 |    14.3 |     1.00 |    3.00
+-- B_s 250 / B_f 1000 / B_in 1000
+      star |   166.2   166.2   166.2 |   166.2 |     3.01 |    3.00
+      line |    55.6    55.6    55.6 |    55.6 |     1.00 |    3.00
+      tree |    55.6    55.6    55.6 |    55.6 |     1.00 |    3.00
+ multipath |    55.6    55.7    55.7 |    55.7 |     1.00 |    3.00
+     aware |    55.6    55.6    55.6 |    55.6 |     1.00 |    3.00
+-- B_s 1000 / B_f 125 / B_in 1000
+      star |    41.8    41.8    41.8 |    41.8 |     3.01 |    3.00
+      line |    14.1   110.9   111.2 |   111.2 |     1.00 |    3.00
+      tree |    14.1   221.5   221.5 |   221.5 |     1.00 |    3.00
+ multipath |    74.0    74.5    74.5 |    74.5 |     1.00 |    3.00
+     aware |    42.1    42.3    42.3 |    42.3 |     2.19 |    3.00
+-- B_s 1000 / B_f 500 / B_in 1000
+      star |    41.8    41.8    41.8 |    41.8 |     3.01 |    3.00
+      line |    14.1    28.0    28.0 |    28.0 |     1.00 |    3.00
+      tree |    14.1    55.6    55.6 |    55.6 |     1.00 |    3.00
+ multipath |    18.8    18.9    18.9 |    18.9 |     1.00 |    3.00
+     aware |    17.1    17.1    17.0 |    17.1 |     1.20 |    3.00
+```
+
+B-pilot go/no-go (G step 3, unchanged): line and multipath within 1 s of 14.1 s, tree within 1 s of 28.1, star within
+1 s of 42.2; added here before the run: aware within 1 s of line; every forwarder pipelined; no duplicate or missing
+fragment; all four nodes on the same commit. Note for the later B sweep: the model predicts the aware assignment to
+beat every fixed family at B_f = 500 Mbps (17.1 vs 18.9 s) and to match star at B_f = 125 Mbps (42.3 vs 41.8 s) by
+retransmitting 1.19 Sinks from the source; those are predictions, not results.
+
 ## H. Execution order and I. costs (network runs 0.5-2 min; GPU runs 2-3 min)
 
 | step | work | runs | wall |
