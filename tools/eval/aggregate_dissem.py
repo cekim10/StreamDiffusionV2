@@ -87,7 +87,10 @@ def main():
                        "completion_D": st.median(x["completion"].get("D", float("nan")) for x in xs)}
     with open(root / "summary_by_config.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(next(iter(cfg.values())).keys())); w.writeheader(); w.writerows(sorted(cfg.values(), key=lambda x: (x["cond"], PLANS.index(x["plan"]))))
-    conds = sorted({c for c, _ in cfg})
+    def cond_key(c):   # uniform first, then slower forwarders, then slower source
+        v = {k: float(x) for k, x in (kv.split("=") for kv in c.split("/"))}
+        return (-v["Bs"], -v["Bf"], -v["Bin"])
+    conds = sorted({c for c, _ in cfg}, key=cond_key)
     f = lambda v, d=1: "-" if v is None else f"{v:.{d}f}"  # noqa: E731
     out = [f"# Experiment B ({a.experiment}{' + ' + a.ref if a.ref else ''}), medians of valid runs", "",
            f"Valid runs {len(valid)}/{len(runs)}; invalid: {invalid or 'none'}; incomplete: {incomplete or 'none'}", "",
@@ -151,9 +154,13 @@ def main():
     for i, p in enumerate(PLANS):
         vals = [(cfg.get((c, p)) or {}).get("makespan_median") or 0 for c in conds]
         ax.bar(xs + (i - 2) * wdt, vals, wdt, color=col[p], label=LABEL[p], edgecolor="black", linewidth=0.6)
-    ax.set_yscale("log"); ax.set_xticks(xs); ax.set_xticklabels([c.replace("Bs=", "S ").replace("/Bf=", "\nF ").replace("/Bin=1000", "") for c in conds], fontsize=bg.F2_ANNOT - 4)
-    ax.set_ylabel("Makespan (s)", fontsize=bg.F2_LABEL); ax.tick_params(axis="y", labelsize=bg.F2_TICK if hasattr(bg, "F2_TICK") else bg.F2_LABEL)
-    ax.legend(ncol=2, frameon=False, prop={"size": bg.F2_ANNOT - 6, "family": bg.FONT_FAMILY}, loc="upper left")
+    from matplotlib.ticker import FixedLocator, NullLocator, ScalarFormatter
+    ax.set_yscale("log"); ax.set_ylim(8, 900)
+    ax.yaxis.set_major_locator(FixedLocator([10, 20, 50, 100, 200, 500])); ax.yaxis.set_minor_locator(NullLocator())
+    ax.yaxis.set_major_formatter(ScalarFormatter()); ax.yaxis.get_major_formatter().set_scientific(False)
+    ax.set_xticks(xs); ax.set_xticklabels([c.replace("Bs=", "S ").replace("/Bf=", "\nF ").replace("/Bin=1000", "") for c in conds], fontsize=bg.F2_ANNOT - 2)
+    ax.set_ylabel("Makespan (s)", fontsize=bg.F2_LABEL); ax.tick_params(axis="y", labelsize=bg.F2_TICK - 4)
+    ax.legend(ncol=5, frameon=False, prop={"size": bg.F2_ANNOT - 6, "family": bg.FONT_FAMILY}, loc="upper center", columnspacing=0.8, handlelength=1.2)
     bg.save(fig, root / "figures" / "figE10_makespan_by_condition", tight=False)
 
 
