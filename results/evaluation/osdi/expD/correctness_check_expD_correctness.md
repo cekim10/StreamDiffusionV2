@@ -22,8 +22,18 @@
 | fast | reuse_dyn | 20261016-225518 | 14/14 | PASS |
 | full | full | 20261016-230130 | 15/15 | PASS |
 | fast | reuse_dyn | 20261016-230213 | 12/12 | PASS |
+| full | full | 20261017-153610 | 16/16 | PASS |
+| full | full | 20261017-154300 | 16/16 | PASS |
+| full | full | 20261017-155009 | 15/15 | PASS |
+| fast | reuse_dyn | 20261017-155052 | 12/12 | PASS |
+| fast | split | 20261017-155647 | 14/14 | PASS |
+| fast | split | 20261017-160314 | 14/14 | PASS |
+| fast | reuse_dyn | 20261017-160936 | 14/14 | PASS |
+| hybrid | restart | 20261017-161553 | 16/16 | PASS |
+| hybrid | split | 20261017-161754 | 16/16 | PASS |
+| hybrid | reuse_dyn | 20261017-161933 | 16/16 | PASS |
 
-18 runs; 2 failing.
+28 runs; 2 failing.
 
 Per-run checks:
 ```
@@ -427,6 +437,240 @@ Per-run checks:
   "nic_ratio": {
    "A": 1.047634946491521
   }
+ },
+ {
+  "run": "policy=full_bw=1000_rho=none_tm=inf_rep=1_20261017-153610",
+  "kind": "full",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "state digests ok": true,
+   "Sink digest = manifest": true,
+   "bit-exact after resume": true,
+   "completed transfer = whole state": true,
+   "redirect discards partial state": true,
+   "resume after transfer end": true
+  },
+  "nic_ratio": {
+   "A": 1.0475913306494908
+  }
+ },
+ {
+  "run": "policy=full_bw=1000_rho=2_tm=7.025_rep=1_20261017-154300",
+  "kind": "full",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "state digests ok": true,
+   "Sink digest = manifest": true,
+   "bit-exact after resume": true,
+   "completed transfer = whole state": true,
+   "redirect discards partial state": true,
+   "resume after transfer end": true
+  },
+  "nic_ratio": {
+   "A": 1.0473393738414702
+  }
+ },
+ {
+  "run": "policy=full_bw=native_rho=none_tm=inf_rep=1_20261017-155009",
+  "kind": "full",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "state digests ok": true,
+   "Sink digest = manifest": true,
+   "bit-exact after resume": true,
+   "completed transfer = whole state": true,
+   "redirect discards partial state": true,
+   "resume after transfer end": true
+  },
+  "nic_ratio": {
+   "A": 1.0476075191433831
+  }
+ },
+ {
+  "run": "policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261017-155052",
+  "kind": "fast",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true
+  },
+  "nic_ratio": {
+   "A": 1.0477808164809521
+  }
+ },
+ {
+  "run": "policy=split_bw=1000_rho=none_tm=inf_path=AC_pp=none_L=10_b=1_rep=1_20261017-155647",
+  "kind": "fast",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true,
+   "placement delivered (allocation - max(2, 5 %) fragments)": true
+  },
+  "nic_ratio": {
+   "A": 1.0478262066044786
+  }
+ },
+ {
+  "run": "policy=split_bw=1000_rho=none_tm=inf_path=AC_pp=top1_L=10_b=1_rep=1_20261017-160314",
+  "kind": "fast",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true,
+   "placement delivered (allocation - max(2, 5 %) fragments)": true
+  },
+  "nic_ratio": {
+   "A": 1.0478098356921628,
+   "B": 1.0488986886466167
+  }
+ },
+ {
+  "run": "policy=reuse_dyn_bw=1000_rho=none_tm=inf_path=AB_pp=oracle_L=10_b=1_rep=1_20261017-160936",
+  "kind": "fast",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "NIC egress vs accounted": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true,
+   "placement delivered (allocation - max(2, 5 %) fragments)": true
+  },
+  "nic_ratio": {
+   "A": 1.0477997689052747
+  }
+ },
+ {
+  "run": "policy=restart_bw=1000_rho=2_tm=7.025_hybrid=3_rep=1_20261017-161553",
+  "kind": "hybrid",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true,
+   "network sessions restored": true,
+   "network pacing valid": true,
+   "combined A payload <= 1.05 cap / 10 s": true,
+   "GPU chunk time unaffected (5 %)": true
+  },
+  "nic_ratio": {}
+ },
+ {
+  "run": "policy=split_bw=1000_rho=2_tm=7.025_hybrid=3_rep=1_20261017-161754",
+  "kind": "hybrid",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true,
+   "network sessions restored": true,
+   "network pacing valid": true,
+   "combined A payload <= 1.05 cap / 10 s": true,
+   "GPU chunk time unaffected (5 %)": true
+  },
+  "nic_ratio": {}
+ },
+ {
+  "run": "policy=reuse_dyn_bw=1000_rho=2_tm=7.025_hybrid=3_rep=1_20261017-161933",
+  "kind": "hybrid",
+  "checks": {
+   "version events 0": true,
+   "duplicates 0": true,
+   "NIC <= 1.15 cap": true,
+   "four hosts, one commit": true,
+   "stop reason": true,
+   "paced egress 10 s <= 1.05 cap": true,
+   "GPU 0 idle before run": true,
+   "per-move timing": true,
+   "final owner keeps generating": true,
+   "all fragments verified": true,
+   "final Sink digest = source": true,
+   "rejoin >= 35 dB": true,
+   "network sessions restored": true,
+   "network pacing valid": true,
+   "combined A payload <= 1.05 cap / 10 s": true,
+   "GPU chunk time unaffected (5 %)": true
+  },
+  "nic_ratio": {}
  }
 ]
 ```
