@@ -17,6 +17,13 @@ fragments are present, verifies the whole-Sink digest against the source's befor
 
     python tools/eval/mobility_node.py --label B --gpu_id 0 --ctl_port 29811 --data_port 29812
     python tools/eval/mobility_node.py --label B --dry_run --ctl_port 29821 --data_port 29822   # no torch, fake payloads (protocol test only)
+
+Experiment D execution modes (EXEC_HANDOFF mode): "fast" = M1 (in-flight rows + metadata, 2.67 MiB; Phase 1 `ours`);
+"full" = Full migration (stop, transfer every state component - sink, recent, meta, vae, inflight - then resume; Phase 1
+`full`), sent in the background so the orchestrator can redirect it (FULL_SEND / FULL_CANCEL) when the user moves on
+before it completes; "cold" = Cold restart (no state; the new owner restarts from the prompt with fresh caches,
+Phase 1 `cold`). --cold_start starts a node after the trigger (OTTER cold destination): no baseline run; the PSNR
+reference is read from the cache a warm node of the same host and configuration wrote (bit-exact on the same GPU).
 """
 
 from __future__ import annotations
@@ -32,6 +39,8 @@ import threading
 import time
 from pathlib import Path
 
+T_MAIN = time.time()   # process start (interpreter start-up before this line is not included)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for p in (REPO_ROOT, REPO_ROOT / "tools", REPO_ROOT / "tools" / "eval"):
     if str(p) not in sys.path:
@@ -43,6 +52,57 @@ from common import DEFAULT_MSS, MSS_WARNINGS, CsvLog, EventLog, ResourceSampler,
 from proto_handoff import MB, _pool, component_digest, payload_slices, recv_exact, recv_msg, send_msg  # noqa: E402
 
 REJOIN_DB = 35.0
+FULL_COMPS = ("inflight", "meta", "recent", "sink", "vae")   # Phase 1 `full` sends sorted(fg) in this order
+_DIGESTS = None
+
+
+def digest_async(parts):
+    """Component digest (Phase 1 definition) in a separate executor, so it never waits on its own hash pool."""
+    global _DIGESTS
+    if _DIGESTS is None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        _DIGESTS = ThreadPoolExecutor(max_workers=6)
+    return _DIGESTS.submit(component_digest, parts)
+
+
+class CountingThrottle(Throttle):
+    """Token bucket (rate 0 = unshaped) that counts the bytes it released, so a cancelled transfer reports what it put
+    on the wire (overcounts by at most the 1 MiB chunk being sent when the socket was closed)."""
+
+    def __init__(self, bw_bps: float):
+        super().__init__(bw_bps)
+        self.count = 0
+
+    def take(self, n: int):
+        super().take(n)
+        self.count += n
+
+
+def ref_cache_path(a) -> Path:
+    tag = f"{socket.gethostname().split('.')[0]}_gpu{a.gpu_id}_{Path(a.video_path).stem}_seed{a.seed}_k{a.step}_M{a.migration_chunk}_N{a.post_chunks}_{a.height}x{a.width}"
+    return REPO_ROOT / "results/evaluation/_reference_cache" / f"{tag}.npz"
+
+
+class CachedReference:
+    """PSNR reference for a cold-started node: the uninterrupted same-seed frames a warm node computed on this host.
+    Loaded in a background thread (not on the critical path); a call not loaded yet is read directly from the file."""
+
+    def __init__(self, path: Path):
+        self.path, self.d, self.t_loaded = path, {}, None
+        threading.Thread(target=self._load, daemon=True).start()
+
+    def _load(self):
+        with np.load(self.path) as z:
+            for k in z.files:
+                self.d[int(k)] = z[k]
+        self.t_loaded = time.time()
+
+    def get(self, c):
+        if c in self.d:
+            return self.d[c]
+        with np.load(self.path) as z:
+            return z[str(c)] if str(c) in z.files else None
 
 
 def frag_table(nbytes: int, frag_bytes: int) -> list[dict]:
@@ -53,6 +113,15 @@ def frag_table(nbytes: int, frag_bytes: int) -> list[dict]:
         n = min(frag_bytes, nbytes - off)
         frags.append({"id": i, "off": off, "len": n}); off += n; i += 1
     return frags
+
+
+def _git_commit() -> str:
+    try:
+        import subprocess
+
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10).stdout.strip() or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
 
 
 def sha256_hex(view) -> str:
@@ -106,6 +175,7 @@ class GpuRuntime:
                 self.mem(f"baseline call {c}")
         self.base = base
         self.service_s = float(np.median(times[M:]))
+        self.write_reference()
         del session
         self.pm.reset_stream_state(reset_vae_flags=True)  # drop the baseline session's caches before the run allocates its own
         import gc
@@ -114,8 +184,33 @@ class GpuRuntime:
         self.mem("after baseline cleanup")
         return self.service_s
 
+    def write_reference(self):
+        """Cache the reference frames for a later cold-started node on this host (written once per configuration)."""
+        path = ref_cache_path(self.args)
+        if path.exists():
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.stem + f".tmp{os.getpid()}.npz")
+        np.savez(tmp, **{str(c): fr for c, fr in self.base.items()})
+        os.replace(tmp, path)
+        print(f"[{self.args.label}] reference cached: {path.name}", flush=True)
+
+    def use_cached_reference(self):
+        path = ref_cache_path(self.args)
+        if not path.exists():
+            raise SystemExit(f"cold start needs the reference cache {path} (start a warm node with the same configuration on this host once)")
+        self.base = CachedReference(path)
+        self.service_s = None
+        return path
+
     def gpu_mem_mb(self):
         return self.torch.cuda.memory_allocated(self.device) / MB
+
+    def reset_peak(self):
+        self.torch.cuda.reset_peak_memory_stats(self.device)
+
+    def peak_mem_mb(self):
+        return {"peak_allocated_mb": self.torch.cuda.max_memory_allocated(self.device) / MB, "peak_reserved_mb": self.torch.cuda.max_memory_reserved(self.device) / MB}
 
     # --- source side
     def run_to(self, M: int):
@@ -160,11 +255,29 @@ class GpuRuntime:
         self.torch.cuda.synchronize(self.device)
         return shifted
 
-    def step(self, c: int):
+    def restore_full(self):
+        """Full migration: every component received (Phase 1 `full`: restore_state with all components)."""
+        self.sa.restore_state(self.pl, self.pm, self.session, self.snap, set(self.sa.STATE_COMPONENTS))
+        for block in self.pl.generator.model.blocks:
+            block.self_attn.adapt_sink_thr = self.cfg_thr
+        self.torch.cuda.synchronize(self.device)
+
+    def cold_restart(self, c: int):
+        """Cold restart (Phase 1 `cold`): new session from [last_image of a fresh destination session, chunk c]."""
+        for block in self.pl.generator.model.blocks:
+            block.self_attn.adapt_sink_thr = self.cfg_thr
+        self.session, frames, ms = self.runner.restart_at(self.session, c)
+        return frames, ms
+
+    def step(self, c: int, override=None, skip: bool = False):
         self.decodes = []
         t0 = time.perf_counter()
-        fr = self.runner.step(self.session, c)
-        self.torch.cuda.synchronize(self.device)
+        fr = None
+        if not skip:   # skip: the cold restart consumed chunk c (Phase 1: no model call at the restart call)
+            fr = self.runner.step(self.session, c)
+            self.torch.cuda.synchronize(self.device)
+        if override is not None:
+            fr = override
         dt = time.perf_counter() - t0
         ref = self.base.get(c)
         ps = ss = None
@@ -194,6 +307,8 @@ class FakeRuntime:
         self.k = 2
         self.bound = False
         self.have_fast = False
+        self.full = False
+        self.cold = False
         self.decodes = []
 
     def baseline(self, M, N):
@@ -201,6 +316,12 @@ class FakeRuntime:
 
     def gpu_mem_mb(self):
         return 0.0
+
+    def reset_peak(self):
+        pass
+
+    def peak_mem_mb(self):
+        return {"peak_allocated_mb": 0.0, "peak_reserved_mb": 0.0}
 
     def run_to(self, M):
         pass
@@ -214,11 +335,23 @@ class FakeRuntime:
             n = len(b) // 4
             header = {"comp": "sink", "tensors": [{"name": f"kv/{i}", "offset": i * n, "nbytes": n, "shape": [n], "dtype": "bf16"} for i in range(4)], "nbytes": len(b), "d2h_s": 0.0}
             return header, [b[i * n:(i + 1) * n] for i in range(4)]
-        b = self.rng.integers(0, 256, size=(2 << 20) if comp == "meta" else (200 << 10), dtype=np.uint8)
+        size = {"meta": 2 << 20, "inflight": 200 << 10, "recent": len(self.sink_bytes), "vae": 2 * len(self.sink_bytes)}[comp]
+        b = self.rng.integers(0, 256, size=size, dtype=np.uint8)
         return {"comp": comp, "tensors": [{"name": comp, "offset": 0, "nbytes": len(b), "shape": [len(b)], "dtype": "bf16"}], "nbytes": len(b), "d2h_s": 0.0}, [b]
 
     def provision(self):
-        self.bound = False; self.have_fast = False
+        self.bound = False; self.have_fast = False; self.full = False; self.cold = False
+
+    def restore_full(self):
+        self.full = True; self.bound = True; self.cold = False
+
+    def cold_restart(self, c):
+        time.sleep(0.05); self.cold = True; self.bound = False; self.full = False
+        return np.zeros(4, dtype=np.uint8), 50.0
+
+    def use_cached_reference(self):
+        self.service_s = None
+        return None
 
     def unpack(self, header, payload):
         if header["comp"] in ("inflight", "meta"):
@@ -232,11 +365,19 @@ class FakeRuntime:
         self.bound = True
         return 73
 
-    def step(self, c):
-        time.sleep(self.service_s)
+    def step(self, c, override=None, skip=False):
+        if skip:
+            self.decodes = []
+            return False, None, None, 0.0, [0, 1, 6]
+        time.sleep(self.args.dry_service_s)
         self.decodes = [(time.time(), 4)]
-        ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
-        return True, float(ps), 0.9 if self.bound else 0.6, self.service_s, [0, 1, 6]
+        if self.cold:
+            ps = 19.5 + self.rng.normal(0, 0.5)
+        elif self.full:
+            ps = 99.0
+        else:
+            ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
+        return True, float(ps), 0.9 if self.bound else 0.6, self.args.dry_service_s, [0, 1, 6]
 
     def release(self):
         pass
@@ -249,6 +390,8 @@ class Node:
         self.label = args.label
         self.me = socket.gethostname()
         self.rt = FakeRuntime(args) if args.dry_run else GpuRuntime(args)
+        self.t_runtime_ready = time.time()   # model weights loaded, CUDA initialized
+        self.ref_path = None
         self.lock = threading.Lock()
         self.ctl = None
         self.ctl_lock = threading.Lock()
@@ -281,12 +424,15 @@ class Node:
 
     def serve(self):
         srv = tcp_listen(self.a.bind, self.a.ctl_port, self.a.mss)
+        self.t_listen = time.time()
         print(f"[{self.label}] {self.me}: control {self.a.ctl_port}, data {self.a.data_port}, mss {self.a.mss}; waiting for the orchestrator", flush=True)
         while True:
             self.ctl = tcp_accept(srv, self.a.mss)
             clock_sync_server(self.ctl)
             self.send("HELLO", host_info=host_info(self.a.gpu_id), mss_effective=effective_mss(self.ctl), mss_warnings=list(MSS_WARNINGS),
-                      service_s=self.rt.service_s, dry_run=self.a.dry_run, data_port=self.a.data_port, k=self.rt.k, pid=os.getpid())
+                      service_s=self.rt.service_s, dry_run=self.a.dry_run, data_port=self.a.data_port, k=self.rt.k, pid=os.getpid(),
+                      cold_start=bool(self.a.cold_start), t_main=T_MAIN, t_runtime_ready=self.t_runtime_ready, t_listen=self.t_listen,
+                      reference=str(self.ref_path) if self.ref_path else "baseline", commit=_git_commit())
             try:
                 while True:
                     hdr, payload = recv_msg(self.ctl)
@@ -320,8 +466,10 @@ class Node:
         self.run = {"id": h["run_id"], "dir": rd, "ev": ev, "metrics": metrics, "frag_log": frag_log, "sampler": sampler, "session_id": h["session_id"],
                     "manifest": None, "sink_buf": None, "have": set(), "frag_ok": {}, "sink_complete_t": None, "sink_verified": None, "sink_verified_t": None,
                     "owner": False, "stop_owner": False, "gen_thread": None, "call": None, "bound_call": None, "rejoin_call": None, "first_out_t": None,
-                    "sink_unpacked": False, "bind_requested": False, "pending_handoff": None}
+                    "sink_unpacked": False, "bind_requested": False, "pending_handoff": None,
+                    "full_pack": None, "full_xfer": None, "dropped_flows": set(), "pending_cold": None, "n_owned": 0, "epoch": 0}
         self.flows = {}
+        self.rt.reset_peak()   # G9: peak memory_allocated / reserved over this run
         return {}
 
     def cmd_source_prep(self, h):
@@ -362,32 +510,110 @@ class Node:
         return {}
 
     def cmd_exec_handoff(self, h):
-        """Current owner: stop at the next chunk boundary, ship in-flight rows + metadata to `to`, hand over."""
+        """Current owner: stop at the next chunk boundary and hand over. mode "fast" (M1): ship in-flight rows + metadata
+        to `to`; "cold": no state, only the call number; "full": pack every state component and send it in the
+        background (redirectable with FULL_CANCEL / FULL_SEND)."""
         r = self.run
         assert r["owner"], "not the execution owner"
+        mode = h.get("mode", "fast")
         t_req = time.time()
         if r["gen_thread"] is not None and r["gen_thread"].is_alive():
             r["stop_owner"] = True
             r["gen_thread"].join()
         t_stop = time.time()
         r["owner"] = False
-        snap = r.pop("live_snap", None) or self.rt.serialize_live()
+        snap = r.pop("live_snap", None)
+        if snap is None and mode != "cold":   # cold restart ships no state: nothing to serialize
+            snap = self.rt.serialize_live()
         t_ser = time.time()
+        if mode == "full":
+            comps, nbytes = [], 0
+            for comp in FULL_COMPS:
+                hdr, bufs = self.rt.pack(snap, comp)
+                comps.append((hdr, bufs, digest_async(bufs))); nbytes += hdr["nbytes"]
+            del snap
+            t_packed = time.time()
+            r["full_pack"] = {"comps": comps, "call": r["call"], "nbytes": nbytes}
+            self._release_source_session()
+            self.event("exec_stop", t_stop, call=r["call"], to=h["to"], mode=mode, wait_boundary_s=t_stop - t_req, serialize_s=t_ser - t_stop, pack_s=t_packed - t_ser, state_bytes=nbytes)
+            self._full_send(h)
+            return {"t_stop": t_stop, "t_fg_sent": None, "t_packed": t_packed, "call": r["call"], "fg_bytes": 0, "state_bytes": nbytes}
         conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
         nbytes = 0
-        for comp in ("inflight", "meta"):
+        for comp in (("inflight", "meta") if mode == "fast" else ()):
             hdr, bufs = self.rt.pack(snap, comp)
             send_msg(conn, "FG", {"from": self.label, "run_id": r["id"], "session_id": r["session_id"], **hdr}, bufs, None)
             nbytes += hdr["nbytes"]
-        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time()}, b"", None)
+        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode}, b"", None)
         t_sent = time.time()
         conn.close()
         del snap
+        self._release_source_session()
+        self.event("exec_stop", t_stop, call=r["call"], to=h["to"], mode=mode, wait_boundary_s=t_stop - t_req, serialize_s=t_ser - t_stop, fg_bytes=nbytes, fg_send_s=t_sent - t_ser)
+        return {"t_stop": t_stop, "t_fg_sent": t_sent, "call": r["call"], "fg_bytes": nbytes}
+
+    def _release_source_session(self):
         if self.label == "A":
             self.rt.session = None; self.rt.snap = None
             self.rt.torch.cuda.empty_cache() if hasattr(self.rt, "torch") else None
-        self.event("exec_stop", t_stop, call=r["call"], to=h["to"], wait_boundary_s=t_stop - t_req, serialize_s=t_ser - t_stop, fg_bytes=nbytes, fg_send_s=t_sent - t_ser)
-        return {"t_stop": t_stop, "t_fg_sent": t_sent, "call": r["call"], "fg_bytes": nbytes}
+
+    def _full_send(self, h):
+        r = self.run
+        st = {"xfer": h.get("xfer"), "to": h["to"], "cancel": False, "sock": None, "pacer": CountingThrottle(float(h.get("rate_bps") or 0)), "done": False}
+        r["full_xfer"] = st
+        st["thread"] = threading.Thread(target=self._full_sender, args=(st, h), daemon=True); st["thread"].start()
+
+    def _full_sender(self, st: dict, h: dict):
+        r = self.run; fp = r["full_pack"]
+        t_start = time.time(); err = None
+        try:
+            conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60); st["sock"] = conn
+            self.event("full_send_start", t_start, xfer=st["xfer"], to=st["to"], state_bytes=fp["nbytes"], rate_bps=float(h.get("rate_bps") or 0))
+            for hdr, bufs, _ in fp["comps"]:
+                if st["cancel"]:
+                    raise ConnectionError("cancelled")
+                send_msg(conn, "FG", {"from": self.label, "run_id": r["id"], "session_id": r["session_id"], "full": True, "xfer": st["xfer"], **hdr}, bufs, st["pacer"])
+            if st["cancel"]:
+                raise ConnectionError("cancelled")
+            digests = {hdr["comp"]: fut.result() for hdr, _, fut in fp["comps"]}
+            send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": fp["call"], "t_go": time.time(), "mode": "full", "xfer": st["xfer"], "digests": digests}, b"", None)
+            st["done"] = True
+            conn.close()
+        except (ConnectionError, OSError) as exc:
+            err = repr(exc)
+        self.event("full_send_end", xfer=st["xfer"], to=st["to"], t_start=t_start, bytes=st["pacer"].count, completed=st["done"], cancelled=st["cancel"], error=None if st["done"] else err)
+
+    def cmd_full_send(self, h):
+        """Redirect: the node holding the packed full state sends it to a new destination."""
+        assert self.run["full_pack"] is not None, "no packed full state here"
+        self._full_send(h)
+        return {}
+
+    def cmd_full_cancel(self, h):
+        st = self.run["full_xfer"]
+        if st is None or st["done"]:
+            return {"bytes": st["pacer"].count if st else 0, "completed": bool(st and st["done"])}
+        st["cancel"] = True
+        try:
+            if st["sock"] is not None:
+                st["sock"].shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        st["thread"].join(timeout=30)
+        return {"bytes": st["pacer"].count, "completed": st["done"]}
+
+    def cmd_sink_drop(self, h):
+        """M1 only (restart): forget this session's Sink fragments here; fragments of the listed (cancelled) flows that
+        are still on the wire are drained and discarded on arrival."""
+        r = self.run
+        with self.lock:
+            r["dropped_flows"].update(h.get("flows", []))
+            n = len(r["have"])
+            if self.label != "A":
+                r["have"] = set(); r["frag_ok"] = {}; r["sink_complete_t"] = None; r["sink_verified"] = None; r["sink_verified_t"] = None; r["sink_unpacked"] = False
+                r["epoch"] += 1   # FRAG_RECV reports carry the epoch they were added in: older ones were dropped here
+        self.event("sink_dropped", fragments=n, flows=list(h.get("flows", [])), epoch=r["epoch"])
+        return {"dropped": n, "epoch": r["epoch"]}
 
     def cmd_flow_start(self, h):
         """Holder: open one data connection to `dst` and send the listed fragments at `rate_bps` (0 = unshaped)."""
@@ -464,10 +690,13 @@ class Node:
         for fl in list(self.flows.values()):
             with fl["cv"]:
                 fl["cancel"] = True; fl["cv"].notify_all()
+        if r["full_xfer"] is not None and not r["full_xfer"]["done"]:
+            self.cmd_full_cancel({})
+        r["full_pack"] = None
         r["sampler"].finish(); r["metrics"].close(); r["frag_log"].close()
         net = (r["dir"] / "network.csv").read_text() if (r["dir"] / "network.csv").exists() else ""
         out = {"have": len(r["have"]), "n_frags": len(r["manifest"]["frags"]) if r["manifest"] else 0, "sink_verified": r["sink_verified"],
-               "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb()}
+               "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb()}
         self.rt.release()
         r["sink_buf"] = None; r.pop("live_snap", None)
         self.run = None
@@ -518,6 +747,7 @@ class Node:
     def _data_conn(self, conn: socket.socket):
         r = self.run
         self._thread_init()
+        full = {"bytes": 0, "digests": {}, "xfer": None, "from": None, "go": False}   # Full migration receive on this connection
         try:
             while True:
                 lens = recv_exact(conn, 16)
@@ -531,8 +761,14 @@ class Node:
                     payload = recv_exact(conn, pl)
                     t_recv = time.time()
                     h2d = self.rt.unpack(hdr, payload)
-                    self.event("fg_recv", t_recv, comp=hdr["comp"], bytes=pl, t_send_src=hdr["t_send"], t_recv_start=t_start, h2d_s=h2d, src=hdr["from"])
+                    if hdr.get("full"):
+                        full["bytes"] += pl; full["xfer"] = hdr.get("xfer"); full["from"] = hdr["from"]
+                        full["digests"][hdr["comp"]] = digest_async(payload_slices(hdr, payload))
+                    self.event("fg_recv", t_recv, comp=hdr["comp"], bytes=pl, t_send_src=hdr["t_send"], t_recv_start=t_start, h2d_s=h2d, src=hdr["from"], full=bool(hdr.get("full")))
                 elif kind == "GO":
+                    full["go"] = True
+                    if hdr.get("mode") == "full":
+                        threading.Thread(target=self._verify_full, args=(hdr, full["digests"]), daemon=True).start()
                     self._become_owner(hdr)
                 elif kind in ("FLOW_HELLO", "FLOW_END"):
                     if pl:
@@ -549,6 +785,19 @@ class Node:
             pass
         finally:
             conn.close()
+            if full["bytes"] and not full["go"]:
+                # a redirected Full migration: the partial state is discarded (the next transfer overwrites every component)
+                self.event("full_recv_aborted", xfer=full["xfer"], src=full["from"], bytes=full["bytes"])
+
+    def _verify_full(self, go: dict, local: dict):
+        """Full migration: per-component digests of the received bytes vs the sender's (Phase 1 checksums), off the
+        critical path; the Sink component's digest is also compared with the manifest's Sink digest."""
+        r = self.run
+        ok = {c: (local[c].result() == d) if c in local else False for c, d in (go.get("digests") or {}).items()}
+        sink_d = local["sink"].result() if "sink" in local else None
+        man = r["manifest"] or {}
+        self.event("full_state_verified", xfer=go.get("xfer"), components_ok=ok, all_ok=bool(ok) and all(ok.values()) and set(ok) == set(FULL_COMPS),
+                   sink_digest=sink_d and sink_d[:16], sink_digest_matches_manifest=(sink_d == man.get("sink_digest")) if sink_d else None)
 
     def _recv_frag(self, conn, hdr: dict, pl: int):
         r = self.run
@@ -562,6 +811,12 @@ class Node:
             return
         f = man["frags"][fid]
         assert f["off"] == off and f["len"] == n == pl, (f, off, n, pl)
+        if hdr["flow_id"] in r["dropped_flows"]:
+            # M1 only: a fragment of a flow cancelled when this owner was abandoned, still on the wire after the drop
+            t0 = time.time(); recv_exact(conn, pl); t1 = time.time()
+            r["frag_log"].row(t=f"{t1:.6f}", event="recv", session_id=r["session_id"], sink_version=man["sink_version"], fragment_id=fid, src=hdr["holder"], dst=self.label, bytes=n, flow=hdr["flow_id"], ok="discarded")
+            self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=n, t_start=t0, t_end=t1, ok=True, dup=False, discarded=True)
+            return
         t_start = time.time()
         with self.lock:
             dup = fid in r["have"]
@@ -580,6 +835,7 @@ class Node:
             ok = sha256_hex(view) == f["sha256"] == hdr["sha256"]
             complete = False
             with self.lock:
+                epoch = r["epoch"]
                 if ok:
                     r["have"].add(fid); r["frag_ok"][fid] = True
                     complete = len(r["have"]) == len(man["frags"]) and r["sink_complete_t"] is None
@@ -590,7 +846,8 @@ class Node:
             if complete:
                 threading.Thread(target=self._verify_sink, args=(t_end,), daemon=True).start()
         r["frag_log"].row(t=f"{t_end:.6f}", event="recv", session_id=r["session_id"], sink_version=man["sink_version"], fragment_id=fid, src=hdr["holder"], dst=self.label, bytes=n, flow=hdr["flow_id"], ok=ok and not dup)
-        self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=n, t_start=t_start, t_end=t_end, ok=ok, dup=dup, t_send=hdr.get("t_send"))
+        self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=n, t_start=t_start, t_end=t_end, ok=ok, dup=dup, t_send=hdr.get("t_send"),
+                  epoch=epoch if not dup else r["epoch"])
 
     def _verify_sink(self, t_complete: float):
         self._thread_init()
@@ -618,16 +875,29 @@ class Node:
     # ------------------------------------------------------------------ execution ownership
     def _become_owner(self, go: dict):
         r = self.run
+        mode = go.get("mode", "fast")
         t0 = time.time()
-        self.rt.restore_fast()
+        # every ownership starts afresh (a revisited owner binds and rejoins again; earlier values stay in events.csv)
         r["call"] = int(go["call"]); r["owner"] = True; r["stop_owner"] = False; r["first_out_t"] = None
-        if r["sink_verified"] and not r["bound_call"]:
-            self._unpack_sink()
-            shifted = self.rt.bind()
-            r["bound_call"] = r["call"]
-            self.event("sink_bind", call=r["call"], slots_rerotated=shifted, at_resume=True)
+        r["bound_call"] = None; r["rejoin_call"] = None; r["pending_cold"] = None; r["n_owned"] += 1
+        extra = {}
+        if mode == "full":
+            self.rt.restore_full()
+            r["bound_call"] = r["call"]   # the Sink is part of the transferred state
+            self.event("sink_bind", call=r["call"], slots_rerotated=0, at_resume=True, full_state=True)
+        elif mode == "cold":
+            frames, ms = self.rt.cold_restart(r["call"])
+            r["pending_cold"] = {"skip": r["call"], "emit": r["call"] + self.rt.k - 1, "frames": frames}
+            extra = {"cold_restart_ms": ms}
+        else:
+            self.rt.restore_fast()
+            if r["sink_verified"]:
+                self._unpack_sink()
+                shifted = self.rt.bind()
+                r["bound_call"] = r["call"]
+                self.event("sink_bind", call=r["call"], slots_rerotated=shifted, at_resume=True)
         t1 = time.time()
-        self.event("resume", t1, call=r["call"], src=go["from"], t_go_src=go["t_go"], restore_s=t1 - t0, gpu_mem_alloc_mb=self.rt.gpu_mem_mb())
+        self.event("resume", t1, call=r["call"], src=go["from"], t_go_src=go["t_go"], restore_s=t1 - t0, gpu_mem_alloc_mb=self.rt.gpu_mem_mb(), mode=mode, ownership=r["n_owned"], **extra)
         r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
 
     def _generate(self):
@@ -635,12 +905,16 @@ class Node:
         r = self.run
         while not r["stop_owner"]:
             c = r["call"]
-            if r["bound_call"] is None and r["sink_verified"]:
+            if r["bound_call"] is None and r["sink_verified"] and r["pending_cold"] is None:
                 self._unpack_sink()
                 shifted = self.rt.bind()
                 r["bound_call"] = c
                 self.event("sink_bind", call=c, slots_rerotated=shifted, at_resume=False)
-            produced, ps, ss, dt, pos = self.rt.step(c)
+            pc = r["pending_cold"]
+            if pc is not None and c in (pc["skip"], pc["emit"]):
+                produced, ps, ss, dt, pos = self.rt.step(c, override=pc["frames"] if c == pc["emit"] else None, skip=c == pc["skip"] and c != pc["emit"])
+            else:
+                produced, ps, ss, dt, pos = self.rt.step(c)
             t_out = time.time()
             if produced and r["first_out_t"] is None:
                 r["first_out_t"] = t_out; self.event("first_output", t_out, call=c)
@@ -668,6 +942,7 @@ def parse_args():
     p.add_argument("--dry_run", action="store_true", help="protocol test without torch (fake Sink); never for reported results")
     p.add_argument("--dry_sink_mb", type=int, default=64)
     p.add_argument("--dry_service_s", type=float, default=0.2)
+    p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
     # model / workload (same defaults as Phase 1)
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))
     p.add_argument("--checkpoint_folder", type=str, default=str(REPO_ROOT / "ckpts/wan_causal_dmd_v2v"))
@@ -699,9 +974,13 @@ def parse_args():
 def main():
     a = parse_args()
     node = Node(a)
-    print(f"[{a.label}] baseline ({a.migration_chunk + a.post_chunks} calls){' [dry run]' if a.dry_run else ''}", flush=True)
-    s = node.rt.baseline(a.migration_chunk, a.post_chunks)
-    print(f"[{a.label}] baseline done; service time {s * 1e3:.0f} ms/chunk", flush=True)
+    if a.cold_start:
+        node.ref_path = node.rt.use_cached_reference()
+        print(f"[{a.label}] cold start: runtime ready {node.t_runtime_ready - T_MAIN:.1f} s after process start; reference {node.ref_path}", flush=True)
+    else:
+        print(f"[{a.label}] baseline ({a.migration_chunk + a.post_chunks} calls){' [dry run]' if a.dry_run else ''}", flush=True)
+        s = node.rt.baseline(a.migration_chunk, a.post_chunks)
+        print(f"[{a.label}] baseline done; service time {s * 1e3:.0f} ms/chunk", flush=True)
     node.serve()
 
 

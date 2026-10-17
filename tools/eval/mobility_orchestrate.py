@@ -17,8 +17,16 @@ Policies (sink routing; execution always moves A -> B -> C -> D):
     direct      oracle lower bound: the source sends to the final owner from time zero
     reuse_aware_in  OTTER at moves: bottleneck-aware fragment assignment from tools/eval/restore_planner.py (D0)
     reuse_dyn       OTTER event-driven: reuse_aware_in + re-planning on measured throughput (E-pilot v2 thresholds)
+    full            Full migration (Experiment D): stop, transfer every state component (6.02 GiB), resume; no Sink flows.
+                    Under repeated mobility a move that comes before the transfer completed redirects it: the node that
+                    still holds the complete state (the last owner that generated) cancels the transfer (the partial
+                    state at the abandoned destination is discarded) and sends the whole state to the new destination.
+    cold            Cold restart (Experiment D): no state; every new owner restarts from the prompt (Phase 1 `cold`).
 D0 options: --caps / --cap_events (per-node caps, changes the planners are not told about), --path (explicit owner
-sequence), --prepos (placement window before the move, the source keeps generating), decode timestamps per chunk.
+sequence; revisits such as A,B,C,D,B allowed), --prepos (placement window before the move, the source keeps
+generating), decode timestamps per chunk. Experiment D: --cold_dest (OTTER cold destination: the destination node
+process is started after the trigger), --hybrid_net N (scenario E: N network-level sessions share the source's egress,
+tools/eval/hybrid_net.py).
 
     python tools/eval/mobility_orchestrate.py --measure_ts --bws 1000 2500 5000 native        # Step 1
     python tools/eval/mobility_orchestrate.py --bw 1000 --ts 14.2 --rhos 2 --policies all      # shakedown
@@ -53,8 +61,10 @@ from restore_planner import maxmin as maxmin_caps  # noqa: E402
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
 POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct",
-                "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)"}
+                "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)",
+                "full": "Full migration (stop, transfer all state, resume)", "cold": "Cold restart (fresh caches from the prompt)"}
 AWARE = ("reuse_aware_in", "reuse_dyn")
+EXEC_MODE = {"full": "full", "cold": "cold"}   # every other policy: "fast" (M1)
 REJOIN_DB = 35.0
 
 
@@ -71,11 +81,11 @@ def parse_nodes(spec: str | None, dry: bool) -> dict[str, dict]:
 
 # ----------------------------------------------------------------------------- node connection
 class NodeConn:
-    def __init__(self, label: str, host: str, port: int, mss, events: queue.Queue, timeout: float):
+    def __init__(self, label: str, host: str, port: int, mss, events: queue.Queue, timeout: float, retry_s: float = 5.0):
         from common import tcp_connect
 
         self.label, self.host, self.port = label, host, port
-        self.sock = tcp_connect(host, port, mss, timeout=timeout, retry_s=5.0)
+        self.sock = tcp_connect(host, port, mss, timeout=timeout, retry_s=retry_s)
         self.sync = clock_sync_client(self.sock)
         self.off = self.sync["offset_s"]  # node_wall ~= orch_wall + off
         self.events = events
@@ -153,8 +163,22 @@ class Run:
         self.o = orch; self.a = orch.a
         self.policy, self.bw, self.tm, self.rho, self.rep = policy, bw_mbps, tm, rho, rep
         self.edges = list(path) if path else EDGES[:hops + 1]
-        assert self.edges[0] == "A" and len(set(self.edges)) == len(self.edges), "path must start at A and not revisit (revisit is not supported in D0)"
+        assert self.edges[0] == "A" and "A" not in self.edges[1:] and all(x != y for x, y in zip(self.edges, self.edges[1:])), \
+            "path must start at A, never return to A, and change owner at every move (revisits of B, C, D are allowed)"
         self.final = self.edges[-1]
+        self.revisit = len(set(self.edges)) < len(self.edges)
+        self.mode = EXEC_MODE.get(policy, "fast")
+        self.cold_dest = bool(orch.a.cold_dest)
+        assert not self.cold_dest or (len(self.edges) == 2 and policy not in EXEC_MODE), "--cold_dest: single move, an OTTER/M1-family policy"
+        assert not (orch.a.hybrid_net and (policy not in ("restart", "split", "reuse_aware_in", "reuse_dyn") or bw_mbps <= 0)), "--hybrid_net: M1-family policy on a shaped network"
+        self.net = None
+        self.running = "A"          # the node currently generating (or about to: it holds the execution)
+        self.state_holder = None    # full: the node holding the packed complete state while it is in transit
+        self.state_xfers: dict[str, dict] = {}
+        self.nxfer = 0
+        self.holder_snaps: list = []   # (move index, {node: held set}) after each move's plan (verified progress retained)
+        self.drop_epoch: dict[str, int] = {}
+        self.cold_info = {}
         self.pp = prepos   # {"policy", "probs" (B, C, D), "L", "b", "dest", "tau"} or None
         self.candidates = [e for e in EDGES if e != "A"] if prepos else []
         self.nodes_used = list(dict.fromkeys(self.edges + self.candidates))
@@ -162,7 +186,8 @@ class Run:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         rho_tag = "none" if rho is None else f"{rho:g}"
         tags = ("" if not path else "_path=" + "".join(self.edges)) + ("" if not prepos else f"_pp={prepos['policy']}_L={prepos['L']:g}_b={prepos['b']:g}") \
-            + ("" if not self.a.cap_events else "_ev=" + self.a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge"))
+            + ("" if not self.a.cap_events else "_ev=" + self.a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge")) \
+            + ("_colddest" if self.a.cold_dest else "") + (f"_hybrid={self.a.hybrid_net}" if self.a.hybrid_net else "")
         self.run_id = f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
@@ -242,9 +267,29 @@ class Run:
 
     # ---------------- flows
     def rates(self, act):
+        if self.net is not None:   # scenario E: the network sessions' flows share the same caps in one allocation
+            return maxmin_caps(act + self.net.tuples(), self.caps)
         if self.caps:
             return maxmin_caps(act, self.caps)
         return maxmin_rates(act, self.bw * 1e6)   # bw <= 0: unshaped (all zero = no token bucket)
+
+    def joint_realloc(self):
+        """Scenario E: one max-min allocation over the GPU session's and the network sessions' flows."""
+        act = [(f["id"], f["src"], f["dst"]) for f in self.flows.values() if f["active"]]
+        rates = self.rates(act)
+        for f_id, _, _ in act:
+            fl = self.flows[f_id]
+            if abs(rates[f_id] - fl["rate_bps"]) > 0.01 * max(1.0, fl["rate_bps"]):
+                fl["rate_bps"] = rates[f_id]
+                self.node(fl["src"]).call("FLOW_SET_RATE", flow_id=f_id, rate_bps=rates[f_id])
+                self.ev.log("flow_rate", flow=f_id, rate_bps=rates[f_id])
+        for f_id, _, _ in self.net.tuples():
+            fl = self.net.flows[f_id]
+            if abs(rates[f_id] - fl["rate"]) > 0.01 * max(1.0, fl["rate"]):
+                fl["rate"] = rates[f_id]
+                if fl["started"]:
+                    self.net.node(fl["src"]).cast("FLOW_SET_RATE", flow_id=f_id, rate_bps=rates[f_id])
+        return rates
 
     def start_flow(self, src: str, dst: str, frag_ids: list[int], closed: bool, reason: str, keep_order: bool = False):
         if not frag_ids and closed:
@@ -285,6 +330,8 @@ class Run:
 
     def realloc(self):
         """Re-run the max-min allocation over the active flows and push every changed rate to its sender."""
+        if self.net is not None:
+            self.joint_realloc(); return
         act = [(f["id"], f["src"], f["dst"]) for f in self.flows.values() if f["active"]]
         rates = self.rates(act)
         for f_id, _, _ in act:
@@ -308,16 +355,25 @@ class Run:
         pol, n_all = self.policy, set(range(len(self.manifest["frags"])))
         owner = self.owner
         decision = []
+        if pol in EXEC_MODE:
+            return ""   # full: the Sink travels inside the full state; cold: no Sink is restored
         if pol == "direct":
             if reason == "start":
                 self.start_flow("A", self.final, sorted(n_all), True, "oracle: source -> final owner from t0")
                 decision.append(f"A->{self.final} all {len(n_all)} fragments (oracle knows the final owner)")
         elif pol == "restart":
+            cancelled = defaultdict(list)
             for fl in list(self.flows.values()):
                 if fl["active"] and fl["dst"] != owner:
                     self.cancel_flow(fl, "owner moved: obsolete transfer cancelled")
-                    # progress at the abandoned owner is discarded by this policy
-                    self.holders[fl["dst"]] = set(); decision.append(f"discard progress at {fl['dst']}")
+                    cancelled[fl["dst"]].append(fl["id"])
+            if reason == "move":
+                # M1 only: progress at every abandoned owner is discarded, at the node too (a revisited owner starts empty)
+                for e in dict.fromkeys(self.edges[1:self.owner_idx]):
+                    if e != owner and (self.holders[e] or self.physical[e] or cancelled.get(e)):
+                        rd = self.node(e).call("SINK_DROP", flows=cancelled.get(e, []))
+                        self.drop_epoch[e] = rd["epoch"]
+                        self.holders[e] = set(); self.physical[e] = set(); decision.append(f"discard progress at {e}")
             missing = n_all - self.holders[owner] - self.active_claims(owner)
             if missing and owner != "A":
                 self.start_flow("A", owner, sorted(missing), True, "restart: source re-sends everything to the new owner")
@@ -346,19 +402,24 @@ class Run:
                     elif existing["active"]:
                         self.add_to_flow(existing, todo, complete)
         elif pol == "split":
-            if reason == "start":
+            if reason == "start" and not self.pp and owner == "B":   # Phase 1 path, unchanged
                 self.start_flow("A", "B", sorted(n_all), True, "source -> first owner")
                 decision.append("A->B all fragments")
             else:
+                # every other trigger (moves, arrivals, flow ends) as in Phase 1; (Experiment D) also a first move to another
+                # edge or after placement
                 for fl in list(self.flows.values()):
                     if fl["active"] and fl["dst"] != owner:
                         self.cancel_flow(fl, "owner moved: retarget remaining fragments (progress kept)")
                 missing = n_all - self.holders[owner] - self.active_claims(owner)
                 if missing:
                     assign: dict[str, list[int]] = defaultdict(list)
+                    # prefer the most recent holder execution has left (its progress is reused), then a holder that was never
+                    # an owner (pre-positioned fragments; the network-level reuse_fixed holder order); the source sends the rest.
+                    # Without placement only past owners hold fragments, so this is the Phase 1 rule.
+                    order = holder_order(self.edges[:self.owner_idx + 1], owner, self.holders, [e for e in EDGES if e != "A"])
                     for f in sorted(missing):
-                        # prefer the most recent holder execution has left (its progress is reused); the source sends the rest
-                        src = next((e for e in reversed(self.edges[:self.owner_idx]) if e != "A" and f in self.holders[e]), "A")
+                        src = next((e for e in order if f in self.holders[e]), "A")
                         assign[src].append(f)
                     for src, ids in assign.items():
                         self.start_flow(src, owner, ids, True, "progress-aware: " + ("reuse fragments already delivered" if src != "A" else "source sends only what no other holder has"))
@@ -415,6 +476,8 @@ class Run:
         if self.policy == "reuse_dyn" and now - self.dyn_last >= self.a.dyn_period:
             self.dyn_last = now
             self.dyn_check(now)
+        if self.net is not None and self.net.t0 is not None:
+            self.net.pump(now)
 
     def dyn_check(self, now: float):
         a, owner, flen = self.a, self.owner, self.manifest["frag_bytes"]
@@ -487,10 +550,17 @@ class Run:
             for k in ("t_send_src", "t_go_src", "t_recv_start"):
                 if k in det and det[k] is not None:
                     det[k] = self.rel_t(nc.to_orch(det[k]))
+            if m["event"] == "full_send_end" and det.get("t_start") is not None:
+                det["t_start"] = nc.to_orch(det["t_start"])
             self.ev.log(f"{lb}:{m['event']}", t, **det)
             self.node_events.append({"node": lb, "event": m["event"], "t": t, **det})
             if m["event"] == "sink_bind":
                 self.bound[lb] = t
+            if m["event"] == "resume":
+                self.running = lb
+            if m["event"] in ("full_send_start", "full_send_end") and det.get("xfer") in self.state_xfers:
+                self.state_xfers[det["xfer"]].update({"t_start": det.get("t_start", t)} if m["event"] == "full_send_start" else
+                                                     {"t_end": t, "bytes": det.get("bytes"), "completed": det.get("completed"), "cancelled": det.get("cancelled")})
             if self.policy in AWARE and self.manifest is not None and self.t0 is not None:
                 fl = self.flows.get(det.get("flow"))
                 if m["event"] == "flow_skip_not_held" and fl is not None:
@@ -524,9 +594,13 @@ class Run:
             return
         if kind == "FRAG_RECV":
             rec = {"t_start": nc.to_orch(m["t_start"]), "t_end": nc.to_orch(m["t_end"]), "src": m["src"], "dst": lb, "fid": m["fragment_id"], "bytes": m["bytes"], "flow": m["flow_id"],
-                   "ok": bool(m["ok"]), "dup": bool(m["dup"]), "rejected": m.get("rejected")}
+                   "ok": bool(m["ok"]), "dup": bool(m["dup"]), "rejected": m.get("rejected"), "discarded": bool(m.get("discarded"))}
             self.recv.append(rec)
             self.in_flight[lb].discard(m["fragment_id"])
+            if m.get("epoch", 0) < self.drop_epoch.get(lb, 0):
+                rec["discarded"] = True   # verified there before the node dropped the session's fragments
+            if rec["discarded"]:
+                return   # M1 only: arrived at an owner after it was abandoned and dropped; never held
             if rec["ok"] and not rec["dup"]:
                 self.flow_rx[m["flow_id"]].append((rec["t_end"], m["bytes"]))
             if rec["ok"] and not rec["dup"]:
@@ -552,27 +626,77 @@ class Run:
     def handoff(self, frm: str, to: str, i: int):
         nd = self.o.node_spec[to]
         t_req = time.time()
-        r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], timeout=120)
+        if self.mode == "full":
+            mv = self.full_handoff(frm, to, i, t_req)
+        else:
+            r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode=self.mode, timeout=120)
+            mv = {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": self.node(frm).to_orch(r["t_stop"]), "t_fg_sent": self.node(frm).to_orch(r["t_fg_sent"]),
+                  "call": r["call"], "fg_bytes": r["fg_bytes"], "mode": self.mode}
+            self.running = None
         self.owner_idx = i
-        mv = {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": self.node(frm).to_orch(r["t_stop"]), "t_fg_sent": self.node(frm).to_orch(r["t_fg_sent"]), "call": r["call"], "fg_bytes": r["fg_bytes"]}
         self.moves.append(mv)
         self.ev.log("move", t_req, **{k: (self.rel_t(v) if k.startswith("t_") else v) for k, v in mv.items()})
         self.p_current_row(t_req)
         return mv
+
+    def full_handoff(self, frm: str, to: str, i: int, t_req: float) -> dict:
+        """Full migration. If `frm` is generating, it stops, packs the whole state and sends it to `to`. If the state is
+        still in transit (the user moved on before it arrived), the node holding the packed state cancels that transfer
+        and sends the whole state again to `to` (the partial copy at the abandoned destination is discarded)."""
+        nd = self.o.node_spec[to]
+        self.drain()
+        rate = 0.0
+        self.nxfer += 1; xid = f"x{self.nxfer}"
+        redirect = self.running != frm
+        if redirect:
+            holder = self.state_holder
+            c = self.node(holder).call("FULL_CANCEL", timeout=60)
+            if c.get("completed"):
+                # the transfer finished just before this move: wait for the destination to resume, then hand off from it
+                t_wait = time.time() + 60
+                while self.running != frm and time.time() < t_wait:
+                    self.drain(0.05)
+                redirect = self.running != frm
+        if not redirect:
+            if self.caps:
+                rate = min(self.caps[("out", frm)], self.caps[("in", to)])
+            self.state_xfers[xid] = {"xfer": xid, "src": frm, "dst": to, "move": i, "t_req": t_req}
+            r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode="full", xfer=xid, rate_bps=rate, timeout=300)
+            self.state_holder = frm; self.running = None
+            self.state_xfers[xid]["state_bytes"] = self.packed_bytes = r["state_bytes"]
+            return {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": self.node(frm).to_orch(r["t_stop"]), "t_fg_sent": None, "t_packed": self.node(frm).to_orch(r["t_packed"]),
+                    "call": r["call"], "fg_bytes": 0, "mode": "full", "state_from": frm, "redirect": False, "xfer": xid}
+        holder = self.state_holder
+        if self.caps:
+            rate = min(self.caps[("out", holder)], self.caps[("in", to)])
+        self.state_xfers[xid] = {"xfer": xid, "src": holder, "dst": to, "move": i, "t_req": t_req, "state_bytes": self.packed_bytes}
+        self.node(holder).call("FULL_SEND", to=to, to_host=nd["host"], to_port=nd["data"], xfer=xid, rate_bps=rate, timeout=60)
+        return {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": t_req, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "full",
+                "state_from": holder, "redirect": True, "xfer": xid}
 
     def execute(self):
         o, a = self.o, self.a
         policy = self.policy
         self.log(f"=== run {self.run_id}: {POLICY_LABEL[policy]}, bw {self.bw or 'native'} Mbps, T_m {self.tm if self.tm < 1e8 else 'inf'} s, rho {self.rho}, path {'->'.join(self.edges)} ===")
         session_id = self.run_id
-        for lb in self.nodes_used:
+        cold = self.edges[1] if self.cold_dest else None
+        warm = [lb for lb in self.nodes_used if lb != cold]
+        if cold:
+            self.o.check_reference(cold)
+        self.gpu0_before = self.o.gpu0_state(self.nodes_used)   # prereg run validity: GPU 0 idle (others < 1 GiB) before the run
+        for lb in warm:
             self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=session_id, t0=None)
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
         self.manifest = prep["manifest"]
         self.holders = {e: set() for e in EDGES}; self.holders["A"] = set(range(len(self.manifest["frags"])))
         self.physical = {e: set() for e in EDGES}; self.physical["A"] = set(self.holders["A"])
-        for lb in self.nodes_used[1:]:
+        for lb in warm[1:]:
             self.node(lb).call("MANIFEST", manifest=self.manifest, timeout=600)
+        if a.hybrid_net:
+            from hybrid_net import NetSessions
+
+            self.net = NetSessions(self, self.o.net, a.hybrid_net)
+            self.net.prepare(self.manifest["nbytes"])
         self.drain(0.5)
         # ---- migration start
         self.t0 = time.time(); self.ev.set_ref(self.t0)
@@ -586,8 +710,27 @@ class Run:
             t_move = self.t0 + self.pp["L"]
             while time.time() < t_move:
                 self.drain(0.05); self.tick(time.time())
+        if cold:
+            # OTTER cold destination: the destination process does not exist at the trigger; the source keeps generating
+            # while the destination starts, loads the weights, initializes CUDA and provisions its buffers (all timed)
+            self.node("A").call("EXEC_START")
+            ci = self.cold_info
+            ci["t_launch"] = time.time()
+            ci["pid"] = self.o.start_node(cold, cold_start=True, tag=self.run_id)
+            self.o.connect_one(cold)
+            ci["t_hello"] = time.time()
+            h = self.node(cold).hello
+            ci.update({"t_process_start": self.node(cold).to_orch(h.get("t_main")), "t_runtime_ready": self.node(cold).to_orch(h.get("t_runtime_ready")),
+                       "t_listen": self.node(cold).to_orch(h.get("t_listen")), "reference": h.get("reference")})
+            self.node(cold).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=session_id, t0=None)
+            self.node(cold).call("MANIFEST", manifest=self.manifest, timeout=600)
+            ci["t_ready"] = time.time()
+            self.drain(0.05)
         self.handoff("A", self.edges[1], 1)
         d = self.plan("start")
+        if self.net is not None:
+            self.net.start(self.moves[-1]["t_req"])
+        self.holder_snaps.append((1, {e: set(v) for e, v in self.holders.items()}))
         self.trace_state(f"move A->{self.edges[1]} (first move)", d)
         n_moves = len(self.edges) - 2
         next_move = 1
@@ -607,17 +750,25 @@ class Run:
                 frm, to = self.edges[next_move], self.edges[next_move + 1]
                 self.handoff(frm, to, next_move + 1)
                 d = self.plan("move")
+                if self.net is not None:
+                    self.net.move_all(to)
+                self.holder_snaps.append((next_move + 1, {e: set(v) for e, v in self.holders.items()}))
                 self.trace_state(f"move {frm}->{to}" + (" (final move)" if next_move == n_moves else ""), d)
                 if next_move == n_moves:
                     final_move_t = self.moves[-1]["t_req"]
                 next_move += 1
-            # end conditions: rejoin at the final owner + tail calls, or deadline
+            # end conditions: rejoin at the final owner + tail calls (cold restart never rejoins: its first output at the
+            # final owner + cold_tail_calls), or deadline; scenario E also waits for the network sessions (bounded)
+            svc = max(0.3, self.node(self.final).hello.get("service_s") or 0.55)
             if final_move_t is not None and t_rejoin_final is None:
-                rj = next((e for e in self.node_events if e["node"] == self.final and e["event"] == "rejoin"), None)
+                key = "first_output" if self.mode == "cold" else "rejoin"
+                rj = next((e for e in self.node_events if e["node"] == self.final and e["event"] == key and e["t"] >= final_move_t - 1e-3), None)
                 if rj:
-                    t_rejoin_final = rj["t"]; stop_at = time.time() + a.tail_calls * max(0.3, self.node(self.final).hello.get("service_s") or 0.55)
+                    t_rejoin_final = rj["t"]; stop_at = time.time() + (a.cold_tail_calls if self.mode == "cold" else a.tail_calls) * svc
             if stop_at is not None and now >= stop_at:
-                self.stop_reason = "rejoin+tail"; break
+                if self.net is None or self.net.all_restored_at(self.final) or now >= stop_at + a.net_grace_s:
+                    self.stop_reason = "rejoin+tail" if self.net is None or self.net.all_restored_at(self.final) else "rejoin+tail; network sessions not all restored"
+                    break
             if now >= deadline:
                 self.stop_reason = "deadline"; break
             if any(e["event"] == "window_exhausted" for e in self.node_events):
@@ -630,12 +781,18 @@ class Run:
         self.drain(1.0)
         ends = {lb: self.node(lb).call("RUN_END", timeout=300) for lb in self.nodes_used}
         self.drain(0.5)
+        if self.net is not None:
+            self.net_summary = self.net.end(self.stop_reason)
+
         for lb, e in ends.items():
             if e.get("network_csv"):
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
                 (self.dir / f"node_{lb}" / "network.csv").write_text(e["network_csv"])
         self.trace_state("run end", f"stop reason: {self.stop_reason}")
-        return self.finish(prep, ends, final_move_t)
+        summary = self.finish(prep, ends, final_move_t)
+        if cold:
+            self.o.stop_node(cold, self.cold_info["pid"])   # a fresh destination process for every cold-destination run
+        return summary
 
     # ---------------- accounting
     def finish(self, prep, ends, final_move_t):
@@ -649,7 +806,7 @@ class Run:
             sent_from[(s["src"], s["fid"])].append(s["t_start"])
         useful = wasted = dup = 0
         for r in self.recv:
-            cls = "rejected" if r["rejected"] else ("duplicate" if r["dup"] or not r["ok"] else None)
+            cls = "rejected" if r["rejected"] else ("duplicate" if r["dup"] or not r["ok"] else ("wasted" if r.get("discarded") else None))
             if cls is None:
                 forwarded_later = any(t > r["t_end"] - 1e-3 for t in sent_from.get((r["dst"], r["fid"]), []))
                 cls = "useful" if (r["dst"] == fin or forwarded_later) else "wasted"
@@ -686,13 +843,15 @@ class Run:
             win = [r_ for r_ in rows_ if float(r_[0]) >= self.t0]
             rx = [float(r_[4]) for r_ in win if r_[4]]; tx = [float(r_[5]) for r_ in win if r_[5]]
             nic_rx_peak[lb] = max(rx) if rx else None; nic_tx_peak[lb] = max(tx) if tx else None
-        ev_final = [e for e in self.node_events if e["node"] == fin]
+        # the final ownership only (a revisited final owner may have bound / produced output during an earlier visit)
+        tfm0 = (final_move_t if final_move_t is not None else self.t0) - 1e-3
+        ev_final = [e for e in self.node_events if e["node"] == fin and (e["event"] in ("sink_complete", "sink_verified") or e["t"] >= tfm0)]
         t_complete = next((e["t"] for e in ev_final if e["event"] == "sink_complete"), None)
         t_verified = next((e["t"] for e in ev_final if e["event"] == "sink_verified"), None)
         t_bind = next((e["t"] for e in ev_final if e["event"] == "sink_bind"), None)
         t_rejoin = next((e["t"] for e in ev_final if e["event"] == "rejoin"), None)
         bind_call = next((e.get("call") for e in ev_final if e["event"] == "sink_bind"), None)
-        rows_final = [m for m in self.metrics if m["owner"] == fin]
+        rows_final = [m for m in self.metrics if m["owner"] == fin and self.t0 + m["t_out_rel"] >= tfm0]
         t_first_bound_out = next((self.t0 + m["t_out_rel"] for m in rows_final if m["sink_bound"] and not m["missing"]), None)
         t_first_out_final = next((self.t0 + m["t_out_rel"] for m in rows_final if not m["missing"]), None)
         after8 = [m["psnr"] for m in rows_final if bind_call is not None and m["call"] >= bind_call + 8 and m["psnr"] is not None]
@@ -720,6 +879,8 @@ class Run:
                 first_fwd[s["src"]] = min(first_fwd.get(s["src"], s["t_start"]), s["t_start"])
         complete_t = {e["node"]: e["t"] for e in self.node_events if e["event"] == "sink_complete"}
         fwd_before_complete = {n: (n not in complete_t or t < complete_t[n]) for n, t in first_fwd.items()}
+        st_evs = [e for e in self.node_events if e["event"] == "full_state_verified"]
+        fin_full = next((e for e in reversed(st_evs) if e["node"] == fin), None)
         validation = {
             "four_hosts_distinct": len(set(hosts.values())) == len(self.nodes_used),
             "owner_sequence": owners_seq, "ownership_changed": owners_seq == self.edges,
@@ -731,9 +892,14 @@ class Run:
             "relay_pipe_forwarded_before_complete": None if (self.policy != "relay_pipe" or ("B" in complete_t and self.moves[1:] and complete_t["B"] <= self.moves[1]["t_req"])) else (any(fwd_before_complete.values()) if fwd_before_complete else False),
             "ours_reused_fragments": None if self.policy != "split" else reused_bytes > 0,
             "oracle_direct_only": None if self.policy != "direct" else links_used == [f"A->{fin}"],
-            "all_fragments_verified": all(r["ok"] for r in self.recv if not r["dup"]) and ends[fin].get("sink_verified") is True,
+            # full / cold restore no Sink fragments (not applicable); full checks its state digests below
+            "all_fragments_verified": None if self.mode != "fast" else (all(r["ok"] for r in self.recv if not r["dup"]) and ends[fin].get("sink_verified") is True),
             "sink_version_consistent": not any(r["rejected"] for r in self.recv),
-            "final_sink_digest_matches_source": ends[fin].get("sink_verified"),
+            "final_sink_digest_matches_source": ends[fin].get("sink_verified") if self.mode == "fast" else (fin_full.get("sink_digest_matches_manifest") if (self.mode == "full" and fin_full) else None),
+            "full_state_digests_ok": None if self.mode != "full" else (bool(fin_full) and bool(fin_full.get("all_ok"))),
+            "full_bit_exact_after_resume": None if self.mode != "full" else (bool(rows_final) and all((m["psnr"] or 0) >= 99 for m in rows_final if not m["missing"])),
+            "cold_no_state_transferred": None if self.mode != "cold" else (not self.sent and all(m["fg_bytes"] == 0 for m in self.moves) and not self.state_xfers),
+            "nodes_same_commit": len({self.node(lb).hello.get("commit") for lb in self.nodes_used if lb in self.o.nodes} | {git_commit().split()[0]}) == 1,
             "ingress_peak_mbps_max": max(ingress_peak.values()) if ingress_peak else 0.0,
             "ingress_within_physical_cap": (max(ingress_peak.values()) if ingress_peak else 0.0) <= a.physical_cap_mbps * 1.05,
             "ingress_within_emulated_cap": None if self.bw <= 0 else (max(ingress_peak.values()) if ingress_peak else 0.0) <= self.bw * 1.15,
@@ -756,9 +922,15 @@ class Run:
         # retained: fragments verified at an owner before it was abandoned that the policy still holds there at the end
         t_left = {m_["from"]: m_["t_req"] for m_ in self.moves}
         retained = {}
-        for e in abandoned:
-            before = {r["fid"] for r in ok_first if r["dst"] == e and r["t_end"] <= t_left.get(e, float("inf"))}
-            retained[e] = (len(before & self.holders.get(e, set())) / len(before)) if before else None
+        for k_, m_ in enumerate(self.moves):
+            e = m_["from"]
+            if e == "A" or e not in abandoned:
+                continue
+            # verified at e when it was abandoned (move k_), still held there at the next move (or at the end)
+            before = {r["fid"] for r in ok_first if r["dst"] == e and r["t_end"] <= m_["t_req"]}
+            nxt = next((snap for idx, snap in self.holder_snaps if idx == m_["i"] + 1), None)
+            still = (nxt or self.holders).get(e, set())
+            retained[e] = (len(before & still) / len(before)) if before else None
         x_at_move = {e: len({r["fid"] for r in ok_first if r["dst"] == e and r["t_end"] <= t_mv}) / len(man["frags"]) for e in self.nodes_used if e != "A"}
         version_events = sum(1 for e in self.node_events if e["event"] in ("fragment_rejected_version", "sink_version_mismatch")) + sum(1 for r in self.recv if r["rejected"])
         d0 = {"t_move_final_rel_s": self.rel_t(t_mv),
@@ -771,8 +943,76 @@ class Run:
               "cap_changes": [(self.rel_t(t), n, d, v) for t, n, d, v in self.cap_changes], "prepos": None if not self.pp else {**self.pp, "alloc_sinks": self.pp_alloc, "frags": {c: len(v) for c, v in (self.pp_frag or {}).items()}},
               "decode_rows": sum(1 for m in self.metrics if m.get("t_decode_rel") is not None)}
         validation["version_events_zero"] = version_events == 0
+        # prereg run validity: GPU 0 idle before the run (others < 1 GiB; our idle node may be resident), paced payload egress
+        # per node <= 1.05 x its cap in every 10 s window (fragments; a full-state transfer is one token bucket at the cap)
+        g0 = getattr(self, "gpu0_before", None)
+        validation["gpu0_before_run"] = g0
+        validation["gpu0_idle_before_run"] = None if g0 is None else all("error" not in v and v["others_mib"] < 1024 and v["util_pct"] <= 5 for v in g0.values())
+        pace = {}
+        for src in {x["src"] for x in self.sent}:
+            ts = sorted((x["t_end"], x["bytes"]) for x in self.sent if x["src"] == src)
+            worst, j, acc = 0.0, 0, 0
+            for i_, (t_, b_) in enumerate(ts):
+                acc += b_
+                while ts[j][0] < t_ - 10.0:
+                    acc -= ts[j][1]; j += 1
+                if t_ - ts[0][0] >= 10.0:
+                    worst = max(worst, acc * 8 / 10 / 1e6)
+            pace[src] = worst
+        validation["paced_egress_worst_10s_mbps"] = pace
+        validation["paced_egress_10s_within_cap"] = None if not self.caps else all(
+            w <= 1.05 * max(self.caps[("out", n)], (self.caps0 or self.caps)[("out", n)]) / 1e6 for n, w in pace.items())
+        # ---- Experiment D: per-move timing (from each move's trigger), execution-state bytes, revisit, cold destination
+        per_move = []
+        for k_, m_ in enumerate(self.moves):
+            lo, hi = m_["t_req"], (self.moves[k_ + 1]["t_req"] if k_ + 1 < len(self.moves) else float("inf"))
+            dst = m_["to"]
+            inwin = lambda ev: next((e["t"] for e in self.node_events if e["node"] == dst and e["event"] == ev and lo - 1e-3 <= e["t"] < hi), None)  # noqa: E731
+            fo = next((self.t0 + m["t_out_rel"] for m in self.metrics if m["owner"] == dst and not m["missing"] and lo - 1e-3 <= self.t0 + m["t_out_rel"] < hi), None)
+            rel = lambda t: None if t is None else t - lo  # noqa: E731
+            xf = self.state_xfers.get(m_.get("xfer")) if m_.get("xfer") else None
+            per_move.append({"i": m_["i"], "from": m_["from"], "to": dst, "t_req_rel_s": self.rel_t(lo), "resume_s": rel(inwin("resume")), "first_output_s": rel(fo),
+                             "sink_bind_s": rel(inwin("sink_bind")), "rejoin_s": rel(inwin("rejoin")), "fg_bytes": m_["fg_bytes"],
+                             "state_transfer": None if not xf else {"src": xf["src"], "bytes": xf.get("bytes"), "completed": xf.get("completed"), "cancelled": xf.get("cancelled"),
+                                                                     "start_s": rel(xf.get("t_start")), "end_s": rel(xf.get("t_end")), "redirect": m_.get("redirect")}})
+        st_bytes = sum((x.get("bytes") or 0) for x in self.state_xfers.values())
+        st_link = defaultdict(int)
+        for x in self.state_xfers.values():
+            st_link[f"{x['src']}->{x['dst']}"] += x.get("bytes") or 0
+        fg_total = sum(m_["fg_bytes"] or 0 for m_ in self.moves)
+        aborted = sum(e.get("bytes") or 0 for e in self.node_events if e["event"] == "full_recv_aborted")
+        execution_state = {"mode": self.mode, "fg_bytes_total": fg_total, "state_transfer_bytes_total": st_bytes, "state_transfer_bytes_by_link": dict(st_link),
+                           "state_transfers": list(self.state_xfers.values()), "state_bytes_completed": sum((x.get("bytes") or 0) for x in self.state_xfers.values() if x.get("completed")),
+                           "state_bytes_cancelled": sum((x.get("bytes") or 0) for x in self.state_xfers.values() if not x.get("completed")), "partial_state_discarded_at_receivers": aborted,
+                           "full_state_verified": [{k: v for k, v in e.items() if k in ("node", "xfer", "all_ok", "sink_digest_matches_manifest")} for e in st_evs],
+                           "packed_state_bytes": next((x.get("state_bytes") for x in self.state_xfers.values() if x.get("state_bytes")), None)}
+        d0["execution_state_bytes_sinks"] = (st_bytes + fg_total) / S
+        d0["aggregate_network_incl_state_sinks"] = (total_sent + st_bytes + fg_total) / S
+        revisit = None
+        if self.revisit:
+            first_left = next((m_["t_req"] for m_ in self.moves if m_["from"] == fin), None)
+            v_before = {r["fid"] for r in ok_first if r["dst"] == fin and first_left is not None and r["t_end"] <= first_left}
+            snap_ret = next((snap for idx, snap in self.holder_snaps if idx == len(self.moves)), None)
+            revisit = {"final_owner": fin, "verified_before_leaving": len(v_before) / len(man["frags"]),
+                       "held_on_return_policy_view": len((snap_ret or {}).get(fin, set())) / len(man["frags"]) if snap_ret is not None else None,
+                       "verified_before_leaving_still_held_on_return": (len(v_before & (snap_ret or {}).get(fin, set())) / len(v_before)) if v_before and snap_ret is not None else None,
+                       "fragments_received_again_after_return": sum(1 for r in ok_first if r["dst"] == fin and r["fid"] in v_before and tfm is not None and r["t_end"] > tfm),
+                       "sink_drops": [e for e in self.node_events if e["event"] == "sink_dropped"]}
+        cold_dest = None
+        if self.cold_dest:
+            ci = self.cold_info
+            fr = lambda t: None if t is None else t - self.t0  # noqa: E731
+            ttfo = next((self.t0 + m["t_out_rel"] for m in rows_final if not m["missing"]), None)
+            cold_dest = {"timed_from": "trigger (t0)", "process_launch_s": fr(ci.get("t_launch")), "process_start_s": fr(ci.get("t_process_start")),
+                         "runtime_ready_s": fr(ci.get("t_runtime_ready")), "listening_s": fr(ci.get("t_listen")), "connected_s": fr(ci.get("t_hello")),
+                         "provisioned_s": fr(ci.get("t_ready")), "handoff_request_s": fr(final_move_t), "ttfo_s": fr(ttfo), "sink_verified_s": fr(t_verified),
+                         "sink_bind_s": fr(t_bind), "first_bound_output_s": fr(t_first_bound_out), "rejoin_s": fr(t_rejoin), "reference": ci.get("reference"),
+                         "source_kept_generating": True}
         summary = {
-            "d0": d0,
+            "d0": d0, "per_move": per_move, "gpu_peak_mem_mb": {lb: {k: e.get(k) for k in ("peak_allocated_mb", "peak_reserved_mb")} for lb, e in ends.items()}, "execution_state": execution_state, "revisit": revisit, "cold_destination": cold_dest,
+            "hybrid": None if self.net is None else {"n_network_sessions": self.net.N, "network_policy": self.net.policy, "network_run_dir": str(self.net.dir.relative_to(REPO_ROOT)),
+                                                     "network_summary": {k: self.net_summary.get(k) for k in ("restored_sessions", "first_restored", "makespan_s", "bytes", "normalized", "validation", "stop_reason")},
+                                                     "network_sessions": [dict(r) for r in __import__("csv").DictReader(open(self.net.dir / "sessions.csv"))]},
             "run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep, "path": self.edges, "hosts": hosts,
             "sink_bytes": S, "n_frags": len(man["frags"]), "frag_bytes": man["frag_bytes"], "sink_version": man["sink_version"],
             "t_final_move_rel_s": self.rel_t(tfm), "moves": [{k: (self.rel_t(v) if k.startswith("t_") else v) for k, v in m.items()} for m in self.moves],
@@ -818,34 +1058,123 @@ class Orchestrator:
         self.events: queue.Queue = queue.Queue()
         self.nodes: dict[str, NodeConn] = {}
         self.agent_pids = {}
+        self.agents = {}
+        self.net = None
+        self.cold_label = "B" if a.cold_dest else None   # --cold_dest: the destination is started after each trigger
+
+    def labels(self):
+        return EDGES[:self.a.hops + 1]
+
+    def agent(self, lb):
+        if lb not in self.agents:
+            self.agents.update(connect_all(parse_hosts(self.a.agent_hosts), [lb]))
+        return self.agents[lb]
+
+    def node_cmd(self, lb, cold_start=False):
+        nd = self.node_spec[lb]
+        gpus = dict(item.split("=") for item in self.a.gpus.split(","))
+        cmd = [self.a.py, "tools/eval/mobility_node.py", "--label", lb, "--gpu_id", gpus.get(lb, "0"), "--ctl_port", str(nd["ctl"]), "--data_port", str(nd["data"]), "--mss", str(self.a.mss or 0),
+               "--migration_chunk", str(self.a.migration_chunk), "--post_chunks", str(self.a.post_chunks)]
+        if self.a.iface:
+            cmd += ["--iface", self.a.iface]
+        if cold_start:
+            cmd += ["--cold_start"]
+        return cmd + self.a.node_extra.split()
 
     def launch(self):
-        hosts = parse_hosts(self.a.agent_hosts)
-        labels = EDGES[:self.a.hops + 1]
-        agents = connect_all(hosts, labels)
+        labels = [lb for lb in self.labels() if lb != self.cold_label]
+        self.agents.update(connect_all(parse_hosts(self.a.agent_hosts), labels))
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        gpus = dict(item.split("=") for item in self.a.gpus.split(","))
         for lb in labels:
-            nd = self.node_spec[lb]
-            cmd = [self.a.py, "tools/eval/mobility_node.py", "--label", lb, "--gpu_id", gpus.get(lb, "0"), "--ctl_port", str(nd["ctl"]), "--data_port", str(nd["data"]), "--mss", str(self.a.mss or 0),
-                   "--migration_chunk", str(self.a.migration_chunk), "--post_chunks", str(self.a.post_chunks)]
-            if self.a.iface:
-                cmd += ["--iface", self.a.iface]
-            cmd += self.a.node_extra.split()
-            pid = agents[lb].run(cmd, f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{stamp}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
-            self.agent_pids[lb] = (agents[lb], pid)
-            print(f"[orch] launched node {lb} on {nd['host']} (pid {pid})", flush=True)
+            pid = self.agents[lb].run(self.node_cmd(lb), f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{stamp}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
+            self.agent_pids[lb] = (self.agents[lb], pid)
+            print(f"[orch] launched node {lb} on {self.node_spec[lb]['host']} (pid {pid})", flush=True)
+        if self.a.hybrid_net:
+            from hybrid_net import NetOrch
+
+            self.net = NetOrch(self.a, self.node_spec)
+            self.net.launch()
 
     def connect(self):
-        labels = EDGES[:self.a.hops + 1]
+        for lb in self.labels():
+            if lb != self.cold_label:
+                self.connect_one(lb)
+        if self.a.hybrid_net:
+            if self.net is None:
+                from hybrid_net import NetOrch
+
+                self.net = NetOrch(self.a, self.node_spec)
+            self.net.connect()
+
+    def connect_one(self, lb):
+        nd = self.node_spec[lb]
+        print(f"[orch] connecting to node {lb} at {nd['host']}:{nd['ctl']} (waits for model load{'' if lb == self.cold_label else ' + baseline'}) ...", flush=True)
+        # the cold destination is timed from the trigger: poll its control port every 20 ms, not every 5 s
+        self.nodes[lb] = NodeConn(lb, nd["host"], nd["ctl"], self.a.mss, self.events, timeout=self.a.connect_timeout, retry_s=0.02 if lb == self.cold_label else 5.0)
+        h = self.nodes[lb].hello
+        print(f"[orch] node {lb} = {h.get('host')} service {h.get('service_s') and round(h['service_s'] * 1e3)} ms/chunk, mss {h.get('mss_effective')}, clock offset {self.nodes[lb].off * 1e3:+.2f} ms, "
+              f"dry_run={h.get('dry_run')}, commit {(h.get('commit') or '?')[:7]}", flush=True)
+        if h.get("dry_run") and not self.a.dry_run:
+            raise SystemExit(f"node {lb} is a dry-run node; refusing to record results")
+
+    # ---- OTTER cold destination: one fresh destination process per run
+    def check_reference(self, lb):
+        if self.a.dry_run:
+            return
+        ag = self.agent(lb)
+        hits = ag.glob(f"results/evaluation/_reference_cache/*_M{self.a.migration_chunk}_N{self.a.post_chunks}_*.npz")
+        host = ag.ping()["host"].split(".")[0]
+        if not [h for h in hits if Path(h).name.startswith(host + "_")]:
+            raise SystemExit(f"--cold_dest: no reference cache on {host} for M={self.a.migration_chunk}, N={self.a.post_chunks}; run one warm run with the same --post_chunks first")
+
+    def gpu0_state(self, labels):
+        """GPU 0 on every host just before a run: utilization and memory used by processes other than our own node."""
+        if self.a.dry_run:
+            return None
+        out = {}
         for lb in labels:
+            try:
+                ag = self.agent(lb)
+                own = {self.nodes[lb].hello.get("pid")} if lb in self.nodes else set()
+                gpu = dict(item.split("=") for item in self.a.gpus.split(",")).get(lb, "0")
+                util = ag.exec(["nvidia-smi", "-i", gpu, "--query-gpu=utilization.gpu,memory.used", "--format=csv,noheader,nounits"])["stdout"].strip()
+                apps = ag.exec(["nvidia-smi", "-i", gpu, "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"])["stdout"].strip()
+                others = [ln.split(",") for ln in apps.splitlines() if ln.strip() and int(ln.split(",")[0]) not in own]
+                u, mem = (float(x) for x in util.split(","))
+                out[lb] = {"util_pct": u, "mem_used_mib": mem, "others_mib": sum(float(x[1]) for x in others), "others": [x[0].strip() for x in others]}
+            except Exception as exc:  # noqa: BLE001
+                out[lb] = {"error": repr(exc)}
+        return out
+
+    def start_node(self, lb, cold_start=False, tag=""):
+        cmd = self.node_cmd(lb, cold_start=cold_start)
+        if self.a.dry_run and not self.a.launch:   # local protocol test: start the dry-run node here
+            import subprocess
+
             nd = self.node_spec[lb]
-            print(f"[orch] connecting to node {lb} at {nd['host']}:{nd['ctl']} (waits for model load + baseline) ...", flush=True)
-            self.nodes[lb] = NodeConn(lb, nd["host"], nd["ctl"], self.a.mss, self.events, timeout=self.a.connect_timeout)
-            h = self.nodes[lb].hello
-            print(f"[orch] node {lb} = {h.get('host')} service {h.get('service_s') and round(h['service_s'] * 1e3)} ms/chunk, mss {h.get('mss_effective')}, clock offset {self.nodes[lb].off * 1e3:+.2f} ms, dry_run={h.get('dry_run')}", flush=True)
-            if h.get("dry_run") and not self.a.dry_run:
-                raise SystemExit(f"node {lb} is a dry-run node; refusing to record results")
+            cmd = [sys.executable] + cmd[1:] + ["--bind", nd["host"], "--dry_run"] + self.a.dry_node_args.split()
+            logp = REPO_ROOT / f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{tag}.log"; logp.parent.mkdir(parents=True, exist_ok=True)
+            pr = subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=open(logp, "w"), stderr=subprocess.STDOUT)
+            self.agent_pids[lb] = (None, pr)
+            return pr.pid
+        pid = self.agent(lb).run(cmd, f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{tag}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
+        self.agent_pids[lb] = (self.agent(lb), pid)
+        return pid
+
+    def stop_node(self, lb, pid):
+        nc = self.nodes.pop(lb, None)
+        if nc is not None:
+            try:
+                send_msg(nc.sock, "SHUTDOWN", {}, b"", None)
+            except OSError:
+                pass
+        ag, h = self.agent_pids.get(lb, (None, None))
+        if ag is None and h is not None:
+            h.wait(timeout=120)
+        elif ag is not None:
+            r = ag.wait(pid, timeout=180)
+            if r.get("timed_out"):
+                ag.call(op="kill", pid=pid)
 
     def shutdown(self):
         for nc in self.nodes.values():
@@ -853,6 +1182,8 @@ class Orchestrator:
                 send_msg(nc.sock, "SHUTDOWN", {}, b"", None)
             except OSError:
                 pass
+        if self.net is not None:
+            self.net.shutdown()
 
 
 def main():
@@ -895,6 +1226,14 @@ def main():
     ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")
     ap.add_argument("--lookahead", type=float, default=10.0)
     ap.add_argument("--budget", type=float, default=1.0)
+    # Experiment D
+    ap.add_argument("--cold_dest", action="store_true", help="OTTER cold destination (scenario A sensitivity): start node B after the trigger")
+    ap.add_argument("--cold_tail_calls", type=int, default=60, help="cold restart: calls to keep generating at the final owner after its first output")
+    ap.add_argument("--hybrid_net", type=int, default=0, help="scenario E: number of network-level restoration sessions next to the GPU session")
+    ap.add_argument("--net_ctl_port", type=int, default=29831); ap.add_argument("--net_data_port", type=int, default=29832)
+    ap.add_argument("--net_nodes", type=str, default="", help="scenario E: restore-node addresses A=host:ctl:data,... (default: the GPU hosts on --net_ctl_port/--net_data_port)")
+    ap.add_argument("--net_grace_s", type=float, default=120.0, help="scenario E: after the GPU session's end condition, wait at most this long for the network sessions")
+    ap.add_argument("--dry_node_args", type=str, default="--dry_sink_mb 64 --dry_service_s 0.2", help="dry run: arguments for a node this orchestrator starts itself (--cold_dest)")
     a = ap.parse_args()
     a.mss = a.mss or None
     if a.dry_run:

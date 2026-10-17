@@ -30,7 +30,8 @@ def kind(s):
 
 def main():
     rows, fails = [], []
-    for d in sorted(EXP.glob("policy=*"), key=lambda p: p.name[-15:]):
+    exp = ROOT / "results/evaluation" / sys.argv[1] if len(sys.argv) > 1 else EXP   # e.g. d0_shakedown_rerun
+    for d in sorted(exp.glob("policy=*"), key=lambda p: p.name[-15:]):
         s = json.load(open(d / "summary.json"))
         v, z, L, c = s["validation"], s["d0"], s["latency_after_final_move_s"], s["continuity"]
         k = kind(s)
@@ -62,7 +63,7 @@ def main():
            "| scenario | policy | first output | Sink bound | rejoin | rejoin PSNR (dB) | source pre / post / total (Sinks) | holder-forwarded | x verified at move | reuse of verified progress | re-plans | NIC peak (Mbps) | verdict |",
            "|---|---|---|---|---|---|---|---|---|---|---|---|---|"] + rows
     out += ["", f"{len(rows)} runs; {len(fails)} failing."]
-    p = ROOT / "results/evaluation/osdi/d0/shakedown_check.md"; p.write_text("\n".join(out) + "\n")
+    p = ROOT / "results/evaluation/osdi/d0" / ("shakedown_check.md" if exp == EXP else f"shakedown_check_{exp.name}.md"); p.write_text("\n".join(out) + "\n")
     print("\n".join(out))
     sys.exit(1 if fails else 0)
 

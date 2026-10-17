@@ -5,7 +5,7 @@
 #   PY=/path/to/python tools/eval/run_planner_regression.sh [group ...]     (groups: reg prepos a3 dissem e2 fe)
 set -uo pipefail
 ROOT_DIR="$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)"; cd "$ROOT_DIR"
-PY="${PY:-python3}"; OUT=_regress_planner; LOGD="${LOGD:-/tmp/planner_regression_nodes}"; mkdir -p "$LOGD"
+PY="${PY:-python3}"; OUT="${OUT:-_regress_planner}"; LOGD="${LOGD:-/tmp/planner_regression_nodes}"; mkdir -p "$LOGD"
 NODES="A=127.0.0.1:29851:29852,B=127.0.0.1:29861:29862,C=127.0.0.1:29871:29872,D=127.0.0.1:29881:29882"
 start_nodes() { pkill -f "tools/eval/restore_node.py" 2>/dev/null; sleep 0.5; i=0
   for L in A B C D; do "$PY" tools/eval/restore_node.py --label $L --bind 127.0.0.1 --ctl_port $((29851+10*i)) --data_port $((29852+10*i)) --mss 0 > "$LOGD/node_$L.log" 2>&1 & i=$((i+1)); done; sleep 2; }

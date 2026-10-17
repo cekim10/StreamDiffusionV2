@@ -56,8 +56,9 @@ def info(d: Path):
 
 def main():
     rows, fails = [], []
+    new_root = sys.argv[1] if len(sys.argv) > 1 else "_regress_planner"   # e.g. _regress_planner_expD (a later re-run)
     for g, old in OLD.items():
-        new_dir = EV / "_regress_planner" / g
+        new_dir = EV / new_root / g
         if not new_dir.exists():
             continue
         olds = {tag(d): d for d in (EV / old).glob("p*") if (d / "summary.json").exists()}
@@ -91,7 +92,7 @@ def main():
            "| group | configuration | T (old -> new, s) | verdict |", "|---|---|---|---|"]
     out += [f"| {g} | `{n}` | {t} | {v} |" for g, n, t, v in rows]
     out += ["", f"{len(rows)} configurations compared; {len(fails)} with differences."]
-    (EV / "_regress_planner" / "comparison.md").write_text("\n".join(out) + "\n")
+    (EV / new_root / "comparison.md").write_text("\n".join(out) + "\n")
     print("\n".join(out))
     sys.exit(1 if fails else 0)
 
