@@ -72,11 +72,29 @@ native (Full migration, OTTER event-driven): PASS. D0 shakedown re-run (`../d0/s
 To re-run on the testbed after the fixes: `full_single full_repeated native placement hybrid`. The earlier runs stay in
 `expD_correctness/` as recorded (superseded, not deleted).
 
+## Re-run after the fixes (2026-10-17, commit 7b35294; results 6e553b3)
+
+All 10 re-run directories pass (`correctness_check_expD_correctness.md`; the two earlier non-passing directories stay
+listed as recorded). Single runs, correctness only; nothing here is an Experiment D result.
+
+| test | outcome |
+|---|---|
+| Full migration, single, 1 Gbps | TTFO 54.09 s (Phase 1 single-handoff `full`: 53.8 s); was 57.25 s before the receive-pool fix; bit-exact, digests ok |
+| Full migration, single, native | TTFO 7.24 s (Phase 1: 7.85 s); was 10.23 s |
+| Full migration, repeated rho 2 | after the final move 53.41 s; two cancelled transfers, one complete A -> D transfer |
+| M1 + M2 + top-1, incorrect (A -> C) | x = 0.72 at B; B_pre / B_post / B_source,total = 0.72 / 0.29 / 1.01; B_fwd 0.72; bind-ready 15.55 s = M1 + M2 without placement (15.55 s) |
+| oracle (A -> B) | x = 0.72; bind-ready 4.90 s |
+| OTTER event-driven, native | TTFO 0.69 s, bind-ready 3.19 s |
+| hybrid (Scenario B v2 layout), GPU session bind-ready after the final move | M1 only 56.83 s, M1 + M2 43.15 s, OTTER event-driven 42.89 s; network sessions restored after their last move in 53.0-55.1 s (M1 only) vs 36.3-39.9 s (M1 + M2, OTTER event-driven); source A per network session 1.31 vs 1.00 Sinks |
+
+The Full-migration timings now match Phase 1's single-handoff baseline (within 0.3-0.6 s), M1 + M2 + top-1 places and
+forwards as the network-level A-pilot predicted (B_pre 0.71, B_post 0.29, B_source,total 1.00, B_fwd 0.72), and the
+hybrid scenario now creates source-egress contention (A's egress, not one destination's ingress, is shared).
+
 ## GO / NO-GO for the full Experiment D sweep
 
-**NO-GO.** Every preregistered scenario except the external C/R comparison can now be executed and every G1-G8 quantity
-is recorded, but: the focused GPU correctness tests and the D0 shakedown re-run have not run on the testbed; G9's
-steady-state clause has no measurement mode yet; the G1-G9 aggregation script and the sweep driver are not written;
-external C/R is blocked by the testbed (no CRIU / cuda-checkpoint / privileges). Recommended order: testbed correctness
-tests -> review -> G9 mode + aggregator + driver (dry-run) -> request approval for the sweep (external C/R handled
-separately).
+**NO-GO (unchanged).** Every in-repo capability the preregistration specifies now passes its focused correctness test on
+the testbed, and the D0 shakedown re-run passes 9/9. Still missing before a sweep can start: the G9 steady-state
+measurement mode, the G1-G9 aggregation script (frozen criteria applied to run summaries; medians over valid reps;
+invalid runs listed) and the sweep driver (matrix, GPU 0 idle gate, resume, invalid-run re-runs); external C/R is
+blocked by the testbed. Recommended next step: implement and dry-run those three, then request approval for the sweep.
