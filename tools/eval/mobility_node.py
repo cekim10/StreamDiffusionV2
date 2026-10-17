@@ -201,6 +201,10 @@ class GpuRuntime:
             raise SystemExit(f"cold start needs the reference cache {path} (start a warm node with the same configuration on this host once)")
         self.base = CachedReference(path)
         self.service_s = None
+        # Runner.start() records the canonical denoising schedule on its first call; a cold node never runs a session
+        # before provisioning, so record it here (no session has run yet, so the schedule is still the configured one)
+        if not hasattr(self.runner, "_canonical_steps"):
+            self.runner._canonical_steps = self.pl.denoising_step_list.detach().clone()
         return path
 
     def gpu_mem_mb(self):
