@@ -755,8 +755,6 @@ class Run:
                 frm, to = self.edges[next_move], self.edges[next_move + 1]
                 self.handoff(frm, to, next_move + 1)
                 d = self.plan("move")
-                if self.net is not None:
-                    self.net.move_all(to)
                 self.holder_snaps.append((next_move + 1, {e: set(v) for e, v in self.holders.items()}))
                 self.trace_state(f"move {frm}->{to}" + (" (final move)" if next_move == n_moves else ""), d)
                 if next_move == n_moves:
@@ -771,8 +769,8 @@ class Run:
                 if rj:
                     t_rejoin_final = rj["t"]; stop_at = time.time() + (a.cold_tail_calls if self.mode == "cold" else a.tail_calls) * svc
             if stop_at is not None and now >= stop_at:
-                if self.net is None or self.net.all_restored_at(self.final) or now >= stop_at + a.net_grace_s:
-                    self.stop_reason = "rejoin+tail" if self.net is None or self.net.all_restored_at(self.final) else "rejoin+tail; network sessions not all restored"
+                if self.net is None or self.net.all_restored() or now >= stop_at + a.net_grace_s:
+                    self.stop_reason = "rejoin+tail" if self.net is None or self.net.all_restored() else "rejoin+tail; network sessions not all restored"
                     break
             if now >= deadline:
                 self.stop_reason = "deadline"; break

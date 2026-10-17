@@ -61,9 +61,11 @@ gained an output-folder option only.
 - Three network-level sessions run on `restore_node.py` processes (no torch, no GPU; separate ports 29831/29832 on the
   same four hosts), driven by `restore_orchestrate.Run` **unchanged** (subclass in `hybrid_net.py` that overrides only
   the rate allocation and the schedule). Every flow of every session (GPU and network) is allocated in one max-min
-  computation over the same per-node caps, so A's egress is really shared. Each network session starts at B at the GPU
-  session's first move and moves with it (B -> C -> D) at the same instants; its policy is the GPU session's (M1 only =
-  restart, M1 + M2 = reuse_fixed, OTTER event-driven = reuse_dyn).
+  computation over the same per-node caps, so A's egress is really shared. Layout (changed 2026-10-17, see README):
+  Scenario B v2's, with the GPU session as session 0 (B, then C, D every T_m); network session i = 1..3 starts at
+  [B, C, D][i % 3] = C, D, B at the GPU session's first move and moves to the next edge at T_m (k + i/4), k = 1, 2.
+  First version: every network session moved with the GPU session, so all four shared D's ingress at the end. Policy
+  per network session = the GPU session's (M1 only = restart, M1 + M2 = reuse_fixed, OTTER event-driven = reuse_dyn).
 - GPU metrics refer to the GPU session only; the network sessions' results (`<run>/net/<id>/sessions.csv`,
   `summary.json`) are reported separately (`summary.json` `hybrid`). The run waits up to `--net_grace_s` (120 s) after
   the GPU session's end condition for the network sessions to restore.

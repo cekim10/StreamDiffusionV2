@@ -61,7 +61,7 @@ native (Full migration, OTTER event-driven): PASS. D0 shakedown re-run (`../d0/s
    destination allocated a new multi-GB buffer per component while receiving (effective 931 Mbps at 1 Gbps). Phase 1
    receives into two preallocated buffers; the GPU harness now does the same (allocated at MANIFEST, untimed). The
    three Full-migration runs passed every check but their timings are superseded; they must be re-run.
-4. Scenario E construction (decision needed, see below): in all three hybrid runs the GPU session's bind-ready after
+4. Scenario E construction (decided 2026-10-17: Scenario B v2 layout, implemented; loopback 3/3 PASS): in all three hybrid runs the GPU session's bind-ready after
    the final move is ~56 s for every policy (M1 only 56.8, M1 + M2 57.2, OTTER event-driven 56.9 s), because all four
    sessions move together B -> C -> D and share D's ingress (each gets ~250 Mbps). The run measures destination-ingress
    contention, not the source-egress contention G6 is about (its prediction comes from Scenario B v2, whose sessions
@@ -69,8 +69,8 @@ native (Full migration, OTTER event-driven): PASS. D0 shakedown re-run (`../d0/s
 5. Descriptive: in the re-run, OTTER at moves' first chunk at D took 1.70 s (D0: 0.59 s; identical output); one sample.
 6. G5 observation reproduced in the re-run (`g5_shakedown_observation.md`, addendum).
 
-To re-run on the testbed after the fixes: `full_single full_repeated native placement`, and `hybrid` once its layout is
-decided.
+To re-run on the testbed after the fixes: `full_single full_repeated native placement hybrid`. The earlier runs stay in
+`expD_correctness/` as recorded (superseded, not deleted).
 
 ## GO / NO-GO for the full Experiment D sweep
 

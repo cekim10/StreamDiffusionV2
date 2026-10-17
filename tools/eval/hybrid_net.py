@@ -7,8 +7,13 @@ unchanged: planning, event handling, event-driven re-planning, accounting) on to
 GPU, no model; separate ports on the same four hosts). Only two things differ from a stand-alone restore run:
   - rate allocation: every flow of every session (the GPU session's and the network sessions') is allocated in ONE
     max-min computation over the same per-node caps, so the source A's egress is really shared;
-  - schedule: every network session starts at B at the GPU session's first move and moves with it (B -> C -> D), at the
-    same instants.
+  - schedule (Scenario B v2 layout, the basis of G6's prediction): the GPU session is session 0 (B at its first move,
+    then C, D every T_m); network session i = 1..N starts at edge [B, C, D][i % 3] at the GPU session's first move and
+    moves to the next edge in the cycle at T_m * (k + i / (N + 1)), k = 1 .. (the GPU session's later moves), i.e.
+    staggered as restore_orchestrate.Run staggers its sessions. The sessions therefore share the source's egress
+    and only sometimes an edge. (2026-10-17: replaces "every network session moves with the GPU session", under which
+    all four sessions shared the final destination's ingress and the run measured ingress, not source-egress,
+    contention; decision recorded in results/evaluation/osdi/expD/README.md.)
 Policy per network session = the GPU session's: restart (M1 only), reuse_fixed (= GPU split, M1 + M2), reuse_aware_in,
 reuse_dyn (OTTER event-driven). Results go to <GPU run dir>/net/<restore run id>/ (sessions.csv, flows.csv,
 summary.json, node_*/network.csv) and are reported separately from the GPU session.
@@ -81,13 +86,16 @@ class NetSessions(RestoreRun):
             caps=ga.caps, cap_events="", dyn_period=ga.dyn_period, dyn_window=ga.dyn_window, dyn_warmup=ga.dyn_warmup, dyn_eps=ga.dyn_eps,
             dyn_rel=ga.dyn_rel, dyn_ctrl=ga.dyn_ctrl, frag_bytes=ga.frag_bytes, sink_bytes=None, others_start=0.0, mss=ga.mss, iface=ga.iface,
             agent_hosts=ga.agent_hosts, py=ga.py, net_ctl_port=ga.net_ctl_port, net_data_port=ga.net_data_port, net_nodes=ga.net_nodes)
-        super().__init__(net_orch, NET_POLICY[gpu_run.policy], n_sess, len(gpu_run.edges) - 1, rho, gpu_run.rep)
+        super().__init__(net_orch, NET_POLICY[gpu_run.policy], n_sess, len(gpu_run.edges) - 2, rho, gpu_run.rep)   # moves per network session
         self.gpu = gpu_run
         self.caps = gpu_run.caps            # one emulated network: the same per-node caps object as the GPU session
         self.known_caps = dict(self.caps)
         self.caps0 = dict(self.caps)
-        for sid in self.sids:               # every network session follows the GPU session: B first, then C, D
-            self.owner[sid] = gpu_run.edges[1]; self.history[sid] = [gpu_run.edges[1]]
+        self.layout_n = n_sess + 1          # Scenario B v2 layout: the GPU session is session 0
+        for j, sid in enumerate(self.sids):
+            i = j + 1
+            self.owner[sid] = NET_EDGES[i % 3]; self.history[sid] = [self.owner[sid]]
+        self.sched = []
         self.stop_reason = None
 
     def realloc(self):
@@ -112,19 +120,23 @@ class NetSessions(RestoreRun):
 
     def start(self, t0: float):
         self.t0 = t0; self.ev.set_ref(t0)
-        self.ev.log("start", t0, policy=self.policy, N=self.N, hybrid_with=self.gpu.run_id, owner=self.gpu.edges[1])
+        n_moves = len(self.gpu.edges) - 2   # the GPU session's moves after its first one
+        for j, sid in enumerate(self.sids):
+            i = j + 1
+            self.sched += [(t0 + self.tm * (k + i / self.layout_n), sid) for k in range(1, n_moves + 1)]
+        self.sched.sort()
+        self.ev.log("start", t0, policy=self.policy, N=self.N, hybrid_with=self.gpu.run_id, layout="Scenario B v2 (GPU session = session 0)",
+                    owners={sid: self.owner[sid] for sid in self.sids}, moves=[(round(t - t0, 3), sid) for t, sid in self.sched])
         with self.lock:
             for sid in self.sids:
                 self.owner_since[sid] = t0; self.restored_now[sid] = False; self.move_t[sid] = t0
                 self.plan(sid, "start")
 
-    def move_all(self, to: str):
-        with self.lock:
-            for sid in self.sids:
-                self.move(sid, to)
-
     def pump(self, now: float):
         with self.lock:
+            while self.sched and self.sched[0][0] <= now:
+                _, sid = self.sched.pop(0)
+                self.move(sid)   # next edge in the cycle B -> C -> D -> B
             self.tick(now)
         while True:
             try:
@@ -133,8 +145,9 @@ class NetSessions(RestoreRun):
                 return
             self.handle(m)
 
-    def all_restored_at(self, edge: str) -> bool:
-        return all(self.restored[s] and self.restored[s][-1][1] == edge and self.owner[s] == edge for s in self.sids)
+    def all_restored(self) -> bool:
+        """Every network session restored at its current (final) owner, with no move left."""
+        return not self.sched and all(self.restored[s] and self.restored[s][-1][1] == self.owner[s] for s in self.sids)
 
     def end(self, reason: str):
         self.stop_reason = reason
