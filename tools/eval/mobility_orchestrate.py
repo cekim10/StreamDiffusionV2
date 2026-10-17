@@ -352,6 +352,11 @@ class Run:
     def plan(self, reason: str):
         if self.policy in AWARE:
             return self.plan_aware(reason)
+        if self.owner_idx == 0:
+            # placement window (before the first move): the source still owns execution and the only flows are the placement
+            # flows; restoration is planned from the first move on (M1-family policies re-plan on every arrival and would
+            # otherwise cancel the placement flows as "not headed to the owner")
+            return ""
         pol, n_all = self.policy, set(range(len(self.manifest["frags"])))
         owner = self.owner
         decision = []
@@ -691,7 +696,7 @@ class Run:
         self.holders = {e: set() for e in EDGES}; self.holders["A"] = set(range(len(self.manifest["frags"])))
         self.physical = {e: set() for e in EDGES}; self.physical["A"] = set(self.holders["A"])
         for lb in warm[1:]:
-            self.node(lb).call("MANIFEST", manifest=self.manifest, timeout=600)
+            self.node(lb).call("MANIFEST", manifest=self.manifest, full_pool=self.mode == "full", timeout=600)
         if a.hybrid_net:
             from hybrid_net import NetSessions
 

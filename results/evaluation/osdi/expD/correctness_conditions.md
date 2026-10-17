@@ -39,3 +39,11 @@ cold-destination ordering; (9) no duplicate application = 0 duplicate receipts i
 
 Amendment before any testbed run (2026-10-16): "keeps generating" was ">= 8 chunks"; set to >= min(8, tail_calls) after the dry
 run with tail_calls = 4 (an unshaped Full migration rejoins at once and stops after the tail). Testbed runs use 12.
+
+Amendment after the testbed run (2026-10-17): added "placement delivered": in a run with placement, the fraction of the
+Sink verified at the top-1 candidate at the move is >= the allocation minus max(2, 5 % of it) fragments (fragments in
+flight at the move are not verified yet; first written as 0.95 x the allocation, changed the same day before any re-run
+because at loopback scale one fragment is 6 % of the fake Sink). Reason: the M1 + M2 + top-1
+run (`expD_correctness/policy=split_..._pp=top1_..._20261016-224842`) passed every written condition although its
+placement flow had been cancelled after 2 of 299 fragments (an implementation bug, fixed in the following commit); the
+written conditions did not check that placement happened. That run is kept and judged FAIL under the amended conditions.

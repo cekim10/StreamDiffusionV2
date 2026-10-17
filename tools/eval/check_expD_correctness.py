@@ -130,6 +130,13 @@ def check(run: Path):
         chk["all fragments verified"] = v["all_fragments_verified"] is True
         chk["final Sink digest = source"] = v["final_sink_digest_matches_source"] is True
         chk["rejoin >= 35 dB"] = (c.get("psnr_after_rejoin_mean") or 0) >= 35
+    pp = z.get("prepos")
+    if pp and pp.get("frags"):
+        # (added 2026-10-17 after the testbed run, see correctness_conditions.md) placement fragments reach the candidates
+        top = max(pp["alloc_sinks"], key=pp["alloc_sinks"].get)
+        want = pp["frags"].get(top, 0)
+        got = round(z["x_verified_at_move"].get(top, 0) * s["n_frags"])
+        chk["placement delivered (allocation - max(2, 5 %) fragments)"] = want == 0 or got >= want - max(2, 0.05 * want)
     if k == "revisit":
         r = s["revisit"]
         if s["policy"] == "restart":

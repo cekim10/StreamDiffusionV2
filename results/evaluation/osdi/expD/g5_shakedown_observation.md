@@ -45,3 +45,11 @@ made without event-driven re-planning in that configuration.
 
 The run directory, its decision trace and this note are kept as written; the run stays in the shakedown report; the
 GPU harness and the planner are not modified to make G5 pass; G5's thresholds are unchanged.
+
+## Addendum (2026-10-17): the D0 shakedown re-run on commit 3556ea5 reproduced it
+
+`results/evaluation/d0_shakedown_rerun/policy=reuse_dyn_bw=1000_rho=none_tm=inf_path=AC_pp=top1_L=10_b=1_rep=1_20261016-233857/`:
+x = 0.716 at B; one re-plan 2.3 s after the move (12.36 s, no network change) moving 89 fragments from B to A (dT
+6.1 s); B_pre / B_post / B_source,total = 0.72 / 0.51 / 1.23 Sinks; B_fwd 0.50 Sink; bind-ready 15.57 s vs 15.44 s for
+the no-placement single migration of the same re-run; 0 duplicates. Two correctness runs now show the same behaviour;
+it is still not an Experiment D result (scenario D, 3 reps, against the frozen G5 text).

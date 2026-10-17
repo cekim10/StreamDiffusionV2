@@ -17,13 +17,13 @@
 | hybrid | reuse_dyn | 20261016-183453 | 16/16 | PASS |
 | - | - | 20261016-184202 | - | INCOMPLETE (no summary.json) |
 | colddest | reuse_dyn | 20261016-223452 | 16/16 | PASS |
-| fast | split | 20261016-224214 | 13/13 | PASS |
-| fast | split | 20261016-224842 | 13/13 | PASS |
-| fast | reuse_dyn | 20261016-225518 | 13/13 | PASS |
+| fast | split | 20261016-224214 | 14/14 | PASS |
+| fast | split | 20261016-224842 | 13/14 | FAIL: placement delivered (allocation - max(2, 5 %) fragments) |
+| fast | reuse_dyn | 20261016-225518 | 14/14 | PASS |
 | full | full | 20261016-230130 | 15/15 | PASS |
 | fast | reuse_dyn | 20261016-230213 | 12/12 | PASS |
 
-18 runs; 1 failing.
+18 runs; 2 failing.
 
 Per-run checks:
 ```
@@ -330,7 +330,8 @@ Per-run checks:
    "NIC egress vs accounted": true,
    "all fragments verified": true,
    "final Sink digest = source": true,
-   "rejoin >= 35 dB": true
+   "rejoin >= 35 dB": true,
+   "placement delivered (allocation - max(2, 5 %) fragments)": true
   },
   "nic_ratio": {
    "A": 1.0478159803216254
@@ -352,7 +353,8 @@ Per-run checks:
    "NIC egress vs accounted": true,
    "all fragments verified": true,
    "final Sink digest = source": true,
-   "rejoin >= 35 dB": true
+   "rejoin >= 35 dB": true,
+   "placement delivered (allocation - max(2, 5 %) fragments)": false
   },
   "nic_ratio": {
    "A": 1.0477929651890794
@@ -374,7 +376,8 @@ Per-run checks:
    "NIC egress vs accounted": true,
    "all fragments verified": true,
    "final Sink digest = source": true,
-   "rejoin >= 35 dB": true
+   "rejoin >= 35 dB": true,
+   "placement delivered (allocation - max(2, 5 %) fragments)": true
   },
   "nic_ratio": {
    "A": 1.047817542472277

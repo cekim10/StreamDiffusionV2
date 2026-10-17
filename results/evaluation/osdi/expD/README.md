@@ -43,6 +43,35 @@ On elves-01 after `git pull` on all four hosts: `tools/eval/run_expD_correctness
 capabilities + the 9 D0 shakedown runs), then `python tools/eval/check_expD_correctness.py` and
 `python tools/eval/check_d0_shakedown.py d0_shakedown_rerun`.
 
+## Testbed focused correctness tests (2026-10-16/17, commits 4b68622 / 3556ea5; results pushed in dc287e7)
+
+`correctness_check_expD_correctness.md`: 18 run directories. Full migration (single, repeated), cold restart (single,
+repeated), revisit (4 policies), hybrid (3 policies), cold destination, M1 + M2 without placement, oracle placement,
+native (Full migration, OTTER event-driven): PASS. D0 shakedown re-run (`../d0/shakedown_check_d0_shakedown_rerun.md`):
+9/9 PASS. Not passing / not clean, all kept as recorded:
+
+1. `...184202` (first cold-destination attempt): INCOMPLETE. Bug: a cold node never ran a session, so the canonical
+   denoising schedule was not recorded and provisioning failed. Fixed in 3556ea5; the re-run (`...223452`) passes.
+2. `split ... pp=top1 ... 20261016-224842` (M1 + M2 + top-1, incorrect placement): passed the written conditions but its
+   placement flow was cancelled after 2 of 299 fragments (M1-family policies re-planned during the placement window and
+   cancelled flows "not headed to the owner"). The written conditions did not check placement; a dated condition was
+   added (`correctness_conditions.md`) and the run is FAIL under it. Fixed: no M1-family planning before the first move.
+   The same symptom was visible in the loopback dry run (2 of 16 fake fragments at B) and was misread as reuse.
+3. Full migration was slower than Phase 1's (1 Gbps: TTFO 57.25 s vs Phase 1 53.8 s; native 10.23 s vs 7.85 s): the
+   destination allocated a new multi-GB buffer per component while receiving (effective 931 Mbps at 1 Gbps). Phase 1
+   receives into two preallocated buffers; the GPU harness now does the same (allocated at MANIFEST, untimed). The
+   three Full-migration runs passed every check but their timings are superseded; they must be re-run.
+4. Scenario E construction (decision needed, see below): in all three hybrid runs the GPU session's bind-ready after
+   the final move is ~56 s for every policy (M1 only 56.8, M1 + M2 57.2, OTTER event-driven 56.9 s), because all four
+   sessions move together B -> C -> D and share D's ingress (each gets ~250 Mbps). The run measures destination-ingress
+   contention, not the source-egress contention G6 is about (its prediction comes from Scenario B v2, whose sessions
+   sit on different edges). This follows from an implementation choice made here, not from the preregistration text.
+5. Descriptive: in the re-run, OTTER at moves' first chunk at D took 1.70 s (D0: 0.59 s; identical output); one sample.
+6. G5 observation reproduced in the re-run (`g5_shakedown_observation.md`, addendum).
+
+To re-run on the testbed after the fixes: `full_single full_repeated native placement`, and `hybrid` once its layout is
+decided.
+
 ## GO / NO-GO for the full Experiment D sweep
 
 **NO-GO.** Every preregistered scenario except the external C/R comparison can now be executed and every G1-G8 quantity

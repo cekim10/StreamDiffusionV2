@@ -49,7 +49,7 @@ for p in (REPO_ROOT, REPO_ROOT / "tools", REPO_ROOT / "tools" / "eval"):
 import numpy as np  # noqa: E402
 
 from common import DEFAULT_MSS, MSS_WARNINGS, CsvLog, EventLog, ResourceSampler, Throttle, clock_sync_server, effective_mss, host_info, tcp_accept, tcp_connect, tcp_listen  # noqa: E402
-from proto_handoff import MB, _pool, component_digest, payload_slices, recv_exact, recv_msg, send_msg  # noqa: E402
+from proto_handoff import MB, RecvPool, _pool, component_digest, estimate_sink_bytes, payload_slices, recv_exact, recv_msg, send_msg  # noqa: E402
 
 REJOIN_DB = 35.0
 FULL_COMPS = ("inflight", "meta", "recent", "sink", "vae")   # Phase 1 `full` sends sorted(fg) in this order
@@ -396,6 +396,7 @@ class Node:
         self.rt = FakeRuntime(args) if args.dry_run else GpuRuntime(args)
         self.t_runtime_ready = time.time()   # model weights loaded, CUDA initialized
         self.ref_path = None
+        self.recv_pool = None   # Full migration: Phase 1's two preallocated receive buffers (allocated before a run, untimed)
         self.lock = threading.Lock()
         self.ctl = None
         self.ctl_lock = threading.Lock()
@@ -510,7 +511,12 @@ class Node:
         r["sink_buf"] = bytearray(r["manifest"]["nbytes"])
         r["have"] = set(); r["frag_ok"] = {}
         self.rt.provision()
-        self.event("provisioned", sink_nbytes=r["manifest"]["nbytes"], n_frags=len(r["manifest"]["frags"]))
+        if h.get("full_pool") and self.recv_pool is None:
+            # same size rule as Phase 1's destination (largest component, the VAE caches, fits); kept for the process lifetime
+            a = self.a
+            n = (2 * (a.dry_sink_mb << 20) + (64 << 20)) if a.dry_run else int(estimate_sink_bytes(self.rt.k, a.height, a.width, a.model_type) * 2.2) + (64 << 20)
+            self.recv_pool = RecvPool(n)
+        self.event("provisioned", sink_nbytes=r["manifest"]["nbytes"], n_frags=len(r["manifest"]["frags"]), recv_pool_mb=self.recv_pool and len(self.recv_pool.bufs[0]) / MB)
         return {}
 
     def cmd_exec_handoff(self, h):
@@ -762,12 +768,15 @@ class Node:
                     self._recv_frag(conn, hdr, pl)
                 elif kind == "FG":
                     t_start = time.time()
-                    payload = recv_exact(conn, pl)
+                    pool = self.recv_pool if (hdr.get("full") and self.recv_pool is not None and pl <= len(self.recv_pool.bufs[0])) else None
+                    payload = recv_exact(conn, pl, pool.next() if pool else None)
                     t_recv = time.time()
                     h2d = self.rt.unpack(hdr, payload)
                     if hdr.get("full"):
                         full["bytes"] += pl; full["xfer"] = hdr.get("xfer"); full["from"] = hdr["from"]
                         full["digests"][hdr["comp"]] = digest_async(payload_slices(hdr, payload))
+                        if pool:
+                            pool.hold(full["digests"][hdr["comp"]])   # the buffer is reused only after its digest is done
                     self.event("fg_recv", t_recv, comp=hdr["comp"], bytes=pl, t_send_src=hdr["t_send"], t_recv_start=t_start, h2d_s=h2d, src=hdr["from"], full=bool(hdr.get("full")))
                 elif kind == "GO":
                     full["go"] = True
