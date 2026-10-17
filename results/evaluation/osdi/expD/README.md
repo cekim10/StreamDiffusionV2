@@ -91,10 +91,33 @@ The Full-migration timings now match Phase 1's single-handoff baseline (within 0
 forwards as the network-level A-pilot predicted (B_pre 0.71, B_post 0.29, B_source,total 1.00, B_fwd 0.72), and the
 hybrid scenario now creates source-egress contention (A's egress, not one destination's ingress, is shared).
 
+## Sweep tooling (2026-10-17): G9 steady-state mode, aggregator, driver
+
+- `tools/eval/steady_state.py` (G9 first clause): unmodified generation vs OTTER-enabled generation (decode-completion
+  hook, per-chunk slot read and metrics row; PSNR off in both), same GPU and seed, ABBA order over reps, chunk intervals
+  over 200 chunks after 30 warm-up chunks, frames hashed to confirm identical output, GPU 0 state recorded.
+- `tools/eval/expD_validity.py`: the prereg's run-validity rules, shared by the aggregator and `--skip_done`.
+- `tools/eval/aggregate_expD.py` + `aggregation_spec.md` (written before any sweep data; interpretations of the frozen
+  text marked for review): G1-G9 verdicts, configuration table, invalid runs, scenario A extra-rep list.
+  Checked on real GPU data (D0 shakedown re-run): discarded bytes M1 only 1.02 / M1 + M2 0.036 Sink (Phase 1: 1.01 /
+  0.07), all four runs valid.
+- `tools/eval/run_expD_sweep.py`: the 147-run matrix (A 30, B 36, C 12, D 12, E 9, F 12, G 12, generalization 24) +
+  G9, 14 orchestrator invocations, GPU 0 idle gate before each, `--skip_done` resume, `--extra` for scenario A reps 4-5;
+  estimate ~7.5 h. Orchestrator additions: `--skip_done`, `--rep_start`, `--pp_configs`.
+- Loopback dry sweep (1 rep each, fake runtime): every step ran end to end through the driver, orchestrator, validity
+  and aggregator; with `--min_reps 1` every criterion path produced a verdict (numbers meaningless at fake scale); with
+  the default 3 reps every criterion is NOT EVALUABLE on 1 rep, as specified; a re-start skipped all valid
+  configurations. One dry-only driver bug (argument removal for `--node_extra`) was found and fixed.
+- Not yet run on GPUs: `steady_state.py` and the driver in real mode (it calls the already tested orchestrator
+  invocations with `--launch`).
+
 ## GO / NO-GO for the full Experiment D sweep
 
-**NO-GO (unchanged).** Every in-repo capability the preregistration specifies now passes its focused correctness test on
-the testbed, and the D0 shakedown re-run passes 9/9. Still missing before a sweep can start: the G9 steady-state
-measurement mode, the G1-G9 aggregation script (frozen criteria applied to run summaries; medians over valid reps;
-invalid runs listed) and the sweep driver (matrix, GPU 0 idle gate, resume, invalid-run re-runs); external C/R is
-blocked by the testbed. Recommended next step: implement and dry-run those three, then request approval for the sweep.
+**Ready to request approval, after one short GPU smoke test of the G9 tool** (`steady_state.py --reps 1 --chunks 20
+--experiment expD_G9_smoke`, ~3 min, kept out of the sweep data). Every in-repo capability passes its focused GPU test,
+the planner regression passes, the aggregation rules are fixed in writing before any data, and the driver resumes
+safely. Open items that do not block the in-repo sweep: external C/R (blocked, reported as not run); the aggregation
+interpretations in `aggregation_spec.md` (G4/G5 subject = Full OTTER, "within" = absolute, T_s = 14.05 s, scenario A
+IQR metrics, G9 chunk interval) await review. Known risks from correctness runs (single runs, not results): G5 for Full
+OTTER (`g5_shakedown_observation.md`); G9 memory spread (destination peaks 27.9-28.7 GB across policies in the focused
+tests, > 1 %).

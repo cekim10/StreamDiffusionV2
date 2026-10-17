@@ -158,6 +158,29 @@ def maxmin_rates(flows: list[tuple[str, str, str]], cap_bps: float) -> dict[str,
 
 
 # ----------------------------------------------------------------------------- one run
+def run_tag(a, policy, bw_mbps, tm, rho, rep, path, prepos) -> str:
+    """Run id without its timestamp (one configuration and rep)."""
+    bw_tag = "native" if bw_mbps <= 0 else f"{bw_mbps:g}"
+    rho_tag = "none" if rho is None else f"{rho:g}"
+    tags = ("" if not path else "_path=" + "".join(path)) + ("" if not prepos else f"_pp={prepos['policy']}_L={prepos['L']:g}_b={prepos['b']:g}") \
+        + ("" if not a.cap_events else "_ev=" + a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge")) \
+        + ("_colddest" if a.cold_dest else "") + (f"_hybrid={a.hybrid_net}" if a.hybrid_net else "")
+    return f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}"
+
+
+def done_validly(a, tag: str) -> str | None:
+    """--skip_done: a completed run directory of this configuration and rep whose run is valid (Experiment D rules)."""
+    from expD_validity import run_validity
+
+    for d in sorted((EVAL_ROOT / a.experiment).glob(tag + "_2*")):
+        try:
+            if run_validity(json.load(open(d / "summary.json")), dry=a.dry_run)[0]:
+                return d.name
+        except (OSError, ValueError, KeyError):
+            continue
+    return None
+
+
 class Run:
     def __init__(self, orch, policy: str, bw_mbps: float, tm: float, rho, rep: int, hops: int, path=None, prepos=None):
         self.o = orch; self.a = orch.a
@@ -182,13 +205,8 @@ class Run:
         self.pp = prepos   # {"policy", "probs" (B, C, D), "L", "b", "dest", "tau"} or None
         self.candidates = [e for e in EDGES if e != "A"] if prepos else []
         self.nodes_used = list(dict.fromkeys(self.edges + self.candidates))
-        bw_tag = "native" if bw_mbps <= 0 else f"{bw_mbps:g}"
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        rho_tag = "none" if rho is None else f"{rho:g}"
-        tags = ("" if not path else "_path=" + "".join(self.edges)) + ("" if not prepos else f"_pp={prepos['policy']}_L={prepos['L']:g}_b={prepos['b']:g}") \
-            + ("" if not self.a.cap_events else "_ev=" + self.a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge")) \
-            + ("_colddest" if self.a.cold_dest else "") + (f"_hybrid={self.a.hybrid_net}" if self.a.hybrid_net else "")
-        self.run_id = f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}_{stamp}"
+        self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
             self.caps = {(d, n): bw_mbps * 1e6 for d in ("out", "in") for n in EDGES}
@@ -1227,9 +1245,12 @@ def main():
     ap.add_argument("--dyn_rel", type=float, default=0.10); ap.add_argument("--dyn_ctrl", type=float, default=0.3)
     ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")
     ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")
+    ap.add_argument("--pp_configs", type=str, default="", help="policy:placement pairs run in this order, e.g. 'split:none,split:top1,reuse_dyn:top1,reuse_dyn:oracle'")
     ap.add_argument("--lookahead", type=float, default=10.0)
     ap.add_argument("--budget", type=float, default=1.0)
     # Experiment D
+    ap.add_argument("--skip_done", action="store_true", help="skip a configuration + rep that already has a valid run (Experiment D validity rules)")
+    ap.add_argument("--rep_start", type=int, default=1, help="first rep number (e.g. 4 for the extra reps of scenario A)")
     ap.add_argument("--cold_dest", action="store_true", help="OTTER cold destination (scenario A sensitivity): start node B after the trigger")
     ap.add_argument("--cold_tail_calls", type=int, default=60, help="cold restart: calls to keep generating at the final owner after its first output")
     ap.add_argument("--hybrid_net", type=int, default=0, help="scenario E: number of network-level restoration sessions next to the GPU session")
@@ -1268,19 +1289,25 @@ def main():
             print(f"-> {tsdir}")
         else:
             pols = POLICIES if a.policies == "all" else [p for p in a.policies.split(",") if p]
+            # (policy, placement) pairs: --pp_configs "split:none,split:top1,reuse_dyn:top1" or every policy with --prepos
+            combos = [tuple(x.split(":")) for x in a.pp_configs.split(",") if x] if a.pp_configs else [(pol, a.prepos) for pol in pols]
             if a.tm:
                 tms = [(float(x), None if not a.ts else a.ts / float(x)) for x in a.tm.split(",")]
             else:
                 assert a.ts, "--ts (measured T_s) is required to derive T_m from rho"
                 tms = [(a.ts / float(r), float(r)) for r in a.rhos.split(",")]
-            for rep in range(1, a.reps + 1):
+            for rep in range(a.rep_start, a.rep_start + a.reps):
                 for tm, rho in tms:
-                    for pol in pols:
+                    for pol, ppol in combos:
                         path = [x for x in a.path.split(",") if x] or None
                         pp = None
-                        if a.prepos:
+                        if ppol:
                             assert path and len(path) == 2, "--prepos needs --path A,<dest>"
-                            pp = {"policy": a.prepos, "probs": [float(x) for x in a.probs.split(",")], "L": a.lookahead, "b": a.budget, "dest": path[1], "tau": 7.5}
+                            pp = {"policy": ppol, "probs": [float(x) for x in a.probs.split(",")], "L": a.lookahead, "b": a.budget, "dest": path[1], "tau": 7.5}
+                        if a.skip_done:
+                            prev = done_validly(a, run_tag(a, pol, a.bw, tm, rho, rep, path, pp))
+                            if prev:
+                                print(f"[orch] skip (valid run exists): {prev}", flush=True); continue
                         r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops, path=path, prepos=pp)
                         results.append(r.execute())
             (EVAL_ROOT / a.experiment).mkdir(parents=True, exist_ok=True)

@@ -154,7 +154,12 @@ class GpuRuntime:
             torch.cuda.synchronize(self.device)
             self.decodes.append((time.time(), int(video.shape[1])))
             return video
+        self._decode_orig, self._decode_timed = orig, timed_decode
         self.pm._timed_stream_decode = timed_decode
+
+    def instrument(self, on: bool):
+        """G9: switch the decode-completion hook (the only per-chunk OTTER instrumentation inside generation)."""
+        self.pm._timed_stream_decode = self._decode_timed if on else self._decode_orig
 
     def mem(self, tag: str):
         torch = self.torch
@@ -944,7 +949,7 @@ class Node:
                 self.event("window_exhausted", call=r["call"]); break
 
 
-def parse_args():
+def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--label", type=str, required=True, help="A, B, C or D")
     p.add_argument("--bind", type=str, default="0.0.0.0")
@@ -979,7 +984,7 @@ def parse_args():
     p.add_argument("--fast", action="store_true", default=False)
     p.add_argument("--migration_chunk", type=int, default=30)
     p.add_argument("--post_chunks", type=int, default=220, help="baseline/window length after migration (must cover the longest run)")
-    a = p.parse_args()
+    a = p.parse_args(argv)
     a.mss = a.mss or None
     return a
 
