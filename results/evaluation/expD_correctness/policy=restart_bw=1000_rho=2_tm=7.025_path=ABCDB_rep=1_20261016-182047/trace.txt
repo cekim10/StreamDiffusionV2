@@ -1,0 +1,22 @@
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_path=ABCDB_rep=1_20261016-182047: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.20s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.44s move C->D
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  21.63s move D->B (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   discard progress at C; discard progress at D; A->B 412 fragments from scratch
+[orch] t=  53.08s run end
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.11 s, Sink received 14.49 s, bound 15.24 s, continuity-ready 15.84 s, rejoin 20.06 s | traffic 2.53x, waste 1.04x, reused 0 MiB | PSNR after bind 39.9 dB | ingress peak 1007 Mbps
