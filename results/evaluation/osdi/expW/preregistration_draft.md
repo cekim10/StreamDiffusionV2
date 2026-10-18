@@ -30,7 +30,9 @@ single-version restoration? W separates three things that Experiment D measured 
   repository prompt file.
 - **W-loveu** (16): the LOVEU-TGVE-2023 subset fixed by the rule in `loveu_tgve_verification.md` section 4 (input
   properties only: source folder, frame count, motion score; prompt types balanced 4 x style / object / background /
-  multiple). Only if the download is approved; otherwise W runs on W-repo alone and every statement is limited to it.
+  multiple). Downloaded and fixed on 2026-10-18 (`loveu_selection.csv`: DAVIS 5, Videvo 6, YouTube 5; chosen before any
+  OTTER run on them); the videos are not redistributed and no LOVEU frame appears in a publication figure until its
+  reuse permission is established (`loveu_tgve_verification.md` section 2).
 - **Unit** = (workload, seed), seeds 0 and 1: 20 workloads x 2 = **40 units**. k = 2, 480x832 (LOVEU's 480x480 is
   resized by the existing loader, an aspect stretch, stated as a property of the workload), 1 Gbps.
 - Groups for descriptive breakdowns (fixed now): repo; LOVEU 32-frame (DAVIS, Videvo); LOVEU 128-frame (YouTube).

@@ -15,11 +15,12 @@ The rule is fixed in results/evaluation/osdi/expW/loveu_tgve_verification.md sec
 The archive and the videos are untrusted input data: run this script with `python -I` and pass paths as arguments;
 nothing in the data is executed. The original videos are never modified or committed.
 
-    uv run --no-project --with av --with numpy python -I tools/eval/expw_loveu.py population --root <dir>/loveu-tgve-2023
-    uv run --no-project --with av --with numpy python -I tools/eval/expw_loveu.py select --root <dir>/loveu-tgve-2023
-    uv run --no-project --with torch==2.6.0 --with torchvision==0.21.0 --with av --with numpy --with einops --with omegaconf \
-        python -I tools/eval/expw_loveu.py check --root <dir>/loveu-tgve-2023
-    python -I tools/eval/expw_loveu.py prepare --zip <path>/loveu-tgve-2023.zip --out <dir outside the repo or data/>
+    # versions = the project pins (pyproject.toml); torchvision 0.21's read_video fails with PyAV >= 14
+    uv run --no-project --python 3.11 --with av==13.1.0 --with numpy==1.24.4 python -I tools/eval/expw_loveu.py population --root <dir>/loveu-tgve-2023
+    uv run --no-project --python 3.11 --with av==13.1.0 --with numpy==1.24.4 python -I tools/eval/expw_loveu.py select --root <dir>/loveu-tgve-2023
+    uv run --no-project --python 3.12 --with torch==2.6.0 --with torchvision==0.21.0 --with av==13.1.0 --with numpy --with einops \
+        --with omegaconf python -I tools/eval/expw_loveu.py check --root <dir>/loveu-tgve-2023
+    python -I tools/eval/expw_loveu.py prepare --zip <path>/loveu-tgve-2023.zip --out data/loveu_tgve_2023   # git-ignored
 """
 
 from __future__ import annotations

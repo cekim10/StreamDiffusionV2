@@ -42,3 +42,9 @@ without counts); their origin is unknown and they are withdrawn. The paper state
 for YouTube. (2) The DAVIS row's "annotations: CC BY 4.0 (challenge pages)" is not found on the official pages read on
 2026-10-18 (davischallenge.org, davis2016/code.html, davis2017/code.html state no license; the evaluation-code
 repository's BSD-3-Clause license covers the code only); it is **unverified**.
+
+## Erratum 2 (2026-10-18, appended)
+
+The official archive (`loveu-tgve-2023.zip`, SHA-256 ed2e7166...0503, downloaded 2026-10-18 for Experiment W) contains
+16 DAVIS, 37 Videvo and 23 YouTube videos. The per-source counts withdrawn in the erratum above are therefore correct;
+their source is the archive (and its CSV), not the paper. The DAVIS license remains unverified.
