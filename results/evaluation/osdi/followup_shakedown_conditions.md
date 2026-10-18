@@ -37,3 +37,15 @@ amendment in the affected document if it changes frozen text, and the shakedown 
 | N-b | the trigger record (time, |S|, verified count, time to Sink verified, reaction feasibility, availability count) is in `summary.json` |
 | N-c | no planner input contains the changed cap (planners see only `known_caps`) |
 | N-d | a run that reaches `max_run_s` or the call window keeps its directory and records timeout status, last progress, bytes and re-plans (checked with a forced short `max_run_s` in the loopback test, P2) |
+
+## Amendment 1 (2026-10-18, before any W / R / N GPU run; the frozen text above is unchanged)
+
+**R-b is replaced** (correctness issue in a pass condition, found while writing the checker): its numbers (restart
+B_source,total >= 2.5; split B_fwd > 0.9) come from the c = 0 analytic model, but the R shakedown configuration is c = 3,
+where the abandoned owners receive less from the contended source (each restoration slows down), so a correct harness
+could fail R-b. Replacement, independent of the delivered amounts:
+- **R-b'** restart: every abandoned owner (B, C) logs `sink_dropped` at its move and the final owner receives no fragment
+  from a non-source node (B_fwd = 0); split: verified progress reused >= 0.9 (fragments verified at abandoned owners and
+  needed by the final owner arrive from those owners, not again from A), and, if an intermediate owner bound the Sink
+  before it was left (`sink_bind` at that owner before its move), the next owner received fragments from it.
+No hypothesis, threshold or matrix entry is affected. N-d is checked in the loopback test (P2) as written.

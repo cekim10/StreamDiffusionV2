@@ -84,6 +84,15 @@ def ref_cache_path(a) -> Path:
     return REPO_ROOT / "results/evaluation/_reference_cache" / f"{tag}.npz"
 
 
+def ref_record_path(a) -> Path:
+    """Per-call record of the node baseline (W / R / N): output-frame digest, Sink value fingerprints, slot positions."""
+    return ref_cache_path(a).with_suffix(".record.json")
+
+
+def frame_digest(fr) -> str | None:
+    return None if fr is None else hashlib.blake2b(np.ascontiguousarray(fr).tobytes(), digest_size=16).hexdigest()
+
+
 class CachedReference:
     """PSNR reference for a cold-started node: the uninterrupted same-seed frames a warm node computed on this host.
     Loaded in a background thread (not on the critical path); a call not loaded yet is read directly from the file."""
@@ -165,22 +174,37 @@ class GpuRuntime:
         torch = self.torch
         print(f"[{self.args.label}] gpu mem {tag}: allocated {torch.cuda.memory_allocated(self.device) / MB:.0f} MB, reserved {torch.cuda.memory_reserved(self.device) / MB:.0f} MB", flush=True)
 
-    def baseline(self, M: int, N: int):
+    def sink_value_fp(self) -> list[float]:
+        """W / R / N: per layer and sink slot, the float64 sum of the slot's VALUE cache (all Stream-Batch rows). Values are
+        not RoPE-rotated, so a t_refresh realignment leaves them unchanged; a promotion (or a bind) changes them."""
+        torch, fsl, n = self.torch, self.fsl, self.sink
+        sums = [layer["v"][:, s * fsl:(s + 1) * fsl].sum(dtype=torch.float64) for layer in self.sa.kv_layers(self.pl) for s in range(n)]
+        return torch.stack(sums).tolist()
+
+    def baseline(self, M: int, N: int, keep_frames: bool = True, write_ref: bool = True):
+        """The uninterrupted reference session (calls 0 .. M + N - 1). Also records per call the output-frame digest, the
+        Sink value fingerprints (--sink_fp) and the sink-slot positions (`self.base_record`, written next to the reference
+        cache); digests and fingerprints are computed after the timed call."""
         torch = self.torch
         self.mem("after model load")
         session = self.runner.start()
         self.mem("after baseline session start")
         base, times = {}, []
+        self.base_record = []
         for c in range(M + N):
             t0 = time.perf_counter(); fr = self.runner.step(session, c); torch.cuda.synchronize(self.device); times.append(time.perf_counter() - t0)
-            if fr is not None:
+            self.base_record.append({"call": c, "frame_digest": frame_digest(fr), "sink_vfp": self.sink_value_fp() if self.args.sink_fp else None,
+                                     "sink_slot_pos": self.sa.slot_positions(self.pl)["sink_slot_pos"], "service_s": times[-1]})
+            if fr is not None and keep_frames:
                 base[c] = fr
             self.runner.noise_hist[c] = float(session.noise_scale)
             if c in (M, M + N - 1):
                 self.mem(f"baseline call {c}")
         self.base = base
         self.service_s = float(np.median(times[M:]))
-        self.write_reference()
+        if write_ref:
+            self.write_reference()
+            ref_record_path(self.args).write_text(json.dumps(self.base_record))
         del session
         self.pm.reset_stream_state(reset_vae_flags=True)  # drop the baseline session's caches before the run allocates its own
         import gc
@@ -205,6 +229,8 @@ class GpuRuntime:
         if not path.exists():
             raise SystemExit(f"cold start needs the reference cache {path} (start a warm node with the same configuration on this host once)")
         self.base = CachedReference(path)
+        rp = ref_record_path(self.args)
+        self.base_record = json.loads(rp.read_text()) if rp.exists() else None
         self.service_s = None
         # Runner.start() records the canonical denoising schedule on its first call; a cold node never runs a session
         # before provisioning, so record it here (no session has run yet, so the schedule is still the configured one)
@@ -319,8 +345,16 @@ class FakeRuntime:
         self.full = False
         self.cold = False
         self.decodes = []
+        self.fp_ver = 0
+        self.promote_calls = {int(x) for x in str(args.dry_promote_calls or "").split(",") if x}
+        self.base_record = None
 
-    def baseline(self, M, N):
+    def sink_value_fp(self):
+        return [float(self.fp_ver)]
+
+    def baseline(self, M, N, keep_frames=True, write_ref=True):
+        self.base_record = [{"call": c, "frame_digest": f"dry{c}", "sink_vfp": [0.0] if self.args.sink_fp else None, "sink_slot_pos": [0, 1, 2], "service_s": self.service_s}
+                            for c in range(M + N)]
         return self.service_s
 
     def gpu_mem_mb(self):
@@ -371,7 +405,7 @@ class FakeRuntime:
         pass
 
     def bind(self):
-        self.bound = True
+        self.bound = True; self.fp_ver += 1
         return 73
 
     def step(self, c, override=None, skip=False):
@@ -379,6 +413,8 @@ class FakeRuntime:
             self.decodes = []
             return False, None, None, 0.0, [0, 1, 6]
         time.sleep(self.args.dry_service_s)
+        if self.bound and c in self.promote_calls:
+            self.fp_ver += 1   # dry promotion (protocol test of the version-event accounting)
         self.decodes = [(time.time(), 4)]
         if self.cold:
             ps = 19.5 + self.rng.normal(0, 0.5)
@@ -470,14 +506,18 @@ class Node:
         rd = REPO_ROOT / h["run_rel"] / f"node_{self.label}"
         rd.mkdir(parents=True, exist_ok=True)
         ev = EventLog(rd / "events.csv", self.me, h["t0"] if h.get("t0") else None)
-        metrics = CsvLog(rd / "metrics.csv", ["call", "t_out", "owner", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode", "n_frames"])
+        metrics = CsvLog(rd / "metrics.csv", ["call", "t_out", "owner", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode", "n_frames",
+                                              "sink_vfp", "promotion", "fp_ms"])
+        if getattr(self.rt, "base_record", None) is not None:
+            (rd / "baseline_record.json").write_text(json.dumps(self.rt.base_record))
         frag_log = CsvLog(rd / "fragments.csv", ["t", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok"])
         sampler = ResourceSampler(rd / "network.csv", self.me, self.a.gpu_id if not self.a.dry_run else None, self.a.iface); sampler.start()
         self.run = {"id": h["run_id"], "dir": rd, "ev": ev, "metrics": metrics, "frag_log": frag_log, "sampler": sampler, "session_id": h["session_id"],
                     "manifest": None, "sink_buf": None, "have": set(), "frag_ok": {}, "sink_complete_t": None, "sink_verified": None, "sink_verified_t": None,
                     "owner": False, "stop_owner": False, "gen_thread": None, "call": None, "bound_call": None, "rejoin_call": None, "first_out_t": None,
                     "sink_unpacked": False, "bind_requested": False, "pending_handoff": None,
-                    "full_pack": None, "full_xfer": None, "dropped_flows": set(), "pending_cold": None, "n_owned": 0, "epoch": 0}
+                    "full_pack": None, "full_xfer": None, "dropped_flows": set(), "pending_cold": None, "n_owned": 0, "epoch": 0,
+                    "last_fp": None, "bind_at": None, "promotions": []}
         self.flows = {}
         self.rt.reset_peak()   # G9: peak memory_allocated / reserved over this run
         return {}
@@ -711,7 +751,8 @@ class Node:
         r["sampler"].finish(); r["metrics"].close(); r["frag_log"].close()
         net = (r["dir"] / "network.csv").read_text() if (r["dir"] / "network.csv").exists() else ""
         out = {"have": len(r["have"]), "n_frags": len(r["manifest"]["frags"]) if r["manifest"] else 0, "sink_verified": r["sink_verified"],
-               "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb()}
+               "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb(),
+               "baseline_record": getattr(self.rt, "base_record", None) if self.a.sink_fp else None, "promotion_calls": list(r["promotions"])}
         self.rt.release()
         r["sink_buf"] = None; r.pop("live_snap", None)
         self.run = None
@@ -898,10 +939,12 @@ class Node:
         # every ownership starts afresh (a revisited owner binds and rejoins again; earlier values stay in events.csv)
         r["call"] = int(go["call"]); r["owner"] = True; r["stop_owner"] = False; r["first_out_t"] = None
         r["bound_call"] = None; r["rejoin_call"] = None; r["pending_cold"] = None; r["n_owned"] += 1
+        r["last_fp"] = None; r["bind_at"] = None
         extra = {}
         if mode == "full":
             self.rt.restore_full()
             r["bound_call"] = r["call"]   # the Sink is part of the transferred state
+            r["bind_at"] = r["call"]
             self.event("sink_bind", call=r["call"], slots_rerotated=0, at_resume=True, full_state=True)
         elif mode == "cold":
             frames, ms = self.rt.cold_restart(r["call"])
@@ -912,7 +955,7 @@ class Node:
             if r["sink_verified"]:
                 self._unpack_sink()
                 shifted = self.rt.bind()
-                r["bound_call"] = r["call"]
+                r["bound_call"] = r["call"]; r["bind_at"] = r["call"]
                 self.event("sink_bind", call=r["call"], slots_rerotated=shifted, at_resume=True)
         t1 = time.time()
         self.event("resume", t1, call=r["call"], src=go["from"], t_go_src=go["t_go"], restore_s=t1 - t0, gpu_mem_alloc_mb=self.rt.gpu_mem_mb(), mode=mode, ownership=r["n_owned"], **extra)
@@ -926,7 +969,7 @@ class Node:
             if r["bound_call"] is None and r["sink_verified"] and r["pending_cold"] is None:
                 self._unpack_sink()
                 shifted = self.rt.bind()
-                r["bound_call"] = c
+                r["bound_call"] = c; r["bind_at"] = c
                 self.event("sink_bind", call=c, slots_rerotated=shifted, at_resume=False)
             pc = r["pending_cold"]
             if pc is not None and c in (pc["skip"], pc["emit"]):
@@ -939,11 +982,23 @@ class Node:
             if r["bound_call"] is not None and r["rejoin_call"] is None and ps is not None and ps >= REJOIN_DB:
                 r["rejoin_call"] = c; self.event("rejoin", t_out, call=c, calls_after_bind=c - r["bound_call"], psnr=ps)
             dec = list(self.rt.decodes)
+            fp = promo = fp_ms = None
+            if self.a.sink_fp:
+                # owner-side Sink version tracking (W / R / N): a value change between two consecutive calls of this ownership
+                # that is not the bind at this call is a promotion (an owner-side Sink-version event)
+                t_fp = time.perf_counter(); fp = self.rt.sink_value_fp(); fp_ms = (time.perf_counter() - t_fp) * 1e3
+                promo = r["last_fp"] is not None and fp != r["last_fp"] and r["bind_at"] != c
+                if promo:
+                    changed = [i for i, (x, y) in enumerate(zip(fp, r["last_fp"])) if x != y]
+                    r["promotions"].append(c)
+                    self.event("sink_promotion", call=c, n_changed=len(changed), changed=changed[:96], bound=r["bound_call"] is not None, ownership=r["n_owned"])
+                r["last_fp"] = fp
             row = {"call": c, "t_out": t_out, "owner": self.label, "chunk_s": dt, "psnr": ps, "ssim": ss, "missing": not produced,
                    "sink_bound": r["bound_call"] is not None and c >= r["bound_call"], "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), "sink_slot_pos": pos,
-                   "t_decode": dec[-1][0] if dec else None, "n_frames": sum(n for _, n in dec)}
+                   "t_decode": dec[-1][0] if dec else None, "n_frames": sum(n for _, n in dec),
+                   "sink_vfp": None if fp is None else json.dumps(fp), "promotion": promo, "fp_ms": fp_ms}
             r["metrics"].row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
-            self.send("METRIC", **row)
+            self.send("METRIC", **{k: v for k, v in row.items() if k != "sink_vfp"})
             r["call"] = c + 1
             if r["call"] >= self.a.migration_chunk + self.a.post_chunks:
                 self.event("window_exhausted", call=r["call"]); break
@@ -960,6 +1015,8 @@ def parse_args(argv=None):
     p.add_argument("--dry_run", action="store_true", help="protocol test without torch (fake Sink); never for reported results")
     p.add_argument("--dry_sink_mb", type=int, default=64)
     p.add_argument("--dry_service_s", type=float, default=0.2)
+    p.add_argument("--dry_promote_calls", type=str, default="", help="dry run: calls at which a bound fake Sink changes (version-event accounting test)")
+    p.add_argument("--sink_fp", action="store_true", help="W / R / N: per-call Sink value fingerprints (baseline and owned calls) and owner-side promotion events")
     p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
     # model / workload (same defaults as Phase 1)
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))

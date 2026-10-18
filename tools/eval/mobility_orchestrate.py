@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import queue
 import sys
 import threading
@@ -172,15 +173,25 @@ def run_tag(a, policy, bw_mbps, tm, rho, rep, path, prepos) -> str:
 
 
 def done_validly(a, tag: str) -> str | None:
-    """--skip_done: a completed run directory of this configuration and rep whose run is valid (Experiment D rules)."""
-    from expD_validity import run_validity
-
-    for d in sorted((EVAL_ROOT / a.experiment).glob(tag + "_2*")):
+    """--skip_done: a completed run directory of this configuration and rep whose run is valid (Experiment D rules, or the
+    W / R / N rules with --validity wrn). W / R / N: after 3 attempts (1 + 2 re-runs, followup_common.md section 3) the
+    configuration + rep counts as done even without a valid run (it is then reported NOT EVALUABLE)."""
+    dirs = sorted((EVAL_ROOT / a.experiment).glob(tag + "_2*"))
+    for d in dirs:
         try:
-            if run_validity(json.load(open(d / "summary.json")), dry=a.dry_run)[0]:
+            s = json.load(open(d / "summary.json"))
+            if a.validity == "wrn":
+                from wrn_validity import run_validity_wrn
+                ok = run_validity_wrn(s, d, dry=a.dry_run)[0]
+            else:
+                from expD_validity import run_validity
+                ok = run_validity(s, dry=a.dry_run)[0]
+            if ok:
                 return d.name
         except (OSError, ValueError, KeyError):
             continue
+    if a.validity == "wrn" and len(dirs) >= 3:
+        return f"{dirs[-1].name} (3 attempts, none valid)"
     return None
 
 
@@ -220,7 +231,17 @@ class Run:
             self.caps = None   # unshaped
         self.known_caps = dict(self.caps) if self.caps else {(d, n): self.a.physical_cap_mbps * 1e6 for d in ("out", "in") for n in EDGES}
         self.caps0 = dict(self.caps) if self.caps else None
-        self.cap_events = parse_cap_events(self.a.cap_events)
+        self.known_caps0 = dict(self.known_caps)
+        specs = [x.strip() for x in (self.a.cap_events or "").split(";") if x.strip()]
+        self.cap_events = parse_cap_events(";".join(x for x in specs if not x.startswith("half:")))
+        for x in specs:
+            if x.startswith("half:"):
+                # Experiment N: progress-aligned network change (emulation only; the planners are not told). At the final move the
+                # set S of fragments the destination has not verified is frozen; the cap changes once, when the destination has
+                # verified ceil(|S| / 2) fragments of S (fragment count).
+                _, node, capv = x.split(":"); d, v = capv.split("=")
+                self.cap_events.append({"spec": x, "cap_node": node, "dir": d, "mbps": float(v), "fired": False, "kind": "half", "S": None})
+        self.progress_trigger = None
         self.cap_changes = []
         self.flow_rx: dict[str, deque] = defaultdict(deque)   # flow id -> (t, bytes) verified at the destination
         self.rate_est: dict = {}
@@ -492,7 +513,21 @@ class Run:
         for evn in self.cap_events:
             if evn.get("fired") or not self.caps:
                 continue
-            fire = (now - self.t0 >= evn["at"]) if evn["kind"] == "t" else (len(self.holders.get(evn["node"], ())) >= evn["frac"] * n)
+            if evn["kind"] == "half":
+                if evn["S"] is None:
+                    continue
+                got = len(self.holders[self.final] & evn["S"])
+                fire = got >= math.ceil(len(evn["S"]) / 2)
+                if fire:
+                    deg = evn["cap_node"] if evn["dir"] == "out" else None
+                    missing = evn["S"] - self.holders[self.final]
+                    others = [e for e in EDGES if e not in (deg, self.final)]
+                    self.progress_trigger = {"spec": evn["spec"], "t": now, "t_rel": self.rel_t(now), "t_after_move_s": now - evn["t_S"], "s_size": len(evn["S"]),
+                                             "verified_of_S_at_trigger": got, "missing_at_trigger": len(missing), "degraded": [evn["cap_node"], evn["dir"]],
+                                             "available_elsewhere_at_trigger": sum(1 for f in missing if any(f in self.holders[e] for e in others)),
+                                             "available_elsewhere_by_node": {e: len(missing & self.holders[e]) for e in others}}
+            else:
+                fire = (now - self.t0 >= evn["at"]) if evn["kind"] == "t" else (len(self.holders.get(evn["node"], ())) >= evn["frac"] * n)
             if fire:
                 evn["fired"] = True
                 self.caps[(evn["dir"], evn["cap_node"])] = evn["mbps"] * 1e6
@@ -661,6 +696,11 @@ class Run:
             self.running = None
         self.owner_idx = i
         self.moves.append(mv)
+        if to == self.final and i == len(self.edges) - 1:
+            for evn in self.cap_events:
+                if evn.get("kind") == "half" and evn["S"] is None:
+                    self.drain()
+                    evn["S"] = set(range(len(self.manifest["frags"]))) - set(self.holders[to]); evn["t_S"] = t_req
         self.ev.log("move", t_req, **{k: (self.rel_t(v) if k.startswith("t_") else v) for k, v in mv.items()})
         self.p_current_row(t_req)
         return mv
@@ -789,7 +829,11 @@ class Run:
                 rj = next((e for e in self.node_events if e["node"] == self.final and e["event"] == key and e["t"] >= final_move_t - 1e-3), None)
                 if rj:
                     t_rejoin_final = rj["t"]; stop_at = time.time() + (a.cold_tail_calls if self.mode == "cold" else a.tail_calls) * svc
-            if stop_at is not None and now >= stop_at:
+            if a.horizon_calls:
+                # W2: the final owner generates through trigger call + horizon - 1 whatever the rejoin (both policies)
+                if final_move_t is not None and any(m["owner"] == self.final and m["call"] >= a.migration_chunk + a.horizon_calls - 1 for m in self.metrics[-8:]):
+                    self.stop_reason = "horizon"; break
+            elif stop_at is not None and now >= stop_at:
                 if self.net is None or self.net.all_restored() or now >= stop_at + a.net_grace_s:
                     self.stop_reason = "rejoin+tail" if self.net is None or self.net.all_restored() else "rejoin+tail; network sessions not all restored"
                     break
@@ -797,6 +841,7 @@ class Run:
                 self.stop_reason = "deadline"; break
             if any(e["event"] == "window_exhausted" for e in self.node_events):
                 self.stop_reason = "window_exhausted"; break
+        self.t_loop_end = time.time()
         self.node(self.owner).call("EXEC_STOP")
         self.drain(1.0)
         for fl in list(self.flows.values()):
@@ -812,6 +857,9 @@ class Run:
             if e.get("network_csv"):
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
                 (self.dir / f"node_{lb}" / "network.csv").write_text(e["network_csv"])
+            if e.get("baseline_record"):   # W / R / N: the node's reference record (frame digests, Sink value fingerprints)
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                (self.dir / f"node_{lb}" / "baseline_record.json").write_text(json.dumps(e.pop("baseline_record")))
         self.trace_state("run end", f"stop reason: {self.stop_reason}")
         summary = self.finish(prep, ends, final_move_t)
         if cold:
@@ -1032,7 +1080,53 @@ class Run:
                          "provisioned_s": fr(ci.get("t_ready")), "handoff_request_s": fr(final_move_t), "ttfo_s": fr(ttfo), "sink_verified_s": fr(t_verified),
                          "sink_bind_s": fr(t_bind), "first_bound_output_s": fr(t_first_bound_out), "rejoin_s": fr(t_rejoin), "reference": ci.get("reference"),
                          "source_kept_generating": True}
+        # ---- W / R / N records (followup_common.md): owner-side Sink versions, N trigger, R exposure, termination / censoring
+        t_end_run = getattr(self, "t_loop_end", None) or time.time()
+        promos = [{"node": e["node"], "call": e.get("call"), "t_rel": self.rel_t(e["t"]), "bound": e.get("bound"), "ownership": e.get("ownership"), "n_changed": e.get("n_changed")}
+                  for e in self.node_events if e["event"] == "sink_promotion"]
+        before_final_bind = [p_ for p_, e in zip(promos, [e for e in self.node_events if e["event"] == "sink_promotion"]) if t_bind is None or e["t"] < t_bind]
+        ptrig = None
+        if self.progress_trigger is not None:
+            ptrig = {k: v for k, v in self.progress_trigger.items() if k != "t"}
+            after = None if t_verified is None else t_verified - self.progress_trigger["t"]
+            ptrig["sink_verified_after_trigger_s"] = after
+            ptrig["reaction_feasible"] = None if after is None else after >= a.dyn_window + a.dyn_period
+        elif any(e.get("kind") == "half" for e in self.cap_events):
+            ptrig = {"fired": False, "s_size": next((len(e["S"]) for e in self.cap_events if e.get("kind") == "half" and e["S"] is not None), None)}
+        exposure = None
+        if self.net is not None and tfm is not None:
+            lo_, hi_ = tfm, (t_verified if t_verified is not None else t_end_run)
+            ivs = sorted((fl["t_start"], fl["t_end"] if fl["t_end"] is not None else t_end_run) for fl in self.net.flows.values() if fl["src"] == "A")
+            ivs = [(max(x, lo_), min(y, hi_)) for x, y in ivs if y > lo_ and x < hi_]
+            covered, cur = [], None
+            for x, y in ivs:
+                if cur and x <= cur[1]:
+                    cur[1] = max(cur[1], y)
+                else:
+                    cur = [x, y]; covered.append(cur)
+            span = max(hi_ - lo_, 1e-9)
+            cov = sum(y - x for x, y in covered)
+            in_cov = lambda t: any(x <= t <= y for x, y in covered)  # noqa: E731
+            bg_bytes = sum(b for (t_, src, _d, _sid, _f, b) in self.net.sent if src == "A" and lo_ <= t_ <= hi_ and in_cov(t_))
+            exposure = {"bottleneck": "A egress", "interval_rel_s": [self.rel_t(lo_), self.rel_t(hi_)], "interval_censored": t_verified is None,
+                        "interval_s": hi_ - lo_, "n_background_flows_from_A_in_interval": len(ivs),
+                        "mean_active_background_flows_from_A": sum(y - x for x, y in ivs) / span, "coverage_fraction": cov / span,
+                        "background_bytes_from_A_in_covered_interval": bg_bytes,
+                        "exposure_valid": bool(ivs) and cov / span >= 0.25 and bg_bytes > 0}
+        rows_fin_after = [m for m in self.metrics if m["owner"] == fin and tfm is not None and self.t0 + m["t_out_rel"] >= tfm - 1e-3]
+        termination = {"stop_reason": self.stop_reason, "elapsed_s": t_end_run - self.t0,
+                       "timed_out": str(self.stop_reason).startswith(("deadline", "window_exhausted")),
+                       "sink_verified": t_verified is not None, "bind_observed": t_bind is not None, "rejoin_observed": t_rejoin is not None,
+                       "last_progress_final_owner": len(self.holders[fin]) / len(man["frags"]),
+                       "first_call_final_owner": min((m["call"] for m in rows_fin_after), default=None),
+                       "last_call_final_owner": max((m["call"] for m in rows_fin_after), default=None),
+                       "horizon_calls": a.horizon_calls or None}
+        wrn = {"owner_promotions": promos, "owner_promotions_before_final_bind": len(before_final_bind),
+               "applicable_single_version": len(before_final_bind) == 0, "progress_trigger": ptrig, "exposure": exposure, "termination": termination,
+               "t0_wall_by_node": {lb: self.t0 + self.node(lb).off for lb in self.nodes_used if lb in self.o.nodes},
+               "known_caps_unchanged": self.known_caps == self.known_caps0}
         summary = {
+            "wrn": wrn,
             "d0": d0, "per_move": per_move, "gpu_peak_mem_mb": {lb: {k: e.get(k) for k in ("peak_allocated_mb", "peak_reserved_mb")} for lb, e in ends.items()}, "execution_state": execution_state, "revisit": revisit, "cold_destination": cold_dest,
             "hybrid": None if self.net is None else {"n_network_sessions": self.net.N, "network_policy": self.net.policy, "network_run_dir": str(self.net.dir.relative_to(REPO_ROOT)),
                                                      "network_summary": {k: self.net_summary.get(k) for k in ("restored_sessions", "first_restored", "makespan_s", "bytes", "normalized", "validation", "stop_reason")},
@@ -1055,7 +1149,7 @@ class Run:
                            "rejoin_calls_after_bind": next((e.get("calls_after_bind") for e in ev_final if e["event"] == "rejoin"), None),
                            "lag_hops_mean": float(np.mean([m["lag_hops"] for m in self.metrics])) if self.metrics else None, "lag_hops_max": max((m["lag_hops"] for m in self.metrics), default=None),
                            "missing_chunks": sum(1 for m in self.metrics if m["missing"]), "n_chunks": len(self.metrics)},
-            "held_at_end": {e: len(self.holders[e]) for e in self.edges}, "physically_held_at_end": {e: len(self.physical[e]) for e in self.edges}, "node_end": {lb: {k: v for k, v in e.items() if k != "network_csv"} for lb, e in ends.items()},
+            "held_at_end": {e: len(self.holders[e]) for e in self.edges}, "physically_held_at_end": {e: len(self.physical[e]) for e in self.edges}, "node_end": {lb: {k: v for k, v in e.items() if k not in ("network_csv", "baseline_record")} for lb, e in ends.items()},
             "source_prep": {k: v for k, v in prep.items() if k != "manifest"}, "validation": validation,
         }
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
@@ -1226,6 +1320,7 @@ def main():
     ap.add_argument("--migration_chunk", type=int, default=30)
     ap.add_argument("--post_chunks", type=int, default=220)
     ap.add_argument("--tail_calls", type=int, default=12, help="calls to keep generating at the final owner after rejoin")
+    ap.add_argument("--horizon_calls", type=int, default=0, help="W2: stop when the final owner has generated call migration_chunk + horizon_calls - 1 (overrides the rejoin + tail end condition)")
     ap.add_argument("--max_run_s", type=float, default=600.0)
     ap.add_argument("--physical_cap_mbps", type=float, default=9400.0, help="Phase 0 measured single-NIC capacity (validation only)")
     ap.add_argument("--mss", type=int, default=DEFAULT_MSS)
@@ -1253,6 +1348,7 @@ def main():
     ap.add_argument("--lookahead", type=float, default=10.0)
     ap.add_argument("--budget", type=float, default=1.0)
     # Experiment D
+    ap.add_argument("--validity", choices=["expD", "wrn"], default="expD", help="--skip_done validity rules: Experiment D or W / R / N (censored runs valid)")
     ap.add_argument("--skip_done", action="store_true", help="skip a configuration + rep that already has a valid run (Experiment D validity rules)")
     ap.add_argument("--rep_start", type=int, default=1, help="first rep number (e.g. 4 for the extra reps of scenario A)")
     ap.add_argument("--cold_dest", action="store_true", help="OTTER cold destination (scenario A sensitivity): start node B after the trigger")
