@@ -41,13 +41,16 @@ caps at plan time and measured throughput (frozen M3 behaviour); they are never 
 
 ## Assumptions
 
-1. One edge site per cell, or per cluster of k adjacent cells (k is a sensitivity parameter, k = 1, 2, 4); a handover
+1. One edge site per cell (default k = 1), or per cluster of k cells ranked by first appearance (k = 2, 4: pre-specified
+   sensitivity; exact mapping and trigger rules in prereg v2 section 3.1); a handover
    between cells of different sites is a move; handovers inside a site are not moves.
 2. The move is issued at the handover instant (no prediction; placement is disabled in this study, so Full OTTER =
    OTTER event-driven, as prereg v3 section 3 defines for scenarios without a prediction).
 3. Cross-traffic is open-loop: replayed as a time series of available capacity, not as competing TCP flows that react
    to OTTER's traffic.
-4. Site uplink capacity is emulated at 1 Gbps per direction (the testbed shaping used in Experiments B-E and D);
+4. (Refined in prereg v2 section 3.2: the varying load comes from MAWI as a *measured source of traffic
+   variability*, not as a representative edge-metro trace; residual capacity max(C(1 - u), 50 Mbps), assumptions R1-R4.)
+   Site uplink capacity is emulated at 1 Gbps per direction (the testbed shaping used in Experiments B-E and D);
    cross-traffic is applied as a utilization fraction u(t) of that capacity: available = C (1 - u(t)) (utilization is
    assumed scale-free across link capacities).
 5. One Sink version per restoration (Experiment D scope conditions 5-6); runs with version events are flagged and
