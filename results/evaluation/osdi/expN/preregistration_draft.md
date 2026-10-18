@@ -1,4 +1,9 @@
-# Experiment N - Network adaptation: preregistration DRAFT v1 (2026-10-18; not frozen; nothing implemented or run)
+# Experiment N - Network adaptation: preregistration DRAFT v2 (2026-10-18; not frozen; nothing implemented or run)
+
+**v2 changes (2026-10-18, review before freeze; no N data exist):** degradation onset changed from "move + 4 s" to a
+progress-based onset (section 3; reason below); run-length parameters fixed; the event-driven rule's reaction time in
+correct-placement cells stated; exploratory onset variants re-expressed as progress fractions. Proposed, pending approval
+(decision N-D1).
 
 Common rules, testbed, definitions, implementation items and cost: `../followup_common.md`. Experiment D is prior
 evidence only (common rule 1). The M3 implementation and every `dyn_*` threshold stay exactly as frozen (E-pilot v2:
@@ -28,8 +33,17 @@ the same move schedule for every policy), dog workload, k = 2, 1 Gbps.
 **Factor P - placement:** `none` (A -> B, no prediction), `correct` (A -> B, top-1 = B), `incorrect` (A -> C, top-1 = B).
 
 **Factor D - degradation** (one link role per cell; magnitude 62.5 Mbps = 1/16 of nominal, the value of ExpD scenario F
-fixed before ExpD ran; onset at the move + 4 s = after `dyn_warmup` + `dyn_window`, so the event-driven rule has one full
-measurement window before the change; persistent to the end of the run):
+fixed before ExpD ran; persistent to the end of the run). **Onset (v2, N-D1):** when the destination has verified half of
+the fragments it lacked at the move, i.e. when its verified share reaches x_move + (1 - x_move) / 2 (x_move = the
+destination's verified share at the move: ~0.71 under correct placement, 0 without placement or under incorrect
+placement). Why not v1's "move + 4 s": under correct placement the destination lacks only ~0.29 Sink, which arrives in
+~4 s at 1 Gbps (ExpD G4: bind-ready 4.94 s), so a change at move + 4 s would land at or after the end of the restoration
+and those cells would be degenerate; a progress-based onset puts the change in the middle of every cell's remaining
+transfer (~2 s after the move with correct placement, ~7 s without placement or with incorrect placement). It is an
+emulation trigger in the orchestrator (a new cap-event kind; the planners are not told), chosen from the transfer
+arithmetic, not from N outcomes. Consequence stated in advance: with correct placement the onset (~2 s) precedes the
+event-driven rule's first full measurement window (`dyn_warmup` 2 s after the move plan + `dyn_window` 2 s), so it
+reacts only after ~4 s.
 - `0` - no change (**primary condition**);
 - `src` - the source A's egress;
 - `hold` - the misplaced holder B's egress (exists only under `incorrect`);
@@ -92,18 +106,25 @@ traffic and latency cost.
 ## 7. Exploratory sensitivity sweeps (separate; after the primary matrix; never change a primary verdict)
 
 - Magnitude: 500, 250, 125 Mbps in incorrect x hold and in incorrect x in.
-- Onset: move + 1 s (inside the warm-up) and move + 8 s.
+- Onset: when the destination has verified 25 % and 75 % of the fragments it lacked at the move.
 - Duration: transient degradations of 2 s and 8 s (a second cap event restores 1 Gbps).
 - Repeated mobility: scenario F's layout (rho 2, C's egress degraded when D holds 50 %) at 250 / 125 / 62.5 Mbps.
 - 2 reps per configuration, OTTER at moves and OTTER event-driven only; reported as a separate table labelled
   exploratory. The `dyn_*` thresholds are not varied anywhere in N.
 
-## 8. Validity
+## 8. Run parameters (fixed now)
+
+`--post_chunks 400`, `--max_run_s 900`: the slowest primary cells restore about half a Sink through a 62.5 Mbps link
+(~110-130 s after the onset), i.e. ~250-270 calls after the trigger including the 10 s placement window; ExpD's 300 /
+600 s would leave too little margin. Trigger M = 30 (dog, as in ExpD scenarios C / D; dog's trigger call is not a loop
+cut, `../expW/loop_audit.md`). Cost: ~6 h for the primary matrix (longer runs than v1's estimate).
+
+## 9. Validity
 
 ExpD run-validity rules (`../followup_common.md` section 2). The NIC-peak and paced-egress checks use the degraded cap
 for the degraded link after the change. A run whose cap change did not fire (no `cap_change` event) is invalid.
 
-## 9. What the outcomes mean for the paper
+## 10. What the outcomes mean for the paper
 
 - N-H2 supported: M3 recovers latency when a degraded provider's data are available elsewhere (the G7 class).
 - N-H1 per placement: whether M3 is free when nothing changes; the expected failure under incorrect placement is reported

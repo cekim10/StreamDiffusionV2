@@ -1,4 +1,8 @@
-# Experiment R - Repeated mobility: preregistration DRAFT v1 (2026-10-18; not frozen; nothing implemented or run)
+# Experiment R - Repeated mobility: preregistration DRAFT v2 (2026-10-18; not frozen; nothing implemented or run)
+
+**v2 changes (2026-10-18, review before freeze; no R data exist):** a manipulation check for realized source contention
+and its use in R-H3(b) (section 3, 6); the coupling of the background sessions' policy to the GPU session's stated
+(section 3); run parameters and the trigger fixed (section 3). Proposed, pending approval (decisions R-D1, R-D2).
 
 Common rules, testbed, definitions, implementation items and cost: `../followup_common.md`. Experiment D is prior
 evidence only (common rule 1).
@@ -29,6 +33,18 @@ stated deployment assumption.
 - **Factor 2, source contention** c in {0, 3}: c = 3 adds three network-level restoration sessions from A (no
   generation; real-size Sinks; `tools/eval/hybrid_net.py`, Scenario B v2 layout, network sessions using the policy
   mapped from the GPU session's), as in ExpD scenario E. Only one session generates; every GPU metric refers to it.
+  - **Policy coupling (R-D2, stated before data):** the three background sessions run the policy mapped from the GPU
+    session's (`hybrid_net.NET_POLICY`: restart -> restart, split -> reuse_fixed, reuse_dyn -> reuse_dyn), so under M1 + M2
+    the background sessions also preserve progress and load the source less. R-H3(b) therefore compares two *systems*
+    (every session on M1 only vs every session on M1 + M2), as ExpD G6 did; it is not a per-session isolation.
+  - **Realized contention (manipulation check, R-D1):** the background sessions start at the GPU session's first move and
+    move on its T_m schedule, so at long T_m they may finish before the GPU session's final restoration. Per run, the
+    time-averaged number of active background source flows from A during the GPU session's final restoration
+    ([final move, Sink verified]) is reported. A c = 3 cell whose median over reps is < 1.0 for either compared policy is
+    reported "contention not realized"; R-H3(b) is NOT EVALUABLE there (R-H1 and R-H2 are still judged). The check
+    concerns the manipulated condition, never the outcome.
+- Run parameters: trigger M = 30 (dog's trigger call is not a loop cut, `../expW/loop_audit.md`); `--post_chunks 300`,
+  `--max_run_s 600` (the longest cell, rho 0.5 with contention, needs ~200 calls after the trigger).
 - **Policies:** M1 only (`restart`), M1 + M2 (`split`), OTTER event-driven (`reuse_dyn`, frozen thresholds; no
   placement). M1 only vs M1 + M2 is the M2 comparison; OTTER event-driven is reported for the full system.
 - 3 reps per configuration: 5 x 2 x 3 x 3 = **90 runs**.
@@ -68,7 +84,8 @@ M1-only measurement, not the model.
 - **R-H3 (latency, reported separately):** (a) c = 0, every rho: |bind-ready(M1 + M2) - bind-ready(M1 only)| <= 1.0 s
   (both ingress-bound; no latency claim without contention). (b) c = 3, rho in {0.5, 1, 2}: bind-ready(M1 + M2) <=
   bind-ready(M1 only) - 1.0 s (holder forwarding bypasses the contended source egress). rho 4 and 8 at c = 3 are
-  descriptive (the holders hold little; the gain is expected to shrink).
+  descriptive (the holders hold little; the gain is expected to shrink). Cells failing the realized-contention check
+  (section 3) are NOT EVALUABLE for (b).
   Origins: the 1.0 s band is G3(c)'s (frozen before ExpD); the direction of (b) follows the mechanism. Recorded
   predictions: (a) supported; (b) supported at rho 2 (G6 prior), unknown at 0.5 and 1.
 

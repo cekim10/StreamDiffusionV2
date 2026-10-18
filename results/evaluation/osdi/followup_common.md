@@ -68,7 +68,8 @@ D (frozen v3, 81bb628; results `expD/expD_report.md`), the M3 implementation, or
 | W | call-class labels (cut / boundary-adjacent / first-pass / repeated-input) in W1 and W2 logs; value fingerprints during the node baseline (reference Sink changes, RVC); the W-AR center-band variant script | W draft v2 sections 3.1, 5.1, 9 |
 | R | GPU shakedown of rho <= 1 (an owner that bound the Sink forwards it as a holder under M1 + M2; M1 only drops it at the move) | never exercised on GPU; the node keeps `sink_buf` after bind, so no change is expected |
 | R | hybrid network sessions at rho other than 2 (layout follows T_m) | ExpD ran E at rho 2 only |
-| N | cap events relative to the move (today `t=` counts from migration start; with the 10 s placement window the move is at ~10 s) and `in`-direction caps in `--cap_events` | degradation timing and ingress degradation |
+| R | per-run realized-contention metric (time-averaged active background source flows from A during the GPU session's final restoration) | R v2 manipulation check |
+| N | a progress-based cap-event trigger "destination verified half of what it lacked at the move" (N v2 onset; emulation only, planners not told) and `in`-direction caps in `--cap_events` (to be verified in a loopback test) | degradation onset and ingress degradation |
 | N | per-run classification script (beneficial / neutral / harmful; per-re-plan records) | pre-specified analysis |
 
 No change to the planner, its thresholds (`dyn_period`, `dyn_window`, `dyn_warmup`, `dyn_eps`, `dyn_rel`, `dyn_ctrl`),
@@ -82,5 +83,5 @@ the placement rules or the transfer path is part of these items.
 | W2 | 80 runs (40 units x 2 policies), 40 orchestrator invocations (the clip is a node argument) | ~6 h |
 | W-AR | 12 runs (4 videos: W1 + W2 on the aspect-preserving variant; descriptive) | ~1 h |
 | R | 90 runs (5 rho x 2 contention levels x 3 policies x 3 reps) | ~4.5 h |
-| N | 90 runs (10 cells x 3 policies x 3 reps), 10 invocations (cap events are per invocation) | ~4.5 h |
-| total | 300 GPU runs | ~16 h, plus exploratory sweeps listed in each draft |
+| N | 90 runs (10 cells x 3 policies x 3 reps), 10 invocations (cap events are per invocation); degraded cells run ~2-3 min longer | ~6 h |
+| total | 312 GPU runs (incl. W-AR) | ~19 h, plus exploratory sweeps listed in each draft |
