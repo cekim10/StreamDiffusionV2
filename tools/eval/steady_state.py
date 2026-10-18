@@ -8,9 +8,11 @@ generation, same GPU, same seed, `--reps` reps of `--chunks` chunks (preregistra
                 decode-completion hook (a device synchronize after every VAE decode, t_decode), the per-chunk Sink-slot
                 position read and the metrics row the node writes. The prereg requires t_decode logging enabled for G9.
                 PSNR against a reference is a measurement of the evaluation, not part of OTTER, and is off in both modes.
-Measured: the interval between consecutive chunk completions (wall clock) for `--chunks` chunks after `--warmup` chunks,
-per rep and mode; modes alternate in ABBA order across reps; frames are hashed so the two modes are checked to produce
-identical output. Run on one host with GPU 0 idle and no node process running (the run records the GPU state first).
+Measured per chunk, for `--chunks` chunks after `--warmup` chunks, per rep and mode: the chunk service time (the model
+call plus the device synchronize, perf_counter; the repo's "service time", as in the nodes' service_s; in OTTER mode the
+decode-completion hook runs inside it) - the G9 metric - and the inter-chunk completion interval (wall clock between
+consecutive chunk completions, which also includes the per-chunk bookkeeping) - reported, descriptive. Modes alternate
+in ABBA order across reps; frames are hashed so the two modes are checked to produce identical output. Run on one host with GPU 0 idle and no node process running (the run records the GPU state first).
 
     python tools/eval/steady_state.py --reps 3 --chunks 200            # -> results/evaluation/expD_G9/steady_<stamp>/
     python tools/eval/steady_state.py --dry_run --reps 1 --chunks 20   # no torch, protocol test only
@@ -74,7 +76,7 @@ def main():
                 rt.instrument(mode == "otter")
                 rt.torch.cuda.reset_peak_memory_stats(rt.device)
                 rt.session = rt.runner.start()
-            prev, iv = None, []
+            prev, iv, sv = None, [], []
             for c in range(a.warmup + a.chunks):
                 if na.dry_run:
                     produced, ps, ss, dt, pos = rt.step(c); fr = None
@@ -95,25 +97,29 @@ def main():
                 interval = None if prev is None else t_out - prev
                 prev = t_out
                 if c >= a.warmup and interval is not None:
-                    iv.append(interval)
+                    iv.append(interval); sv.append(dt)
                 log.row(rep=rep, mode=mode, call=c, t_out=f"{t_out:.6f}", interval_s=None if interval is None else f"{interval:.6f}", chunk_s=f"{dt:.6f}", frame_sha=h)
             peak = None if na.dry_run else rt.torch.cuda.max_memory_allocated(rt.device) / 2**20
-            res.append({"rep": rep, "mode": mode, "n": len(iv), "median_interval_s": float(np.median(iv)), "mean_interval_s": float(np.mean(iv)),
+            res.append({"rep": rep, "mode": mode, "n": len(iv), "median_service_s": float(np.median(sv)), "mean_service_s": float(np.mean(sv)),
+                        "median_interval_s": float(np.median(iv)), "mean_interval_s": float(np.mean(iv)),
                         "p95_interval_s": float(np.percentile(iv, 95)), "peak_allocated_mb": peak})
-            print(f"[g9] rep {rep} {mode:10s}: median {res[-1]['median_interval_s'] * 1e3:.1f} ms, mean {res[-1]['mean_interval_s'] * 1e3:.1f} ms over {len(iv)} chunks", flush=True)
+            print(f"[g9] rep {rep} {mode:10s}: service time median {res[-1]['median_service_s'] * 1e3:.1f} ms, completion interval median {res[-1]['median_interval_s'] * 1e3:.1f} ms over {len(iv)} chunks", flush=True)
             if not na.dry_run:
                 rt.release()
     log.close(); metrics.close()
     by = lambda m, k: [r[k] for r in res if r["mode"] == m]  # noqa: E731
-    med_u, med_o = float(np.median(by("unmodified", "median_interval_s"))), float(np.median(by("otter", "median_interval_s")))
+    med_u, med_o = float(np.median(by("unmodified", "median_service_s"))), float(np.median(by("otter", "median_service_s")))
+    iv_u, iv_o = float(np.median(by("unmodified", "median_interval_s"))), float(np.median(by("otter", "median_interval_s")))
     same = all(len(set(v.values())) == 1 for v in hashes.values() if len(v) == 2) if hashes else None
     summary = {"experiment": "G9 steady state", "reps": a.reps, "chunks": a.chunks, "warmup": a.warmup, "per_rep": res,
-               "median_over_reps_s": {"unmodified": med_u, "otter": med_o}, "relative_difference": (med_o - med_u) / med_u,
-               "mean_over_reps_s": {"unmodified": float(np.mean(by("unmodified", "mean_interval_s"))), "otter": float(np.mean(by("otter", "mean_interval_s")))},
+               "metric": "chunk service time (G9); completion interval descriptive",
+               "median_service_over_reps_s": {"unmodified": med_u, "otter": med_o}, "relative_difference": (med_o - med_u) / med_u,
+               "median_interval_over_reps_s": {"unmodified": iv_u, "otter": iv_o}, "relative_difference_interval": (iv_o - iv_u) / iv_u,
                "identical_frames_rep1": same, "gpu0_before": g0, "gpu0_idle_before": None if g0 is None else ("error" not in g0 and g0["others_mib"] < 1024 and g0["util_pct"] <= 5),
                "host": socket.gethostname(), "host_info": host_info(None if na.dry_run else na.gpu_id), "git_commit": git_commit(), "args": vars(na), "dry_run": na.dry_run}
     (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
-    print(f"[g9] median chunk interval: unmodified {med_u * 1e3:.2f} ms, OTTER enabled {med_o * 1e3:.2f} ms, relative {summary['relative_difference'] * 100:+.2f} % -> {out.relative_to(ROOT)}", flush=True)
+    print(f"[g9] median chunk service time: unmodified {med_u * 1e3:.2f} ms, OTTER enabled {med_o * 1e3:.2f} ms, relative {summary['relative_difference'] * 100:+.2f} %; "
+          f"completion interval {summary['relative_difference_interval'] * 100:+.2f} % -> {out.relative_to(ROOT)}", flush=True)
 
 
 if __name__ == "__main__":

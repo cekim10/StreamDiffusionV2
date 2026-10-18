@@ -185,7 +185,11 @@ class Agg:
         parts = []
         if steady:
             rel = steady["relative_difference"]; okv = steady.get("gpu0_idle_before") is not False and steady["reps"] >= self.min_reps and steady.get("identical_frames_rep1") is not False
-            parts.append((abs(rel) <= 0.02 if okv else None, f"steady state: OTTER-enabled vs unmodified median chunk interval {rel * 100:+.2f} % (|.| <= 2 %), reps {steady['reps']}, identical frames {steady.get('identical_frames_rep1')}"))
+            if "median_service_over_reps_s" not in steady:
+                okv = False   # written before the service-time correction (interval only): not a G9 measurement
+            parts.append((abs(rel) <= 0.02 if okv else None, f"steady state: OTTER-enabled vs unmodified median chunk service time {rel * 100:+.2f} % (|.| <= 2 %), "
+                          f"reps {steady['reps']}, identical frames {steady.get('identical_frames_rep1')}; inter-chunk completion interval (descriptive) "
+                          f"{(steady.get('relative_difference_interval') or 0) * 100:+.2f} %"))
         else:
             parts.append((None, "steady state: no expD_G9 run"))
         for bw in (SHAPED, 0.0):

@@ -31,8 +31,9 @@ sweep data in view; the only GPU data seen so far are correctness runs (D0 shake
   event of that node in `events.csv`), divided by the Sink size.
 - Re-plans = `d0.n_replans`; duplicates = `bytes.duplicate` (orchestrator) plus `recv` rows with ok = False in the
   node logs.
-- T_s = 14.05 s (the measured 1 Gbps transfer-ready time used for every T_m) for G4 **[interpretation: G4 writes
-  "x T_s" without naming the value]**.
+- T_s = 14.05 s for G4 **[interpretation: G4 writes "x T_s" without a value; the frozen text defines T_m = T_s / rho
+  and G6 writes "3.5 s (0.5 T_m)", i.e. T_m = 7.0 s at rho 2, consistent with the measured Phase 1 1 Gbps T_s of 14.05 s
+  that every T_m in the harness uses (T_m = 7.025 s)]**.
 
 ## Criteria
 
@@ -56,13 +57,31 @@ sweep data in view; the only GPU data seen so far are correctness runs (D0 shake
   and |bind-ready(OTTER event-driven) - bind-ready(OTTER at moves)| <= 1.0 s. Secondary (F): OTTER event-driven vs
   M1 + M2 and M1 only, reported. Re-plan counts of every rep are listed next to the medians.
 - **G8** (G): for each of M1 + M2, OTTER at moves, OTTER event-driven: bind-ready at the revisited B <= 0.6 x M1 only's.
-- **G9**: (steady state) |median chunk interval OTTER-enabled / unmodified - 1| <= 0.02 over 3 reps of 200 chunks
-  (`tools/eval/steady_state.py`; definition of the two modes in its docstring) **[interpretation: "chunk service
-  time" = interval between consecutive chunk completions; "within 2 %" = absolute relative difference]**; (memory)
+- **G9**: (steady state) |median chunk service time OTTER-enabled / unmodified - 1| <= 0.02 over 3 reps of 200 chunks
+  (`tools/eval/steady_state.py`; the two modes are defined in its docstring). Chunk service time = the model call plus
+  the device synchronize per chunk (the repo's established "service time", the nodes' `service_s`); in OTTER mode the
+  decode-completion hook runs inside it. The inter-chunk completion interval (section 6's descriptive "chunk
+  interval") is reported next to it, named as such, not judged. "Within 2 %" = absolute relative difference
+  **[interpretation]**. *(Corrected 2026-10-17 before any sweep data, after comparing this spec with the frozen text:
+  the first version used the completion interval, which section 6 lists as a separate descriptive metric.)* (memory)
   scenario A, per bandwidth: (max - min) / min of the destination's median peak `memory_allocated` over Full migration,
-  Cold restart, M1 only and OTTER event-driven <= 0.01 (warm destination only).
+  Cold restart, M1 only and OTTER event-driven <= 0.01 (warm destination only). The frozen text compares policies with
+  each other ("across in-repo policies"), not with a no-migration baseline; that is what is computed.
 - **External C/R**: not run (blocked); reported as such.
 - **Generalization** (`expD_Agen_*`): TTFO, bind-ready, rejoin per clip and seed, descriptive.
 
 Every criterion is reported as SUPPORTED / NOT SUPPORTED / NOT EVALUABLE with the medians it used and the valid / invalid
 rep counts; no criterion is evaluated on fewer than 3 valid reps.
+
+## Check against the frozen text (2026-10-17, before launch)
+
+| item | frozen text (v3, 81bb628) | this spec | status |
+|---|---|---|---|
+| G4 / G5 subject | no explicit subject; scenarios C, D run M1 + M2 (no placement), M1 + M2 + top-1, Full OTTER, oracle; "Full OTTER" defined in section 3 for C, D; predictions from the A-pilot (OTTER at moves + top-1) | Full OTTER judged; M1 + M2 + top-1 and oracle reported against the same clauses | interpretation (not a contradiction); alternative: require both placement policies |
+| G4 reference | "no-placement's" | M1 + M2 (no placement), the only no-placement policy in C | matches |
+| "within" (G3c, G5a, G7, G9) | "within X" | absolute difference | interpretation |
+| T_s in G4 | "x T_s", no value; T_m = T_s / rho; G6 "3.5 s (0.5 T_m)" | 14.05 s (the measured value every T_m uses) | consistent |
+| scenario A extra reps | "3 (5 if IQR > 10 % of median)", metric not named | TTFO or bind-ready | interpretation |
+| G9 steady state | "chunk service time"; section 6 lists "chunk interval" separately | chunk service time (model call + sync); interval reported, not judged | **corrected** (first version used the interval) |
+| G9 memory | "within 1 % across in-repo policies" | spread across Full migration, Cold restart, M1 only, OTTER event-driven | matches |
+| medians | "medians over valid reps" | medians over >= 3 valid reps | matches |
