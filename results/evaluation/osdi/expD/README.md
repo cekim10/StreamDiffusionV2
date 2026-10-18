@@ -113,7 +113,9 @@ hybrid scenario now creates source-egress contention (A's egress, not one destin
 
 ## GO / NO-GO for the full Experiment D sweep
 
-**Ready to request approval, after one short GPU smoke test of the G9 tool** (`steady_state.py --reps 1 --chunks 20
+**Ready to request approval.** The G9 tool's GPU smoke test passed (2026-10-17, `expD_G9_smoke/`, 1 rep x 20
+chunks on elves-01 GPU 0, idle before: median chunk interval 554.8 ms unmodified vs 559.1 ms OTTER-enabled, identical
+frames; a smoke test, not the G9 measurement). Previously: one short GPU smoke test of the G9 tool (`steady_state.py --reps 1 --chunks 20
 --experiment expD_G9_smoke`, ~3 min, kept out of the sweep data). Every in-repo capability passes its focused GPU test,
 the planner regression passes, the aggregation rules are fixed in writing before any data, and the driver resumes
 safely. Open items that do not block the in-repo sweep: external C/R (blocked, reported as not run); the aggregation
