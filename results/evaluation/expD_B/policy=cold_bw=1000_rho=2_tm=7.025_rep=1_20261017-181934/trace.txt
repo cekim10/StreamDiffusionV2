@@ -1,0 +1,15 @@
+[orch] === run policy=cold_bw=1000_rho=2_tm=7.025_rep=1_20261017-181934: Cold restart (fresh caches from the prompt), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.15s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=   7.21s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  14.40s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  54.14s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Cold restart (fresh caches from the prompt) @ 1000.0 Mbps rho 2.0: after final move: first output 1.55 s, Sink received None s, bound None s, continuity-ready None s, rejoin None s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind None dB | ingress peak 0 Mbps

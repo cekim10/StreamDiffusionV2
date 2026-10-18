@@ -1,0 +1,18 @@
+[orch] === run policy=reuse_aware_in_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=1_20261017-200433: OTTER at moves (bottleneck-aware assignment, shared planner), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.29s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.55s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (110 left, 333 Mbps), B->D (152 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 110 fragments; B->D 152 fragments; C->D 150 fragments
+[orch] t=  81.30s run end
+        held   A: 100.0%, B:  50.7%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER at moves (bottleneck-aware assignment, shared planner) @ 1000.0 Mbps rho 2.0: after final move: first output 1.06 s, Sink received 50.85 s, bound 51.12 s, continuity-ready 51.73 s, rejoin 55.33 s | traffic 2.03x, waste 0.17x, reused 1636 MiB | PSNR after bind 39.7 dB | ingress peak 1018 Mbps

@@ -1,0 +1,10 @@
+flow,src,dst,t_start_rel,t_end_rel,n_frags,bytes,rate_bps_last,cancelled,reason
+f1_AB,A,B,0.1859,7.7283,222,931135488,1000000000,True,reuse_dyn: source sends the rest
+f2_AC,A,C,7.7298,14.3031,97,406847488,500000000,True,reuse_dyn: source sends the rest
+f3_BC,B,C,7.7342,14.3140,97,406847488,1000000000,True,reuse_dyn: reuse fragments held at B
+f4_AD,A,D,14.3161,21.4921,71,297795584,333333333,True,reuse_dyn: source sends the rest
+f5_BD,B,D,14.3206,21.5104,71,297795584,500000000,True,reuse_dyn: reuse fragments held at B
+f6_CD,C,D,14.3253,21.5489,72,301989888,1000000000,True,reuse_dyn: reuse fragments held at C
+f7_AB,A,B,21.5502,26.5322,50,206898592,333333333,False,reuse_dyn: source sends the rest
+f8_CB,C,B,21.5545,27.9423,73,306184192,1000000000,False,reuse_dyn: reuse fragments held at C
+f9_DB,D,B,21.5601,27.7273,67,281018368,500000000,False,reuse_dyn: reuse fragments held at D

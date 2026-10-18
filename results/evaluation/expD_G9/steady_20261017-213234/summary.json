@@ -1,0 +1,186 @@
+{
+ "experiment": "G9 steady state",
+ "reps": 3,
+ "chunks": 200,
+ "warmup": 30,
+ "per_rep": [
+  {
+   "rep": 1,
+   "mode": "unmodified",
+   "n": 200,
+   "median_service_s": 0.5558980517089367,
+   "mean_service_s": 0.5564732998982072,
+   "median_interval_s": 0.5587882995605469,
+   "mean_interval_s": 0.5593568193912506,
+   "p95_interval_s": 0.5699406743049621,
+   "peak_allocated_mb": 22342.119140625
+  },
+  {
+   "rep": 1,
+   "mode": "otter",
+   "n": 200,
+   "median_service_s": 0.5563466511666775,
+   "mean_service_s": 0.5571127304062248,
+   "median_interval_s": 0.5595666170120239,
+   "mean_interval_s": 0.56035196185112,
+   "p95_interval_s": 0.561467134952545,
+   "peak_allocated_mb": 22343.2041015625
+  },
+  {
+   "rep": 2,
+   "mode": "otter",
+   "n": 200,
+   "median_service_s": 0.556622389703989,
+   "mean_service_s": 0.5574478985927999,
+   "median_interval_s": 0.5598459243774414,
+   "mean_interval_s": 0.5606775939464569,
+   "p95_interval_s": 0.5630744338035581,
+   "peak_allocated_mb": 22345.0166015625
+  },
+  {
+   "rep": 2,
+   "mode": "unmodified",
+   "n": 200,
+   "median_service_s": 0.5560461860150099,
+   "mean_service_s": 0.556756052132696,
+   "median_interval_s": 0.5589339733123779,
+   "mean_interval_s": 0.5596428525447845,
+   "p95_interval_s": 0.561108863353729,
+   "peak_allocated_mb": 22346.0634765625
+  },
+  {
+   "rep": 3,
+   "mode": "unmodified",
+   "n": 200,
+   "median_service_s": 0.5563456136733294,
+   "mean_service_s": 0.5571248097717763,
+   "median_interval_s": 0.5592397451400757,
+   "mean_interval_s": 0.5600168216228485,
+   "p95_interval_s": 0.5614985704421995,
+   "peak_allocated_mb": 22344.2041015625
+  },
+  {
+   "rep": 3,
+   "mode": "otter",
+   "n": 200,
+   "median_service_s": 0.556684385985136,
+   "mean_service_s": 0.5574696802720428,
+   "median_interval_s": 0.5599159002304077,
+   "mean_interval_s": 0.560713906288147,
+   "p95_interval_s": 0.5619391202926634,
+   "peak_allocated_mb": 22345.1572265625
+  }
+ ],
+ "metric": "chunk service time (G9); completion interval descriptive",
+ "median_service_over_reps_s": {
+  "unmodified": 0.5560461860150099,
+  "otter": 0.556622389703989
+ },
+ "relative_difference": 0.0010362514903817627,
+ "median_interval_over_reps_s": {
+  "unmodified": 0.5589339733123779,
+  "otter": 0.5598459243774414
+ },
+ "relative_difference_interval": 0.001631589970563131,
+ "identical_frames_rep1": true,
+ "gpu0_before": {
+  "util_pct": 0.0,
+  "mem_used_mib": 14.0,
+  "others_mib": 0,
+  "processes": []
+ },
+ "gpu0_idle_before": true,
+ "host": "elves-01",
+ "host_info": {
+  "hostname": "elves-01",
+  "fqdn": "elves-01",
+  "platform": "Linux-6.8.0-84-generic-x86_64-with-glibc2.39",
+  "python": "3.10.22",
+  "cpu_count": 128,
+  "nics": [
+   {
+    "iface": "docker0",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "enp193s0f0np0",
+    "mtu": 9200,
+    "speed_mbps": "10000",
+    "state": "up"
+   },
+   {
+    "iface": "enp193s0f1np1",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "ens5f0np0",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "ens5f1np1",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "enxfe988a5ba0c5",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "unknown"
+   }
+  ],
+  "time_utc": "2026-10-18T04:46:37.194240Z",
+  "meminfo_MemTotal": "1584841048 kB",
+  "meminfo_MemFree": "339335392 kB",
+  "meminfo_MemAvailable": "767562996 kB",
+  "nvidia_smi": "0, NVIDIA L40S, 46068 MiB, 575.51.03\n1, NVIDIA L40S, 46068 MiB, 575.51.03",
+  "torch": "2.6.0+cu124",
+  "cuda": "12.4",
+  "gpu_name": "NVIDIA L40S",
+  "tcp_congestion_control": "cubic",
+  "tcp_mtu_probing": "0"
+ },
+ "git_commit": "656dde63b9ae4f480cb73c53518d4964016b400a (dirty)",
+ "args": {
+  "label": "A",
+  "bind": "0.0.0.0",
+  "ctl_port": 29811,
+  "data_port": 29812,
+  "mss": 1400,
+  "iface": null,
+  "dry_run": false,
+  "dry_sink_mb": 64,
+  "dry_service_s": 0.2,
+  "cold_start": false,
+  "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+  "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+  "prompt_file_path": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+  "video_path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+  "output_folder": "/home/ckim151/StreamDiffusionV2/results/evaluation",
+  "noise_scale": 0.8,
+  "height": 480,
+  "width": 832,
+  "fps": 16,
+  "step": 2,
+  "seed": 0,
+  "gpu_id": 0,
+  "model_type": "T2V-1.3B",
+  "fixed_noise_scale": false,
+  "t2v": false,
+  "profile": false,
+  "use_taehv": false,
+  "normalize_latents": false,
+  "use_tensorrt": false,
+  "fast": false,
+  "migration_chunk": 30,
+  "post_chunks": 200,
+  "max_post_chunks": 200
+ },
+ "dry_run": false
+}

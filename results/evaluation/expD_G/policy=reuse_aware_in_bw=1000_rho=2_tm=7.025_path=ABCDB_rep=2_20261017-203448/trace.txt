@@ -1,0 +1,22 @@
+[orch] === run policy=reuse_aware_in_bw=1000_rho=2_tm=7.025_path=ABCDB_rep=2_20261017-203448: OTTER at moves (bottleneck-aware assignment, shared planner), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.22s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active A->C (212 left, 500 Mbps), B->C (200 left, 500 Mbps)
+        next   A->C 212 fragments; B->C 200 fragments
+[orch] t=  14.42s move C->D
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (149 left, 333 Mbps), C->D (152 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 149 fragments; C->D 152 fragments
+[orch] t=  21.73s move D->B (final move)
+        held   A: 100.0%, B:  50.0%, C:  51.5%, D:  47.6%
+        active A->B (45 left, 333 Mbps), C->B (91 left, 333 Mbps), D->B (70 left, 333 Mbps)
+        next   A->B 45 fragments; C->B 91 fragments; D->B 70 fragments
+[orch] t=  46.05s run end
+        held   A: 100.0%, B: 100.0%, C:  51.5%, D:  52.4%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER at moves (bottleneck-aware assignment, shared planner) @ 1000.0 Mbps rho 2.0: after final move: first output 1.15 s, Sink received 7.54 s, bound 8.29 s, continuity-ready 8.89 s, rejoin 13.06 s | traffic 2.04x, waste 0.50x, reused 1644 MiB | PSNR after bind 41.2 dB | ingress peak 1018 Mbps
