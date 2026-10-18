@@ -4,8 +4,8 @@ Aggregated by `tools/eval/aggregate_expD.py` per `aggregation_spec.md` from `res
 
 | criterion | verdict | detail |
 |---|---|---|
-| G1 | **NOT EVALUABLE** | bw 1000.0: OTTER TTFO - s (n=2) <= 1.0; bw native: OTTER TTFO 0.680 s (n=3) <= 1.0 [pass]; 1 Gbps: OTTER - s <= 0.1 x Full migration 54.250 s (n=3) |
-| G2 | **NOT EVALUABLE** | bw 1000.0: rejoin - s, - calls (n=2) <= 6.0 s and <= 8; bw native: rejoin 3.575 s, 6 calls (n=3) <= 6.0 s and <= 8 [pass] |
+| G1 | **SUPPORTED** | bw 1000.0: OTTER TTFO 0.675 s (n=3) <= 1.0 [pass]; bw native: OTTER TTFO 0.680 s (n=3) <= 1.0 [pass]; 1 Gbps: OTTER 0.675 s <= 0.1 x Full migration 54.250 s (n=3) [pass] |
+| G2 | **SUPPORTED** | bw 1000.0: rejoin 3.581 s, 6 calls (n=3) <= 6.0 s and <= 8 [pass]; bw native: rejoin 3.575 s, 6 calls (n=3) <= 6.0 s and <= 8 [pass] |
 | G3 rho 2 | **SUPPORTED** | (a) source M1+M2 1.034 <= 1.10, M1 only 2.014 >= 1.40 (n=3,3) [pass]; (b) discarded M1+M2 0.049 <= 0.10, M1 only 1.014 >= 0.40 [pass]; (c) bind-ready M1+M2 15.105 vs M1 only 15.522 s, within 1.0 s [pass] |
 | G3 rho 4 | **SUPPORTED** | (a) source M1+M2 1.024 <= 1.10, M1 only 1.515 >= 1.40 (n=3,3) [pass]; (b) discarded M1+M2 0.036 <= 0.10, M1 only 0.515 >= 0.40 [pass]; (c) bind-ready M1+M2 15.658 vs M1 only 15.165 s, within 1.0 s [pass] |
 | G4 | **SUPPORTED** | Full OTTER bind-ready 4.942 s (n=3) <= no placement 15.419 s (n=3) - 0.5 x 0.716 x 14.05 = 10.389 |
@@ -13,7 +13,7 @@ Aggregated by `tools/eval/aggregate_expD.py` per `aggregation_spec.md` from `res
 | G6 | **SUPPORTED** | GPU session bind-ready M1+M2 43.094 (n=3), OTTER event-driven 42.820 (n=3) <= M1 only 57.068 (n=3) - 3.5 s |
 | G7 | **SUPPORTED** | F: event-driven 15.802 (n=3) <= 0.5 x at moves 51.577 (n=3) s [pass]; F: re-plans 2 <= 2 (reps [2, 2, 2]) [pass]; F: duplicates 0 = 0 [pass]; B rho 2 (no change): re-plans 0 = 0 (reps [0, 0, 0]), bind-ready 15.449 vs 15.241 s within 1.0 s [pass]; B rho 4 (no change): re-plans 0 = 0 (reps [0, 0, 0]), bind-ready 15.072 vs 15.107 s within 1.0 s [pass]; G (no change): re-plans 0 = 0 (reps [0, 0, 0]), bind-ready 8.381 vs 8.669 s within 1.0 s [pass] |
 | G8 | **SUPPORTED** | M1 + M2 8.724 (n=3) <= 0.6 x M1 only 15.409 (n=3) s [pass]; OTTER at moves 8.669 (n=3) <= 0.6 x M1 only 15.409 (n=3) s [pass]; OTTER event-driven 8.381 (n=3) <= 0.6 x M1 only 15.409 (n=3) s [pass] |
-| G9 | **NOT EVALUABLE** | steady state: OTTER-enabled vs unmodified median chunk service time +0.10 % (|.| <= 2 %), reps 3, identical frames True; inter-chunk completion interval (descriptive) +0.16 % [pass]; bw 1000.0: destination peak memory_allocated {Full migration: 28.663 GiB, Cold restart: 28.018 GiB, M1 only: 27.930 GiB, OTTER event-driven: - GiB}, spread - <= 0.01; bw native: destination peak memory_allocated {Full migration: 28.663 GiB, Cold restart: 28.018 GiB, M1 only: 27.930 GiB, OTTER event-driven: 27.930 GiB}, spread 0.026 <= 0.01 [fail] |
+| G9 | **NOT SUPPORTED** | steady state: OTTER-enabled vs unmodified median chunk service time +0.10 % (|.| <= 2 %), reps 3, identical frames True; inter-chunk completion interval (descriptive) +0.16 % [pass]; bw 1000.0: destination peak memory_allocated {Full migration: 28.663 GiB, Cold restart: 28.018 GiB, M1 only: 27.930 GiB, OTTER event-driven: 27.930 GiB}, spread 0.026 <= 0.01 [fail]; bw native: destination peak memory_allocated {Full migration: 28.663 GiB, Cold restart: 28.018 GiB, M1 only: 27.930 GiB, OTTER event-driven: 27.930 GiB}, spread 0.026 <= 0.01 [fail] |
 
 ### G5 clauses for M1 + M2 + top-1 (reported, not judged)
 
@@ -32,10 +32,10 @@ Aggregated by `tools/eval/aggregate_expD.py` per `aggregation_spec.md` from `res
 | A | Full migration | 1000.0 | None | 3 / 3 | 54.25 | 54.25 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | A | M1 only | native | None | 3 / 3 | 0.68 | 3.21 | 3.58 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | A | M1 only | 1000.0 | None | 3 / 3 | 0.68 | 15.40 | 3.58 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
-| A | OTTER cold destination | native | None | 1 / 1 | 0.74 | 3.21 | 3.55 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
-| A | OTTER cold destination | 1000.0 | None | 1 / 1 | 0.74 | 15.12 | 4.30 / 7.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| A | OTTER cold destination | native | None | 3 / 3 | 0.74 | 3.22 | 3.57 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| A | OTTER cold destination | 1000.0 | None | 3 / 3 | 0.74 | 15.12 | 4.28 / 7.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | A | OTTER event-driven | native | None | 3 / 3 | 0.68 | 3.16 | 3.57 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
-| A | OTTER event-driven | 1000.0 | None | 2 / 3 | 0.67 | 15.41 | 3.58 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| A | OTTER event-driven | 1000.0 | None | 3 / 4 | 0.67 | 15.41 | 3.58 / 6.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | Agen_bird_s0 | Full migration | 1000.0 | None | 3 / 3 | 54.12 | 54.12 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | Agen_bird_s0 | OTTER event-driven | 1000.0 | None | 3 / 3 | 0.68 | 15.38 | 7.75 / 13.00 | 1.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | Agen_bird_s1 | Full migration | 1000.0 | None | 3 / 3 | 54.16 | 54.16 | 0.00 / 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
