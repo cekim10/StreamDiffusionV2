@@ -1,218 +1,237 @@
-# Experiment T: trace-driven evaluation of OTTER M3 - preregistration (DRAFT v2, 2026-10-17, NOT FROZEN)
+# Experiment T: trace-driven evaluation of OTTER M3 - preregistration (DRAFT v3, 2026-10-17, NOT FROZEN)
 
-**Status: draft for review.** Nothing in this study has run; no trace has been downloaded or examined beyond its
-public description. v1 (a720b5d) is superseded; changes in `prereg_v2_changes.md`. After the freeze, corrections are
-dated errata and results are judged against the frozen text.
+**Status: draft for the final review before the freeze.** Nothing in this study has run; no trace has been downloaded
+or examined beyond its public description. v1 (a720b5d) and v2 (f799a74) are superseded; changes in
+`prereg_v2_changes.md` and `prereg_v3_changes.md`. After the freeze, corrections are dated errata and results are
+judged against the frozen text.
 
 ## 0. Relation to Experiment D and freeze scope
 
 - Experiment D (prereg v3, frozen 81bb628; results `../expD/expD_report.md`) is complete and is not re-tested,
   reinterpreted or replaced: G1-G4, G6-G8 supported; G5, G9 not supported; external C/R not run. Experiment T has its
-  own directories (`results/evaluation/expT_*`), hypotheses T1-T6 and aggregation. It evaluates the **same frozen M3**
-  (rules and thresholds unchanged) and the M3 code is not modified.
-- **Frozen at the freeze, before any formal Experiment T outcome is examined:** hypotheses and thresholds (section 6),
-  trace selection rules (section 3), cell-to-site mapping and trigger rules (section 3), residual-capacity rules
-  (section 3), validity (section 7), analysis and counterfactual procedures (sections 8-9).
-- **After the freeze:** download and preprocessing (deterministic scripts implementing the frozen rules; the generated
-  segment list is committed before any run), harness implementation (`harness_plan.md`), loopback tests and a
-  correctness shakedown (one run per block, not used for T1-T6). A measurement bug found then is fixed and recorded as a
-  dated erratum; criteria are not changed.
+  own directories (`results/evaluation/expT_*`), hypotheses and aggregation. It evaluates the **same frozen M3** (rules
+  and thresholds unchanged); the M3 code is not modified.
+- **Frozen before any formal Experiment T outcome is examined:** hypotheses, thresholds and decision rules (section 6),
+  trace eligibility, mapping, trigger, residual-capacity and selection rules (section 3), validity (section 7), analysis
+  and aggregation units (section 8), the exploratory counterfactual procedure (section 9).
+- **After the freeze:** download and deterministic preprocessing implementing the frozen rules (the generated segment
+  list and the eligibility statistics are committed before the first run), harness implementation (`harness_plan.md`),
+  loopback tests and a correctness shakedown (one run per block, not used for any hypothesis). A measurement bug found
+  then is fixed and recorded as a dated erratum; criteria are not changed.
 
 ## 1. Question
 
 Under measured mobility timing and measured traffic variability applied as inter-edge residual capacity, does OTTER's
-event-driven re-planning (M3) shorten restoration relative to re-planning only at moves, how often does it re-plan
-without benefit or with harm, and what does that cost in latency and traffic?
+event-driven re-planning (M3) shorten restoration relative to re-planning only at moves, at what traffic cost, and does
+it stay quiet when nothing changes? (Event-level re-planning costs are estimated by a model and reported as
+exploratory.)
 
 ## 2. Setting
 
 - Deployment model: `deployment_model.md`. Placement is disabled (the traces give no destination prediction), so
-  "Full OTTER" = OTTER event-driven and "Full OTTER at moves" = OTTER at moves (prereg v3 section 3 definition).
-- Policies: M1 only (`restart`), M1 + M2 (`reuse_fixed`; GPU `split`), OTTER at moves (`reuse_aware_in`, "AM"), OTTER
-  event-driven (`reuse_dyn`, "ED").
+  "Full OTTER" = OTTER event-driven and "Full OTTER at moves" = OTTER at moves (prereg v3 of Experiment D, section 3).
+- Policies: M1 only (`restart`), M1 + M2 (`reuse_fixed`; GPU `split`), OTTER at moves (`reuse_aware_in`, **AM**), OTTER
+  event-driven (`reuse_dyn`, **ED**).
 - Harness: network-level primary (four hosts, `restore_orchestrate.py` / `restore_node.py`), GPU confirmation subset
   (`mobility_orchestrate.py`, dog workload). Site uplinks 1 Gbps nominal per direction; Sink 1,725,236,640 B (412 x
   4 MiB fragments).
 
-## 3. Traces, mapping, trigger and residual capacity (rules frozen; data examined only after the freeze)
+## 3. Traces, mapping, trigger, residual capacity, selection (rules frozen; data examined only after the freeze)
 
 ### 3.1 Mobility (Lumos5G 1.0; `trace_candidates.md` M-a)
 
-- Unit: a run file of the dataset as a per-second sequence of `tower_id`. Rows with a missing `tower_id` take the
-  previous value; a run with more than 10 % missing rows is not used.
-- **Handover:** second t is a handover if tower_id(t) differs from tower_id(t - 1).
-- **Cell-to-site mapping (cluster size k).** Within a run file, distinct tower IDs are ranked by first appearance
-  (rank 0, 1, 2, ...). Site(tower) = floor(rank / k). **Default k = 1** (one edge site per tower). k = 2 and k = 4 are
-  pre-specified sensitivity analyses (section 6.3), reported separately from the primary evaluation.
-- **Migration trigger:** a move is issued at second t when site(tower_id(t)) differs from site(tower_id(t - 1)); no
-  hysteresis or dwell filter (the trace as measured). Moves less than 1 s apart cannot occur (1 s resolution).
-- **Site-to-node assignment:** a segment starts at a handover; the site before it is the source **A** (the Sink
-  version is taken there at t0 = the first move). Later sites are mapped to testbed nodes B, C, D in order of first
-  appearance in the segment, cyclically (B, C, D, B, ...) when a segment has more than three distinct non-source sites;
-  a return to an already mapped site maps to the same node (a revisit). A return to the source site maps to the next
-  node in the cycle (the harness never moves execution back to A); such returns are counted and reported.
-- **Segment:** a 120 s window starting at a handover and containing >= 2 moves under the given k. The final move is the
-  last move inside the window; the run continues until restoration completes or the deadline.
+- **Trace unit:** a run file of the dataset = a per-second sequence of `tower_id`. A missing `tower_id` takes the
+  previous value; a run file with more than 10 % missing rows is not used.
+- **Tower handover vs edge migration.** A tower handover is a change of `tower_id` between consecutive seconds. An edge
+  migration is a change of *edge site* that persists: with cluster size k and hysteresis H,
+  - site(tower) = floor(rank(tower) / k), rank = order of first appearance of the tower in the run file;
+  - a migration to site s is issued at second t + H when the site changed to s at second t and stayed s for every
+    second of [t, t + H]; a change that does not persist H seconds issues no migration (ping-pong suppressed).
+  **Primary: k = 1, H = 3 s.** H = 3 s is a judgement-based minimum dwell that suppresses ping-pong handovers of a few
+  seconds while keeping the move close to the handover; the migration is delayed by H relative to the handover
+  (the restoration clock starts at the migration). **Pre-specified sensitivity (block S, section 6.3):** k = 2 and
+  k = 4 (with H = 3 s); H = 0 s (every tower handover is a migration) and H = 10 s (with k = 1).
+- **Origin and persistent site-to-node mapping.** The source **A** is the origin edge where the Sink version was taken
+  (the session's home before the window); it is not one of the trace's cells. At t0 (the window start) the session
+  migrates from A to the first site of the window (the first move, as in Experiment D). Each distinct site of the
+  window is mapped to one of B, C, D in order of first appearance and **keeps that node for the whole run**: a return
+  to a site is a revisit of the same node, so its holder's verified fragments are reused (M2) exactly as the frozen
+  policies do.
+- **Eligibility (needed for persistence with three edge nodes):** a window is eligible if it has <= 3 distinct sites
+  under the given (k, H) and >= 2 migrations after the first move. Windows with more sites are not used, which biases the
+  sample towards less dispersed mobility; the eligible fraction and the site-count and migration-rate distributions of
+  eligible vs all windows are computed from the traces and reported with the segment list, before any run.
+- **Window:** 120 s starting at a second where the site is stable for H seconds; the last migration inside the window
+  is the final move; the run continues until restoration completes or the deadline.
 
 ### 3.2 Inter-edge residual capacity (MAWI samplepoint-F; `trace_candidates.md` X-a)
 
 - **What MAWI is used as:** a *measured source of traffic variability* on a real 1 Gbps link (WIDE's transit link to
   its upstream ISP). It is **not** a representative trace of an edge-metro network, of edge-site uplinks, or of any
-  operator's backhaul. It provides realistic second-scale fluctuations of a shared link's load; the claim of this study
-  is limited to "M3 under measured load variability of this kind".
-- **Days:** samplepoint-F traces before 2023-07-01 (the transit link only; the 10 Gbps BBIX link was added later),
-  chosen by the seeded rule below.
-- **Utilization:** per second and direction, u(t) = bytes in that second x 8 / 1 Gbps, from the packet headers
-  (frame lengths as captured).
-- **Residual capacity (assumptions R1-R4).** For a site uplink of nominal capacity C = 1 Gbps:
-  available(t) = max(C x (1 - u(t)), C_min), C_min = 50 Mbps.
-  R1 utilization is scale-free (a utilization fraction measured on one 1 Gbps link is applied to another 1 Gbps link);
-  R2 cross-traffic is open-loop (it does not yield to OTTER's flows, and OTTER cannot take capacity from it);
-  R3 the floor C_min keeps a link usable when u(t) > 0.95 (each clamped second is counted and reported);
-  R4 the four site uplinks receive independent MAWI windows (no cross-site correlation).
+  operator's backhaul; the conclusions are limited to "M3 under measured load variability of this kind".
+- **Days:** samplepoint-F traces before 2023-07-01 (the transit link only).
+- **Utilization:** per second and direction, u(t) = bytes in that second x 8 / 1 Gbps, from the captured frame lengths.
+- **Residual capacity:** for a site uplink of nominal capacity C = 1 Gbps: available(t) = max(C (1 - u(t)), C_min),
+  **C_min = 50 Mbps primary**. Assumptions: R1 utilization is scale-free across 1 Gbps links; R2 cross-traffic is
+  open-loop; R3 the floor C_min is required by the harness (a rate of 0 means "unshaped" in both node types' token
+  buckets) and keeps a link usable when u(t) > 0.95; R4 the four sites receive independent windows. **C_min is a
+  sensitivity variable:** every run reports its clamped seconds (count, share, per link), and block S repeats a subset
+  with C_min = 10 Mbps (section 6.3).
 - **Limitations stated with every result:** transit-link traffic composition and aggregation differ from edge-metro
   traffic; per-second averaging hides sub-second bursts; open-loop replay overstates rigidity; independence across
-  sites may understate correlated congestion; capacity scaled to the testbed's 1 Gbps.
-- **Windows and assignment:** 120 s windows; for each run the windows for A, B, C, D (egress from one direction,
-  ingress from the other) are drawn without replacement by the seeded rule.
+  sites may understate correlated congestion; capacity scaled to the testbed's 1 Gbps; the floor removes the deepest
+  degradations.
+- **Window assignment:** 120 s windows; per run, A's egress and the egress and ingress of B, C, D each receive a window
+  direction, drawn without replacement, preferring distinct MAWI days (a day is reused only when the eligible days are
+  exhausted; reuse is reported).
 
-### 3.3 Selection (seeded, from trace statistics only)
+### 3.3 Variability metric, strata and selection (from trace statistics only)
 
-- Mobility strata: tertiles of the median inter-move time of eligible segments (k = 1).
-- Cross-traffic strata: tertiles of the coefficient of variation of available(t) over the windows a run assigns to the
-  nodes on its path.
-- 2 (mobility, cross-traffic) pairs per cell of the 3 x 3 strata = **18 segment pairs**, chosen with seed 20261017; the
-  list (file hashes, offsets, k) is generated by the frozen script and committed before the first run. Segments are
-  never replaced after a run.
+- **Variability V of a run's capacity schedule:** for each of the 7 series a run uses (A egress; B, C, D egress and
+  ingress), sigma_i = standard deviation over the 120 s of available_i(t) / C (normalized by the **nominal** capacity,
+  not by the mean, so V does not blow up when the mean is low); V = the mean of the 7 sigma_i. The mean level
+  L = mean over series and time of available(t) / C is reported next to V.
+- **Strata:** tertiles of V over all candidate capacity schedules (cross-traffic strata) and tertiles of the median
+  inter-migration time of eligible mobility windows (mobility strata).
+- **Selection:** 2 (mobility window, capacity schedule) pairs per cell of the 3 x 3 strata = **18 pairs**, seed
+  20261017, with at most one mobility window per Lumos5G run file per cell and capacity windows from distinct MAWI days
+  where possible. The list (file hashes, offsets, k, H, V, L, clusters) is generated by the frozen script and committed
+  before the first run; pairs are never replaced after a run.
+- **Clusters for aggregation:** each pair records its mobility cluster (Lumos5G run file) and capacity cluster (the set
+  of MAWI days it uses).
 
 ## 4. Runs
 
 | block | content | runs |
 |---|---|---|
-| P primary (network level, N = 1, k = 1) | 18 pairs x 4 policies x 3 reps | 216 |
-| C contention (network level, N = 4, Scenario B v2 layout) | the 6 high-CV pairs x 4 policies x 3 | 72 |
-| NC1 negative control: trace mobility, no cross-traffic | 6 mobility segments (2 per tertile) x {AM, ED} x 3 | 36 |
+| P primary (network level, N = 1, k = 1, H = 3 s, C_min = 50 Mbps) | 18 pairs x 4 policies x 3 reps | 216 |
+| C contention (N = 4: the pair's session + 3 sessions on other eligible mobility windows of the same stratum cell, seeded, each with its own persistent mapping onto B, C, D; one shared capacity schedule) | the 6 high-V pairs x 4 policies x 3 | 72 |
+| NC1 negative control: trace mobility, constant capacity (no cross-traffic) | 6 mobility windows (2 per mobility tertile) x {AM, ED} x 3 | 36 |
 | NC2 negative control: cross-traffic only on A's ingress (unused by restoration) | 6 pairs x {AM, ED} x 3 | 36 |
-| PC positive control: Experiment D scenario F's step at network level | {AM, ED} x 3 | 6 |
-| G GPU confirmation | 3 pairs (one per CV tertile, mobility middle tertile) x 4 policies x 3 | 36 |
-| S sensitivity k = 2 and k = 4 (section 6.3) | 18 pairs per k (re-derived by the same rule) x {AM, ED} x 3 | 216 |
+| PC positive control: Experiment D scenario F's step (C egress -> 62.5 Mbps when D holds 50 %) | {AM, ED} x 3 | 6 |
+| V counterfactual validation: ED limited to its first re-plan (then AM rules), section 9 | the 6 high-V pairs x 3 | 18 |
+| S sensitivity: k = 2; k = 4; H = 0 s; H = 10 s; C_min = 10 Mbps | 9 pairs (one per stratum cell, re-derived per condition by the same rules) x {AM, ED} x 3, per condition | 270 |
+| G GPU confirmation | 3 pairs (one per V tertile, middle mobility tertile) x 4 policies x 3 | 36 |
 
-Order: NC1, NC2, PC, then P, C, S, G. Policy order within a rep randomized (seed recorded).
+Total 654 network-level runs (~16 h at ~1.5 min) + 36 GPU runs (~2.5 h). Order: NC1, NC2, PC, P, C, V, S, G; policy
+order within a rep randomized (seed recorded).
 
-## 5. Metrics (definitions)
+## 5. Metrics
 
-- **T_r** (restoration time): final move's handoff request -> the Sink is complete and verified at the final owner
+- **T_r** (restoration time): final migration's handoff request -> the Sink complete and verified at the final owner
   (network level: the `restored` event; GPU: Sink verified). **Bind-ready** (GPU): first chunk with the Sink bound.
-- **S** (source bytes): bytes sent by A for the session / Sink size. **B_tot**: all fragment bytes / Sink size.
-- **Re-plans**: event-driven re-plan decisions (count; per minute of run).
-- Per configuration: medians over valid reps. Per segment pair s: R_s = T_r(ED) / T_r(AM), dS_s = S(ED) - S(AM)
-  (each from the medians).
+- **S** (source bytes): bytes sent by A for the session / Sink size; **B_tot**: all fragment bytes / Sink size.
+- **Re-plans**: ED re-plan decisions (count; per minute).
+- Per configuration: medians over >= 3 valid reps. Per pair p: **R_p** = T_r(ED) / T_r(AM) and **dS_p** = S(ED) - S(AM)
+  from those medians.
+- **Trace-level aggregation:** per mobility cluster (Lumos5G run file), the median of R_p (and dS_p) over its pairs in
+  the stratum considered; the trace-level statistic is the median of these cluster medians.
 
 ## 6. Hypotheses, thresholds and decision rules
 
-### 6.1 Primary (block P, k = 1)
+### 6.1 Primary (block P unless stated)
 
 - **T1 - benefit under measured variability.**
-  Metric: R_s per pair. Decision: T1 is SUPPORTED iff (a) the median of R_s over the 6 pairs of the high-CV tertile is
-  <= 0.90, and (b) in each of the three CV tertiles, the median of R_s is <= 1.05. Otherwise NOT SUPPORTED; NOT
-  EVALUABLE if any tertile has fewer than 4 pairs with valid medians.
-  Why these values: (b) 1.05 is a non-inferiority margin about the size of the measured run-to-run spread of
-  restoration time in Experiment D's repeated scenario (bind-ready ranges of 15.04-15.82 s, about 5 %); (a) 0.90 asks
-  for a benefit about twice that spread, the smallest effect that would not be attributable to run-to-run variation.
-  Both are judgement-based choices informed by Experiment D, not derived from a model.
-- **T2 - no spurious re-planning.**
-  Metric: ED re-plans and |T_r(ED) - T_r(AM)| in NC1 and NC2. Decision: SUPPORTED iff in both controls the median ED
-  re-plan count is 0 and the median over segments of |T_r(ED) - T_r(AM)| is <= 1.0 s. Thresholds inherited unchanged
-  from Experiment D G7's no-change clause.
-- **T3 - traffic cost.**
-  Metric: dS_s per pair. Decision: SUPPORTED iff in each CV tertile the median of dS_s is <= 0.05 Sink. Why: 0.05 is
-  about the run-to-run spread of OTTER's source bytes in Experiment D's repeated scenario (1.02-1.06 Sinks); a larger
-  median difference is extra source traffic beyond measurement variation. For scale, Experiment D's incorrect-placement
-  re-plan added 0.22 Sink.
-- **T4 - harmful re-planning (event level).**
-  Metric: the share of classified ED re-plans (section 9) that are *harmful*, over all P runs. Decision: SUPPORTED iff
-  that share is <= 20 % and section 9's model-validation gate passes; NOT EVALUABLE if the gate fails or fewer than 20
-  re-plans are classifiable. Why 20 %: no prior data on re-planning under trace variability exists; 20 % means at most
-  one in five decisions that can be judged makes restoration worse, a tolerance chosen by judgement (a minority of
-  decisions, small enough to be dominated by beneficial ones if T1 holds). The other classes are reported in full.
-- **T5 - positive control.** Decision: SUPPORTED iff median T_r(ED) <= 0.5 x median T_r(AM) in block PC (as
-  Experiment D G7's primary clause; network-level E results predict about 14.0 vs 53.8 s).
-- **T6 - GPU carries over.** Decision: SUPPORTED iff for each of the 3 GPU pairs, sign(median bind-ready(ED) -
-  median bind-ready(AM)) equals sign(network-level T_r(ED) - T_r(AM)) on the same pair, or both absolute differences
-  are <= 1.0 s.
+  Decision: SUPPORTED iff, in the high-V tertile, the median of R_p over pairs is <= 0.90 **and** the trace-level
+  median (section 5) is <= 0.90; and in every V tertile both the pair-level and the trace-level medians are <= 1.05.
+  NOT EVALUABLE if any tertile has fewer than 4 pairs with valid medians or fewer than 3 mobility clusters.
+  Rationale: 1.05 is a non-inferiority margin of about the run-to-run spread of restoration time in Experiment D's
+  repeated scenario (bind-ready 15.04-15.82 s, ~5 %); 0.90 asks for about twice that spread. Judgement informed by
+  Experiment D, not derived from a model.
+- **T2 - no spurious re-planning.** Decision: SUPPORTED iff in NC1 and in NC2 the median ED re-plan count is 0 and the
+  median over windows of |T_r(ED) - T_r(AM)| is <= 1.0 s (Experiment D G7's no-change clause).
+- **T3 - traffic cost.** Decision: SUPPORTED iff in every V tertile the pair-level and the trace-level medians of dS_p
+  are <= 0.05 Sink. Rationale: about the run-to-run spread of OTTER's source bytes in Experiment D's repeated scenario
+  (1.02-1.06 Sinks); for scale, Experiment D's incorrect-placement re-plan added 0.22 Sink.
+- **T5 - positive control.** Decision: SUPPORTED iff median T_r(ED) <= 0.5 x median T_r(AM) in block PC (Experiment D
+  G7's primary clause).
+- **T6 - GPU direction.** The GPU block confirms direction only; no magnitude is claimed from it. Noise band:
+  n_GPU = 2 x the median, over the 12 GPU configurations, of the range (max - min) of bind-ready over its 3 reps.
+  Decision: SUPPORTED iff for each of the 3 GPU pairs either
+  sign(median bind-ready(ED) - median bind-ready(AM)) = sign(network-level T_r(ED) - T_r(AM)) on the same pair, or
+  both absolute differences are <= max(1.0 s, n_GPU).
+
+(T4 of v2 moved to the exploratory analysis, section 9.)
 
 ### 6.2 Contention (block C, N = 4)
 
-The same T1 and T3 rules applied to the 6 high-CV pairs with N = 4 sessions, reported as T1-C and T3-C, separate from
-the primary.
+T1 and T3 rules applied to the 6 high-V pairs with N = 4, reported as T1-C and T3-C (pair-level; trace-level where >= 3
+clusters), separate from the primary.
 
-### 6.3 Sensitivity (block S, k = 2 and k = 4)
+### 6.3 Sensitivity (block S)
 
-T1 (rule (a) on the k-specific high-CV tertile, rule (b) on all tertiles), T3 and the re-plan rate are reported per k
-as sensitivity results, labelled as such. They never change a primary verdict.
+For each condition (k = 2, k = 4, H = 0 s, H = 10 s, C_min = 10 Mbps): the medians of R_p and dS_p over its 9 pairs,
+the re-plan rate, the migration rate, and (for C_min) the change in R_p and dS_p on the pairs shared with block P.
+Labelled as sensitivity; never changes a primary verdict.
 
 ### 6.4 Mandatory reporting (no threshold)
 
-Every segment pair where ED increases median T_r or S relative to AM (values listed), every harmful re-plan
-(section 9), M1 only and M1 + M2 on the same segments, the number of clamped seconds (R3), and every run with a
+Every pair where ED increases median T_r or S relative to AM (values listed); M1 only and M1 + M2 on every pair;
+clamped seconds per run (R3); excluded mobility windows (eligibility statistics); MAWI-day reuse; every run with a
 Sink-version event (section 10).
 
 ## 7. Validity
 
 Experiment D's rules (`tools/eval/expD_validity.py`) plus: paced egress <= 1.05 x the time-averaged cap per node per
-10 s window; NIC peaks <= 1.15 x the window's maximum cap; every scheduled cap change and move applied within 1 s of its
-trace time; GPU 0 idle before each GPU run. Invalid runs are kept, listed with reasons and re-run (`--skip_done`);
-none is deleted.
+10 s window; NIC peaks <= 1.15 x the window's maximum cap; every scheduled cap change and migration applied within
+1 s of its schedule; GPU 0 idle before each GPU run. Invalid runs are kept, listed with reasons and re-run; none is
+deleted.
 
 ## 8. Analysis
 
-Per configuration: medians over >= 3 valid reps (otherwise NOT EVALUABLE). Per tertile: the medians of R_s and dS_s,
-with a seeded bootstrap 95 % interval (10,000 resamples of pairs) and a Wilcoxon signed-rank p-value, both descriptive;
-the decision rules use the medians only. No outcome-dependent re-selection of segments, thresholds, policies or k.
+Per configuration: medians over >= 3 valid reps (otherwise NOT EVALUABLE). Pair level and trace level (section 5) both
+computed for every tertile. Uncertainty (descriptive): a cluster bootstrap 95 % interval (10,000 resamples of mobility
+clusters, pairs within a resampled cluster kept together, seed 20261017) and a Wilcoxon signed-rank p-value over
+cluster medians. Decisions use the medians only. No outcome-dependent re-selection of segments, thresholds, policies,
+k, H or C_min.
 
-## 9. Event-level counterfactual: procedure, validation, classification, cost aggregation
+## 9. Exploratory: model-estimated re-planning effects (no hypothesis verdict)
 
-1. **State capture.** At every ED re-plan decision the harness logs the full state (fragments verified per node, in
-   flight, assignment per provider, flow rates, caps) (`harness_plan.md` item 4).
-2. **Two branches.** The fluid model (`tools/eval/restore_model.py`, state-injected) simulates from that state under
-   the recorded remaining cap trace and move schedule: branch K (keep the pre-re-plan assignment; later triggers
-   behave as in AM) and branch A (apply the re-plan; later triggers as in ED). dT = T_r(A) - T_r(K);
-   dS = S(A) - S(K).
-3. **Model validation (per run).** The model also simulates each executed run from its start (all logged decisions
-   applied); e_run = |T_r,model - T_r,measured| / T_r,measured.
-   **Gate:** the event-level analysis is valid only if the median e_run over P runs is <= 0.10 and the model's
-   executed-branch error bound eps = the 90th percentile of |T_r,model - T_r,measured| (seconds) over P runs is fixed
-   before any re-plan is classified. If the gate fails, T4 is NOT EVALUABLE and only policy-level results are reported.
-4. **Classification (per re-plan).** If its run's own error |T_r,model - T_r,measured| > eps, the re-plan is
-   *ambiguous* (model unreliable for that run). Otherwise: **beneficial** if dT < -eps; **harmful** if dT > +eps;
-   **costly without benefit** if |dT| <= eps and dS > 0.05 Sink; **neutral** if |dT| <= eps and dS <= 0.05 Sink.
-   "Classified" (T4's denominator) = beneficial + harmful + costly + neutral.
-5. **Cost aggregation.** Reported over P: counts per class; for harmful re-plans the sum and median of dT (seconds) and
-   dS (Sinks); for costly re-plans the sum and median of dS; both also per run and per hour of trace time; and the
-   share of each run's restoration-time difference (R_s) attributable to classified re-plans (sum of dT of its re-plans
-   divided by the measured T_r(ED) - T_r(AM), descriptive). A policy-level difference is never used to label a single
-   re-plan.
-6. **Cross-check.** In NC1 and NC2 every ED re-plan (expected none) is classified the same way; in PC the model's dT
-   for the step re-plan is compared with the measured paired difference (descriptive).
+Event-level effects are **model-estimated**, not causal claims, unless section 9.3 validates the model counterfactually.
 
-## 10. Sink-version events (applicability study kept separate)
+1. **State capture** at every ED re-plan (verified fragments per node, in flight, assignment per provider, rates,
+   caps; `harness_plan.md` item 4).
+2. **Two branches** simulated by the fluid model (`restore_model.py`, state-injected) under the recorded remaining
+   schedule: K (keep the pre-re-plan assignment, later triggers as AM) and A (apply the re-plan, later triggers as
+   ED); dT = T_r(A) - T_r(K), dS = S(A) - S(K).
+3. **Validation, two kinds.**
+   - *Factual:* the model replays each executed P run from its start with the logged decisions;
+     e_run = |T_r,model - T_r,measured| / T_r,measured. Passes if the median e_run <= 0.10 **and** the 90th percentile
+     e_run <= 0.20 (tail check). eps = the 90th percentile of |T_r,model - T_r,measured| in seconds, fixed before any
+     classification.
+   - *Counterfactual (controlled):* block V runs ED limited to its first re-plan (after it, AM rules); on the same pair,
+     the AM run of block P is the measured no-re-plan branch and the V run the measured re-plan branch, so the measured
+     effect of the first re-plan is dT_meas = T_r(V) - T_r(AM). Passes if, over the 6 pairs with a first re-plan,
+     sign(dT_model) = sign(dT_meas) or both |.| <= eps in >= 5 of 6 pairs, and the median |dT_model - dT_meas| <= eps.
+     The limited variant is a validation instrument; it is not an OTTER policy and is not compared in any hypothesis.
+   If both pass, event-level results are labelled "model-estimated, counterfactually validated on first re-plans";
+   otherwise "model-estimated, not counterfactually validated".
+4. **Classes** (each re-plan): *ambiguous* if its run's factual error > eps; else *beneficial* (dT < -eps), *harmful*
+   (dT > +eps), *costly without benefit* (|dT| <= eps and dS > 0.05 Sink), *neutral* (|dT| <= eps, dS <= 0.05 Sink).
+5. **Aggregation** over P: counts and shares per class; for harmful re-plans the sum and median of dT and dS; for costly
+   re-plans the sum and median of dS; per run and per hour of trace time; the share of each pair's measured
+   T_r(ED) - T_r(AM) attributable to its re-plans' dT (descriptive). A policy-level difference never labels a single
+   re-plan; no threshold and no verdict.
+6. Controls: re-plans in NC1 and NC2 (expected none) are classified the same way; PC's step re-plan model dT is
+   compared with its measured paired difference.
+
+## 10. Sink-version events (separate applicability study)
 
 The frequency of Sink promotions during restoration windows is a separate applicability study
-(`sink_stability_plan.md`) with its own report; it does not gate T1-T6. In Experiment T, the network-level runs carry
-no generation (no promotions possible); the GPU block uses the dog workload. Any run with a Sink-version event is
-flagged, excluded from T1-T6 as Experiment D's scope rule requires, and **listed** with its count, timing and affected
-state volume in the results; none is dropped silently.
+(`sink_stability_plan.md`) with its own report; it does not gate any hypothesis. Network-level runs carry no generation
+(no promotion possible); the GPU block uses the dog workload. Any run with a Sink-version event is flagged, excluded from
+T1-T6 as Experiment D's scope rule requires, and listed with its count, timing and affected state volume; none is
+dropped silently.
 
 ## 11. Scope
 
-Placement disabled; no last-mile modelling; non-blocking metro core; open-loop residual capacity from MAWI (section
-3.2); synthetic cell-to-site mapping (k); one Sink version per restoration; 1 Gbps emulated uplinks. Star/Line/Tree/
-Butterfly are not part of this study.
+Placement disabled; no last-mile modelling; non-blocking metro core; open-loop residual capacity from MAWI as a
+variability source (3.2); synthetic cell-to-site mapping (k), migration hysteresis (H) and the <= 3-site eligibility
+(3.1); one Sink version per restoration; 1 Gbps emulated uplinks. Star/Line/Tree/Butterfly are not part of this study.
 
-## 12. Open items for the review before the freeze
+## 12. Open items for the final review
 
-1. The thresholds and their rationale (6.1), the gate (9.3: 10 %, P90), the classification margin (9.4: eps; 0.05
-   Sink for costly), C_min = 50 Mbps (3.2).
-2. Block sizes (18 pairs; S adds 216 runs; total 582 network runs (P 216, C 72, NC1 36, NC2 36, PC 6, S 216) + 36 GPU
-   runs; roughly 16 h network level at ~1.5 min per run + ~2.5 h GPU).
-3. Download approvals: Lumos5G (IEEE DataPort login by the user), MAWI pcaps (large), optionally the UCC 5G archive.
+1. H = 3 s primary and the S conditions (k, H, C_min); the <= 3-site eligibility and its selection effect.
+2. Variability metric V (nominal-normalized standard deviation) and the trace-level aggregation unit (Lumos5G run file).
+3. T6 noise band definition; the exploratory gate values (factual 0.10 / 0.20; counterfactual 5 of 6 and eps).
+4. Download approvals: Lumos5G (IEEE DataPort login by the user), MAWI pcaps (large), optionally the UCC 5G archive.
