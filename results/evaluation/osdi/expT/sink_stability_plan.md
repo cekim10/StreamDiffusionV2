@@ -52,6 +52,6 @@ Derived, per workload:
 ## Reporting rule
 
 Version-change frequency is itself the result: every workload is reported, with or without promotions. In the
-trace-driven study (`preregistration_draft.md`), a run with a Sink-version event is flagged, excluded from the criteria
+trace-driven study (`preregistration.md`), a run with a Sink-version event is flagged, excluded from the criteria
 as Experiment D's scope rule requires, and listed with its count and timing in the descriptive results; it is never
 dropped silently.

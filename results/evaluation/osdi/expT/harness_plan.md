@@ -58,7 +58,7 @@ and "Full OTTER" equals OTTER event-driven (prereg v3 section 3 definition); "Fu
 - Trace preprocessing is a deterministic script from the raw files (recorded with their SHA-256) to the CSV inputs;
   segment ids, offsets and the cell-to-site clustering k are written into every run's config.
 - Segment choice is fixed before any run by a seeded, stratified rule computed from trace statistics only
-  (`preregistration_draft.md`); the list is committed with the preregistration.
+  (`preregistration.md`); the list is committed with the preregistration.
 - Alignment: trace time 0 = the run's start (t0); cap changes and moves at their trace times (1 s resolution).
 - Paired comparisons: every policy runs every segment; policy order within a rep is randomized with a recorded seed;
   reps of a segment run back to back on the same hosts and commit.
