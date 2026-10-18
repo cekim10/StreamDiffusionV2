@@ -123,3 +123,15 @@ interpretations in `aggregation_spec.md` (G4/G5 subject = Full OTTER, "within" =
 IQR metrics, G9 chunk interval) await review. Known risks from correctness runs (single runs, not results): G5 for Full
 OTTER (`g5_shakedown_observation.md`); G9 memory spread (destination peaks 27.9-28.7 GB across policies in the focused
 tests, > 1 %).
+
+## Sweep execution log (2026-10-17)
+
+The sweep ran on commit 656dde6 (results 572cfca). Execution anomalies, all kept as recorded:
+1. `expD_A/...colddest_rep=2_20261017-180438` and `...native..._colddest_rep=2_20261017-181205`: incomplete. Harness
+   bug: the cold destination is shut down after every run, and the closed control socket of the previous run's node was
+   reported as "node B lost", aborting the next run before its trigger (and the invocation, so rep 3 never ran). The
+   dry sweep ran one rep per configuration and missed it. Fixed (an intentionally closed connection no longer reports
+   a loss); no measurement code changed. Re-run of the missing reps on the fixed commit.
+2. `expD_A/policy=reuse_dyn_bw=1000_..._rep=1_20261017-173408`: invalid by the frozen rule (NIC receive peak at B
+   1168.7 Mbps in one 1 s sample > 1.15 x 1 Gbps, while A sent 1039.9 Mbps and paced egress was 990 Mbps / 10 s; extra
+   traffic into B's NIC or a sampling artefact). Re-run under --skip_done.

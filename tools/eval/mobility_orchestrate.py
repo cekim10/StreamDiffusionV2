@@ -89,6 +89,7 @@ class NodeConn:
         self.sync = clock_sync_client(self.sock)
         self.off = self.sync["offset_s"]  # node_wall ~= orch_wall + off
         self.events = events
+        self.closing = False   # set before an intentional shutdown: the reader then does not report the node as lost
         self.lock = threading.Lock()
         self.pending: dict[int, dict] = {}
         self.n = 0
@@ -105,7 +106,9 @@ class NodeConn:
             try:
                 hdr, _ = recv_msg(self.sock)
             except (ConnectionError, OSError) as exc:
-                self.events.put({"kind": "NODE_LOST", "label": self.label, "error": repr(exc)}); return
+                if not self.closing:
+                    self.events.put({"kind": "NODE_LOST", "label": self.label, "error": repr(exc)})
+                return
             if hdr["kind"] == "REPLY":
                 with self.lock:
                     w = self.pending.pop(hdr.get("cmd_id"), None)
@@ -1185,6 +1188,7 @@ class Orchestrator:
     def stop_node(self, lb, pid):
         nc = self.nodes.pop(lb, None)
         if nc is not None:
+            nc.closing = True   # a cold destination is shut down after every run; its closed socket is not a failure
             try:
                 send_msg(nc.sock, "SHUTDOWN", {}, b"", None)
             except OSError:
