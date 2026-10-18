@@ -1,5 +1,7 @@
 # Experiment T (trace-driven M3 study) - preregistration frozen 2026-10-17; nothing implemented, downloaded or run
 
+**ON HOLD since 2026-10-18** (evaluation prioritization; `HOLD.md`). Everything below is preserved unchanged.
+
 | step | document |
 |---|---|
 | 1. deployment network model | `deployment_model.md` |

@@ -32,3 +32,13 @@ inter-edge links.
 | W-b | **LOVEU-TGVE-2023** (CVPR'23 text-guided video editing) | https://sites.google.com/view/loveucvpr23/track4 ; paper arXiv:2310.16003 | "All videos are creative commons licensed." (no version given; the paper: 16 from DAVIS, 37 Videvo, 23 YouTube, all under licenses that allow modification and redistribution) | 76 videos, 480x480, 32 or 128 frames, four editing prompts per video | video + text prompt = v2v input; resized to 480x832; clips are shorter than a run (~1,300 frames) and would loop (loop boundaries must be marked) | candidate; per-video license version **unverified** |
 | - | DAVIS videos | davischallenge.org | annotations: CC BY 4.0 (challenge pages); video license **unverified** | - | - | not used directly |
 | - | VBench, EvalCrafter | - | not investigated further | text-to-video prompt suites | the harness is video-to-video (`configs/wan_causal_dmd_v2v.yaml`; the Runner feeds input frames every call); a T2V branch exists in `streamv2v/inference.py` but not in the harness path | not usable without source videos |
+
+## Erratum (2026-10-18, appended; nothing above edited)
+
+Re-reading the primary sources for Experiment W (`../expW/loveu_tgve_verification.md`): (1) the per-source counts in row
+W-b ("16 from DAVIS, 37 Videvo, 23 YouTube") are **not** stated in the paper (arXiv:2310.16003v1 HTML: "We begun by
+collecting 100 videos from DAVIS, YouTube, and Videvo ... filtered it down to 76 videos total"; Table 1 lists the sources
+without counts); their origin is unknown and they are withdrawn. The paper states 32 frames for DAVIS and Videvo, 128
+for YouTube. (2) The DAVIS row's "annotations: CC BY 4.0 (challenge pages)" is not found on the official pages read on
+2026-10-18 (davischallenge.org, davis2016/code.html, davis2017/code.html state no license; the evaluation-code
+repository's BSD-3-Clause license covers the code only); it is **unverified**.
