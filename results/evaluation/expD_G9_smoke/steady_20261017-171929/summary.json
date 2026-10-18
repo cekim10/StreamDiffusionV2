@@ -1,0 +1,136 @@
+{
+ "experiment": "G9 steady state",
+ "reps": 1,
+ "chunks": 20,
+ "warmup": 30,
+ "per_rep": [
+  {
+   "rep": 1,
+   "mode": "unmodified",
+   "n": 20,
+   "median_interval_s": 0.5548248291015625,
+   "mean_interval_s": 0.5572441101074219,
+   "p95_interval_s": 0.5719312429428101,
+   "peak_allocated_mb": 22341.6181640625
+  },
+  {
+   "rep": 1,
+   "mode": "otter",
+   "n": 20,
+   "median_interval_s": 0.5591374635696411,
+   "mean_interval_s": 0.5608281970024109,
+   "p95_interval_s": 0.5737190008163452,
+   "peak_allocated_mb": 22342.7197265625
+  }
+ ],
+ "median_over_reps_s": {
+  "unmodified": 0.5548248291015625,
+  "otter": 0.5591374635696411
+ },
+ "relative_difference": 0.007772965883776574,
+ "mean_over_reps_s": {
+  "unmodified": 0.5572441101074219,
+  "otter": 0.5608281970024109
+ },
+ "identical_frames_rep1": true,
+ "gpu0_before": {
+  "util_pct": 0.0,
+  "mem_used_mib": 14.0,
+  "others_mib": 0,
+  "processes": []
+ },
+ "gpu0_idle_before": true,
+ "host": "elves-01",
+ "host_info": {
+  "hostname": "elves-01",
+  "fqdn": "elves-01",
+  "platform": "Linux-6.8.0-84-generic-x86_64-with-glibc2.39",
+  "python": "3.10.22",
+  "cpu_count": 128,
+  "nics": [
+   {
+    "iface": "docker0",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "enp193s0f0np0",
+    "mtu": 9200,
+    "speed_mbps": "10000",
+    "state": "up"
+   },
+   {
+    "iface": "enp193s0f1np1",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "ens5f0np0",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "ens5f1np1",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "down"
+   },
+   {
+    "iface": "enxfe988a5ba0c5",
+    "mtu": 1500,
+    "speed_mbps": "-1",
+    "state": "unknown"
+   }
+  ],
+  "time_utc": "2026-10-18T00:21:31.607425Z",
+  "meminfo_MemTotal": "1584841048 kB",
+  "meminfo_MemFree": "350139156 kB",
+  "meminfo_MemAvailable": "777885932 kB",
+  "nvidia_smi": "0, NVIDIA L40S, 46068 MiB, 575.51.03\n1, NVIDIA L40S, 46068 MiB, 575.51.03",
+  "torch": "2.6.0+cu124",
+  "cuda": "12.4",
+  "gpu_name": "NVIDIA L40S",
+  "tcp_congestion_control": "cubic",
+  "tcp_mtu_probing": "0"
+ },
+ "git_commit": "c9112764663d050e30c69066935140f377ad26ff (dirty)",
+ "args": {
+  "label": "A",
+  "bind": "0.0.0.0",
+  "ctl_port": 29811,
+  "data_port": 29812,
+  "mss": 1400,
+  "iface": null,
+  "dry_run": false,
+  "dry_sink_mb": 64,
+  "dry_service_s": 0.2,
+  "cold_start": false,
+  "config_path": "/home/ckim151/StreamDiffusionV2/configs/wan_causal_dmd_v2v.yaml",
+  "checkpoint_folder": "/home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v",
+  "prompt_file_path": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+  "video_path": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+  "output_folder": "/home/ckim151/StreamDiffusionV2/results/evaluation",
+  "noise_scale": 0.8,
+  "height": 480,
+  "width": 832,
+  "fps": 16,
+  "step": 2,
+  "seed": 0,
+  "gpu_id": 0,
+  "model_type": "T2V-1.3B",
+  "fixed_noise_scale": false,
+  "t2v": false,
+  "profile": false,
+  "use_taehv": false,
+  "normalize_latents": false,
+  "use_tensorrt": false,
+  "fast": false,
+  "migration_chunk": 30,
+  "post_chunks": 20,
+  "max_post_chunks": 20
+ },
+ "dry_run": false
+}
