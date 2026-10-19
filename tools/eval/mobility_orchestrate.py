@@ -638,7 +638,7 @@ class Run:
         rec = {"t_s": self.rel_t(t_dec), "owner": owner, "from": ",".join(d["moved_from"]), "to": {p_: len(v) for p_, v in d["assign"].items()}, "moved_fragments": len(moved),
                "eta_cur_s": d["eta_cur"], "eta_new_s": d["eta_new"], "eta_cur_opt_s": d["eta_cur_opt"], "eta_new_pess_s": d["eta_new_pess"], "dT_s": d["dT"], "c_switch_s": d["c_switch"], "margin_s": d["margin"],
                "measured_rate_mbps": {k: v * 8 / 1e6 for k, v in rate.items()}, "I_est_mbps": d["I_est"] * 8 / 1e6, "c_est_mbps": {k: v * 8 / 1e6 for k, v in d["c_est"].items()},
-               "resolution_mbps": d["res"] * 8 / 1e6, "cap_change_t_s": self.rel_t(self.cap_changes[-1][0]) if self.cap_changes else None, "new_flows": new_flows, "version": 2}
+               "resolution_mbps": d["res"] * 8 / 1e6, "probe": bool(d.get("probe")), "cap_change_t_s": self.rel_t(self.cap_changes[-1][0]) if self.cap_changes else None, "new_flows": new_flows, "version": 2}
         self.replans.append(rec)
         self.ev.log("replan", t_dec, **rec)
         self.plan_aware("flow_done")
