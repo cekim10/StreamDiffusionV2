@@ -1,0 +1,138 @@
+
+=== 2026-10-18T22:53:53.859715 shakedown W2 mbike-trick s0: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment shk_W2_mbike-trick_s0 --skip_done --validity wrn --bw 1000 --policies reuse_dyn,cold --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --launch '--node_extra=--video_path data/loveu_tgve_2023/mbike-trick.mp4 --prompt_file_path data/loveu_tgve_2023/mbike-trick__style.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 259503)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 3727522)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 555 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 132ece6
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 552 ms/chunk, mss 1388, clock offset -0.46 ms, dry_run=False, commit 132ece6
+[orch] skip (valid run exists): policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261018-211302
+[orch] skip (valid run exists): policy=cold_bw=1000_rho=none_tm=inf_rep=1_20261018-211430
+[orch] done: 0 runs under results/evaluation/shk_W2_mbike-trick_s0/
+
+=== 2026-10-18T22:57:39.773702 shakedown R rho 0.5 c = 3: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment shk_R --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn --hops 3 --ts 14.05 --rhos 0.5 --reps 1 --post_chunks 300 --max_run_s 600 --hybrid_net 3 --launch --node_extra=--sink_fp
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 261712)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 3729223)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 626180)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 1096467)
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched restore node A on elves-01.be.ucsc.edu (pid 261778)
+[orch] launched restore node B on elves-02.be.ucsc.edu (pid 3729293)
+[orch] launched restore node C on elves-03.be.ucsc.edu (pid 626253)
+[orch] launched restore node D on elves-04.be.ucsc.edu (pid 1096544)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 132ece6
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset -0.10 ms, dry_run=False, commit 132ece6
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 552 ms/chunk, mss 1388, clock offset +0.04 ms, dry_run=False, commit 132ece6
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 557 ms/chunk, mss 1388, clock offset +0.18 ms, dry_run=False, commit 132ece6
+[orch] restore node A = elves-01 commit 132ece6
+[orch] restore node B = elves-02 commit 132ece6
+[orch] restore node C = elves-03 commit 132ece6
+[orch] restore node D = elves-04 commit 132ece6
+[orch] === run policy=restart_bw=1000_rho=0.5_tm=28.1_hybrid=3_rep=1_20261018-230206: Restart, bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  28.35s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 250 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  56.86s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 250 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] restart N=3 moves=2 rho=0.5: restored 3/3, median first 120.7 s, makespan 122.5 s, coverage 0.08, source 6.80 S, total 6.80 S, unused 3.80 S | A tx peak 1058.7 Mbps, valid True
+[orch] t= 130.91s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 0.5: after final move: first output 1.19 s, Sink received 56.09 s, bound 56.37 s, continuity-ready 56.97 s, rejoin 61.83 s | traffic 2.02x, waste 1.02x, reused 0 MiB | PSNR after bind 39.1 dB | ingress peak 268 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_hybrid=3_rep=1_20261018-230449: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.22s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B all fragments
+[orch] t=  28.64s move B->C
+        held   A: 100.0%, B:  50.2%, C:   0.0%, D:   0.0%
+        active B->C (207 left, 500 Mbps), A->C (205 left, 250 Mbps)
+        next   B->C 207 fragments (828 MiB) already delivered to B, reused; A->C 205 fragments (820 MiB) not yet anywhere else
+[orch] t=  56.52s move C->D (final move)
+        held   A: 100.0%, B:  51.2%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] reuse_fixed N=3 moves=2 rho=0.5: restored 3/3, median first 57.9 s, makespan 64.9 s, coverage 0.25, source 3.00 S, total 8.27 S, unused 0.00 S | A tx peak 1058.8 Mbps, valid True
+[orch] t=  97.74s run end
+        held   A: 100.0%, B:  51.2%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 0.91 s, Sink received 14.26 s, bound 14.61 s, continuity-ready 15.21 s, rejoin 19.44 s | traffic 2.51x, waste 0.01x, reused 2473 MiB | PSNR after bind 39.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn_bw=1000_rho=0.5_tm=28.1_hybrid=3_rep=1_20261018-230652: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments
+[orch] t=  28.59s move B->C
+        held   A: 100.0%, B:  50.2%, C:   0.0%, D:   0.0%
+        active A->C (205 left, 250 Mbps), B->C (207 left, 500 Mbps)
+        next   A->C 205 fragments; B->C 207 fragments
+[orch] t=  56.37s move C->D (final move)
+        held   A: 100.0%, B:  51.2%, C: 100.0%, D:   0.0%
+        active B->D (105 left, 500 Mbps), C->D (307 left, 500 Mbps)
+        next   B->D 105 fragments; C->D 307 fragments
+[orch] reuse_dyn N=3 moves=2 rho=0.5: restored 3/3, median first 58.0 s, makespan 65.1 s, coverage 0.25, source 4.27 S, total 8.29 S, unused 0.18 S | A tx peak 1058.5 Mbps, valid True
+[orch] t=  98.00s run end
+        held   A: 100.0%, B:  51.2%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ 1000.0 Mbps rho 0.5: after final move: first output 0.76 s, Sink received 14.04 s, bound 14.55 s, continuity-ready 15.16 s, rejoin 19.46 s | traffic 2.52x, waste 0.59x, reused 1929 MiB | PSNR after bind 39.8 dB | ingress peak 1040 Mbps
+[orch] done: 3 runs under results/evaluation/shk_R/
+
+=== 2026-10-18T23:09:56.159369 shakedown N cell 9: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment shk_N_cell9 --skip_done --validity wrn --bw 1000 --pp_configs reuse_aware_in:top1,reuse_dyn:top1 --path A,C --tm 1e9 --lookahead 10 --budget 1 --reps 1 --post_chunks 400 --max_run_s 900 --cap_events half:B:out=62.5 --launch --node_extra=--sink_fp
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 270872)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 3736848)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 633417)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 1116441)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 132ece6
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 132ece6
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset -0.22 ms, dry_run=False, commit 132ece6
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 556 ms/chunk, mss 1388, clock offset +0.16 ms, dry_run=False, commit 132ece6
+[orch] === run policy=reuse_aware_in_bw=1000_rho=none_tm=inf_path=AC_pp=top1_L=10_b=1_ev=halfBout62.5_rep=1_20261018-231516: OTTER at moves (bottleneck-aware assignment, shared planner), bw 1000.0 Mbps, T_m inf s, rho None, path A->C ===
+[orch] t=  10.26s move A->C (first move)
+        held   A: 100.0%, C:   0.0%
+        active A->C (113 left, 500 Mbps), B->C (299 left, 500 Mbps)
+[orch] t= 140.06s run end
+        held   A: 100.0%, C: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER at moves (bottleneck-aware assignment, shared planner) @ 1000.0 Mbps rho None: after final move: first output 0.72 s, Sink received 112.39 s, bound 113.18 s, continuity-ready 113.77 s, rejoin 118.02 s | traffic 1.73x, waste 0.00x, reused 1196 MiB | PSNR after bind 39.2 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn_bw=1000_rho=none_tm=inf_path=AC_pp=top1_L=10_b=1_ev=halfBout62.5_rep=1_20261018-231801: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw 1000.0 Mbps, T_m inf s, rho None, path A->C ===
+[orch] t=  10.26s move A->C (first move)
+        held   A: 100.0%, C:   0.0%
+        active A->C (113 left, 500 Mbps), B->C (299 left, 500 Mbps)
+[orch] t=  40.69s run end
+        held   A: 100.0%, C: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ 1000.0 Mbps rho None: after final move: first output 0.72 s, Sink received 14.15 s, bound 14.45 s, continuity-ready 15.04 s, rejoin 19.28 s | traffic 1.73x, waste 0.45x, reused 456 MiB | PSNR after bind 43.4 dB | ingress peak 1040 Mbps
+[orch] done: 2 runs under results/evaluation/shk_N_cell9/

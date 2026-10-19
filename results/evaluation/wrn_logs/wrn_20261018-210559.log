@@ -1,0 +1,102 @@
+
+=== 2026-10-18T21:10:16.902677 shakedown W2 mbike-trick s0: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment shk_W2_mbike-trick_s0 --skip_done --validity wrn --bw 1000 --policies reuse_dyn,cold --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --launch --node_extra '--video_path data/loveu_tgve_2023/mbike-trick.mp4 --prompt_file_path data/loveu_tgve_2023/mbike-trick__style.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 200145)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 3684093)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit c240ff7
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.02 ms, dry_run=False, commit c240ff7
+[orch] === run policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261018-211302: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.63s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ 1000.0 Mbps rho None: after final move: first output 0.68 s, Sink received 14.2 s, bound 14.57 s, continuity-ready 15.16 s, rejoin 21.23 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.4 dB | ingress peak 1007 Mbps
+[orch] === run policy=cold_bw=1000_rho=none_tm=inf_rep=1_20261018-211430: Cold restart (fresh caches from the prompt), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.14s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active -
+[orch] t=  64.70s run end
+        held   A: 100.0%, B:   0.0%
+        active -
+        next   stop reason: horizon
+[orch] Cold restart (fresh caches from the prompt) @ 1000.0 Mbps rho None: after final move: first output 1.19 s, Sink received None s, bound None s, continuity-ready None s, rejoin None s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind None dB | ingress peak 0 Mbps
+[orch] done: 2 runs under results/evaluation/shk_W2_mbike-trick_s0/
+
+=== 2026-10-18T21:16:59.185710 shakedown R rho 0.5 c = 3: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment shk_R --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn --hops 3 --ts 14.05 --rhos 0.5 --reps 1 --post_chunks 300 --max_run_s 600 --hybrid_net 3 --launch --node_extra --sink_fp
+usage: mobility_orchestrate.py [-h] [--nodes NODES] [--hops HOPS]
+                               [--experiment EXPERIMENT] [--policies POLICIES]
+                               [--bw BW] [--ts TS] [--rhos RHOS] [--tm TM]
+                               [--reps REPS] [--frag_bytes FRAG_BYTES]
+                               [--migration_chunk MIGRATION_CHUNK]
+                               [--post_chunks POST_CHUNKS]
+                               [--tail_calls TAIL_CALLS]
+                               [--horizon_calls HORIZON_CALLS]
+                               [--max_run_s MAX_RUN_S]
+                               [--physical_cap_mbps PHYSICAL_CAP_MBPS]
+                               [--mss MSS] [--iface IFACE] [--measure_ts]
+                               [--bws BWS] [--launch]
+                               [--agent_hosts AGENT_HOSTS] [--gpus GPUS]
+                               [--py PY] [--node_extra NODE_EXTRA]
+                               [--connect_timeout CONNECT_TIMEOUT]
+                               [--keep_nodes] [--dry_run] [--path PATH]
+                               [--caps CAPS] [--cap_events CAP_EVENTS]
+                               [--dyn_period DYN_PERIOD]
+                               [--dyn_window DYN_WINDOW]
+                               [--dyn_warmup DYN_WARMUP] [--dyn_eps DYN_EPS]
+                               [--dyn_rel DYN_REL] [--dyn_ctrl DYN_CTRL]
+                               [--prepos PREPOS] [--probs PROBS]
+                               [--pp_configs PP_CONFIGS]
+                               [--lookahead LOOKAHEAD] [--budget BUDGET]
+                               [--validity {expD,wrn}] [--skip_done]
+                               [--rep_start REP_START] [--cold_dest]
+                               [--cold_tail_calls COLD_TAIL_CALLS]
+                               [--hybrid_net HYBRID_NET]
+                               [--net_ctl_port NET_CTL_PORT]
+                               [--net_data_port NET_DATA_PORT]
+                               [--net_nodes NET_NODES]
+                               [--net_grace_s NET_GRACE_S]
+                               [--dry_node_args DRY_NODE_ARGS]
+mobility_orchestrate.py: error: argument --node_extra: expected one argument
+
+=== 2026-10-18T21:16:59.511416 shakedown N cell 9: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment shk_N_cell9 --skip_done --validity wrn --bw 1000 --pp_configs reuse_aware_in:top1,reuse_dyn:top1 --path A,C --tm 1e9 --lookahead 10 --budget 1 --reps 1 --post_chunks 400 --max_run_s 900 --cap_events half:B:out=62.5 --launch --node_extra --sink_fp
+usage: mobility_orchestrate.py [-h] [--nodes NODES] [--hops HOPS]
+                               [--experiment EXPERIMENT] [--policies POLICIES]
+                               [--bw BW] [--ts TS] [--rhos RHOS] [--tm TM]
+                               [--reps REPS] [--frag_bytes FRAG_BYTES]
+                               [--migration_chunk MIGRATION_CHUNK]
+                               [--post_chunks POST_CHUNKS]
+                               [--tail_calls TAIL_CALLS]
+                               [--horizon_calls HORIZON_CALLS]
+                               [--max_run_s MAX_RUN_S]
+                               [--physical_cap_mbps PHYSICAL_CAP_MBPS]
+                               [--mss MSS] [--iface IFACE] [--measure_ts]
+                               [--bws BWS] [--launch]
+                               [--agent_hosts AGENT_HOSTS] [--gpus GPUS]
+                               [--py PY] [--node_extra NODE_EXTRA]
+                               [--connect_timeout CONNECT_TIMEOUT]
+                               [--keep_nodes] [--dry_run] [--path PATH]
+                               [--caps CAPS] [--cap_events CAP_EVENTS]
+                               [--dyn_period DYN_PERIOD]
+                               [--dyn_window DYN_WINDOW]
+                               [--dyn_warmup DYN_WARMUP] [--dyn_eps DYN_EPS]
+                               [--dyn_rel DYN_REL] [--dyn_ctrl DYN_CTRL]
+                               [--prepos PREPOS] [--probs PROBS]
+                               [--pp_configs PP_CONFIGS]
+                               [--lookahead LOOKAHEAD] [--budget BUDGET]
+                               [--validity {expD,wrn}] [--skip_done]
+                               [--rep_start REP_START] [--cold_dest]
+                               [--cold_tail_calls COLD_TAIL_CALLS]
+                               [--hybrid_net HYBRID_NET]
+                               [--net_ctl_port NET_CTL_PORT]
+                               [--net_data_port NET_DATA_PORT]
+                               [--net_nodes NET_NODES]
+                               [--net_grace_s NET_GRACE_S]
+                               [--dry_node_args DRY_NODE_ARGS]
+mobility_orchestrate.py: error: argument --node_extra: expected one argument

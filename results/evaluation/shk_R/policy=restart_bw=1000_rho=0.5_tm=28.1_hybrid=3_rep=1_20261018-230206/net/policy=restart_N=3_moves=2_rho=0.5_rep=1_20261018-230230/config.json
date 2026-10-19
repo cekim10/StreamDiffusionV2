@@ -1,0 +1,56 @@
+{
+ "args": {
+  "experiment": "shk_R/policy=restart_bw=1000_rho=0.5_tm=28.1_hybrid=3_rep=1_20261018-230206/net",
+  "ts": 14.05,
+  "cap_mbps": 1000.0,
+  "holder_mbps": 0.0,
+  "source_mbps": 0.0,
+  "in_mbps": 0.0,
+  "caps": "",
+  "cap_events": "",
+  "dyn_period": 0.5,
+  "dyn_window": 2.0,
+  "dyn_warmup": 2.0,
+  "dyn_eps": 2.0,
+  "dyn_rel": 0.1,
+  "dyn_ctrl": 0.3,
+  "frag_bytes": 4194304,
+  "sink_bytes": 1725236640,
+  "others_start": 0.0,
+  "mss": 1400,
+  "iface": null,
+  "agent_hosts": null,
+  "py": "auto",
+  "net_ctl_port": 29831,
+  "net_data_port": 29832,
+  "net_nodes": ""
+ },
+ "policy": "restart",
+ "N": 3,
+ "moves": 2,
+ "rho": 0.5,
+ "tm_s": 28.1,
+ "nodes": {
+  "A": {
+   "host": "elves-01.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  },
+  "B": {
+   "host": "elves-02.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  },
+  "C": {
+   "host": "elves-03.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  },
+  "D": {
+   "host": "elves-04.be.ucsc.edu",
+   "ctl": 29831,
+   "data": 29832
+  }
+ },
+ "transport": "tcp+tcp_maxseg+per-flow token bucket, max-min fair per-node caps"
+}
