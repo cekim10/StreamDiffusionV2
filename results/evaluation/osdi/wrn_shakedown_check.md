@@ -13,7 +13,7 @@
 | R-b' | PASS | restart drops at ['B', 'C'], B_fwd 0.000; split reused 1.0, bound-before-leaving owners [] |
 | R-c | PASS | restart: {'mean_active_background_flows_from_A': 3.0, 'coverage_fraction': 1.0, 'exposure_valid': True}; reuse_dyn: {'mean_active_background_flows_from_A': 1.003, 'coverage_fraction': 0.939, 'exposure_valid': True}; split: {'mean_active_background_flows_from_A': 0.0, 'coverage_fraction': 0.0, 'exposure_valid': False} |
 | R-d | PASS | restart: 0 before final bind; reuse_dyn: 0 before final bind; split: 0 before final bind |
-| N-a | PASS | reuse_aware_in: cap changes [[17.24604105949402, 'B', 'out', 62.5]], |S| 412, verified at trigger 206 (need 206), after-trigger 105.32883358001709, feasible True, available 206, valid (True, []); reuse_dyn: cap changes [[17.287582635879517, 'B', 'out', 62.5]], |S| 412, verified at trigger 206 (need 206), after-trigger 6.9779887199401855, feasible True, available 206, valid (False, ['NIC B out > 1.15 x degraded cap after the change']) |
+| N-a | PASS | reuse_aware_in: cap changes [[17.24604105949402, 'B', 'out', 62.5]], |S| 412, verified at trigger 206 (need 206), after-trigger 105.32883358001709, feasible True, available 206, valid (True, []); reuse_dyn: cap changes [[17.287582635879517, 'B', 'out', 62.5]], |S| 412, verified at trigger 206 (need 206), after-trigger 6.9779887199401855, feasible True, available 206, valid (True, []) |
 | N-b | PASS | trigger record fields |
 | N-c | PASS | known_caps (planner view) unchanged |
 

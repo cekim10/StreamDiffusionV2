@@ -74,10 +74,14 @@ def run_validity_wrn(s: dict, run_dir: Path | str | None = None, dry: bool = Fal
                 # network.csv t_wall is the node's clock; the run's t0 on that clock is recorded per run
                 t0_node = (s.get("wrn") or {}).get("t0_wall_by_node", {}).get(node)
                 if t0_node is not None:
+                    # followup_common.md Amendment 1: a degraded link is judged on 10 s windows of the 1 s NIC samples (one 4 MiB
+                    # fragment is 33 Mbps in a 1 s sample, more than the 1.15 x 62.5 Mbps tolerance; over 10 s it is 5 %)
                     idx = 1 if d == "in" else 2
-                    late = [x[idx] for x in samples if x[idx] is not None and x[0] >= t0_node + t_rel + 1.0]
-                    if late and max(late) > 1.15 * mbps:
-                        bad.append(f"NIC {node} {d} > 1.15 x degraded cap after the change")
+                    late = [(x[0], x[idx]) for x in samples if x[idx] is not None and x[0] >= t0_node + t_rel + 1.0]
+                    for i in range(len(late)):
+                        win = [v for t, v in late[i:] if t - late[i][0] < 10.0]
+                        if len(win) >= 9 and sum(win) / len(win) > 1.15 * mbps:
+                            bad.append(f"NIC {node} {d} 10 s mean > 1.15 x degraded cap after the change"); break
             if d == "out":
                 # rows carry the send-completion time: a fragment counts against the degraded cap only if it could have been
                 # sent entirely after the change (completion >= change + its transmission time at the degraded cap), so a

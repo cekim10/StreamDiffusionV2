@@ -102,3 +102,14 @@ Commit of every node and of the orchestrator; host names, GPU model, driver, CUD
 cache path; caps and cap events; all event, flow, fragment and metric logs. Dataset identity: the LOVEU archive SHA-256
 and the SHA-256 of `expW/loveu_population.csv`, `expW/loveu_selection.csv`, `expW/loop_audit.json` (frozen in
 `followup_prereg_freeze.md`).
+
+## Amendment 1 (2026-10-19, after the GPU shakedown, before any W / R / N measurement run; the frozen text above is unchanged)
+
+**Section 3, NIC check on a degraded link.** The frozen text applies "NIC peaks <= 1.15 x the cap in force" to the 1 s
+kernel NIC samples. On a link degraded to 62.5 Mbps one 4 MiB fragment is 33 Mbps within a 1 s sample, i.e. more than
+the tolerance (9.4 Mbps), so a correctly shaped link fails the check whenever two fragments complete inside one sample
+(GPU shakedown N cell 9, OTTER event-driven: samples 77 / 60 / 77 / 60 / 60 Mbps after the change while the fragment
+records show 62.5 Mbps). **Correction:** for a link under a changed cap, the NIC check uses the mean of the 1 s samples
+over 10 s windows (>= 9 samples) after the change, <= 1.15 x the degraded cap (one fragment is then 5 % of the window);
+the 1 s-sample check is unchanged against the nominal cap, and the fragment-record paced-egress check (10 s) is
+unchanged. Implemented in `tools/eval/wrn_validity.py`. No hypothesis, threshold or matrix entry changes.
