@@ -3,10 +3,10 @@
 ## W
 
 - **W-H1**: SUPPORTED
-- **W-H2 primary**: {'set': 'all units', 'n': 39, 'successes': 38, 'share': 0.9743589743589743, 'verdict': 'SUPPORTED'}
-- **W-H2 S1**: {'set': 'S1: no RVC', 'n': 4, 'verdict': 'counts only (n < 10)', 'successes': 4, 'excluded': 35}
-- **W-H2 S2**: {'set': 'S2: no cut-induced RVC', 'n': 25, 'successes': 24, 'share': 0.96, 'verdict': 'SUPPORTED', 'excluded': 14}
-- **W-H3**: SUPPORTED (Cold reaches 35 dB in 0.0% of 38)
+- **W-H2 primary**: {'set': 'all units', 'n': 40, 'successes': 39, 'share': 0.975, 'verdict': 'SUPPORTED'}
+- **W-H2 S1**: {'set': 'S1: no RVC', 'n': 4, 'verdict': 'counts only (n < 10)', 'successes': 4, 'excluded': 36}
+- **W-H2 S2**: {'set': 'S2: no cut-induced RVC', 'n': 26, 'successes': 25, 'share': 0.9615384615384616, 'verdict': 'SUPPORTED', 'excluded': 14}
+- **W-H3**: SUPPORTED (Cold reaches 35 dB in 0.0% of 39)
 - W1 units present: 40 of 40 (per-unit table: `w2_table.csv`; W1 detail in `wrn_results.json`)
 
 ## R
