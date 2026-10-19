@@ -1,0 +1,129 @@
+{
+ "run_id": "policy=reuse_dyn_N=3_moves=2_rho=8_rep=2_20261019-074120",
+ "policy": "reuse_dyn",
+ "prepos": null,
+ "dyn": {
+  "replans": [],
+  "n_replans": 0,
+  "cap_changes": [],
+  "duplicate_bytes": 0
+ },
+ "N": 3,
+ "moves": 2,
+ "rho": 8.0,
+ "tm_s": 1.75625,
+ "rep": 2,
+ "sink_bytes": 1725236640,
+ "frag_bytes": 4194304,
+ "caps_mbps": {
+  "A:out": 1000.0,
+  "B:out": 1000.0,
+  "C:out": 1000.0,
+  "D:out": 1000.0,
+  "A:in": 1000.0,
+  "B:in": 1000.0,
+  "C:in": 1000.0,
+  "D:in": 1000.0
+ },
+ "stop_reason": "rejoin+tail",
+ "duration_s": 75.2836287021637,
+ "restored_sessions": 3,
+ "first_restored": {
+  "median": 55.90444254875183,
+  "max": 56.06720209121704,
+  "all": [
+   56.06720209121704,
+   55.90444254875183,
+   55.87062048912048
+  ]
+ },
+ "makespan_s": 56.06720209121704,
+ "coverage_mean": 0.25684477978598413,
+ "bytes": {
+  "total_sent": 5804855520,
+  "source_sent": 5209264352,
+  "by_link": {
+   "A->C": 1716848032,
+   "A->D": 1725236640,
+   "A->B": 1767179680,
+   "C->D": 201326592,
+   "D->B": 142606336,
+   "B->C": 201326592,
+   "C->B": 37748736,
+   "D->C": 12582912
+  },
+  "unused": 83886080,
+  "duplicate": 0
+ },
+ "normalized": {
+  "total_per_session": 1.1215573534306575,
+  "source_per_session": 1.006483058849635,
+  "unused_per_session": 0.016207647124087666
+ },
+ "node_stats": {
+  "A": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  },
+  "B": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  },
+  "C": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  },
+  "D": {
+   "rate_before_start": 0,
+   "cancel_before_start": 0,
+   "add_before_start": 0
+  }
+ },
+ "paced_egress_worst_1s_mbps": {
+  "A": 754.97472,
+  "B": 729.808896,
+  "C": 494.927872,
+  "D": 578.813952
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 747.4249728,
+  "B": 161.0612736,
+  "C": 191.26026240000002,
+  "D": 124.15139839999999
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 5.2,
+   "tx_peak": 1058.2
+  },
+  "B": {
+   "rx_peak": 883.1,
+   "tx_peak": 721.4
+  },
+  "C": {
+   "rx_peak": 1013.9,
+   "tx_peak": 733.3
+  },
+  "D": {
+   "rx_peak": 1037.6,
+   "tx_peak": 528.4
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "nic_within_cap": true,
+  "source_nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}

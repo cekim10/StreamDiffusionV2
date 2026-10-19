@@ -1,0 +1,94 @@
+{
+ "workload": "dog",
+ "seed": 1,
+ "calls": 330,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "video_sha256": "17192dda391d80d3157a4121cc0328ab77936f76784891007acdd39a2178de20",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "prompt": "A dog walks on the grass, realistic",
+ "T_frames": 81,
+ "commit": "ca7c95142ea998f9464f8bfbaf41664ff33d0eeb",
+ "host": "elves-02",
+ "gpu_id": 0,
+ "dry_run": false,
+ "elapsed_s": 254.2407877445221,
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ },
+ "n_fingerprint_values": 90,
+ "promotion_calls": [
+  4,
+  5,
+  6,
+  7,
+  8,
+  14,
+  15,
+  20,
+  21,
+  34,
+  60,
+  78,
+  82,
+  161,
+  195,
+  291,
+  302,
+  303
+ ],
+ "first_pass_within_clip": {
+  "promotions": 7,
+  "calls": 17,
+  "per_100": 41.1764705882353
+ },
+ "repeated_within_clip": {
+  "promotions": 5,
+  "calls": 255,
+  "per_100": 1.9607843137254901
+ },
+ "boundary_associated": {
+  "promotions": 4,
+  "calls": 45,
+  "cut_calls": 15,
+  "cuts_followed_by_promotion": 3,
+  "boundary_promotion_probability": 0.2
+ },
+ "P_w": {
+  "6": {
+   "as_fed": 0.17687074829931973,
+   "as_fed_windows": 294,
+   "within_clip": 0.1125,
+   "within_clip_windows": 160,
+   "within_clip_measurable": true
+  },
+  "25": {
+   "as_fed": 0.52,
+   "as_fed_windows": 275,
+   "within_clip": null,
+   "within_clip_windows": 0,
+   "within_clip_measurable": false
+  },
+  "52": {
+   "as_fed": 0.7217741935483871,
+   "as_fed_windows": 248,
+   "within_clip": null,
+   "within_clip_windows": 0,
+   "within_clip_measurable": false
+  }
+ },
+ "stable_at_w": {
+  "6": {
+   "as_fed": false,
+   "within_clip": false
+  },
+  "25": {
+   "as_fed": false,
+   "within_clip": null
+  },
+  "52": {
+   "as_fed": false,
+   "within_clip": null
+  }
+ }
+}

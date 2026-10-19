@@ -1,0 +1,18 @@
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_hybrid=3_rep=1_20261019-065629: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B all fragments
+[orch] t=  14.71s move B->C
+        held   A: 100.0%, B:  25.0%, C:   0.0%, D:   0.0%
+        active B->C (103 left, 500 Mbps), A->C (309 left, 250 Mbps)
+        next   B->C 103 fragments (412 MiB) already delivered to B, reused; A->C 309 fragments (1236 MiB) not yet anywhere else
+[orch] t=  28.38s move C->D (final move)
+        held   A: 100.0%, B:  26.2%, C:  49.0%, D:   0.0%
+        active C->D (202 left, 500 Mbps), A->D (210 left, 250 Mbps)
+        next   C->D 202 fragments (808 MiB) already delivered to C, reused; A->D 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  74.40s run end
+        held   A: 100.0%, B:  26.2%, C:  49.5%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 0.88 s, Sink received 28.04 s, bound 28.31 s, continuity-ready 28.92 s, rejoin 33.2 s | traffic 1.76x, waste 0.02x, reused 1220 MiB | PSNR after bind 40.6 dB | ingress peak 1007 Mbps

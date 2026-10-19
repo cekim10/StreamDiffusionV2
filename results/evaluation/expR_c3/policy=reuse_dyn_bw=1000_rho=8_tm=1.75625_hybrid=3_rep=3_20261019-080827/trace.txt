@@ -1,0 +1,18 @@
+[orch] === run policy=reuse_dyn_bw=1000_rho=8_tm=1.75625_hybrid=3_rep=3_20261019-080827: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw 1000.0 Mbps, T_m 1.75625 s, rho 8.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments
+[orch] t=   2.05s move B->C
+        held   A: 100.0%, B:   2.9%, C:   0.0%, D:   0.0%
+        active A->C (400 left, 250 Mbps), B->C (12 left, 500 Mbps)
+        next   A->C 400 fragments; B->C 12 fragments
+[orch] t=   4.00s move C->D (final move)
+        held   A: 100.0%, B:   3.4%, C:   5.3%, D:   0.0%
+        active A->D (390 left, 250 Mbps), B->D (7 left, 250 Mbps), C->D (15 left, 250 Mbps)
+        next   A->D 390 fragments; B->D 7 fragments; C->D 15 fragments
+[orch] t=  74.36s run end
+        held   A: 100.0%, B:   3.4%, C:   6.3%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ 1000.0 Mbps rho 8.0: after final move: first output 0.97 s, Sink received 52.61 s, bound 52.82 s, continuity-ready 53.43 s, rejoin 57.7 s | traffic 1.10x, waste 0.03x, reused 136 MiB | PSNR after bind 40.7 dB | ingress peak 872 Mbps
