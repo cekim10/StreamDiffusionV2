@@ -233,14 +233,15 @@ class Run:
         self.caps0 = dict(self.caps) if self.caps else None
         self.known_caps0 = dict(self.known_caps)
         specs = [x.strip() for x in (self.a.cap_events or "").split(";") if x.strip()]
-        self.cap_events = parse_cap_events(";".join(x for x in specs if not x.startswith("half:")))
+        self.cap_events = parse_cap_events(";".join(x for x in specs if not (x.startswith("half:") or x.startswith("frac"))))
         for x in specs:
-            if x.startswith("half:"):
-                # Experiment N: progress-aligned network change (emulation only; the planners are not told). At the final move the
-                # set S of fragments the destination has not verified is frozen; the cap changes once, when the destination has
-                # verified ceil(|S| / 2) fragments of S (fragment count).
-                _, node, capv = x.split(":"); d, v = capv.split("=")
-                self.cap_events.append({"spec": x, "cap_node": node, "dir": d, "mbps": float(v), "fired": False, "kind": "half", "S": None})
+            if x.startswith("half:") or x.startswith("frac"):
+                # Experiment N / V: progress-aligned network change (emulation only; the planners are not told). At the final move
+                # the set S of fragments the destination has not verified is frozen; the cap changes once, when the destination
+                # has verified ceil(q |S|) fragments of S (fragment count); "half" = frac0.5 (N), "frac<q>" (V).
+                kind, node, capv = x.split(":"); d, v = capv.split("=")
+                q = 0.5 if kind == "half" else float(kind[4:])
+                self.cap_events.append({"spec": x, "cap_node": node, "dir": d, "mbps": float(v), "fired": False, "kind": "half", "q": q, "S": None})
         self.progress_trigger = None
         self.cap_changes = []
         self.flow_rx: dict[str, deque] = defaultdict(deque)   # flow id -> (t, bytes) verified at the destination
@@ -518,12 +519,12 @@ class Run:
                 if evn["S"] is None:
                     continue
                 got = len(self.holders[self.final] & evn["S"])
-                fire = got >= math.ceil(len(evn["S"]) / 2)
+                fire = got >= math.ceil(len(evn["S"]) * evn.get("q", 0.5))
                 if fire:
                     deg = evn["cap_node"] if evn["dir"] == "out" else None
                     missing = evn["S"] - self.holders[self.final]
                     others = [e for e in EDGES if e not in (deg, self.final)]
-                    self.progress_trigger = {"spec": evn["spec"], "t": now, "t_rel": self.rel_t(now), "t_after_move_s": now - evn["t_S"], "s_size": len(evn["S"]),
+                    self.progress_trigger = {"spec": evn["spec"], "q": evn.get("q", 0.5), "t": now, "t_rel": self.rel_t(now), "t_after_move_s": now - evn["t_S"], "s_size": len(evn["S"]),
                                              "verified_of_S_at_trigger": got, "missing_at_trigger": len(missing), "degraded": [evn["cap_node"], evn["dir"]],
                                              "available_elsewhere_at_trigger": sum(1 for f in missing if any(f in self.holders[e] for e in others)),
                                              "available_elsewhere_by_node": {e: len(missing & self.holders[e]) for e in others}}

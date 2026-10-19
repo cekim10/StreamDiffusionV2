@@ -11,6 +11,8 @@
     python tools/eval/run_wrn.py n                    # N: 10 cells x 3 policies x 3 reps
     python tools/eval/run_wrn.py war                  # W-AR (exploratory)
     python tools/eval/run_wrn.py all                  # w1, w2, r, n, war in the frozen order
+    python tools/eval/run_wrn.py m3dev                # M3-v2 development regression: N cells 7-10, at-moves / v1 / v2, 1 rep (not evidence)
+    python tools/eval/run_wrn.py v                    # Experiment V holdout (M3-v2 plan): cells V1-V8 x 4 policies x 3 reps
     add --dry for the loopback protocol test (fake nodes on 127.0.0.1, scaled bandwidth; never reported)
 
 Orchestrator invocations use --skip_done --validity wrn, so a re-start resumes and invalid runs get at most 2 re-runs.
@@ -46,6 +48,12 @@ REPO = {"dog": ("examples/original.mp4", "examples/prompt.txt"), "bird": ("examp
 N_CELLS = {1: ("none", "A,B", None), 2: ("none", "A,B", "A:out"), 3: ("none", "A,B", "B:in"),
            4: ("top1", "A,B", None), 5: ("top1", "A,B", "A:out"), 6: ("top1", "A,B", "B:in"),
            7: ("top1", "A,C", None), 8: ("top1", "A,C", "A:out"), 9: ("top1", "A,C", "B:out"), 10: ("top1", "A,C", "C:in")}
+# Experiment V (M3-v2 holdout, expN/m3v2_holdout_plan.md): id -> (placement, path, degradation spec or None)
+V_CELLS = {1: ("proportional", "A,C", None), 2: ("proportional", "A,C", "frac0.25:B:out=125"), 3: ("proportional", "A,C", "frac0.75:C:in=250"),
+           4: ("top1", "A,C", "frac0.25:B:out=250"), 5: ("top1", "A,C", "frac0.75:B:out=31.25"), 6: ("top1", "A,C", "frac0.25:C:in=125"),
+           7: ("top1", "A,C", "frac0.75:A:out=250"), 8: ("none", "A,B", "frac0.25:B:in=31.25")}
+V_LABEL = {1: "proportional x 0", 2: "proportional x holder 125 @0.25", 3: "proportional x ingress 250 @0.75", 4: "incorrect x holder 250 @0.25",
+           5: "incorrect x holder 31.25 @0.75", 6: "incorrect x ingress 125 @0.25", 7: "incorrect x source 250 @0.75", 8: "none x ingress 31.25 @0.25"}
 N_LABEL = {1: "none x 0", 2: "none x src", 3: "none x in", 4: "correct x 0", 5: "correct x src", 6: "correct x in",
            7: "incorrect x 0", 8: "incorrect x src", 9: "incorrect x hold", 10: "incorrect x in"}
 
@@ -244,6 +252,26 @@ def n_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "reuse_dyn",
     return a
 
 
+def v_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "split", "reuse_dyn", "reuse_dyn2")):
+    pp, path, deg = V_CELLS[cell]
+    a = ["--pp_configs", ",".join(f"{p}:{pp}" for p in policies), "--path", path, "--tm", "1e9", "--lookahead", "4" if c.dry else "10", "--budget", "1",
+         "--reps", reps, "--post_chunks", "400", "--max_run_s", "900"]
+    if deg:
+        kind, node, capv = deg.split(":"); d, mbps = capv.split("=")
+        a += ["--cap_events", f"{kind}:{node}:{d}={float(mbps) / 10 if c.dry else mbps}"]
+    return a
+
+
+def do_m3dev(c):
+    for cell in (7, 8, 9, 10):
+        c.orch(f"m3dev_cell{cell}", n_args(c, cell, reps="1", policies=("reuse_aware_in", "reuse_dyn", "reuse_dyn2")), ["--sink_fp"], f"M3-v2 dev regression N cell {cell} ({N_LABEL[cell]})")
+
+
+def do_v(c):
+    for cell in V_CELLS:
+        c.orch(f"expV_cell{cell}", v_args(c, cell), ["--sink_fp"], f"V cell {cell} ({V_LABEL[cell]})")
+
+
 def do_w1(c):
     c.w1_units([(w, s, None) for w in workloads() for s in (0, 1)])
 
@@ -304,7 +332,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -317,7 +345,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:

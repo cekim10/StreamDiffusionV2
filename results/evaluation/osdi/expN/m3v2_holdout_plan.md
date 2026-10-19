@@ -14,8 +14,9 @@ re-plans, partial moves and oscillation of M3-v1, on network conditions it was n
 trigger M = 30; `post_chunks` 400, `max_run_s` 900)
 
 **Placements:** `incorrect` (A -> C, top-1 = B: one misplaced holder, as N) and **`proportional`** (A -> C; the budget
-spread over B, C, D in proportion to p = 0.6 / 0.3 / 0.1: a misplaced holder B with most of the placed fragments, the
-true destination C with some, D with few: two providers besides the source share C's ingress - untested).
+spread over B, C, D in proportion to p = 0.6 / 0.3 / 0.1 (`prepos_alloc`): with L = 10 s at 1 Gbps the source can place
+0.72 Sink, so B receives 0.43, the true destination C 0.22 and D 0.07 Sink before the move; after the move C lacks
+0.78 Sink, held by B (0.43), D (0.07) and only by A (0.28): three providers on C's ingress - untested).
 
 **Degradations** (progress-aligned trigger: fires once when the destination has verified a fraction `q` of the
 fragments it lacked at the move; magnitude in Mbps; persistent):
