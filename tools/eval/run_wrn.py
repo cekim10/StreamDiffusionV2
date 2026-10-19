@@ -88,6 +88,7 @@ class Ctx:
         self.log.mkdir(parents=True, exist_ok=True)
         self.stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.procs = []
+        self.failures = []
 
     # ---------------- GPU / loopback orchestrator invocations
     def wait_idle(self, what):
@@ -132,7 +133,8 @@ class Ctx:
             cmd += ["--dry_run", "--nodes", "A=127.0.0.1:29911:29912,B=127.0.0.1:29921:29922,C=127.0.0.1:29931:29932,D=127.0.0.1:29941:29942",
                     "--net_nodes", "A=127.0.0.1:29951:29952,B=127.0.0.1:29961:29962,C=127.0.0.1:29971:29972,D=127.0.0.1:29981:29982", "--mss", "0"]
         else:
-            cmd += ["--launch", "--node_extra", " ".join(node_extra)]
+            # "=" form: a value that starts with "--" and has no space (e.g. "--sink_fp") would otherwise be parsed as an option
+            cmd += ["--launch", "--node_extra=" + " ".join(node_extra)]
         print(f"[wrn] === {what}", flush=True)
         with open(self.log / f"wrn_{self.stamp}.log", "a") as fh:
             fh.write(f"\n=== {datetime.now().isoformat()} {what}: {shlex.join(cmd)}\n"); fh.flush()
@@ -140,6 +142,8 @@ class Ctx:
         if self.dry:
             self.stop_dry()
         print(f"[wrn] {what}: exit {r.returncode}", flush=True)
+        if r.returncode != 0:
+            self.failures.append(f"{what}: exit {r.returncode}")
         return r.returncode
 
     # ---------------- W1 on the hosts' GPU 0 (agents) or locally (dry)
@@ -178,6 +182,9 @@ class Ctx:
                 pid = ag.run(cmd, logrel)
                 rc = ag.wait(pid, timeout=3600).get("rc")
                 print(f"[wrn] W1 {w} s{s} on {lb}: rc {rc}", flush=True)
+                if rc != 0:
+                    with lock:
+                        self.failures.append(f"W1 {w} s{s} on {lb}: rc {rc}")
                 if lb != "A":   # copy the result back to elves-01 (text files)
                     for d in ag.glob(f"results/evaluation/expW_W1/{w}_s{s}{('_' + tag) if tag else ''}_2*"):
                         loc = ROOT / d; loc.mkdir(parents=True, exist_ok=True)
@@ -201,7 +208,10 @@ class Ctx:
         ag = Agent(lb, *parse_hosts(self.a.agent_hosts)[lb])
         pid = ag.run([".venv/bin/python", "tools/eval/expw_w1.py", "--workload", w, "--seed", str(s), "--gpu_id", "0", "--loveu_dir", LOVEU_DIR, "--tag", "shk"],
                      f"results/evaluation/wrn_logs/shk_w1_{w}_s{s}_{lb}.log")
-        print(f"[wrn] shakedown W1 {w} s{s} on {lb}: rc {ag.wait(pid, timeout=3600).get('rc')}", flush=True)
+        rc = ag.wait(pid, timeout=3600).get("rc")
+        print(f"[wrn] shakedown W1 {w} s{s} on {lb}: rc {rc}", flush=True)
+        if rc != 0:
+            self.failures.append(f"shakedown W1 on {lb}: rc {rc}")
         for d in ag.glob(f"results/evaluation/expW_W1/{w}_s{s}_shk_2*"):
             loc = ROOT / d; loc.mkdir(parents=True, exist_ok=True)
             for f in ("w1_calls.csv", "w1_summary.json"):
@@ -310,6 +320,9 @@ def main():
             {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war}[a.what](c)
     finally:
         c.stop_dry()
+    if c.failures:
+        print("[wrn] FAILED invocations:\n  " + "\n  ".join(c.failures), flush=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
