@@ -31,7 +31,7 @@ from proto_handoff import send_msg  # noqa: E402
 from restore_orchestrate import EDGES as NET_EDGES  # noqa: E402
 from restore_orchestrate import Run as RestoreRun  # noqa: E402
 
-NET_POLICY = {"restart": "restart", "split": "reuse_fixed", "reuse_aware_in": "reuse_aware_in", "reuse_dyn": "reuse_dyn"}
+NET_POLICY = {"restart": "restart", "split": "reuse_fixed", "reuse_aware_in": "reuse_aware_in", "reuse_dyn": "reuse_dyn", "reuse_dyn2": "reuse_dyn"}
 
 
 class NetOrch:

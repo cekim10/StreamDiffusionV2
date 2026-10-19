@@ -56,15 +56,15 @@ import numpy as np  # noqa: E402
 from agents import connect_all, parse_hosts  # noqa: E402
 from common import DEFAULT_MSS, EVAL_ROOT, CsvLog, EventLog, clock_sync_client, git_commit  # noqa: E402
 from proto_handoff import MB, recv_msg, send_msg  # noqa: E402
-from restore_planner import assign_providers, dyn_decide, holder_order, parse_cap_events, prepos_alloc  # noqa: E402
+from restore_planner import assign_providers, bps_to_Bps, dyn_decide, dyn_decide_v2, holder_order, parse_cap_events, prepos_alloc  # noqa: E402
 from restore_planner import maxmin as maxmin_caps  # noqa: E402
 
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
 POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct",
-                "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)",
+                "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)", "reuse_dyn2": "OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware)",
                 "full": "Full migration (stop, transfer all state, resume)", "cold": "Cold restart (fresh caches from the prompt)"}
-AWARE = ("reuse_aware_in", "reuse_dyn")
+AWARE = ("reuse_aware_in", "reuse_dyn", "reuse_dyn2")
 EXEC_MODE = {"full": "full", "cold": "cold"}   # every other policy: "fast" (M1)
 REJOIN_DB = 35.0
 
@@ -207,7 +207,7 @@ class Run:
         self.mode = EXEC_MODE.get(policy, "fast")
         self.cold_dest = bool(orch.a.cold_dest)
         assert not self.cold_dest or (len(self.edges) == 2 and policy not in EXEC_MODE), "--cold_dest: single move, an OTTER/M1-family policy"
-        assert not (orch.a.hybrid_net and (policy not in ("restart", "split", "reuse_aware_in", "reuse_dyn") or bw_mbps <= 0)), "--hybrid_net: M1-family policy on a shaped network"
+        assert not (orch.a.hybrid_net and (policy not in ("restart", "split", "reuse_aware_in", "reuse_dyn", "reuse_dyn2") or bw_mbps <= 0)), "--hybrid_net: M1-family policy on a shaped network"
         self.net = None
         self.running = "A"          # the node currently generating (or about to: it holds the execution)
         self.state_holder = None    # full: the node holding the packed complete state while it is in transit
@@ -245,6 +245,7 @@ class Run:
         self.cap_changes = []
         self.flow_rx: dict[str, deque] = defaultdict(deque)   # flow id -> (t, bytes) verified at the destination
         self.rate_est: dict = {}
+        self.dyn2_state: dict = {}   # M3-v2 bottleneck estimator state (reset at every ownership change)
         self.last_plan_t = 0.0
         self.dyn_last = 0.0
         self.replans: list[dict] = []
@@ -498,7 +499,7 @@ class Run:
             if fl["active"]:
                 backlog[fl["src"]] += len(fl["queue_left"]) * flen
         inbound = sum(len(fl["queue_left"]) * flen for fl in self.flows.values() if fl["active"] and fl["dst"] == owner)
-        assign, late = assign_providers(self.policy, missing=missing, own=owner, holders=holders, held=held, soon=soon, skipped=set(),
+        assign, late = assign_providers("reuse_dyn" if self.policy == "reuse_dyn2" else self.policy, missing=missing, own=owner, holders=holders, held=held, soon=soon, skipped=set(),
                                         backlog=backlog, inbound_bytes=inbound, known_caps=self.known_caps, flen=flen, history=history)
         decision = []
         for src in sorted(set(assign) | set(late)):
@@ -534,9 +535,9 @@ class Run:
                 self.cap_changes.append((now, evn["cap_node"], evn["dir"], evn["mbps"]))
                 self.ev.log("cap_change", now, node=evn["cap_node"], dir=evn["dir"], mbps=evn["mbps"], trigger=evn["spec"])
                 self.realloc()
-        if self.policy == "reuse_dyn" and now - self.dyn_last >= self.a.dyn_period:
+        if self.policy in ("reuse_dyn", "reuse_dyn2") and now - self.dyn_last >= self.a.dyn_period:
             self.dyn_last = now
-            self.dyn_check(now)
+            (self.dyn_check_v2 if self.policy == "reuse_dyn2" else self.dyn_check)(now)
         if self.net is not None and self.net.t0 is not None:
             self.net.pump(now)
 
@@ -585,6 +586,60 @@ class Run:
         self.replans.append(rec)
         self.ev.log("replan", t_dec, **rec)
         # a cancelled flow may stop before its head fragment: assign anything still unclaimed by the same rules
+        self.plan_aware("flow_done")
+
+    def dyn_check_v2(self, now: float):
+        """M3-v2 (restore_planner.dyn_decide_v2): same measurement as v1 (verified bytes per provider over dyn_window),
+        bottleneck-constrained ETA, joint re-assignment, resolution-aware hysteresis, anti-oscillation."""
+        a, owner, flen = self.a, self.owner, self.manifest["frag_bytes"]
+        if now - self.last_plan_t < a.dyn_warmup:
+            return
+        act = [fl for fl in self.flows.values() if fl["active"] and fl["dst"] == owner and fl["queue_left"]]
+        if not act:
+            return
+        rate = {}
+        for fl in act:
+            q = self.flow_rx.get(fl["id"])
+            if not q:
+                return
+            while q and q[0][0] < now - a.dyn_window:
+                q.popleft()
+            rate[fl["src"]] = rate.get(fl["src"], 0.0) + (sum(b for _, b in q) / a.dyn_window if q else 0.0)
+        view = [{"src": fl["src"], "left": fl["queue_left"], "order": [f for f in fl["order"] if f in fl["queue_left"]] or sorted(fl["queue_left"]), "fl": fl} for fl in act]
+        held = {e: self.holders.get(e, set()) for e in EDGES}
+        nom_out = {n: bps_to_Bps(self.known_caps[("out", n)]) for n in EDGES}
+        d = dyn_decide_v2(own=owner, act=view, rate=rate, state=self.dyn2_state, now=now, held=held, nom_out=nom_out, nom_in=bps_to_Bps(self.known_caps[("in", owner)]),
+                          flen=flen, nodes=list(EDGES), window=a.dyn_window, ctrl=a.dyn_ctrl, eps=a.dyn_eps, rel=a.dyn_rel)
+        if d is None:
+            return
+        t_dec = time.time()
+        moved = {f for ids in d["assign"].values() for f in ids}
+        new_flows = []
+        # providers that lose fragments: cancel their flows (the in-flight head drains at the node) and re-add what stays
+        for fl in act:
+            if fl["src"] in d["moved_from"]:
+                keep = sorted(fl["queue_left"] - moved)
+                self.cancel_flow(fl, f"replan v2: {len(fl['queue_left'] & moved)} of {len(fl['queue_left'])} fragments move (eta {d['eta_cur']:.1f} -> {d['eta_new']:.1f} s)")
+                for f in fl.get("sent_by_node", set()) & fl["queue_left"]:
+                    fl["queue_left"].discard(f); self.in_flight[fl["dst"]].add(f)
+                keep = [f for f in keep if f in fl["queue_left"]]
+                if keep:
+                    nf = self.start_flow(fl["src"], owner, keep, True, f"replan v2: {len(keep)} fragments stay at {fl['src']}", keep_order=True)
+                    new_flows.append(nf["id"] if nf else None)
+        for p_, ids in d["assign"].items():
+            ex = next((fl for fl in self.flows.values() if fl["active"] and fl["src"] == p_ and fl["dst"] == owner and p_ not in d["moved_from"]), None)
+            if ex is not None:
+                self.add_to_flow(ex, sorted(ids), True); new_flows.append(ex["id"])
+            else:
+                fl = self.start_flow(p_, owner, sorted(ids), True, f"replan v2: {len(ids)} fragments moved from {','.join(d['moved_from'])}", keep_order=True)
+                new_flows.append(fl["id"] if fl else None)
+        self.last_plan_t = t_dec
+        rec = {"t_s": self.rel_t(t_dec), "owner": owner, "from": ",".join(d["moved_from"]), "to": {p_: len(v) for p_, v in d["assign"].items()}, "moved_fragments": len(moved),
+               "eta_cur_s": d["eta_cur"], "eta_new_s": d["eta_new"], "eta_cur_opt_s": d["eta_cur_opt"], "eta_new_pess_s": d["eta_new_pess"], "dT_s": d["dT"], "c_switch_s": d["c_switch"], "margin_s": d["margin"],
+               "measured_rate_mbps": {k: v * 8 / 1e6 for k, v in rate.items()}, "I_est_mbps": d["I_est"] * 8 / 1e6, "c_est_mbps": {k: v * 8 / 1e6 for k, v in d["c_est"].items()},
+               "resolution_mbps": d["res"] * 8 / 1e6, "cap_change_t_s": self.rel_t(self.cap_changes[-1][0]) if self.cap_changes else None, "new_flows": new_flows, "version": 2}
+        self.replans.append(rec)
+        self.ev.log("replan", t_dec, **rec)
         self.plan_aware("flow_done")
 
     def prepos_start(self):
@@ -695,6 +750,7 @@ class Run:
                   "call": r["call"], "fg_bytes": r["fg_bytes"], "mode": self.mode}
             self.running = None
         self.owner_idx = i
+        self.dyn2_state = {}
         self.moves.append(mv)
         if to == self.final and i == len(self.edges) - 1:
             for evn in self.cap_events:

@@ -312,3 +312,201 @@ def dissem_assign(plan, nfr, flen, caps, edges=("B", "C", "D")):
     else:
         raise ValueError(plan)
     return prov
+
+
+# ----------------------------------------------------------------------------------------------- M3-v2 (2026-10-19)
+# Bottleneck-constrained, uncertainty-aware re-planning. Development data: Experiment N cells 7-10 (frozen M3-v1 results,
+# results/evaluation/osdi/expN/m3_root_cause.md). M3-v1 (dyn_decide) is unchanged and stays selectable (policy reuse_dyn).
+# All rates and capacities inside v2 are bytes/s; the harness's caps (bit/s) are converted once at the boundary.
+
+def bps_to_Bps(x):
+    return x / 8.0
+
+
+def fluid_eta(load, c_est, ingress, own):
+    """Completion time of an assignment {provider: bytes} under per-provider capacities c_est {provider: bytes/s} and the
+    destination's ingress capacity `ingress` (bytes/s), with max-min fair sharing (the emulated network's allocation).
+    Fluid: the rates are re-solved whenever a provider finishes."""
+    left = {p: float(b) for p, b in load.items() if b > 0}
+    t = 0.0
+    while left:
+        flows = [(p, p, own) for p in left]
+        caps = {("in", own): ingress}
+        for p in left:
+            caps[("out", p)] = max(c_est.get(p, 0.0), 1.0)
+        r = maxmin(flows, caps)
+        dt = min(left[p] / max(r[p], 1e-9) for p in left)
+        if dt == float("inf") or dt > 1e7:
+            return 1e6
+        t += dt
+        for p in list(left):
+            left[p] -= r[p] * dt
+            if left[p] <= 1e-6 * dt * max(r[p], 1.0) + 1e-3:
+                del left[p]
+    return t
+
+
+def update_bottlenecks(state, rate, nom_out, nom_in, res, now=0.0, window=2.0, flen=None, min_frags=8):
+    """See below. `rate` are the harness's window rates (bytes/s over `window`); for the attribution they are averaged
+    over an estimation span long enough to hold >= `min_frags` fragments in aggregate at the current ingress estimate
+    (= `window` at 1 Gbps, ~6 s at 62.5 Mbps), and differences count as evidence only above two fragments per span."""
+    """Per measurement window: separate the destination's ingress capacity from per-provider capacities, using only
+    the measured verified rates {provider: bytes/s} of the active providers, the nominal caps (bytes/s) and the
+    measurement resolution `res` (bytes/s = one fragment per window). Rules (differences below `res` are not evidence):
+      - initial estimates = nominal caps;
+      - a provider whose rate is below the fair share by more than res while another provider is above the fair
+        share by more than res is provider-limited: c_est[p] = rate[p];
+      - if no provider is provider-limited and the aggregate is below the ingress estimate by more than res, the
+        ingress is the bottleneck: I_est = aggregate (all providers dropped together);
+      - upward revisions are immediate (a provider or the aggregate seen faster than its estimate);
+      - a single active provider below the ingress estimate is attributed to its own egress (ambiguous; bounded cost:
+        at most one re-plan that adds the source, after which the shared drop is seen and I_est is lowered)."""
+    if "I_est" not in state:
+        state["I_est"] = nom_in
+        state["c_est"] = dict(nom_out)
+    c = state["c_est"]
+    flen = flen if flen is not None else res * window
+    span = max(window, min_frags * flen / max(state["I_est"], 1.0))
+    hist = state.setdefault("hist", [])
+    hist.append((now, dict(rate)))
+    while hist and hist[0][0] < now - span:
+        hist.pop(0)
+    sm = {p: sum(h[1].get(p, 0.0) for h in hist) / len(hist) for p in rate}   # window rates averaged over the span
+    res_eff = flen / span
+    margin = 2 * res_eff
+    # downward revisions need a span without a transition: every window rate in the span within two raw-window
+    # fragments of each other (a span that straddles a provider finishing or a flow starting is not steady); upward
+    # revisions are immediate
+    steady = {p: (len(hist) >= 2 and max(h[1].get(p, 0.0) for h in hist) - min(h[1].get(p, 0.0) for h in hist) <= 2 * res) for p in rate}
+    # a provider that delivered nothing says nothing about the ingress: it is left out of the aggregate and the fair
+    # share; if it stays at zero for two checks while others deliver, it is stalled (its fragments can move)
+    pos = {p: r for p, r in sm.items() if r > 0}
+    n = len(pos)
+    R = sum(pos.values())
+    I = state["I_est"]
+    limited = []
+    single = state.setdefault("single_attr", set())   # providers attributed from single-provider evidence (unconfirmed)
+    if n >= 2:
+        share = I / n
+        limited = [p for p in pos if steady[p] and pos[p] < share - margin and any(pos[o] > share + margin for o in pos if o != p)]
+        for p in limited:
+            single.discard(p)   # confirmed by a second provider's higher rate
+        if not limited and all(steady[p] for p in pos) and R < I - margin:
+            single.clear()      # all dropped together: the ingress explains it; single-provider attributions are withdrawn
+    elif n == 1:
+        p = next(iter(pos))
+        if steady[p] and pos[p] < I - margin:
+            limited = [p]
+            if p not in state.get("confirmed", set()):
+                single.add(p)
+    stalled = [p for p in rate if sm[p] <= 0 and steady[p] and n >= 1]
+    for p in rate:
+        if p in limited:
+            c[p] = min(nom_out[p], sm[p])
+        elif p in stalled:
+            c[p] = res_eff / 2
+        elif sm[p] > c[p] + margin:
+            c[p] = min(nom_out[p], sm[p])
+    if n >= 1 and not limited and all(steady[p] for p in pos) and R < I - margin:
+        state["I_est"] = max(R, res_eff)
+    elif R > I + margin:
+        state["I_est"] = min(nom_in, R)
+    if n >= 2:
+        for p in list(limited):
+            state.setdefault("confirmed", set()).add(p)
+    state["last_rate"] = dict(sm)
+    state["res_eff"] = res_eff
+    state["n_pos"] = n
+
+
+def dyn_decide_v2(*, own, act, rate, state, now, held, nom_out, nom_in, flen, nodes, window, ctrl, eps, rel):
+    """M3-v2 re-planning decision for one session (bytes/s everywhere).
+
+    act     active flows to `own`: dicts with src, left (set), order (list)
+    rate    {provider: measured verified throughput toward `own` over the window, bytes/s}
+    state   persistent per-ownership estimator state (dict; reset by the harness when the owner changes)
+    nom_out {node: nominal egress capacity, bytes/s}; nom_in: own's nominal ingress capacity, bytes/s
+    Returns None or {assign: {provider: [ids]} (only fragments whose provider changes), cancel: [flows whose fragments
+    move], eta_cur, eta_new, eta_cur_opt, eta_new_pess, c_switch, margin, I_est, c_est, moved_from}.
+    """
+    update_bottlenecks(state, rate, nom_out, nom_in, flen / window, now=now, window=window, flen=flen)
+    res = state["res_eff"]
+    I, c = state["I_est"], state["c_est"]
+    cur_prov = {}
+    head = {}
+    for fl in act:
+        cur_prov.setdefault(fl["src"], set()).update(fl["left"])
+        h = next((f for f in fl["order"] if f in fl["left"]), None)
+        if h is not None:
+            head.setdefault(fl["src"], set()).add(h)
+    load_cur = {p: len(ids) * flen for p, ids in cur_prov.items()}
+    eta_cur = fluid_eta(load_cur, c, I, own)
+    # joint candidate: fragments move only away from the provider that finishes last, to the provider that would finish
+    # earliest with them (by its capacity estimate), while that shortens the longest finish; in-flight heads stay. The
+    # current assignment is the starting point, so nothing moves when no provider is behind (no churn).
+    movable = {p: sorted(f for f in ids if f not in head.get(p, ())) for p, ids in cur_prov.items()}
+    load = {p: len(ids) * flen for p, ids in cur_prov.items()}
+    for p in nodes:
+        load.setdefault(p, 0.0)
+    cap = lambda p: max(c.get(p, nom_out[p]), 1.0)  # noqa: E731
+    cand = {}
+    while True:
+        behind = [p for p in movable if movable[p]]
+        if not behind:
+            break
+        q = max(behind, key=lambda p: load[p] / cap(p))
+        f = movable[q][-1]
+        opts = [p for p in nodes if p != own and p != q and (p == SOURCE or f in held[p])]
+        if not opts:
+            movable[q].pop(); continue
+        best = min(opts, key=lambda p: ((load[p] + flen) / cap(p), p == SOURCE))
+        if (load[best] + flen) / cap(best) < load[q] / cap(q):
+            movable[q].pop(); load[q] -= flen; load[best] += flen; cand[f] = best
+        else:
+            break
+    load_new = {p: b for p, b in load.items() if b > 0}
+    eta_new = fluid_eta(load_new, c, I, own)
+    moved = dict(cand)
+    if not moved:
+        state["last_decision"] = None
+        return None
+    # uncertainty: a provider attributed as the bottleneck from single-provider evidence only (the alternative, that
+    # the destination's ingress itself dropped, is indistinguishable without a second provider) is probed first: at most
+    # `probe_n` of its fragments move; the next checks see two providers and either confirm the attribution (the
+    # aggregate rises: the rest moves) or withdraw it (both share the same aggregate: I_est drops, nothing more moves)
+    probe_n = 4
+    single = state.get("single_attr", set())
+    losing = {next(q for q, ids in cur_prov.items() if f in ids) for f in moved}
+    if losing and losing <= single and len(moved) > probe_n:
+        keep = sorted(moved, key=lambda f: -f)[:probe_n]
+        moved = {f: moved[f] for f in keep}
+        load_new = {p: b for p, b in load.items() if b > 0}
+        probe = True
+    else:
+        probe = False
+    # pessimistic gain: the current providers may be faster than measured (+res), the new ones slower (-res)
+    c_opt = {p: min(nom_out.get(p, v), v + res) for p, v in c.items()}
+    c_pess = {p: max(v - res, res) for p, v in c.items()}
+    eta_cur_opt = fluid_eta(load_cur, c_opt, I, own)
+    eta_new_pess = fluid_eta(load_new, c_pess, I, own)
+    # switching cost: control delay + the in-flight fragment of every provider that loses fragments drains first
+    drain = max((flen / max(rate.get(q, 0.0), 1.0) for q in losing), default=0.0)
+    resend = len(moved) * 0  # fragments move before they are sent (heads excluded): no duplicate payload by design
+    c_switch = ctrl + drain + resend
+    margin = max(eps, rel * eta_cur)
+    dT = eta_cur_opt - eta_new_pess
+    # anti-oscillation: do not undo the previous re-plan unless a bottleneck estimate changed by more than res since
+    last = state.get("last_replan")
+    pairs = {(next(q for q, ids in cur_prov.items() if f in ids), p) for f, p in moved.items()}
+    if last is not None and any((b, a_) in pairs for a_, b in last["pairs"]):
+        changed = abs(state["I_est"] - last["I_est"]) > res or any(abs(c.get(p, 0) - last["c_est"].get(p, 0)) > res for p in set(c) | set(last["c_est"]))
+        if not changed:
+            return None
+    if dT <= c_switch + margin:
+        return None
+    assign = defaultdict(list)
+    for f, p in moved.items():
+        assign[p].append(f)
+    state["last_replan"] = {"t": now, "pairs": pairs, "I_est": state["I_est"], "c_est": dict(c)}
+    return {"assign": assign, "moved_from": sorted(losing), "eta_cur": eta_cur, "eta_new": eta_new, "eta_cur_opt": eta_cur_opt, "eta_new_pess": eta_new_pess,
+            "c_switch": c_switch, "margin": margin, "dT": dT, "I_est": I, "c_est": dict(c), "res": res, "probe": probe}

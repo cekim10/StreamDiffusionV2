@@ -1,0 +1,66 @@
+# M3-v2: bottleneck-constrained, uncertainty-aware restoration re-planning (design and development record)
+
+Status: implemented as policy `reuse_dyn2` (`tools/eval/restore_planner.dyn_decide_v2`, `update_bottlenecks`,
+`fluid_eta`; orchestrator `Run.dyn_check_v2`). M3-v1 (`reuse_dyn`, `dyn_decide`) is unchanged and selectable. M1 / M2,
+the migration protocol, the fragment table, the state formats, the measurement (verified bytes per provider over
+`dyn_window`) and the v1 thresholds (`dyn_period` 0.5 s, `dyn_window` 2 s, `dyn_warmup` 2 s, `dyn_eps` 2 s,
+`dyn_rel` 0.10, `dyn_ctrl` 0.3 s) are unchanged. **Development data:** the frozen Experiment N cells 7-10
+(`m3_root_cause.md`); nothing below is evidence for v2 (holdout plan: `m3v2_holdout_plan.md`, after the freeze).
+
+## 1. What changes (and why: the three causes of `m3_root_cause.md`)
+
+| v1 (frozen) | v2 | cause addressed |
+|---|---|---|
+| `known_caps` in bit/s mixed with rates in bytes/s (ingress floor and unmeasured providers 8x optimistic) | every capacity converted once to bytes/s at the harness boundary (`bps_to_Bps`); unit tests | 3 |
+| each provider's measured rate = its persistent independent capacity; ETA = max_p (left_p / rate_p) | a **bottleneck model**: per-provider capacities `c_est[p]` and the destination's ingress `I_est`, estimated separately from the same measurements; ETA of *any* assignment = max-min fluid simulation under {c_est, I_est} (`fluid_eta`, re-solved whenever a provider finishes) | 1 |
+| reassign the slowest provider's fragments greedily by (load + f) / rate | **joint** candidate: fragments move from the provider that finishes last to the provider that would finish earliest, only while that shortens the longest finish; in-flight heads stay; the current assignment is the starting point (no churn when nobody is behind) | 1, 3 |
+| switch if dT > ctrl + drain + max(eps, rel x eta_cur) | same hysteresis, applied to the **pessimistic gain** (current providers +1 fragment/span faster, new ones -1 slower); switching cost = ctrl + drain of every losing provider's in-flight fragment | 2 |
+| rates over one 2 s window, no notion of resolution | attribution uses rates averaged over a **span holding >= 8 fragments in aggregate** at the current ingress estimate (2 s at 1 Gbps, ~6 s at 62.5 Mbps); differences below **two fragments per span** are not evidence; downward revisions need a span without a transition (all window rates within two raw-window fragments) | 2 |
+| - | **anti-oscillation**: a re-plan that reverses the previous one is refused unless a bottleneck estimate changed by more than the resolution | 2 |
+| - | **single-provider probe**: when the only evidence for a provider bottleneck is one provider delivering below the ingress estimate (indistinguishable from an ingress drop), at most 4 fragments move; the next windows, with two providers, either confirm (aggregate rises: the rest moves) or withdraw the attribution (both share the aggregate: `I_est` drops, nothing else moves). Bounded cost: 4 fragments (0.01 Sink) | 1, 2 |
+
+## 2. Bottleneck estimator (`update_bottlenecks`), per check
+
+Inputs: window rates `rate[p]` (bytes/s) of the active providers, nominal caps (bytes/s), resolution `res` = one
+fragment per window. State: `I_est` (init nominal ingress), `c_est[p]` (init nominal egress), rate history over the
+span, single-provider attributions, confirmations.
+1. span = max(window, 8 x fragment / I_est); `sm[p]` = mean of the window rates in the span; `res_eff` = fragment / span;
+   margin = 2 x `res_eff`; `steady[p]` = the span's window rates differ by <= 2 x `res` (no transition inside).
+2. Providers with zero delivery are excluded from the aggregate R and the fair share; if they stay at zero over a
+   steady span while others deliver, they are stalled (`c_est` = res_eff / 2: their fragments can move).
+3. n >= 2 delivering providers: p is **provider-limited** if steady, `sm[p]` < share - margin and another provider is
+   above share + margin -> `c_est[p]` = `sm[p]` (confirmed). If none is limited, all are steady and R < `I_est` - margin,
+   the **ingress** dropped -> `I_est` = R, single-provider attributions withdrawn.
+4. n = 1: if steady and `sm[p]` < `I_est` - margin -> `c_est[p]` = `sm[p]`, marked *single-provider* (unconfirmed).
+5. Upward revisions (`sm[p]` > `c_est[p]` + margin; R > `I_est` + margin) are immediate.
+
+## 3. Decision (`dyn_decide_v2`), per check after the warm-up
+
+eta_cur = fluid(current); candidate by joint reassignment (section 1); if nothing moves -> None. If every losing
+provider is only single-provider-attributed and more than 4 fragments would move -> probe (4 fragments). Gain
+dT = fluid(current, c + res_eff) - fluid(candidate, c - res_eff); switch iff dT > ctrl + drain + max(eps, rel x eta_cur)
+and the move does not reverse the previous re-plan without a changed estimate. The harness cancels the losing
+providers' flows (their in-flight head drains at the node, as v1), re-starts a flow for what stays, and adds the moved
+fragments to the gaining providers' flows.
+
+## 4. Development tests (CPU; `tools/eval/test_m3v2.py`; development data, not evidence)
+
+- Units: bit/s -> bytes/s; one 4 MiB fragment per 2 s window = 16.78 Mbps.
+- Fluid ETA: split-independent under a shared ingress (352 fragments: 11.81 s for any split); provider-limited holder
+  (62.5 Mbps) 161 s -> 10 s when moved; re-solve when a provider finishes.
+- Estimator: balanced shares keep the nominal estimates; one provider dropping while the other rises is attributed
+  after a transition-free span, not in the first window; both dropping together (16.8 vs 33.6 Mbps quantized, flipping)
+  lowers `I_est` and attributes nothing.
+- Synthetic decisions: cell-7 situation -> no re-plan; cell-9 situation (two providers, B degraded) -> one joint move
+  of B's movable fragments to A balanced by capacity (eta 146 -> 12 s), then no further move; cell-10 situation
+  (quantized flips) -> no re-plan over 6 windows; cell-8 situation -> nothing movable (A's fragments are held only by A).
+- Replay of the frozen **at-moves** streams (the measurement v2 would see while it has not re-planned): cell 7 whole run
+  no re-plan (v1: re-plan at +2.3 s); cell 8 whole run no re-plan; cell 9 first decision after the change = a 4-fragment
+  probe to A; cell 10 at most one probe.
+- Loopback (fake nodes, emulated caps; section 5) and GPU regression on cells 7-10 before the freeze.
+
+## 5. Loopback regression on cells 7-10 (at-moves, v1, v2; 100 Mbps scaled emulation, 16 fragments) - [LOOPBACK RESULTS]
+
+## 6. GPU regression on cells 7-10 - [GPU RESULTS]
+
+## 7. Freeze - [FREEZE RECORD]
