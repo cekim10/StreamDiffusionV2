@@ -1,4 +1,4 @@
-# Experiment V - M3-v2 holdout evaluation: preregistration DRAFT (2026-10-19; to be frozen with M3-v2; nothing run)
+# Experiment V - M3-v2 holdout evaluation: preregistration (FROZEN 2026-10-19 with M3-v2; record `../m3v2_freeze.md`; nothing run)
 
 Mechanism-motivated follow-up of Experiment N (`../followup_common.md` rules apply: validity, re-runs, censoring,
 order-statistic medians, NOT EVALUABLE). **Development data (never evidence for v2):** Experiment N cells 1-10, ExpD
@@ -49,11 +49,13 @@ I_est, c_est), trigger record, reaction feasibility.
 | failure | any clause violated | any clause violated (a probe counts as a re-plan) | any clause violated | any clause violated |
 | NOT EVALUABLE | < 3 valid reps; undecidable under censoring | as V-H1; trigger not fired in >= 2 reps | as V-H2 | as V-H1 |
 
-Recorded predictions (from the design, not from data): V-H1 supported; V-H2 supported in V4 and V5 (one probe + one
-move = 2 re-plans), uncertain in V2 (three providers); V-H3 uncertain in V3 / V6 (ingress drop with a probe: the probe
-is a re-plan and may cost up to 4 fragments = 0.01 Sink, inside the 0.05 bound) and in V8 (single provider from the
-start: the probe adds the source on an ingress-limited link); V-H4 supported everywhere except possibly where v1 makes
-no re-plan at all.
+Recorded predictions (from the design and the development regression, not from holdout data): V-H1 supported; V-H2
+supported in V4 and V5 (one probe + one move = 2 re-plans), uncertain in V2 (three providers); V-H3 uncertain in V3 /
+V6 (ingress drop with a probe: the probe is a re-plan and may cost up to 4 fragments = 0.01 Sink, inside the 0.05
+bound) and in V8 (single provider from the start: the probe adds the source on an ingress-limited link); **V-H4 expected
+NOT SUPPORTED in holder-degraded cells (V2, V4, V5)**: in the development cell 9 v2 bound 5.4 s after v1 because v1's
+false-positive re-plan had moved fragments to the source before the degradation (`m3v2_design.md` section 6); V-H4 is
+kept as written and judged as such.
 
 M3-v1's own verdicts on the same cells are reported with the same rules (descriptive for v1: its development is
 closed). No universal M3 claim: the paper's statement is per class, as for N.

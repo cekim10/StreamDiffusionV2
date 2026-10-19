@@ -98,6 +98,27 @@ occurred, and the single-provider rule re-attributed the holder at the next chec
 by its own flow's rate (confirm if >> the provider's estimate; withdraw and block re-probes otherwise; no decision
 while pending); unit tests `test_probe_cycle`. Round 1 directories are kept.
 
-Round 2: [GPU RESULTS 2]
+**Round 2 (commit 114799a; `m3dev_r2_cell*`, 2026-10-19): all four cells PASS** (`m3v2_gpu_regression_r2.md`).
 
-## 7. Freeze - [FREEZE RECORD]
+| cell | at moves bind / B_src | v1 bind / B_src / re-plans | v2 bind / B_src / re-plans |
+|---|---|---|---|
+| 7 incorrect x 0 | 15.67 s / 1.010 | 15.22 / 1.226 / 1 | **15.04 / 1.010 / 0** |
+| 8 incorrect x src | 15.06 / 1.000 | 18.64 / 1.027 / 3 | **15.03 / 1.000 / 0** |
+| 9 incorrect x hold | 113.10 / 1.000 | 15.01 / 1.450 / 3 | **20.42 / 1.423 / 2** (probe +10.3 s after the move, full move of 170 fragments +12.9 s) |
+| 10 incorrect x in | 118.04 / 1.000 | 114.28 / 1.226 / 27 | **117.67 / 1.010 / 1** (one probe, withdrawn) |
+
+Observations recorded before the holdout (development data): in cell 9 v2 binds 5.4 s later than v1. v1's early
+false-positive re-plan (+2.3 s, before the degradation) had already moved 93 fragments to the source, so when B's
+egress dropped it had less left; v2 reacts only after the drop is steady (~3 s), probes (4 fragments, 0.5 s cancel +
+transfer + resolution), then moves 170 fragments in one step and leaves B a capacity-balanced share (~12 fragments,
+6.4 s) - the cost of acting on evidence instead of on a wrong model. The holdout hypothesis V-H4 (v2 not worse than v1
+by more than 1.0 s) is therefore expected to fail in holder-degraded cells; it is kept as preregistered. In cell 10 v2
+costs one probe (0.01 Sink) and is 3.4 s slower than v1 (which paid 0.23 Sink for its 3.8 s gain through 27 re-plans).
+
+## 7. Freeze
+
+**FROZEN 2026-10-19** with `m3v2_holdout_plan.md` (record: `../m3v2_freeze.md`). Algorithm: `restore_planner.dyn_decide_v2`,
+`update_bottlenecks`, `fluid_eta`; harness: `mobility_orchestrate.Run.dyn_check_v2`. Parameters: v1's `dyn_period` 0.5 s,
+`dyn_window` 2 s, `dyn_warmup` 2 s, `dyn_eps` 2 s, `dyn_rel` 0.10, `dyn_ctrl` 0.3 s (unchanged); `min_frags` 8 per
+estimation span; margins 2 fragments per span; steadiness = window rates within 2 raw-window fragments; probe
+`dyn_probe` 4 fragments; anti-oscillation and probe blocking as in sections 2-3. Any later change is a dated amendment.
