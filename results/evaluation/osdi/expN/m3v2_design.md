@@ -17,7 +17,7 @@ the migration protocol, the fragment table, the state formats, the measurement (
 | switch if dT > ctrl + drain + max(eps, rel x eta_cur) | same hysteresis, applied to the **pessimistic gain** (current providers +1 fragment/span faster, new ones -1 slower); switching cost = ctrl + drain of every losing provider's in-flight fragment | 2 |
 | rates over one 2 s window, no notion of resolution | attribution uses rates averaged over a **span holding >= 8 fragments in aggregate** at the current ingress estimate (2 s at 1 Gbps, ~6 s at 62.5 Mbps); differences below **two fragments per span** are not evidence; downward revisions need a span without a transition (all window rates within two raw-window fragments) | 2 |
 | - | **anti-oscillation**: a re-plan that reverses the previous one is refused unless a bottleneck estimate changed by more than the resolution | 2 |
-| - | **single-provider probe**: when the only evidence for a provider bottleneck is one provider delivering below the ingress estimate (indistinguishable from an ingress drop), at most 4 fragments move; the next windows, with two providers, either confirm (aggregate rises: the rest moves) or withdraw the attribution (both share the aggregate: `I_est` drops, nothing else moves). Bounded cost: 4 fragments (0.01 Sink) | 1, 2 |
+| - | **single-provider probe**: when the only evidence for a provider bottleneck is one provider delivering below the ingress estimate (indistinguishable from an ingress drop), at most 4 fragments move to the source as a separate flow; **the probe flow's own rate decides**: delivered faster than the provider's estimated capacity + margin -> confirmed (the rest moves in one decision); otherwise withdrawn (`I_est` = the shared aggregate; the provider is not probed again until `I_est` rises above that value + margin). No decision while a probe is pending. Bounded cost: 4 fragments (0.01 Sink) per ingress state | 1, 2 |
 
 ## 2. Bottleneck estimator (`update_bottlenecks`), per check
 
@@ -90,6 +90,14 @@ Pass conditions, written before the run (a failure is a defect to fix before the
 | 10 incorrect x in | <= 1 re-plan (a probe), B_source <= at-moves + 0.05, bind within 1.0 s |
 | all | the trigger fired once at ceil(|S| / 2); valid by `wrn_validity`; every v2 re-plan record carries I_est, c_est, probe |
 
-Results: [GPU RESULTS]
+**Round 1 (commit 99b83a8; `m3dev_cell*`, 2026-10-19): cells 7 and 8 PASS, cells 9 and 10 FAIL.** Cell 7: v2 0 re-plans,
+B_source 1.010 (v1: 1 re-plan, 1.226); cell 8: v2 0 re-plans, bind 15.05 s (v1: 3 re-plans, 18.58 s). Cells 9 / 10: the
+probe fired every ~3 s (19 and 21 probes of 4 fragments = 0.19 / 0.20 Sink) and never resolved: a 4-fragment probe at
+1 Gbps completes in 0.13 s, so the "two providers, steady span" condition the estimator needed for a confirmation never
+occurred, and the single-provider rule re-attributed the holder at the next check. Fix (round 2): the probe is resolved
+by its own flow's rate (confirm if >> the provider's estimate; withdraw and block re-probes otherwise; no decision
+while pending); unit tests `test_probe_cycle`. Round 1 directories are kept.
+
+Round 2: [GPU RESULTS 2]
 
 ## 7. Freeze - [FREEZE RECORD]

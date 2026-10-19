@@ -123,6 +123,53 @@ def test_decisions():
     check("source degraded while A sends fragments B also holds: move (almost all of) them to B, none the other way", d is not None and set(d["assign"]) == {"B"} and len(d["assign"]["B"]) >= 80, f"{None if d is None else dict((k, len(v)) for k, v in d['assign'].items())}")
 
 
+def test_probe_cycle():
+    print("probe cycle (single-provider ambiguity)")
+    Bps = bps_to_Bps
+    held = {"A": set(range(412)), "B": set(range(299)), "C": set(), "D": set()}
+    actB = [{"src": "B", "left": set(range(30, 299)), "order": list(range(30, 299))}]
+    # cell-9 shape: A finished, B alone steady at 62 Mbps while I_est is the nominal 1 Gbps
+    st = {}
+    for i in range(6):
+        d = decide(st, actB, {"B": Bps(62e6)}, held, 20.0 + 0.5 * i)
+        if d is not None:
+            break
+    check("B alone below the ingress estimate: a probe of 4 fragments to A", d is not None and d["probe"] and set(d["assign"]) == {"A"} and len(d["assign"]["A"]) == 4 and d["probe_provider"] == "B", f"{None if d is None else (d['probe'], dict((k, len(v)) for k, v in d['assign'].items()))}")
+    st["probe_pending"] = {"provider": "B", "flow": "fx", "t": 23.0}
+    d2 = decide(st, actB, {"B": Bps(62e6)}, held, 23.5)
+    check("while the probe is pending: no decision", d2 is None)
+    st["probe_pending"] = None; st["probe_result"] = {"provider": "B", "rate": Bps(937e6), "duration_s": 0.14, "bytes": 4 * FLEN}
+    act2 = [{"src": "B", "left": set(range(30, 295)), "order": list(range(30, 295))}]
+    d3 = decide(st, act2, {"B": Bps(62e6)}, held, 24.0)
+    check("probe delivered at 937 Mbps (>> B's 62): confirmed, the rest moves to A in one decision", d3 is not None and not d3["probe"] and set(d3["assign"]) == {"A"} and len(d3["assign"]["A"]) >= 240, f"{None if d3 is None else (d3['probe'], dict((k, len(v)) for k, v in d3['assign'].items()), round(d3['eta_cur'], 1), round(d3['eta_new'], 1))}")
+    # cell-10 shape: ingress degraded to 62.5; B alone measures ~45; the probe shares the ingress (rate ~30)
+    st = {}
+    for i in range(6):
+        d = decide(st, actB, {"B": Bps(45e6)}, held, 20.0 + 0.5 * i)
+        if d is not None:
+            break
+    check("B alone at 45 Mbps: a probe", d is not None and d["probe"])
+    st["probe_pending"] = None; st["probe_result"] = {"provider": "B", "rate": Bps(30e6), "duration_s": 4.5, "bytes": 4 * FLEN}
+    n_dec = 0
+    for i in range(20):
+        d = decide(st, act2, {"B": Bps(45e6)}, held, 25.0 + 0.5 * i)
+        n_dec += d is not None
+    check("probe only shared the rate: withdrawn, I_est ~ 75 Mbps, no further decision over 20 checks", n_dec == 0 and st["I_est"] < Bps(90e6) and st["c_est"]["B"] == Bps(1e9), f"decisions {n_dec}, I_est {st['I_est'] * 8 / 1e6:.0f} Mbps, c_B {st['c_est']['B'] * 8 / 1e6:.0f}")
+    # confirmed provider whose re-started flow has not delivered yet (measured rate 0): the decision is not blocked
+    st5 = {}
+    for i in range(6):
+        d = decide(st5, actB, {"B": Bps(62e6)}, held, 20.0 + 0.5 * i)
+        if d is not None:
+            break
+    st5["probe_pending"] = None; st5["probe_result"] = {"provider": "B", "rate": Bps(937e6), "duration_s": 0.14, "bytes": 4 * FLEN}
+    d5 = decide(st5, act2, {"B": 0.0}, held, 24.0)
+    check("confirmed B with a re-started flow at measured rate 0: full move still decided (drain from the capacity estimate)", d5 is not None and not d5["probe"] and set(d5["assign"]) == {"A"}, f"{None if d5 is None else (d5['c_switch'], dict((k, len(v)) for k, v in d5['assign'].items()))}")
+    # ingress recovers: B alone now at 500 Mbps -> I_est rises (upward revision), later a real drop may be probed again
+    for i in range(6):
+        decide(st, act2, {"B": Bps(500e6)}, held, 40.0 + 0.5 * i)
+    check("ingress recovery raises I_est and unblocks", st["I_est"] > Bps(400e6) and "B" not in st["withdrawn"], f"I_est {st['I_est'] * 8 / 1e6:.0f}, withdrawn {st['withdrawn']}")
+
+
 def replay_cell(cell: int):
     """Replay a frozen run's measurement stream (orchestrator fragments.csv recv rows at the destination) through v2.
     The stream of the **at-moves** run (reuse_aware_in, which never re-plans) is exactly what v2 observes as long as v2 has
@@ -193,6 +240,6 @@ def test_replay():
 
 
 if __name__ == "__main__":
-    test_units(); test_fluid(); test_estimator(); test_decisions(); test_replay()
+    test_units(); test_fluid(); test_estimator(); test_decisions(); test_probe_cycle(); test_replay()
     print("FAILED:" if FAILS else "ALL PASS", FAILS)
     sys.exit(1 if FAILS else 0)

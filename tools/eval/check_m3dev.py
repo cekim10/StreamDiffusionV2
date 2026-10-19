@@ -35,10 +35,12 @@ def load(pattern):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--tag", default="", help="round tag used with run_wrn.py m3dev --tag")
     a = ap.parse_args()
+    tag = f"_{a.tag}" if a.tag else ""
     rows, allok = [], True
     for cell in (7, 8, 9, 10):
-        runs = load(str(ROOT / "results/evaluation" / (f"_dryrun__m3v2_cell{cell}" if a.dry else f"m3dev_cell{cell}") / "policy=*"))
+        runs = load(str(ROOT / "results/evaluation" / (f"_dryrun__m3v2_cell{cell}" if a.dry else f"m3dev{tag}_cell{cell}") / "policy=*"))
         if not {"reuse_aware_in", "reuse_dyn2"} <= set(runs):
             rows.append((cell, False, f"runs present: {sorted(runs)}")); allok = False; continue
         am, v2 = runs["reuse_aware_in"][1], runs["reuse_dyn2"][1]
@@ -67,7 +69,7 @@ def main():
     L = [f"# M3-v2 GPU regression on N cells 7-10 ({'LOOPBACK' if a.dry else 'GPU'}; development data, not evidence)", "", "| cell | pass | detail |", "|---|---|---|"]
     L += [f"| {c} {LABEL[c]} | {'PASS' if ok else '**FAIL**'} | {d} |" for c, ok, d in rows]
     L += ["", f"Overall: {'PASS' if allok else 'FAIL'}"]
-    out = ROOT / "results/evaluation/osdi/expN" / (("_dryrun_" if a.dry else "") + "m3v2_gpu_regression.md")
+    out = ROOT / "results/evaluation/osdi/expN" / (("_dryrun_" if a.dry else "") + f"m3v2_gpu_regression{tag}.md")
     out.write_text("\n".join(L) + "\n")
     print("\n".join(L))
     sys.exit(0 if allok else 1)

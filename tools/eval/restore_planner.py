@@ -386,6 +386,21 @@ def update_bottlenecks(state, rate, nom_out, nom_in, res, now=0.0, window=2.0, f
     I = state["I_est"]
     limited = []
     single = state.setdefault("single_attr", set())   # providers attributed from single-provider evidence (unconfirmed)
+    withdrawn = state.setdefault("withdrawn", {})       # provider -> I_est when its single-provider attribution was withdrawn
+    pr = state.pop("probe_result", None)
+    if pr is not None:
+        # the probe flow's own rate decides: a source that delivered much faster than the "limited" provider shows the
+        # provider's own egress is the bottleneck (confirmed); a probe that only shared the provider's rate shows the
+        # destination's ingress is (withdrawn: I_est = the shared aggregate, the provider is not re-probed until I_est rises)
+        p = pr["provider"]
+        if pr["rate"] > c.get(p, nom_out[p]) + margin:
+            state.setdefault("confirmed", set()).add(p); single.discard(p)
+            state["I_est"] = min(nom_in, max(I, c[p] + pr["rate"]))
+        else:
+            single.discard(p); c[p] = nom_out[p]
+            state["I_est"] = max(min(I, sm.get(p, 0.0) + pr["rate"]), res_eff)   # the shared aggregate = the ingress
+            withdrawn[p] = state["I_est"]
+        I = state["I_est"]
     if n >= 2:
         share = I / n
         limited = [p for p in pos if steady[p] and pos[p] < share - margin and any(pos[o] > share + margin for o in pos if o != p)]
@@ -395,10 +410,14 @@ def update_bottlenecks(state, rate, nom_out, nom_in, res, now=0.0, window=2.0, f
             single.clear()      # all dropped together: the ingress explains it; single-provider attributions are withdrawn
     elif n == 1:
         p = next(iter(pos))
-        if steady[p] and pos[p] < I - margin:
+        blocked = p in withdrawn and I <= withdrawn[p] + margin   # ingress explained it; nothing has changed since
+        if steady[p] and pos[p] < I - margin and not blocked:
             limited = [p]
             if p not in state.get("confirmed", set()):
                 single.add(p)
+    for p in list(withdrawn):
+        if I > withdrawn[p] + margin:
+            del withdrawn[p]   # the ingress estimate rose: the provider may be attributed (and probed) again
     stalled = [p for p in rate if sm[p] <= 0 and steady[p] and n >= 1]
     for p in rate:
         if p in limited:
@@ -419,7 +438,7 @@ def update_bottlenecks(state, rate, nom_out, nom_in, res, now=0.0, window=2.0, f
     state["n_pos"] = n
 
 
-def dyn_decide_v2(*, own, act, rate, state, now, held, nom_out, nom_in, flen, nodes, window, ctrl, eps, rel):
+def dyn_decide_v2(*, own, act, rate, state, now, held, nom_out, nom_in, flen, nodes, window, ctrl, eps, rel, probe_n=4):
     """M3-v2 re-planning decision for one session (bytes/s everywhere).
 
     act     active flows to `own`: dicts with src, left (set), order (list)
@@ -474,7 +493,8 @@ def dyn_decide_v2(*, own, act, rate, state, now, held, nom_out, nom_in, flen, no
     # the destination's ingress itself dropped, is indistinguishable without a second provider) is probed first: at most
     # `probe_n` of its fragments move; the next checks see two providers and either confirm the attribution (the
     # aggregate rises: the rest moves) or withdraw it (both share the same aggregate: I_est drops, nothing more moves)
-    probe_n = 4
+    if state.get("probe_pending"):
+        return None   # the probe's outcome decides the next step
     single = state.get("single_attr", set())
     losing = {next(q for q, ids in cur_prov.items() if f in ids) for f in moved}
     if losing and losing <= single and len(moved) > probe_n:
@@ -490,7 +510,9 @@ def dyn_decide_v2(*, own, act, rate, state, now, held, nom_out, nom_in, flen, no
     eta_cur_opt = fluid_eta(load_cur, c_opt, I, own)
     eta_new_pess = fluid_eta(load_new, c_pess, I, own)
     # switching cost: control delay + the in-flight fragment of every provider that loses fragments drains first
-    drain = max((flen / max(rate.get(q, 0.0), 1.0) for q in losing), default=0.0)
+    # drain of a losing provider's in-flight fragment: at its measured rate, or at its capacity estimate when it has not
+    # delivered in this window (a just re-started flow measures 0; v1 never reaches this case because it skips the check)
+    drain = max((flen / max(rate.get(q, 0.0), c.get(q, 0.0), res) for q in losing), default=0.0)
     resend = len(moved) * 0  # fragments move before they are sent (heads excluded): no duplicate payload by design
     c_switch = ctrl + drain + resend
     margin = max(eps, rel * eta_cur)
@@ -509,4 +531,5 @@ def dyn_decide_v2(*, own, act, rate, state, now, held, nom_out, nom_in, flen, no
         assign[p].append(f)
     state["last_replan"] = {"t": now, "pairs": pairs, "I_est": state["I_est"], "c_est": dict(c)}
     return {"assign": assign, "moved_from": sorted(losing), "eta_cur": eta_cur, "eta_new": eta_new, "eta_cur_opt": eta_cur_opt, "eta_new_pess": eta_new_pess,
-            "c_switch": c_switch, "margin": margin, "dT": dT, "I_est": I, "c_est": dict(c), "res": res, "probe": probe}
+            "c_switch": c_switch, "margin": margin, "dT": dT, "I_est": I, "c_est": dict(c), "res": res, "probe": probe,
+            "probe_provider": next(iter(losing)) if probe else None}

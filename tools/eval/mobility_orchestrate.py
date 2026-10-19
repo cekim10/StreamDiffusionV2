@@ -593,6 +593,15 @@ class Run:
         """M3-v2 (restore_planner.dyn_decide_v2): same measurement as v1 (verified bytes per provider over dyn_window),
         bottleneck-constrained ETA, joint re-assignment, resolution-aware hysteresis, anti-oscillation."""
         a, owner, flen = self.a, self.owner, self.manifest["frag_bytes"]
+        # a pending probe is resolved by its flow's own rate as soon as the flow has ended (before any other gate)
+        pend = self.dyn2_state.get("probe_pending")
+        if pend is not None:
+            pf = self.flows.get(pend["flow"])
+            if pf is not None and pf["t_end"] is not None:
+                dur = max(pf["t_end"] - pf["t_start"], 1e-3)
+                self.dyn2_state["probe_result"] = {"provider": pend["provider"], "rate": pf["bytes"] / dur, "duration_s": dur, "bytes": pf["bytes"]}
+                self.dyn2_state["probe_pending"] = None
+                self.ev.log("probe_result", now, provider=pend["provider"], flow=pend["flow"], bytes=pf["bytes"], duration_s=dur, rate_mbps=pf["bytes"] / dur * 8 / 1e6)
         if now - self.last_plan_t < a.dyn_warmup:
             return
         act = [fl for fl in self.flows.values() if fl["active"] and fl["dst"] == owner and fl["queue_left"]]
@@ -601,16 +610,17 @@ class Run:
         rate = {}
         for fl in act:
             q = self.flow_rx.get(fl["id"])
-            if not q:
-                return
-            while q and q[0][0] < now - a.dyn_window:
-                q.popleft()
+            if q:
+                while q and q[0][0] < now - a.dyn_window:
+                    q.popleft()
+            # a flow that has not delivered yet (just re-started) counts as 0 bytes/s: the estimator leaves zero-rate
+            # providers out of the aggregate and never attributes a capacity from a single window
             rate[fl["src"]] = rate.get(fl["src"], 0.0) + (sum(b for _, b in q) / a.dyn_window if q else 0.0)
         view = [{"src": fl["src"], "left": fl["queue_left"], "order": [f for f in fl["order"] if f in fl["queue_left"]] or sorted(fl["queue_left"]), "fl": fl} for fl in act]
         held = {e: self.holders.get(e, set()) for e in EDGES}
         nom_out = {n: bps_to_Bps(self.known_caps[("out", n)]) for n in EDGES}
         d = dyn_decide_v2(own=owner, act=view, rate=rate, state=self.dyn2_state, now=now, held=held, nom_out=nom_out, nom_in=bps_to_Bps(self.known_caps[("in", owner)]),
-                          flen=flen, nodes=list(EDGES), window=a.dyn_window, ctrl=a.dyn_ctrl, eps=a.dyn_eps, rel=a.dyn_rel)
+                          flen=flen, nodes=list(EDGES), window=a.dyn_window, ctrl=a.dyn_ctrl, eps=a.dyn_eps, rel=a.dyn_rel, probe_n=a.dyn_probe)
         if d is None:
             return
         t_dec = time.time()
@@ -635,6 +645,10 @@ class Run:
                 fl = self.start_flow(p_, owner, sorted(ids), True, f"replan v2: {len(ids)} fragments moved from {','.join(d['moved_from'])}", keep_order=True)
                 new_flows.append(fl["id"] if fl else None)
         self.last_plan_t = t_dec
+        if d.get("probe"):
+            self.dyn2_state["probe_pending"] = {"provider": d["probe_provider"], "flow": next((f for f in new_flows if f and self.flows[f]["src"] != d["probe_provider"]), None), "t": t_dec}
+            if self.dyn2_state["probe_pending"]["flow"] is None:
+                self.dyn2_state["probe_pending"] = None
         rec = {"t_s": self.rel_t(t_dec), "owner": owner, "from": ",".join(d["moved_from"]), "to": {p_: len(v) for p_, v in d["assign"].items()}, "moved_fragments": len(moved),
                "eta_cur_s": d["eta_cur"], "eta_new_s": d["eta_new"], "eta_cur_opt_s": d["eta_cur_opt"], "eta_new_pess_s": d["eta_new_pess"], "dT_s": d["dT"], "c_switch_s": d["c_switch"], "margin_s": d["margin"],
                "measured_rate_mbps": {k: v * 8 / 1e6 for k, v in rate.items()}, "I_est_mbps": d["I_est"] * 8 / 1e6, "c_est_mbps": {k: v * 8 / 1e6 for k, v in d["c_est"].items()},
@@ -1399,6 +1413,7 @@ def main():
     ap.add_argument("--dyn_period", type=float, default=0.5); ap.add_argument("--dyn_window", type=float, default=2.0)
     ap.add_argument("--dyn_warmup", type=float, default=2.0); ap.add_argument("--dyn_eps", type=float, default=2.0)
     ap.add_argument("--dyn_rel", type=float, default=0.10); ap.add_argument("--dyn_ctrl", type=float, default=0.3)
+    ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
     ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")
     ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")
     ap.add_argument("--pp_configs", type=str, default="", help="policy:placement pairs run in this order, e.g. 'split:none,split:top1,reuse_dyn:top1,reuse_dyn:oracle'")

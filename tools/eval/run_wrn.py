@@ -129,8 +129,33 @@ class Ctx:
                 p.kill()
         self.procs = []
 
+    def already_done(self, experiment: str, args: list[str]) -> bool:
+        """Single-configuration invocations (W2: --policies without --rhos / --pp_configs): skip the whole invocation,
+        including the node start, when every policy already has `reps` valid runs (the orchestrator's --skip_done only
+        checks after the nodes are up, ~2 min of model load per invocation)."""
+        if "--policies" not in args or "--rhos" in args or "--pp_configs" in args:
+            return False
+        pols = args[args.index("--policies") + 1].split(",")
+        reps = int(args[args.index("--reps") + 1]) if "--reps" in args else 1
+        root = ROOT / "results/evaluation" / (("_dryrun_" if self.dry else "") + experiment)
+        from wrn_validity import run_validity_wrn
+        for pol in pols:
+            n = 0
+            for d in root.glob(f"policy={pol}_*"):
+                try:
+                    if run_validity_wrn(json.load(open(d / "summary.json")), d, dry=self.dry)[0]:
+                        n += 1
+                except (OSError, ValueError, KeyError):
+                    pass
+            if n < reps:
+                return False
+        return True
+
     def orch(self, experiment: str, args: list[str], node_extra: list[str], what: str):
         """One orchestrator invocation (nodes start once; --skip_done resumes)."""
+        if self.already_done(experiment, args):
+            print(f"[wrn] skip {what}: every policy already has its valid runs", flush=True)
+            return 0
         self.wait_idle(what)
         cmd = [self.py, "tools/eval/mobility_orchestrate.py", "--experiment", experiment, "--skip_done", "--validity", "wrn", "--bw", self.bw] + args
         if self.dry:
@@ -138,7 +163,8 @@ class Ctx:
             pc = args[args.index("--post_chunks") + 1] if "--post_chunks" in args else "300"
             dry_extra = [x for x in node_extra if x in ("--sink_fp",)] + (["--dry_promote_calls", self.a.dry_promote] if self.a.dry_promote else [])
             self.dry_nodes(["--migration_chunk", m, "--post_chunks", pc] + dry_extra, "--hybrid_net" in args)
-            cmd += ["--dry_run", "--nodes", "A=127.0.0.1:29911:29912,B=127.0.0.1:29921:29922,C=127.0.0.1:29931:29932,D=127.0.0.1:29941:29942",
+            cmd += ["--dyn_probe", "1",   # 16-fragment fake Sink: a 4-fragment probe would be a quarter of it
+                    "--dry_run", "--nodes", "A=127.0.0.1:29911:29912,B=127.0.0.1:29921:29922,C=127.0.0.1:29931:29932,D=127.0.0.1:29941:29942",
                     "--net_nodes", "A=127.0.0.1:29951:29952,B=127.0.0.1:29961:29962,C=127.0.0.1:29971:29972,D=127.0.0.1:29981:29982", "--mss", "0"]
         else:
             # "=" form: a value that starts with "--" and has no space (e.g. "--sink_fp") would otherwise be parsed as an option
@@ -263,8 +289,9 @@ def v_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "split", "re
 
 
 def do_m3dev(c):
+    tag = f"_{c.a.tag}" if c.a.tag else ""
     for cell in (7, 8, 9, 10):
-        c.orch(f"m3dev_cell{cell}", n_args(c, cell, reps="1", policies=("reuse_aware_in", "reuse_dyn", "reuse_dyn2")), ["--sink_fp"], f"M3-v2 dev regression N cell {cell} ({N_LABEL[cell]})")
+        c.orch(f"m3dev{tag}_cell{cell}", n_args(c, cell, reps="1", policies=("reuse_aware_in", "reuse_dyn", "reuse_dyn2")), ["--sink_fp"], f"M3-v2 dev regression{tag} N cell {cell} ({N_LABEL[cell]})")
 
 
 def do_v(c):
@@ -337,6 +364,7 @@ def main():
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
     ap.add_argument("--wait_s", type=int, default=1800)
+    ap.add_argument("--tag", default="", help="m3dev: round tag (results in m3dev_<tag>_cell*; earlier rounds are kept)")
     ap.add_argument("--py", default=os.environ.get("PY") or (str(ROOT / ".venv/bin/python") if (ROOT / ".venv/bin/python").exists() else sys.executable))
     a = ap.parse_args()
     c = Ctx(a)
