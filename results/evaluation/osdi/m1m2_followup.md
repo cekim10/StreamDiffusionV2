@@ -132,3 +132,24 @@ instead of 412 x 4 MiB) dirtiness becomes exact at fragment granularity. Cost: o
 | A: recent-KV handoff at native bandwidth | **run the ablation** (40 runs, ~2.5 h) | +0.5 s per slot; the bird evidence and the 8 non-sustained W2 units make a sustained-recovery gain plausible but unproven |
 | B: exact reuse instrumentation + offline study | **GO** (cheap, no mechanism change) | the logs cannot give exact numbers; 720 checksums per call do |
 | B: version-aware wavefront implementation | **design only, not now** | the approximate numbers (>= 94 % reusable after 28 s for the median clip) justify the design; implementation would be a new mechanism with its own preregistration, after the M3-v2 holdout |
+
+## Decisions and constraints (user, 2026-10-19)
+
+Execution order: M3-v2 regression -> freeze -> V holdout -> Task A (native) -> Task B instrumentation.
+
+Task A: the native-network 40-run ablation first (5 workloads x 2 seeds x n in {0, 1, 2, 3} slots, policy OTTER
+event-driven, M = 34, horizon 100); the n = 0 baseline's TTFO is preserved (default path, byte-identical); the actual
+transferred bytes of the fast path are measured per run (not n x 575 MB assumed); success = sustained 10-call rejoin
+and terminal median PSNR, never a transient PSNR gain. **Consumption check:** the destination logs, at its first call,
+the K/V fingerprint and `pos` of each recent slot; they must equal the source's at the handoff (the transferred slots are
+in the live ring) and the first output must differ from the n = 0 run's (the slots were attended to) - a run failing
+either check is a harness fault, not a result.
+
+Task B: the 94 % figure is an **estimate from V-only fingerprints**, not a measurement. The exact study measures K and
+V block changes separately per (layer, key, row, slot) and per call, and attributes each change to Sink refresh
+(promotion: K and V of a slot change together, `pos` of the slot changes) or to key realignment (K changes, V and the
+slot's content identity do not, `pos` of every filled slot shifts by the same delta). **Canonicalized RoPE keys are not
+assumed bitwise equivalent:** re-rotation in bf16 is lossy; before any canonicalization is adopted, the exact study
+compares re-rotated keys with the source's keys at the same position (bitwise and max abs error) and the resulting
+outputs (PSNR against the uninterrupted reference), as the current bind already re-rotates and ExpD's bit-exactness of
+Full migration does not cover that path. No rolling synchronization is implemented.
