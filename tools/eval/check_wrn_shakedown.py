@@ -78,7 +78,7 @@ def main():
             add("W-b", False, "no node_B/baseline_record.json in the W2 OTTER run"); add("W-c", False, "no baseline record"); add("W-g", False, "no baseline record")
         else:
             n = min(164, len(brec), len(rows))
-            dig = sum(1 for c in range(n) if rows[c]["frame_digest"] != brec[c]["frame_digest"])
+            dig = sum(1 for c in range(n) if (rows[c]["frame_digest"] or None) != brec[c]["frame_digest"])   # '' in the CSV = no output (None)
             fpd = sum(1 for c in range(n) if json.loads(rows[c]["sink_vfp"]) != brec[c]["sink_vfp"])
             add("W-b", n == 164 and dig == 0, f"output-frame digests W1 vs node B baseline, calls 0-{n - 1}: {dig} differ")
             add("W-c", n == 164 and fpd == 0, f"value fingerprints W1 vs node B baseline, calls 0-{n - 1}: {fpd} differ")
@@ -88,7 +88,7 @@ def main():
         both = [c for c in range(1, len(rows)) if pos[c] != pos[c - 1] and fps[c] != fps[c - 1]]
         promo = [int(r["call"]) for r in rows if r["promotion"] == "True"]
         add("W-d", all(fps[c] != fps[c - 1] for c in promo), f"promotions {promo[:20]}{'...' if len(promo) > 20 else ''}; position-only changes (realignments, not counted) at {pos_only[:12]}; position+value changes at {both[:12]}"
-            + ("; NOTE promotion at call 1 (inspect: sink filling vs promotion)" if 1 in promo else ""))
+            + ("; NOTE value change at call 1 (sink filling, W Amendment 1: not counted)" if 1 in promo else ""))
         audit = {r["workload"]: r for r in json.load(open(ROOT / "results/evaluation/osdi/expW/loop_audit.json"))}
         cuts = [int(r["call"]) for r in rows if r["class"] == "cut"]
         add("W-e", cuts == audit["mbike-trick"]["cut_calls_0_329"], f"cut calls {cuts[:6]}... vs loop_audit {audit['mbike-trick']['cut_calls_0_329'][:6]}...")

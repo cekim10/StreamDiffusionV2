@@ -76,10 +76,12 @@ def call_classes(T: int, n: int) -> list[str]:
 def analyse(rec: list[dict], classes: list[str]) -> dict:
     """Promotions by cause and P_w (as fed / within-clip), preregistration section 4."""
     n = len(rec)
-    promo = [False] + [rec[c]["sink_vfp"] != rec[c - 1]["sink_vfp"] for c in range(1, n)]
+    # W Amendment 1 (2026-10-19): the third sink slot is written at call 1 (2-step Stream Batch), so a promotion is counted
+    # from call 2 on; the call-1 change is sink filling
+    promo = [False, False] + [rec[c]["sink_vfp"] != rec[c - 1]["sink_vfp"] for c in range(2, n)]
     boundary = {c for c in range(n) if classes[c] in ("cut", "adjacent")}
     cnt = lambda pred: (sum(1 for c in range(n) if pred(c) and promo[c]), sum(1 for c in range(n) if pred(c)))  # noqa: E731
-    fp_num, fp_den = cnt(lambda c: c >= 1 and classes[c] == "first_pass")
+    fp_num, fp_den = cnt(lambda c: c >= 2 and classes[c] == "first_pass")
     rp_num, rp_den = cnt(lambda c: c >= STAT_FROM and classes[c] == "repeated")
     bd_num, bd_den = cnt(lambda c: c >= STAT_FROM and c in boundary)
     cuts = [c for c in range(STAT_FROM, n) if classes[c] == "cut"]

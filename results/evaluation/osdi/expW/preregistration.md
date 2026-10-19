@@ -134,3 +134,17 @@ publication figure until its reuse permission is established.
 
 D1 M = 34 (loop arithmetic). D2 W-H2 primary over all 40 units; S1, S2 secondary; RVC diagnostic. D3 W-AR center-band
 crop, exploratory, 480x832.
+
+## Amendment 1 (2026-10-19, after the GPU shakedown, before any W measurement run; the frozen text above is unchanged)
+
+**Correctness of the promotion definition (section 4).** The frozen text says call 0 and the first batch fill the 3 sink
+slots, so promotions are counted from call 1. The GPU shakedown (mbike-trick seed 0, W1, commit c240ff7) shows that the
+third slot is written at **call 1**: at call 1 the value fingerprint of slot 2 changes in all 30 layers while every
+slot position stays [0, 1, 2], and nothing changes at calls 2-3 (with the 2-step Stream Batch, chunk 0's keys / values
+are committed one call later). Counting call 1 would classify sink filling as a promotion in every unit.
+**Correction:** promotions are counted from **call 2** on; the first-pass within-clip denominator is calls 2 .. end of
+first pass. Nothing else changes (P_w and its windows start at call 30; RVC is evaluated at calls >= c0 = 34; owner-side
+detection compares calls within one ownership of a transferred Sink). Implemented in `tools/eval/expw_w1.py` (analysis
+only; the recorded fingerprints are unchanged). Observation, not a rule change: a single refresh can change fingerprints
+on two consecutive calls (the two Stream-Batch rows are written one call apart, e.g. calls 4-5); the frozen per-call
+definition is kept, and runs of consecutive changed calls are reported descriptively next to it.
