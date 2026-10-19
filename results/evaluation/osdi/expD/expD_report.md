@@ -70,3 +70,16 @@ every run's nodes on one commit (validated per run).
    chunk (one VAE call per chunk; erratum).
 5. Scope: one Sink version per restoration, dog workload for repeated mobility (scope conditions 5-6); earlier frozen
    network-level outcomes (prereg section 0) stand unchanged.
+
+## Erratum (2026-10-19, appended after Experiment W; no result, criterion or run changed)
+
+Scope conditions 5-6 and section "Execution anomalies" item 5 rest on the audit "the dog clip shows no adaptive
+promotion over the measured window", made from the layer-0 sink-slot positions. Experiment W's per-layer value-cache
+fingerprints (`../expW/`, W1) show that adaptive refresh is decided per layer (`models/wan/causal_model.py`, each
+`self_attn` keeps its own eviction queue and cosine test) and that the dog clip promotes 16-18 times in 330 calls, 13 of
+them in layers other than layer 0 (calls 34, 60, 78, 82, 161, ... for seed 0). The layer-0 position audit therefore
+under-detected promotions. **No Experiment D run is affected:** in all 69 repeated-mobility runs (scenarios B, E, F, G)
+no intermediate owner bound the Sink before it was left (T_m 3.5-7 s < the ~15 s restoration), so no holder ever held a
+stale version; the single-version assumption held in the data by timing, not by the absence of promotions. The scope
+statement must be read as "no owner generated on a bound Sink before being left", and the frequency of promotions is
+now measured (W1), not assumed.
