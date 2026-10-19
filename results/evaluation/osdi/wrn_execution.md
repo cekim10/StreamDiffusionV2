@@ -33,7 +33,13 @@ Frozen plan: `followup_prereg_freeze.md` (freeze commit 4001882, 2026-10-18T23:2
   planner caps unchanged; R c = 0 rho 0.5 (split B_source 1.00 with B_fwd 1.00 from a bound owner; restart 3.00 = 1 + 2
   min(1, 1/rho)); an injected promotion at an intermediate owner counted before the final bind; a forced N timeout kept
   with censoring fields.
-- Full matrix loopback (`run_wrn.py all --dry`): see section "Loopback full matrix" below.
+- **Full matrix loopback** (`run_wrn.py all --dry`, 2026-10-18 16:58-19:1x, ~2.3 h): all 56 orchestrator invocations
+  exit 0; runs produced W1 40 + W-AR W1 4, W2 80, R 90, N 90, W-AR W2 8 (= the frozen 312); every N degraded cell's
+  trigger fired; the aggregator reaches a verdict or a stated NOT EVALUABLE reason in every cell
+  (`_dryrun_wrn_results.md`). The two dog seed-0 W2 runs are invalid ("nodes on different commits": a commit was pushed
+  while they ran), which exercises the commit check. **The dry verdicts are not results**: the fake Sink has 16 fragments
+  (one fragment = 0.0625 Sink), so byte criteria are quantized far beyond the thresholds' resolution, and PSNR values are
+  synthetic. Operational note: do not commit on the testbed while a sweep runs.
 
 ## Testbed procedure (elves-01, repo root, agents running on all four hosts)
 
