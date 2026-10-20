@@ -1,0 +1,35 @@
+[ablation] baseline: 110 calls, M=30, k=2
+[ablation] adaptive sink refresh fired at calls [4, 48, 93]; last before M: 4
+[ablation] baseline done in 61 s; 109 calls with output
+[ablation] baseline SSIM vs input (M on): 0.4025901347398758
+[ablation] config drop_inflight
+  drop_inflight: call 30 (M+0) psnr 10.0
+  drop_inflight: call 31 (M+1) psnr 21.2
+  drop_inflight: call 34 (M+4) psnr 28.2
+  drop_inflight: call 46 (M+16) psnr 36.4
+[ablation] config drop_kv_recent
+  drop_kv_recent: call 30 (M+0) psnr 23.0
+  drop_kv_recent: call 31 (M+1) psnr 22.1
+  drop_kv_recent: call 34 (M+4) psnr 25.5
+  drop_kv_recent: call 46 (M+16) psnr 46.1
+[ablation] config drop_vae_all
+  drop_vae_all: call 30 (M+0) psnr 19.4
+  drop_vae_all: call 31 (M+1) psnr 24.3
+  drop_vae_all: call 34 (M+4) psnr 29.0
+  drop_vae_all: call 46 (M+16) psnr 45.8
+[ablation] config ph_localrefresh
+  ph_localrefresh: call 30 (M+0) psnr 29.4
+  ph_localrefresh: call 31 (M+1) psnr 23.4
+  ph_localrefresh: call 34 (M+4) psnr 19.5
+  ph_localrefresh: call 46 (M+16) psnr 18.1
+[ablation] config xfer_sink+meta+inflight
+  xfer_sink+meta+inflight: call 30 (M+0) psnr 18.1
+  xfer_sink+meta+inflight: call 31 (M+1) psnr 19.6
+  xfer_sink+meta+inflight: call 34 (M+4) psnr 24.5
+  xfer_sink+meta+inflight: call 46 (M+16) psnr 45.5
+[ablation] done -> results/state_migration/fig23_same_run/dragonB_dog_s1_k2/ablation_summary.md
+  drop_inflight          withheld       0 MB  PSNR M+0..3  20.0  M+16..  33.9  recovery None
+  drop_kv_recent         withheld    1645 MB  PSNR M+0..3  23.1  M+16..  46.9  recovery None
+  drop_vae_all           withheld    2871 MB  PSNR M+0..3  23.0  M+16..  45.9  recovery None
+  ph_localrefresh        withheld    1645 MB  PSNR M+0..3  23.4  M+16..  18.9  recovery None
+  xfer_sink+meta+inflight withheld    4604 MB  PSNR M+0..3  19.6  M+16..  45.5  recovery None
