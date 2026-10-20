@@ -1,8 +1,10 @@
-# Experiment RD - visual recovery diagnosis: preregistration DRAFT (2026-10-20)
+# Experiment RD - visual recovery diagnosis: preregistration (2026-10-20)
 
-Status: **DRAFT, not frozen. Nothing implemented, nothing run.** Frozen results (ExpD, W / R / N, V, A, B, VACW) are
-used only as prior evidence and as fidelity targets; none is modified. Open decisions are listed in section 11 and must
-be closed before the freeze.
+Status: **FROZEN** (freeze record `../expRD_freeze.md`). Draft 4c5aa5e revised before the freeze with the user's
+decisions D1-D5 (section 11) and six clarifications (r3e interpretation, withheld-Sink preservation in r3c, meaning of
+d = 0, Phase 1 run count 100, unchanged hypotheses / thresholds / rules, Phase 0 gate 5 / 5). Nothing implemented or run
+at the freeze. Frozen results (ExpD, W / R / N, V, A, B, VACW) are used only as prior evidence and as fidelity targets;
+none is modified.
 
 ## 1. Question
 
@@ -40,8 +42,12 @@ RoPE re-rotation to the live positions, refresh re-enabled), exactly as `_become
 
 The Sink snapshot rebound at b is, by default, the **withheld Sink**: the Sink packed at the reset that opened the
 current Sink-less episode (the session's own Sink at that moment). For a contiguous window this is also the trigger
-snapshot, so freshness does not vary within Phase 1. (Phase 0 additionally replays the stale variant: the trigger
-snapshot rebound in every episode, as frozen `split` does at rho 0.5.)
+snapshot, so freshness does not vary within Phase 1. **Within one Sink-less episode the withheld Sink is packed once,
+at the episode's first reset, and kept as host bytes until its bind; a later reset inside the same episode (r3c) never
+packs a Sink from the intermediate Sink-less session** (whose Sink region is zero), exactly as in VACW rho 1, where
+the Sink restored at D is the one packed at the trigger. The runner asserts this (the bound payload's SHA-256 equals the
+one packed at the episode's first reset). (Phase 0 additionally replays the stale variant: the trigger snapshot rebound
+in every episode, as frozen `split` does at rho 0.5.)
 
 What the emulation removes: network transfer and its timing jitter (calls of reset and bind are exact), separate
 processes and hosts, concurrent transfer threads, the warm-destination provisioning before the trigger (here done at
@@ -53,8 +59,10 @@ against real runs before it is used (Phase 0) and after (Phase 2); it is not ass
 Notation: d = total Sink-less calls before the final bind b; resets R = {t_1, ...}; binds B = {..., b}.
 
 ### 3.1 Sink-less duration d
-{0, 25, 50, 75, 100} calls (as instructed). d = 0 means the Sink is bound at the reset call itself (the real case of a
-Sink already verified at the destination when execution arrives); only the recent KV / VAE state is reset.
+{0, 10, 25, 50, 75, 100} calls under r1 (d = 10 added by D1); {25, 50, 75, 100} under r3c; {0, 75} under r3e.
+**d = 0 is "immediate Sink bind after an M1 reset"**: the Sink is rebound at the reset call itself (the real case of a
+Sink already verified at the destination when execution arrives), while the recent KV and VAE state are reset. It is
+not uninterrupted execution and is never described as such; the uninterrupted run is the PSNR reference.
 
 ### 3.2 Reset structure (the reset count never changes d)
 
@@ -67,6 +75,13 @@ Sink already verified at the destination when execution arrives); only the recen
 g = 25 bound calls between episodes (VACW rho 0.5: 23-24). r3c resets are equally spaced, mirroring equal T_m.
 r3c is defined for d >= 25 only; r3e for d in {0, 75} only (d = 0: three resets with the Sink rebound at each reset;
 d = 75: three 25-call episodes).
+
+**What each comparison isolates.** r1 vs r3c at the same d and anchor changes only the number of resets inside one
+Sink-less window (same d, same final bind call, same withheld Sink): this is the reset-count contrast used by the
+hypotheses. **r3e vs r3c does not isolate the reset count**: r3e also rebinds the Sink between episodes, generates g
+bound calls twice (with its own refreshes and promotions), rebinds a fresher Sink in later episodes, and spans
+d + 2g calls. r3e is therefore a **descriptive episodic comparison** (it reproduces the structure of the VACW rho 0.5
+failure) and never enters the D / R / I / E rules.
 
 ### 3.3 Bind anchors (absolute call of the final bind)
 
@@ -105,9 +120,11 @@ Seed 0 only (seed 1 would double the cost; see D5).
 ### 5.2 No-reference temporal consistency (secondary, descriptive; never decides a hypothesis)
 Computed on the decoded output frames O, the reference output frames R and the input frames I at the same frame
 indices, over three windows (Sink-less window, first 20 calls after b, last 10 calls of H):
-- **input-motion-conditioned warp error**: flow F_t from I_t to I_{t+1} (OpenCV Farneback on 1/4-resolution grayscale;
-  D4); E_X = mean |X_{t+1} - warp(X_t, F_t)| for X in {O, R}; report **E_O / E_R** (the migrated stream against the
-  uninterrupted one under the input's own motion);
+- **input-motion-conditioned warp error**: dense flow F_t from I_t to I_{t+1} (OpenCV Farneback, fixed parameters
+  pyr_scale 0.5, levels 3, winsize 15, iterations 3, poly_n 5, poly_sigma 1.2, on 1/4-resolution grayscale; D4);
+  E_X = mean over pixels whose warped position lies inside the frame of |X_t - X_{t+1} warped back to t along F_t|
+  (`cv2.remap`, bilinear), for X in {O, R}; report **E_O / E_R** (the migrated stream against the uninterrupted one
+  under the input's own motion);
 - **motion magnitude ratio**: mean |O_{t+1} - O_t| / mean |R_{t+1} - R_t| (detects a static or frozen output);
 - **event spikes**: frame difference at each reset and bind transition divided by the median of the 8 preceding
   transitions.
@@ -139,9 +156,9 @@ last 10 common post-bind calls when shorter than H), and median per-call |dPSNR|
 calls. **Gate: 5 / 5 pass, else stop** (section 8).
 
 ### Phase 1 - cause separation (emulation)
-Per workload and anchor: r1 at d in {0, 25, 50, 75, 100} (5), r3c at d in {25, 50, 75, 100} (4), r3e at d in {0, 75}
-(2) = 11 conditions; 4 workloads x 2 anchors = **88 runs**, one run per condition (the runtime is deterministic: VACW
-reps agree to 0.1 dB; checked below), plus **4 determinism repeats** (r1, d = 75, b1, every workload).
+Per workload and anchor: r1 at d in {0, 10, 25, 50, 75, 100} (6), r3c at d in {25, 50, 75, 100} (4), r3e at d in
+{0, 75} (2) = 12 conditions; 4 workloads x 2 anchors = 96 runs, one run per condition (the runtime is deterministic:
+VACW reps agree to 0.1 dB; checked below), plus 4 determinism repeats (r1, d = 75, b1, every workload) = **100 runs**.
 
 ### Phase 2 - real-migration validation (after Phase 1 analysis and the user's approval)
 Real 4-host harness, warm destinations, frozen M1 + M2 (`split`; no owner binds before it is left, so Sink content =
@@ -215,7 +232,10 @@ only, with the disagreement.
 
 - Run validity: reference digest of the uninterrupted prefix identical up to t_1 (99 dB); every reset and bind at its
   scheduled call; no missing call; GPU 0 idle before the run; nodes / process on the frozen commit.
-- **Stop S1:** any Phase 0 target fails -> no Phase 1 run; diagnose; a dated amendment before anything else.
+- **Stop S1:** any Phase 0 target fails -> no Phase 1 run; the mismatch is reported and its cause investigated (GPU
+  execution order, state initialization, schedule, reference); a dated amendment before anything else. A failed target
+  by itself (e.g. a > 1 dB terminal difference) is reported as a mismatch of this implementation, not as evidence that
+  in-place emulation is unsound in principle.
 - **Stop S2:** a determinism repeat differs from its first run by median |dPSNR| > 0.5 dB -> stop; the pre-specified
   fallback is 3 runs per condition with the median T and majority outcomes (cost x 3), started only after the user's
   approval.
@@ -229,28 +249,28 @@ only, with the disagreement.
 | phase | runs | per run | GPU time | wall (4 GPUs) |
 |---|---|---|---|---|
 | 0 replay | 5 | 1.5-3 min (133-250 calls) | ~0.2 h | ~5 min |
-| 1 emulation | 88 + 4 | ~2.7 min (255 / 275 calls at 0.556 s + resets + PSNR / metrics) | ~4.2 h | ~1.1-1.3 h (+ model load per worker) |
+| 1 emulation | 96 + 4 | ~2.4 min (calls 0 .. b + 99 at 0.556 s + resets + PSNR / metrics; one baseline per workload) | ~4.2 h | ~1.1-1.3 h (one workload per host) |
 | 2 real | 18 | ~4-5 min | - | ~1.5 h |
 | 2 replays | 9 | ~2.5 min | ~0.4 h | ~10 min |
-| **total** | **124** | | | **~3-3.5 h** |
+| **total** | **132** | | | **~3-3.5 h** |
 
 Implementation (not started): an emulation runner reusing `GpuRuntime` (no new mechanism), the schedule table, the
 section 5.2 metric module (OpenCV), a Phase 0 replay checker and an aggregator; one CPU / dry test of the schedule logic
 before any GPU run.
 
-## 11. Open decisions (close before the freeze)
+## 11. Decisions (closed 2026-10-20, before the freeze)
 
-- **D1** - add d = 10 under r1 (+8 runs)? Prior evidence puts butterfly's sustained-recovery transition below 25
-  calls (A ~4: sustained; W2 24: not sustained). Without it the duration curve's knee may fall between 0 and 25.
-  Recommended: add.
-- **D2** - keep r3e (22 of the 88 runs)? It is the structure of the rho 0.5 failure; without it RD cannot say whether
-  episodic resets with intermediate binds behave like a contiguous window. Recommended: keep (only at d = 0, 75).
-- **D3** - second refresh-heavy workload(s): audi-snow-trail s0 and train s0 (current), or circus-ball-act s0 instead
-  of one of them. Train is the only refresh-heavy repo clip (usable in figures).
-- **D4** - flow estimator for 5.2: OpenCV Farneback (no model download; availability on the testbed to be checked
-  during implementation) vs RAFT (needs weights). Recommended: Farneback.
-- **D5** - seed 1 for butterfly (+22 runs) to separate a seed-specific trajectory from a clip property. Recommended:
-  only if Phase 1 butterfly is UNCLASSIFIED.
+- **D1** - d = 10 added under r1 (+8 runs; Phase 1 = 100 runs): the sustained-recovery transition for butterfly may lie
+  between 0 and 25 Sink-less calls (A ~4: sustained; W2 24: not sustained).
+- **D2** - r3e kept as a descriptive episodic comparison (section 3.2); it never enters the hypothesis rules.
+- **D3** - workloads butterfly-feeding-slow-motion, audi-snow-trail, train (refresh-heavy) and dog (control), seed 0.
+- **D4** - OpenCV Farneback for the section 5.2 flow (no model download). OpenCV is not a declared dependency of the
+  repository: availability on the four hosts is checked by the driver's preflight before Phase 0; if it is missing,
+  installing `opencv-python-headless` into the hosts' environment needs the user's approval, and Phase 0 / 1 do not
+  start without it.
+- **D5** - seed 1 excluded from the initial experiment. If Phase 1 leaves butterfly UNCLASSIFIED, a seed-1 run may be
+  proposed as a separate exploratory experiment; its results are never merged into the verdicts of this
+  preregistration.
 
 ## 12. Recorded predictions (before any data)
 
