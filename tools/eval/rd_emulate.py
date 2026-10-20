@@ -144,7 +144,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workload", required=True)
     ap.add_argument("--seed", type=int, default=rs.SEED)
-    ap.add_argument("--phase", type=int, choices=[0, 1], required=True)
+    ap.add_argument("--phase", choices=["0", "1", "x"], required=True, help="x = RD-X replays given with --replay_json")
+    ap.add_argument("--replay_json", default="", help="RD-X: JSON list of replay conditions (realized schedules of real runs)")
     ap.add_argument("--only", default="", help="comma list of condition ids (re-runs)")
     ap.add_argument("--gpu_id", type=int, default=0)
     ap.add_argument("--loveu_dir", default=None)
@@ -153,7 +154,10 @@ def main():
     ap.add_argument("--no_metrics", action="store_true", help="skip the section 5.2 metrics (dry runs)")
     ap.add_argument("--dry_promote_calls", default="", help="dry run only: calls at which a bound fake Sink changes (tests fresh vs withheld vs trigger Sinks)")
     a = ap.parse_args()
-    conds = rs.phase0(a.workload) if a.phase == 0 else rs.phase1(a.workload)
+    if a.phase == "x":
+        conds = [dict(c, workload=a.workload, seed=a.seed) for c in json.loads(a.replay_json)]
+    else:
+        conds = rs.phase0(a.workload) if a.phase == "0" else rs.phase1(a.workload)
     if a.only:
         keep = set(a.only.split(",")); conds = [c for c in conds if c["id"] in keep]
     if not conds:

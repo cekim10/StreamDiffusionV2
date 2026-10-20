@@ -72,6 +72,18 @@ def phase0(w: str | None = None) -> list[dict]:
     return out
 
 
+RDX_WORKLOADS = ("butterfly-feeding-slow-motion", "audi-snow-trail", "dog")   # followup_rdx.md (exploratory)
+
+
+def replay_from_run(summary: dict, cid: str) -> dict:
+    """RD-X: an emulation replay of a real single-move run with its realized schedule (move call, destination bind call)."""
+    reset = int(summary["moves"][0]["call"])
+    b = int(summary["final"]["bind_call"])
+    c = _cond("x", None, "replay", b - reset, b, [reset], [b], cid=cid)
+    c["real_run"] = summary.get("run_id")
+    return c
+
+
 def sinkless_calls(cond: dict) -> list[int]:
     """Calls generated without a bound Sink after the first reset (an episode runs from a reset to the next bind)."""
     out, open_ = [], None

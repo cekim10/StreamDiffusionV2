@@ -63,12 +63,12 @@ def preflight(a) -> bool:
     return not bad
 
 
-def run_units(a, phase: int, plan: dict) -> None:
+def run_units(a, phase, plan: dict, extra: dict | None = None) -> None:
     """plan: {host: (workload, [condition ids] or None)}; one process per host; results copied back to A; invalid
     conditions re-run (<= 2 times)."""
     if a.dry:
         for lb, (w, ids) in plan.items():
-            cmd = [sys.executable, "tools/eval/rd_emulate.py", "--workload", w, "--phase", str(phase), "--dry_run"] + (["--only", ",".join(ids)] if ids else [])
+            cmd = [sys.executable, "tools/eval/rd_emulate.py", "--workload", w, "--phase", str(phase), "--dry_run"] + (["--only", ",".join(ids)] if ids else []) + list((extra or {}).get(w, []))
             subprocess.run(cmd, cwd=ROOT, check=True)
         return
     ags = agents(a.agent_hosts)
@@ -76,7 +76,7 @@ def run_units(a, phase: int, plan: dict) -> None:
 
     def one(lb, w, ids, attempt):
         ag = ags[lb]
-        cmd = [PY, "tools/eval/rd_emulate.py", "--workload", w, "--phase", str(phase), "--gpu_id", "0", "--loveu_dir", LOVEU_DIR] + (["--only", ",".join(ids)] if ids else [])
+        cmd = [PY, "tools/eval/rd_emulate.py", "--workload", w, "--phase", str(phase), "--gpu_id", "0", "--loveu_dir", LOVEU_DIR] + (["--only", ",".join(ids)] if ids else []) + list((extra or {}).get(w, []))
         pid = ag.run(cmd, f"{LOG}/rd_phase{phase}_{w}_{lb}{'_rerun' + str(attempt) if attempt else ''}.log")
         rc = ag.wait(pid, timeout=4 * 3600).get("rc")
         print(f"[rd] phase {phase} {w} on {lb}{' re-run ' + str(attempt) if attempt else ''}: rc {rc}", flush=True)
@@ -95,7 +95,7 @@ def run_units(a, phase: int, plan: dict) -> None:
     def worker(lb, w, ids):
         one(lb, w, ids, 0)
         for attempt in (1, 2)[:MAX_RERUNS]:
-            want = ids or [c["id"] for c in (rs.phase0(w) if phase == 0 else rs.phase1(w))]
+            want = ids or [c["id"] for c in (rs.phase0(w) if str(phase) == "0" else rs.phase1(w))]
             done = {}
             for p in (ROOT / root / f"{w}_s{rs.SEED}").glob("*/summary.json"):
                 s = json.load(open(p)); done[s["condition"]["id"]] = done.get(s["condition"]["id"], False) or bool(s.get("valid"))
@@ -109,6 +109,33 @@ def run_units(a, phase: int, plan: dict) -> None:
         t.start()
     for t in th:
         t.join()
+
+
+RDX_HOSTS = {"A": "butterfly-feeding-slow-motion", "B": "audi-snow-trail", "C": "dog"}
+
+
+def rdx(a):
+    """RD-X (osdi/expRD/followup_rdx.md, exploratory): 6 real one-hop runs at 320 Mbps, then one emulation replay per
+    run with its realized schedule, then the comparison table."""
+    import run_wrn
+    c = run_wrn.Ctx(argparse.Namespace(dry=a.dry, py=sys.executable if a.dry else PY, agent_hosts=a.agent_hosts, wait_s=1800, dry_promote="", tag="", cells=""))
+    c.bw = "32" if a.dry else "320"   # dry: 64 MB fake Sink, the same ~80 Sink-less calls as 1.6 GB at 320 Mbps
+    args = ["--policies", "split", "--hops", "1", "--tm", "1e9", "--reps", "1" if a.dry else "2", "--migration_chunk", "80", "--post_chunks", "200",
+            "--horizon_calls", "190", "--max_run_s", "600"]
+    for w in rs.RDX_WORKLOADS:
+        c.orch(f"expRDX_{w}", args, run_wrn.node_extra(w, rs.SEED), f"RD-X {w} one hop {c.bw} Mbps")
+    plan, extra = {}, {}
+    for lb, w in RDX_HOSTS.items():
+        conds = []
+        for d in sorted((ROOT / "results/evaluation" / f"{'_dryrun_' if a.dry else ''}expRDX_{w}").glob("policy=split_*")):
+            s = json.load(open(d / "summary.json"))
+            if s["final"]["bind_call"] is None:
+                print(f"[rd] RD-X {d.name}: no bind observed; no replay", flush=True); continue
+            conds.append(rs.replay_from_run(s, f"RX_{w}_rep{s['rep']}"))
+        if conds:
+            plan[lb] = (w, [x["id"] for x in conds]); extra[w] = ["--replay_json", json.dumps(conds)]
+    run_units(a, "x", plan, extra)
+    subprocess.run([sys.executable, "tools/eval/aggregate_rd.py", "rdx"] + (["--dry"] if a.dry else []), cwd=ROOT, check=False)
 
 
 def phase0(a) -> bool:
@@ -128,12 +155,16 @@ def phase1(a):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["preflight", "phase0", "phase1", "all"])
+    ap.add_argument("what", choices=["preflight", "phase0", "phase1", "all", "rdx"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--agent_hosts", default=None)
     a = ap.parse_args()
     if a.what == "preflight":
         sys.exit(0 if preflight(a) else 1)
+    if a.what == "rdx":
+        if not preflight(a):
+            sys.exit(1)
+        rdx(a); return
     if a.what in ("phase0", "all"):
         if not preflight(a):
             sys.exit(1)

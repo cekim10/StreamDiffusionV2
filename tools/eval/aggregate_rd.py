@@ -33,7 +33,7 @@ def fnum(x):
         return None
 
 
-def load_runs(phase: int, dry: bool) -> dict:
+def load_runs(phase, dry: bool) -> dict:
     """{(workload, condition id): {"dir", "summary", "psnr", "valid", "all_dirs"}} (latest valid, else latest)."""
     root = ROOT / "results/evaluation" / f"{'_dryrun_' if dry else ''}expRD_phase{phase}"
     out = {}
@@ -210,13 +210,67 @@ def phase1(dry: bool) -> dict:
     return out
 
 
+# ----------------------------------------------------------------------------- RD-X (exploratory follow-up; no verdict)
+def rdx(dry: bool) -> dict:
+    from wrn_validity import run_validity_wrn
+    em, p1 = load_runs("x", dry), load_runs(1, dry)
+    rows = []
+    for w in rs.RDX_WORKLOADS:
+        for d in sorted((ROOT / "results/evaluation" / f"{'_dryrun_' if dry else ''}expRDX_{w}").glob("policy=split_*")):
+            if not (d / "summary.json").exists():
+                continue
+            s = json.load(open(d / "summary.json"))
+            ok, bad = run_validity_wrn(s, d, dry=dry)
+            fin = s["path"][-1]
+            psr = {int(r["call"]): fnum(r["psnr"]) for r in csv.DictReader(open(d / "metrics.csv", newline="")) if r["owner"] == fin}
+            reset, b = s["moves"][0]["call"], s["final"]["bind_call"]
+            r = {"workload": w, "rep": s["rep"], "real_run": str(d.relative_to(ROOT)), "valid": ok, "invalid_reasons": bad, "reset_call": reset, "bind_call": b,
+                 "sinkless_calls": None if b is None else b - reset, "bind_after_move_s": s["latency_after_final_move_s"]["sink_bind"],
+                 "ttfo_s": s["latency_after_final_move_s"]["first_output"]}
+            if b is None:
+                r["note"] = "no bind observed"; rows.append(r); continue
+            r["real"] = rm.trajectory(psr, b)
+            r["real_gap_psnr"] = rm.gap_psnr(psr, range(reset, b))
+            e = em.get((w, f"RX_{w}_rep{s['rep']}"))
+            ctx = p1.get((w, "b155_r1_d75"))
+            r["phase1_context_b155_r1_d75"] = None if not ctx else ctx["summary"]["trajectory"]
+            if e is None:
+                r["replay"] = None; rows.append(r); continue
+            sch_ok = e["summary"]["condition"]["resets"] == [reset] and e["summary"]["condition"]["binds"] == [b]
+            common = {c for c in range(b, b + rs.H) if psr.get(c) is not None and e["psnr"].get(c) is not None}
+            dif = [abs(psr[c] - e["psnr"][c]) for c in sorted(common)]
+            te, tr = rm.trajectory(e["psnr"], b, common), rm.trajectory(psr, b, common)
+            r["replay"] = {"dir": e["dir"], "valid": e["valid"], "schedule_matches": sch_ok, "n_common": len(common), "real_common": tr, "emul_common": te,
+                           "same_crossing": tr["crossed"] == te["crossed"], "same_sustained": tr["sustained"] == te["sustained"],
+                           "abs_dT": None if tr["T"] is None or te["T"] is None else abs(tr["T"] - te["T"]),
+                           "median_abs_dpsnr": st.median(dif) if dif else None, "max_abs_dpsnr": max(dif) if dif else None}
+            rows.append(r)
+    out = {"dry": dry, "exploratory": True, "runs": rows}
+    stem = "_dryrun_rdx_results" if dry else "rdx_results"
+    (OUT / f"{stem}.json").write_text(json.dumps(out, indent=1, default=str))
+    f = lambda x, n=2: "-" if x is None else f"{x:.{n}f}"  # noqa: E731
+    L = [f"# RD-X: one hop at 320 Mbps vs emulation replay (EXPLORATORY; no verdict){' (DRY RUN)' if dry else ''}", "",
+         "| workload | rep | valid | reset / bind call (d) | bind after move (s) | real: T / crossed / sustained | replay: same crossing / sustained, abs dT, median / max abs dPSNR | Phase 1 r1 d75 b155 T |",
+         "|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        rp, re_, cx = r.get("replay"), r.get("real") or {}, r.get("phase1_context_b155_r1_d75") or {}
+        rtxt = "-" if not rp else f"{rp['same_crossing']} / {rp['same_sustained']}, {f(rp['abs_dT'])}, {f(rp['median_abs_dpsnr'])} / {f(rp['max_abs_dpsnr'])}"
+        L.append(f"| {r['workload']} | {r['rep']} | {r['valid']} | {r['reset_call']} / {r['bind_call']} ({r['sinkless_calls']}) | {f(r['bind_after_move_s'])} | "
+                 f"{f(re_.get('T'))} / {re_.get('crossed')} / {re_.get('sustained')} | {rtxt} | {f(cx.get('T'))} |")
+    (OUT / f"{stem}.md").write_text("\n".join(L) + "\n")
+    print("\n".join(L))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["phase0", "phase1"])
+    ap.add_argument("what", choices=["phase0", "phase1", "rdx"])
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args()
     if a.what == "phase0":
         sys.exit(0 if phase0(a.dry) else 2)
+    if a.what == "rdx":
+        rdx(a.dry); return
     phase1(a.dry)
 
 

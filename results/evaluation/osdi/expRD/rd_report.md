@@ -3,7 +3,7 @@
 Frozen preregistration `preregistration.md` (f850072; freeze record `../expRD_freeze.md`), implementation 24ad330. Runs
 on elves-01..04 GPU 0 (commit 454cc03): Phase 0 5 runs, Phase 1 100 runs (`results/evaluation/expRD_phase{0,1}/`),
 **105 / 105 valid, no re-run**. Verdicts by `tools/eval/aggregate_rd.py` (`phase0_gate.md`, `rd_results.{md,json}`);
-nothing in the rules, thresholds or schedules was changed after the freeze. Phase 2 not run (needs approval).
+nothing in the rules, thresholds or schedules was changed after the freeze. The pre-registered Phase 2 was not run (section 3).
 
 ## 1. Pre-registered outcomes
 
@@ -18,42 +18,42 @@ nothing in the rules, thresholds or schedules was changed after the freeze. Phas
 | overall (section 7 rule) | no class shared by the three refresh-heavy workloads except UNCLASSIFIED (2 / 3): **no pre-registered cause class is established** |
 | reset effect R | **absent in every refresh-heavy workload**: dR median 0.0 dB, 3-6 of 8 positive |
 
-## 2. What the data show (descriptive; not used to revise any verdict)
+## 2. Descriptive findings (exploratory; none revises a verdict above)
 
-- **Repeated resets have no lasting effect.** Each extra reset inside a Sink-less window perturbs the output (up to
-  2.4-6.6 dB for a few calls) and the trajectory returns to the one-reset trajectory (median per-call difference
-  0.01 dB in the window, 0.02-0.10 dB after the bind; terminal T within 0.2 dB in 31 / 32 refresh-heavy and dog pairs).
-  Migration count per se is not what prevents recovery in these workloads.
-- **Sink-less duration is strongly associated with recovery from d = 10 on.** For d >= 10, terminal T is non-increasing
-  in d (within 1 dB) for butterfly and audi at both anchors, with a threshold between 25 and 50 Sink-less calls
-  (14-28 s at 0.556 s per call): butterfly sustains 35 dB up to d = 25 and not from d = 50 (28.2-31.6 dB); audi crosses
-  up to d = 10-25 and not from d = 50 (26.7-28.1 dB). Train depends on the anchor (b155: 44-46 dB up to d = 25, 32-34 dB
-  after; b175: 34-36 dB at every d). The pre-registered D rule fails because of the d = 0 point (next bullet) and
-  train's anchor dependence; this paragraph is an exploratory reading, not a verdict.
-- **Immediate Sink bind after an M1 reset (d = 0) is worse than a 10-call delay** in butterfly (34.6 / 34.1 vs 37.2 /
-  39.9 dB), audi at b175 (32.4 vs 33.8) and dog (45.0 / 46.7 vs 49.6 / 49.6); not in train. Cause not examined.
-- **Episodic Sink loss behaves like the same total contiguous loss.** r3e at d = 75 (three 25-call episodes with bound
-  gaps) ends at 28.4 / 29.4 dB on butterfly vs 28.8 / 29.7 for r3c d = 75, although a single 25-call episode recovers
-  (33.5-36.3 dB). This matches the VACW rho 0.5 failure (three ~24-call episodes) and rho 1 failure (71 calls).
-- **No-reference temporal consistency (section 5.2):** in the last 10 calls of the horizon the warp-error ratio E_O / E_R
-  is 0.97-1.02 and the motion ratio 0.97-1.01 in every condition shown, including non-recovered ones (28 dB): the
-  diverged stream follows the input's motion as consistently as the uninterrupted one. The Sink-less window is less
-  consistent (ratio 1.23-1.60 on refresh-heavy inputs, 1.77-3.12 on dog), and resets produce a visible transition
-  (frame-difference spike at the reset median 5.5x the local median, max 16.6x; reference 1.0x); binds 1.6x. These
-  metrics do not establish perceptual continuity (section 5.2).
+- **Repeated resets show a negligible lasting effect under the tested conditions.** Each extra reset inside a Sink-less
+  window perturbs the output for a few calls (up to 2.4-6.6 dB) and the trajectory then returns to the one-reset
+  trajectory (median per-call difference 0.01 dB inside the window, 0.02-0.10 dB after the bind; terminal T within
+  0.2 dB in 31 of 32 matched r1 / r3c pairs). This is what the R rule measured as absent; it is a statement about these
+  workloads, anchors and reset spacings, not about migration count in general.
+- **Sink-less duration is associated with reduced terminal PSNR for butterfly and audi-snow-trail.** For d >= 10, T is
+  non-increasing in d (within 1 dB) at both anchors for both workloads; butterfly holds 35 dB up to d = 25 and ends at
+  28.2-31.6 dB from d = 50, audi crosses up to d = 10-25 and ends at 26.7-28.1 dB from d = 50. Train depends on the
+  anchor (b155: 44-46 dB up to d = 25, 32-34 dB after; b175: 34-36 dB at every d).
+- **The 25-50-call transition is exploratory**, observed on two inputs, one seed and two anchors; it is not a general
+  recovery threshold and is not used as one.
+- **d = 0 can perform worse than d = 10**: butterfly 34.6 / 34.1 vs 37.2 / 39.9 dB, audi at b175 32.4 vs 33.8 dB, dog
+  45.0 / 46.7 vs 49.6 / 49.6 dB; not train. This non-monotonicity is why the pre-registered D rule fails for butterfly
+  and audi; its cause was not examined.
+- **Episodic Sink loss ended like contiguous loss of the same total length** on butterfly (r3e d = 75: 28.4 / 29.4 dB;
+  r3c d = 75: 28.8 / 29.7 dB), although a single 25-call episode recovers (33.5-36.3 dB).
+- **Reference-trajectory recovery and temporal consistency are distinct.** In the last 10 calls of the horizon the
+  input-motion-conditioned warp-error ratio E_O / E_R is 0.97-1.02 and the motion ratio 0.97-1.01 in every condition
+  shown, including streams that never return to the reference (28 dB): a stream can leave the reference trajectory and
+  still follow the input's motion as consistently as the uninterrupted one. During the Sink-less window the ratio is
+  1.23-1.60 (refresh-heavy) and 1.77-3.12 (dog); a reset produces a frame-difference spike of median 5.5x the local
+  median (max 16.6x; reference 1.0x), a bind 1.6x. None of these metrics establishes perceptual continuity.
 
-## 3. Consequences
+## 3. Consequences and decisions (2026-10-20)
 
-- For the paper: the cause of the three-hop butterfly failure is **not repeated migration**; it is associated with the
-  **total time the session generates without its Sink** (threshold 25-50 calls on two of three refresh-heavy inputs;
-  workload- and position-dependent), i.e. with restoration latency. This supports the planned direction (M2 / M3 and
-  placement shorten Sink-less time) over a new M1 cache mechanism; it does not establish a general bound.
-- Claims-list update (`../paper_claims.md`, M1-2 / E2E-4): "after one move the stream returns ... how late the Sink may
-  arrive is not established" can now cite RD as exploratory evidence of a 25-50-call threshold on two refresh-heavy
-  inputs and no lasting effect of repeated resets; the pre-registered classification remains not established.
-- Phase 2 (real one-hop / three-hop validation, 18 runs) was planned to test whether the emulation carries over to real
-  migration. Phase 0 already shows exact per-call equality with five real runs; Phase 2 would add a bandwidth-limited
-  one-hop run (d ~ 75) that has no real counterpart yet. Decision pending.
+- Pre-registered conclusion: **no established cause class.** Descriptively, under the tested conditions, recovery
+  failure tracks the total Sink-less generation time rather than the number of resets, which is consistent with
+  restoration latency (M2 / M3, placement) being the lever; the paper may state this only as a descriptive,
+  exploratory observation with its conditions.
+- **The pre-registered Phase 2 (18 runs) is not run** (user decision): Phase 0 already shows exact per-call equality of
+  the emulation with five real runs. A separate, explicitly exploratory real-migration follow-up (RD-X: one hop at
+  320 Mbps, butterfly / audi-snow-trail / dog, seed 0, 2 reps, each compared with an emulation replay of its realized
+  schedule) is planned in `followup_rdx.md`; it is not part of this preregistration's verdicts.
+- Next priority after RD-X: M3-v2 end-to-end validation, ahead of further M1 development.
 
 ## 4. Limitations
 
