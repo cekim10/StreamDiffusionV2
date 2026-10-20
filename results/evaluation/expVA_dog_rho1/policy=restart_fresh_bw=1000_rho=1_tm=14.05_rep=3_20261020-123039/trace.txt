@@ -1,0 +1,18 @@
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=3_20261020-123039: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.49s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.75s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t=  60.55s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 1.26 s, Sink received 14.6 s, bound 14.94 s, continuity-ready 15.54 s, rejoin 20.36 s | traffic 3.00x, waste 2.00x, reused 0 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps

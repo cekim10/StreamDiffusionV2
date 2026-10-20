@@ -1,0 +1,748 @@
+
+=== 2026-10-20T11:55:19.266573 VACW v0 dog rho 0.5: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expVA_dog_rho0.5 --skip_done --validity wrn --bw 1000 --policies restart_fresh,split,split_va --hops 3 --ts 14.05 --rhos 0.5 --reps 3 --migration_chunk 30 --post_chunks 300 --max_run_s 600 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2055834)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 463084)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 1978871)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 3936081)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset -0.21 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 555 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 558 ms/chunk, mss 1388, clock offset +0.00 ms, dry_run=False, commit 94f1da0
+[orch] === run policy=restart_fresh_bw=1000_rho=0.5_tm=28.1_rep=1_20261020-115939: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.21s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch]   fresh snapshot S_1 from B (call 77): 172 / 412 fragments changed; valid elsewhere {'A': 240, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 172, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.79s move B->C
+        held   A:  58.3%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments from scratch
+[orch]   fresh snapshot S_2 from C (call 123): 177 / 412 fragments changed; valid elsewhere {'A': 235, 'B': 235, 'C': 412, 'D': 0}; invalidated {'A': 177, 'B': 177, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  57.93s move C->D (final move)
+        held   A:  57.0%, B:   0.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   discard progress at B; C->D 412 fragments from scratch
+[orch] t=  89.29s run end
+        held   A:  57.0%, B:   0.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 0.5: after final move: first output 0.84 s, Sink received 15.69 s, bound 15.92 s, continuity-ready 16.52 s, rejoin 20.78 s | traffic 3.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.3 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_rep=1_20261020-120134: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  28.40s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments (1648 MiB) already delivered to B, reused
+[orch] t=  56.81s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] t=  88.22s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.24 s, Sink received 14.57 s, bound 15.03 s, continuity-ready 15.63 s, rejoin 19.87 s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=0.5_tm=28.1_rep=1_20261020-120327: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch]   fresh snapshot S_1 from B (call 77): 172 / 412 fragments changed; valid elsewhere {'A': 240, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 172, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.58s move B->C
+        held   A:  58.3%, B: 100.0%, C:   0.0%, D:   0.0%
+        active A->C (240 left, 500 Mbps), B->C (172 left, 500 Mbps)
+        next   A->C 240 fragments (960 MiB) already delivered to A, reused; B->C 172 fragments (688 MiB) not yet anywhere else
+[orch]   fresh snapshot S_2 from C (call 124): 177 / 412 fragments changed; valid elsewhere {'A': 235, 'B': 235, 'C': 412, 'D': 0}; invalidated {'A': 177, 'B': 177, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.03 s
+[orch] t=  58.14s move C->D (final move)
+        held   A:  57.0%, B:  57.0%, C: 100.0%, D:   0.0%
+        active B->D (235 left, 500 Mbps), C->D (177 left, 500 Mbps)
+        next   B->D 235 fragments (940 MiB) already delivered to B, reused; C->D 177 fragments (708 MiB) not yet anywhere else
+[orch] t=  89.37s run end
+        held   A:  57.0%, B:  57.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.07 s, Sink received 15.83 s, bound 16.14 s, continuity-ready 16.74 s, rejoin 21.0 s | traffic 3.00x, waste 0.58x, reused 1900 MiB | PSNR after bind 40.7 dB | ingress peak 1018 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=0.5_tm=28.1_rep=2_20261020-120521: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.21s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch]   fresh snapshot S_1 from B (call 77): 172 / 412 fragments changed; valid elsewhere {'A': 240, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 172, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.69s move B->C
+        held   A:  58.3%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments from scratch
+[orch]   fresh snapshot S_2 from C (call 123): 177 / 412 fragments changed; valid elsewhere {'A': 235, 'B': 235, 'C': 412, 'D': 0}; invalidated {'A': 177, 'B': 177, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  58.21s move C->D (final move)
+        held   A:  57.0%, B:   0.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   discard progress at B; C->D 412 fragments from scratch
+[orch] t=  89.78s run end
+        held   A:  57.0%, B:   0.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 0.5: after final move: first output 1.04 s, Sink received 15.94 s, bound 16.48 s, continuity-ready 17.08 s, rejoin 21.34 s | traffic 3.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_rep=2_20261020-120715: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  28.23s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments (1648 MiB) already delivered to B, reused
+[orch] t=  56.46s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] t=  87.79s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 0.85 s, Sink received 14.2 s, bound 14.55 s, continuity-ready 15.15 s, rejoin 19.4 s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=0.5_tm=28.1_rep=2_20261020-120908: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch]   fresh snapshot S_1 from B (call 77): 172 / 412 fragments changed; valid elsewhere {'A': 240, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 172, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.56s move B->C
+        held   A:  58.3%, B: 100.0%, C:   0.0%, D:   0.0%
+        active A->C (240 left, 500 Mbps), B->C (172 left, 500 Mbps)
+        next   A->C 240 fragments (960 MiB) already delivered to A, reused; B->C 172 fragments (688 MiB) not yet anywhere else
+[orch]   fresh snapshot S_2 from C (call 124): 177 / 412 fragments changed; valid elsewhere {'A': 235, 'B': 235, 'C': 412, 'D': 0}; invalidated {'A': 177, 'B': 177, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  58.11s move C->D (final move)
+        held   A:  57.0%, B:  57.0%, C: 100.0%, D:   0.0%
+        active B->D (235 left, 500 Mbps), C->D (177 left, 500 Mbps)
+        next   B->D 235 fragments (940 MiB) already delivered to B, reused; C->D 177 fragments (708 MiB) not yet anywhere else
+[orch] t=  89.19s run end
+        held   A:  57.0%, B:  57.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.05 s, Sink received 15.83 s, bound 16.56 s, continuity-ready 17.17 s, rejoin 20.82 s | traffic 3.00x, waste 0.58x, reused 1900 MiB | PSNR after bind 40.7 dB | ingress peak 1018 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=0.5_tm=28.1_rep=3_20261020-121102: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.24s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch]   fresh snapshot S_1 from B (call 78): 172 / 412 fragments changed; valid elsewhere {'A': 240, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 172, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  30.05s move B->C
+        held   A:  58.3%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments from scratch
+[orch]   fresh snapshot S_2 from C (call 124): 177 / 412 fragments changed; valid elsewhere {'A': 235, 'B': 235, 'C': 412, 'D': 0}; invalidated {'A': 177, 'B': 177, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  57.89s move C->D (final move)
+        held   A:  57.0%, B:   0.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   discard progress at B; C->D 412 fragments from scratch
+[orch] t=  89.10s run end
+        held   A:  57.0%, B:   0.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 0.5: after final move: first output 0.86 s, Sink received 15.64 s, bound 15.84 s, continuity-ready 16.45 s, rejoin 20.72 s | traffic 3.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_rep=3_20261020-121255: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  28.46s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments (1648 MiB) already delivered to B, reused
+[orch] t=  56.85s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] t=  88.21s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.28 s, Sink received 14.61 s, bound 15.05 s, continuity-ready 15.65 s, rejoin 19.91 s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=0.5_tm=28.1_rep=3_20261020-121448: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch]   fresh snapshot S_1 from B (call 77): 172 / 412 fragments changed; valid elsewhere {'A': 240, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 172, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.47s move B->C
+        held   A:  58.3%, B: 100.0%, C:   0.0%, D:   0.0%
+        active A->C (240 left, 500 Mbps), B->C (172 left, 500 Mbps)
+        next   A->C 240 fragments (960 MiB) already delivered to A, reused; B->C 172 fragments (688 MiB) not yet anywhere else
+[orch]   fresh snapshot S_2 from C (call 124): 177 / 412 fragments changed; valid elsewhere {'A': 235, 'B': 235, 'C': 412, 'D': 0}; invalidated {'A': 177, 'B': 177, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  57.75s move C->D (final move)
+        held   A:  57.0%, B:  57.0%, C: 100.0%, D:   0.0%
+        active B->D (235 left, 500 Mbps), C->D (177 left, 500 Mbps)
+        next   B->D 235 fragments (940 MiB) already delivered to B, reused; C->D 177 fragments (708 MiB) not yet anywhere else
+[orch] t=  89.23s run end
+        held   A:  57.0%, B:  57.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 0.86 s, Sink received 15.45 s, bound 16.05 s, continuity-ready 16.65 s, rejoin 20.89 s | traffic 3.00x, waste 0.58x, reused 1900 MiB | PSNR after bind 40.7 dB | ingress peak 1018 Mbps
+[orch] done: 9 runs under results/evaluation/expVA_dog_rho0.5/
+
+=== 2026-10-20T12:17:43.216324 VACW v0 dog rho 1: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expVA_dog_rho1 --skip_done --validity wrn --bw 1000 --policies restart_fresh,split,split_va --hops 3 --ts 14.05 --rhos 1 --reps 3 --migration_chunk 30 --post_chunks 300 --max_run_s 600 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2074794)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 472212)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 1993580)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 3957992)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 559 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset -0.61 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 555 ms/chunk, mss 1388, clock offset +0.09 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 556 ms/chunk, mss 1388, clock offset +0.08 ms, dry_run=False, commit 94f1da0
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=1_20261020-122208: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.39s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.76s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t=  60.18s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 1.27 s, Sink received 14.61 s, bound 15.02 s, continuity-ready 15.64 s, rejoin 20.49 s | traffic 3.00x, waste 2.00x, reused 0 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_rep=1_20261020-122334: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.46s move B->C
+        held   A: 100.0%, B:  99.3%, C:   0.0%, D:   0.0%
+        active B->C (409 left, 500 Mbps), A->C (3 left, 500 Mbps)
+        next   B->C 409 fragments (1636 MiB) already delivered to B, reused; A->C 3 fragments (12 MiB) not yet anywhere else
+[orch] t=  28.78s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.6%, D:   0.0%
+        active C->D (402 left, 500 Mbps), B->D (10 left, 500 Mbps)
+        next   C->D 402 fragments (1608 MiB) already delivered to C, reused; B->D 10 fragments (40 MiB) already delivered to B, reused
+[orch] t=  59.89s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.29 s, Sink received 14.64 s, bound 15.28 s, continuity-ready 15.88 s, rejoin 20.18 s | traffic 3.00x, waste 0.03x, reused 3281 MiB | PSNR after bind 40.1 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=1_20261020-122458: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.48s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.79s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.8%, D:   0.0%
+        active C->D (403 left, 500 Mbps), B->D (9 left, 500 Mbps)
+        next   C->D 403 fragments (1612 MiB) already delivered to C, reused; B->D 9 fragments (36 MiB) already delivered to B, reused
+[orch] t=  60.64s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.31 s, Sink received 14.62 s, bound 14.99 s, continuity-ready 15.58 s, rejoin 20.42 s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=2_20261020-122624: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.33s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.62s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t=  60.57s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 1.13 s, Sink received 14.45 s, bound 14.84 s, continuity-ready 15.44 s, rejoin 20.27 s | traffic 3.00x, waste 2.00x, reused 0 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_rep=2_20261020-122749: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.33s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.59s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.8%, D:   0.0%
+        active C->D (407 left, 500 Mbps), B->D (5 left, 500 Mbps)
+        next   C->D 407 fragments (1628 MiB) already delivered to C, reused; B->D 5 fragments (20 MiB) already delivered to B, reused
+[orch] t=  60.43s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.11 s, Sink received 14.42 s, bound 14.81 s, continuity-ready 15.41 s, rejoin 20.24 s | traffic 3.00x, waste 0.02x, reused 3277 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=2_20261020-122914: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.35s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.64s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.3%, D:   0.0%
+        active C->D (405 left, 500 Mbps), B->D (7 left, 500 Mbps)
+        next   C->D 405 fragments (1620 MiB) already delivered to C, reused; B->D 7 fragments (28 MiB) already delivered to B, reused
+[orch] t=  60.47s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.18 s, Sink received 14.52 s, bound 14.88 s, continuity-ready 15.48 s, rejoin 20.31 s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=3_20261020-123039: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.49s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.75s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t=  60.55s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 1.26 s, Sink received 14.6 s, bound 14.94 s, continuity-ready 15.54 s, rejoin 20.36 s | traffic 3.00x, waste 2.00x, reused 0 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_rep=3_20261020-123205: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.34s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.65s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.8%, D:   0.0%
+        active C->D (407 left, 500 Mbps), B->D (5 left, 500 Mbps)
+        next   C->D 407 fragments (1628 MiB) already delivered to C, reused; B->D 5 fragments (20 MiB) already delivered to B, reused
+[orch] t=  60.58s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.14 s, Sink received 14.47 s, bound 14.82 s, continuity-ready 15.42 s, rejoin 20.25 s | traffic 3.00x, waste 0.02x, reused 3277 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=3_20261020-123330: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.35s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.65s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.3%, D:   0.0%
+        active C->D (405 left, 500 Mbps), B->D (7 left, 500 Mbps)
+        next   C->D 405 fragments (1620 MiB) already delivered to C, reused; B->D 7 fragments (28 MiB) already delivered to B, reused
+[orch] t=  60.58s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.19 s, Sink received 14.52 s, bound 14.93 s, continuity-ready 15.53 s, rejoin 20.37 s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] done: 9 runs under results/evaluation/expVA_dog_rho1/
+
+=== 2026-10-20T12:35:56.093988 VACW v0 butterfly-feeding-slow-motion rho 0.5: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expVA_butterfly-feeding-slow-motion_rho0.5 --skip_done --validity wrn --bw 1000 --policies restart_fresh,split,split_va --hops 3 --ts 14.05 --rhos 0.5 --reps 3 --migration_chunk 30 --post_chunks 300 --max_run_s 600 --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2089937)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 479923)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2006501)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 3976521)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset -0.42 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset +0.07 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 558 ms/chunk, mss 1388, clock offset +0.08 ms, dry_run=False, commit 94f1da0
+[orch] === run policy=restart_fresh_bw=1000_rho=0.5_tm=28.1_rep=1_20261020-124016: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch]   fresh snapshot S_1 from B (call 77): 216 / 412 fragments changed; valid elsewhere {'A': 196, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 216, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.93s move B->C
+        held   A:  47.6%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments from scratch
+[orch]   fresh snapshot S_2 from C (call 123): 216 / 412 fragments changed; valid elsewhere {'A': 187, 'B': 196, 'C': 412, 'D': 0}; invalidated {'A': 225, 'B': 216, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  58.17s move C->D (final move)
+        held   A:  45.4%, B:   0.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   discard progress at B; C->D 412 fragments from scratch
+[orch] t= 187.15s run end
+        held   A:  45.4%, B:   0.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 0.5: after final move: first output 0.99 s, Sink received 15.91 s, bound 16.5 s, continuity-ready 17.1 s, rejoin None s | traffic 3.00x, waste 0.00x, reused 0 MiB | PSNR after bind 28.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_rep=1_20261020-124348: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  28.34s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments (1648 MiB) already delivered to B, reused
+[orch] t=  56.71s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] t= 187.56s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.13 s, Sink received 14.47 s, bound 14.83 s, continuity-ready 15.43 s, rejoin None s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 29.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=0.5_tm=28.1_rep=1_20261020-124721: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch]   fresh snapshot S_1 from B (call 77): 216 / 412 fragments changed; valid elsewhere {'A': 196, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 216, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.57s move B->C
+        held   A:  47.6%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (216 left, 500 Mbps), A->C (196 left, 500 Mbps)
+        next   B->C 216 fragments (864 MiB) not yet anywhere else; A->C 196 fragments (784 MiB) already delivered to A, reused
+[orch]   fresh snapshot S_2 from C (call 124): 216 / 412 fragments changed; valid elsewhere {'A': 187, 'B': 196, 'C': 412, 'D': 0}; invalidated {'A': 225, 'B': 216, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  58.12s move C->D (final move)
+        held   A:  45.4%, B:  47.6%, C: 100.0%, D:   0.0%
+        active C->D (216 left, 500 Mbps), B->D (196 left, 500 Mbps)
+        next   C->D 216 fragments (864 MiB) not yet anywhere else; B->D 196 fragments (784 MiB) already delivered to B, reused
+[orch] t= 186.45s run end
+        held   A:  45.4%, B:  47.6%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 0.96 s, Sink received 15.81 s, bound 16.44 s, continuity-ready 17.04 s, rejoin None s | traffic 3.00x, waste 0.50x, reused 1568 MiB | PSNR after bind 28.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=0.5_tm=28.1_rep=2_20261020-125052: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch]   fresh snapshot S_1 from B (call 78): 216 / 412 fragments changed; valid elsewhere {'A': 196, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 216, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  30.05s move B->C
+        held   A:  47.6%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments from scratch
+[orch]   fresh snapshot S_2 from C (call 124): 213 / 412 fragments changed; valid elsewhere {'A': 189, 'B': 199, 'C': 412, 'D': 0}; invalidated {'A': 223, 'B': 213, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  57.84s move C->D (final move)
+        held   A:  45.9%, B:   0.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   discard progress at B; C->D 412 fragments from scratch
+[orch] t= 186.21s run end
+        held   A:  45.9%, B:   0.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 0.5: after final move: first output 0.79 s, Sink received 15.6 s, bound 16.27 s, continuity-ready 16.88 s, rejoin None s | traffic 3.00x, waste 0.00x, reused 0 MiB | PSNR after bind 28.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_rep=2_20261020-125423: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  28.33s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments (1648 MiB) already delivered to B, reused
+[orch] t=  56.61s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] t= 186.33s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.03 s, Sink received 14.38 s, bound 14.75 s, continuity-ready 15.34 s, rejoin None s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 29.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=0.5_tm=28.1_rep=2_20261020-125754: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch]   fresh snapshot S_1 from B (call 77): 216 / 412 fragments changed; valid elsewhere {'A': 196, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 216, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.66s move B->C
+        held   A:  47.6%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (216 left, 500 Mbps), A->C (196 left, 500 Mbps)
+        next   B->C 216 fragments (864 MiB) not yet anywhere else; A->C 196 fragments (784 MiB) already delivered to A, reused
+[orch]   fresh snapshot S_2 from C (call 125): 214 / 412 fragments changed; valid elsewhere {'A': 188, 'B': 198, 'C': 412, 'D': 0}; invalidated {'A': 224, 'B': 214, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  58.28s move C->D (final move)
+        held   A:  45.6%, B:  48.1%, C: 100.0%, D:   0.0%
+        active C->D (214 left, 500 Mbps), B->D (198 left, 500 Mbps)
+        next   C->D 214 fragments (856 MiB) not yet anywhere else; B->D 198 fragments (792 MiB) already delivered to B, reused
+[orch] t= 186.04s run end
+        held   A:  45.6%, B:  48.1%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.28 s, Sink received 15.98 s, bound 16.2 s, continuity-ready 16.8 s, rejoin None s | traffic 3.00x, waste 0.50x, reused 1576 MiB | PSNR after bind 28.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=0.5_tm=28.1_rep=3_20261020-130125: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch]   fresh snapshot S_1 from B (call 77): 216 / 412 fragments changed; valid elsewhere {'A': 196, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 216, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.03 s
+[orch] t=  29.65s move B->C
+        held   A:  47.6%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments from scratch
+[orch]   fresh snapshot S_2 from C (call 124): 214 / 412 fragments changed; valid elsewhere {'A': 188, 'B': 198, 'C': 412, 'D': 0}; invalidated {'A': 224, 'B': 214, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  58.11s move C->D (final move)
+        held   A:  45.6%, B:   0.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   discard progress at B; C->D 412 fragments from scratch
+[orch] t= 186.82s run end
+        held   A:  45.6%, B:   0.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 0.5: after final move: first output 0.97 s, Sink received 15.87 s, bound 16.49 s, continuity-ready 17.09 s, rejoin None s | traffic 3.00x, waste 0.00x, reused 0 MiB | PSNR after bind 28.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=0.5_tm=28.1_rep=3_20261020-130456: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  28.33s move B->C
+        held   A: 100.0%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (412 left, 1000 Mbps)
+        next   B->C 412 fragments (1648 MiB) already delivered to B, reused
+[orch] t=  56.39s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D:   0.0%
+        active C->D (412 left, 1000 Mbps)
+        next   C->D 412 fragments (1648 MiB) already delivered to C, reused
+[orch] t= 187.19s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 0.82 s, Sink received 14.17 s, bound 14.81 s, continuity-ready 15.41 s, rejoin None s | traffic 3.00x, waste 0.00x, reused 3291 MiB | PSNR after bind 29.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=0.5_tm=28.1_rep=3_20261020-130828: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 28.1 s, rho 0.5, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch]   fresh snapshot S_1 from B (call 77): 216 / 412 fragments changed; valid elsewhere {'A': 196, 'B': 412, 'C': 0, 'D': 0}; invalidated {'A': 216, 'B': 0, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.02 s
+[orch] t=  29.62s move B->C
+        held   A:  47.6%, B: 100.0%, C:   0.0%, D:   0.0%
+        active B->C (216 left, 500 Mbps), A->C (196 left, 500 Mbps)
+        next   B->C 216 fragments (864 MiB) not yet anywhere else; A->C 196 fragments (784 MiB) already delivered to A, reused
+[orch]   fresh snapshot S_2 from C (call 124): 216 / 412 fragments changed; valid elsewhere {'A': 187, 'B': 196, 'C': 412, 'D': 0}; invalidated {'A': 225, 'B': 216, 'C': 0, 'D': 0}; 0 flows cancelled; install 0.03 s
+[orch] t=  58.28s move C->D (final move)
+        held   A:  45.4%, B:  47.6%, C: 100.0%, D:   0.0%
+        active C->D (216 left, 500 Mbps), B->D (196 left, 500 Mbps)
+        next   C->D 216 fragments (864 MiB) not yet anywhere else; B->D 196 fragments (784 MiB) already delivered to B, reused
+[orch] t= 186.89s run end
+        held   A:  45.4%, B:  47.6%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 0.5: after final move: first output 1.12 s, Sink received 15.99 s, bound 16.26 s, continuity-ready 16.86 s, rejoin None s | traffic 3.00x, waste 0.50x, reused 1568 MiB | PSNR after bind 28.8 dB | ingress peak 1007 Mbps
+[orch] done: 9 runs under results/evaluation/expVA_butterfly-feeding-slow-motion_rho0.5/
+
+=== 2026-10-20T13:13:00.936828 VACW v0 butterfly-feeding-slow-motion rho 1: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expVA_butterfly-feeding-slow-motion_rho1 --skip_done --validity wrn --bw 1000 --policies restart_fresh,split,split_va --hops 3 --ts 14.05 --rhos 1 --reps 3 --migration_chunk 30 --post_chunks 300 --max_run_s 600 --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2112448)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 489287)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2023495)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 4004048)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset -0.12 ms, dry_run=False, commit 94f1da0
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 556 ms/chunk, mss 1388, clock offset -0.13 ms, dry_run=False, commit 94f1da0
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=1_20261020-131726: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.54s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.31s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t= 186.83s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 0.78 s, Sink received 14.16 s, bound 14.56 s, continuity-ready 15.16 s, rejoin None s | traffic 2.98x, waste 1.98x, reused 0 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_rep=1_20261020-132058: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.50s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.35s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.3%, D:   0.0%
+        active C->D (401 left, 500 Mbps), B->D (11 left, 500 Mbps)
+        next   C->D 401 fragments (1604 MiB) already delivered to C, reused; B->D 11 fragments (44 MiB) already delivered to B, reused
+[orch] t= 187.38s run end
+        held   A: 100.0%, B: 100.0%, C:  99.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 0.84 s, Sink received 14.21 s, bound 14.63 s, continuity-ready 15.23 s, rejoin None s | traffic 2.99x, waste 0.03x, reused 3261 MiB | PSNR after bind 29.7 dB | ingress peak 1040 Mbps
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=1_20261020-132430: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.35s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.58s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.3%, D:   0.0%
+        active C->D (405 left, 500 Mbps), B->D (7 left, 500 Mbps)
+        next   C->D 405 fragments (1620 MiB) already delivered to C, reused; B->D 7 fragments (28 MiB) already delivered to B, reused
+[orch] t= 188.06s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.11 s, Sink received 14.43 s, bound 14.9 s, continuity-ready 15.5 s, rejoin None s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=2_20261020-132804: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.38s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.64s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t= 186.69s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 1.15 s, Sink received 14.48 s, bound 14.91 s, continuity-ready 15.51 s, rejoin None s | traffic 3.00x, waste 2.00x, reused 0 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_rep=2_20261020-133135: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.46s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.86s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.6%, D:   0.0%
+        active C->D (402 left, 500 Mbps), B->D (10 left, 500 Mbps)
+        next   C->D 402 fragments (1608 MiB) already delivered to C, reused; B->D 10 fragments (40 MiB) already delivered to B, reused
+[orch] t= 187.00s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.38 s, Sink received 14.73 s, bound 15.11 s, continuity-ready 15.71 s, rejoin None s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=2_20261020-133508: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.53s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.80s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.3%, D:   0.0%
+        active C->D (401 left, 500 Mbps), B->D (11 left, 500 Mbps)
+        next   C->D 401 fragments (1604 MiB) already delivered to C, reused; B->D 11 fragments (44 MiB) already delivered to B, reused
+[orch] t= 189.42s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.3 s, Sink received 14.64 s, bound 14.99 s, continuity-ready 15.6 s, rejoin None s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_fresh_bw=1000_rho=1_tm=14.05_rep=3_20261020-133842: Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=  14.34s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  28.59s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at C; A->D 412 fragments from scratch
+[orch] t= 187.80s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole) @ 1000.0 Mbps rho 1.0: after final move: first output 1.11 s, Sink received 14.44 s, bound 15.22 s, continuity-ready 15.82 s, rejoin None s | traffic 3.00x, waste 2.00x, reused 0 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=1_tm=14.05_rep=3_20261020-134214: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.32s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.59s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.8%, D:   0.0%
+        active C->D (407 left, 500 Mbps), B->D (5 left, 500 Mbps)
+        next   C->D 407 fragments (1628 MiB) already delivered to C, reused; B->D 5 fragments (20 MiB) already delivered to B, reused
+[orch] t= 188.45s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.1 s, Sink received 14.43 s, bound 15.03 s, continuity-ready 15.64 s, rejoin None s | traffic 3.00x, waste 0.02x, reused 3277 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=3_20261020-134547: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.34s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.62s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  98.8%, D:   0.0%
+        active C->D (407 left, 500 Mbps), B->D (5 left, 500 Mbps)
+        next   C->D 407 fragments (1628 MiB) already delivered to C, reused; B->D 5 fragments (20 MiB) already delivered to B, reused
+[orch] t= 187.17s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.11 s, Sink received 14.44 s, bound 14.86 s, continuity-ready 15.46 s, rejoin None s | traffic 3.00x, waste 0.02x, reused 3277 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
+[orch] done: 9 runs under results/evaluation/expVA_butterfly-feeding-slow-motion_rho1/

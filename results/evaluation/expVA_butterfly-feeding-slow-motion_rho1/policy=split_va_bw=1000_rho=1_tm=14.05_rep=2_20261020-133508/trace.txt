@@ -1,0 +1,18 @@
+[orch] === run policy=split_va_bw=1000_rho=1_tm=14.05_rep=2_20261020-133508: Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.53s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.80s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.3%, D:   0.0%
+        active C->D (401 left, 500 Mbps), B->D (11 left, 500 Mbps)
+        next   C->D 401 fragments (1604 MiB) already delivered to C, reused; B->D 11 fragments (44 MiB) already delivered to B, reused
+[orch] t= 189.42s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest) @ 1000.0 Mbps rho 1.0: after final move: first output 1.3 s, Sink received 14.64 s, bound 14.99 s, continuity-ready 15.6 s, rejoin None s | traffic 3.00x, waste 0.03x, reused 3277 MiB | PSNR after bind 29.7 dB | ingress peak 1007 Mbps
