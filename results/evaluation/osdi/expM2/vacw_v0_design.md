@@ -240,3 +240,18 @@ Estimated size: ~250 lines; no change to transport, fragment format (header alre
 
 Smallest viable evaluation: the 36-run matrix above; a loopback version (fake nodes, dry promotions injected at known
 calls to make S_k differ from S_{k-1} by a known fragment set) tests I1-I7 before any GPU run.
+
+## Amendment 1 (2026-10-20, before implementation and before any run; frozen text above unchanged)
+
+**I3 / I4 realization.** The frozen text realizes buffer immutability with one immutable `bytes` object per fragment
+and a contiguous assembly at bind (~0.3 s). The implementation realizes the same guarantees without the assembly and
+without touching the frozen policies' bind path:
+- every outgoing flow binds its **manifest and buffer object at flow start** (today's `_sender` already does: `man`,
+  `memoryview(sink_buf)` are taken once); a fresh snapshot installs a **new** buffer object, so flows started before
+  the capture keep sending from the old object (pinned by reference until the flow ends; never written again);
+- within one buffer object, a fragment is **copied under the node lock into a private `bytes` immediately before it is
+  sent**, and a verified receipt replaces a fragment's bytes **in place under the same lock**; a sender therefore never
+  observes a torn or changed fragment (I3), and a newer receipt cannot mutate bytes a send is using (I4);
+- cost: one 4 MiB memcpy per sent fragment (~1 ms; the 1 Gbps fragment time is 34 ms), applied to every policy in the
+  36-run matrix alike; no bind-time assembly.
+Guarantees, invariants and hypotheses are unchanged; this is the engineering form of I3 / I4.

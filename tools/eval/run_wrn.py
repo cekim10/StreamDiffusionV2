@@ -297,6 +297,21 @@ def v_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "split", "re
 
 A_WORKLOADS = ["dog", "audi-snow-trail", "butterfly-feeding-slow-motion", "circus-ball-act", "train"]   # osdi/m1m2_followup.md Task A rule
 
+VACW_WORKLOADS = ["dog", "butterfly-feeding-slow-motion"]   # expM2/vacw_v0_design.md section 6: refresh-light / refresh-heavy, seed 0
+VACW_POLICIES = "restart_fresh,split,split_va"
+
+
+def vacw_args(c: Ctx, rho: str, reps="3"):
+    return ["--policies", VACW_POLICIES, "--hops", "3", "--ts", c.ts, "--rhos", rho, "--reps", reps, "--migration_chunk", "30", "--post_chunks", "300", "--max_run_s", "600"]
+
+
+def do_vacw(c):
+    """VACW v0 (frozen 9137bc9): A -> B -> C -> D, rho {0.5, 1}, 1 Gbps, dog / butterfly seed 0, 3 policies x 3 reps = 36 runs."""
+    tag = f"_{c.a.tag}" if c.a.tag else ""
+    for w in VACW_WORKLOADS:
+        for rho in ("0.5", "1"):
+            c.orch(f"expVA{tag}_{w}_rho{rho}", vacw_args(c, rho), node_extra(w, 0), f"VACW v0{tag} {w} rho {rho}")
+
 
 def do_a(c):
     """Experiment A: OTTER event-driven, single move at M = 34, horizon 100 calls, native bandwidth, recent_slots n."""
@@ -387,7 +402,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -402,7 +417,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:

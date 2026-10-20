@@ -61,9 +61,12 @@ from restore_planner import maxmin as maxmin_caps  # noqa: E402
 
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
+FRESH = ("split_va", "restart_fresh")   # Version-aware Continuity Wavefront v0 (expM2/vacw_v0_design.md): fresh snapshots by bound owners, hash reuse
 POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct",
                 "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)", "reuse_dyn2": "OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware)",
-                "full": "Full migration (stop, transfer all state, resume)", "cold": "Cold restart (fresh caches from the prompt)"}
+                "full": "Full migration (stop, transfer all state, resume)", "cold": "Cold restart (fresh caches from the prompt)",
+                "split_va": "Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest)",
+                "restart_fresh": "Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole)"}
 AWARE = ("reuse_aware_in", "reuse_dyn", "reuse_dyn2")
 EXEC_MODE = {"full": "full", "cold": "cold"}   # every other policy: "fast" (M1)
 REJOIN_DB = 35.0
@@ -279,6 +282,13 @@ class Run:
         self.t0 = None
         self.manifest = None
         self.stop_reason = None
+        # VACW (fresh policies): the active snapshot's capturing owner is the source role; S_0's is A
+        self.fresh = policy in FRESH
+        self.source = "A"
+        self.snapshots: list[dict] = []    # S_0, S_1, ... as installed (orchestrator view)
+        self.manifest_hist: list[tuple[float, str]] = []   # (t installed, sink_version)
+        self.binds: list[dict] = []        # every sink_bind: bound digest vs the snapshot active at that time (I5 / H1a)
+        self.rejected_stale = 0
 
     # ---------------- helpers
     @property
@@ -411,7 +421,7 @@ class Run:
             if reason == "start":
                 self.start_flow("A", self.final, sorted(n_all), True, "oracle: source -> final owner from t0")
                 decision.append(f"A->{self.final} all {len(n_all)} fragments (oracle knows the final owner)")
-        elif pol == "restart":
+        elif pol in ("restart", "restart_fresh"):
             cancelled = defaultdict(list)
             for fl in list(self.flows.values()):
                 if fl["active"] and fl["dst"] != owner:
@@ -420,14 +430,14 @@ class Run:
             if reason == "move":
                 # M1 only: progress at every abandoned owner is discarded, at the node too (a revisited owner starts empty)
                 for e in dict.fromkeys(self.edges[1:self.owner_idx]):
-                    if e != owner and (self.holders[e] or self.physical[e] or cancelled.get(e)):
+                    if e != owner and e != self.source and (self.holders[e] or self.physical[e] or cancelled.get(e)):
                         rd = self.node(e).call("SINK_DROP", flows=cancelled.get(e, []))
                         self.drop_epoch[e] = rd["epoch"]
                         self.holders[e] = set(); self.physical[e] = set(); decision.append(f"discard progress at {e}")
             missing = n_all - self.holders[owner] - self.active_claims(owner)
-            if missing and owner != "A":
-                self.start_flow("A", owner, sorted(missing), True, "restart: source re-sends everything to the new owner")
-                decision.append(f"A->{owner} {len(missing)} fragments from scratch")
+            if missing and owner != self.source:
+                self.start_flow(self.source, owner, sorted(missing), True, "restart: source re-sends everything to the new owner")
+                decision.append(f"{self.source}->{owner} {len(missing)} fragments from scratch")
         elif pol in ("relay", "relay_pipe"):
             if reason == "start":
                 self.start_flow("A", "B", sorted(n_all), True, "relay: source -> first owner")
@@ -451,7 +461,7 @@ class Run:
                             decision.append(f"{x}->{succ} pipelined ({len(todo)} held now, more as they arrive)")
                     elif existing["active"]:
                         self.add_to_flow(existing, todo, complete)
-        elif pol == "split":
+        elif pol in ("split", "split_va"):
             if reason == "start" and not self.pp and owner == "B":   # Phase 1 path, unchanged
                 self.start_flow("A", "B", sorted(n_all), True, "source -> first owner")
                 decision.append("A->B all fragments")
@@ -467,14 +477,15 @@ class Run:
                     # prefer the most recent holder execution has left (its progress is reused), then a holder that was never
                     # an owner (pre-positioned fragments; the network-level reuse_fixed holder order); the source sends the rest.
                     # Without placement only past owners hold fragments, so this is the Phase 1 rule.
-                    order = holder_order(self.edges[:self.owner_idx + 1], owner, self.holders, [e for e in EDGES if e != "A"])
+                    # split_va: the same rule over hash-valid holdings, the source role being the capturing owner of the active snapshot
+                    order = holder_order(self.edges[:self.owner_idx + 1], owner, self.holders, [e for e in EDGES if e != self.source], source=self.source)
                     for f in sorted(missing):
-                        src = next((e for e in order if f in self.holders[e]), "A")
+                        src = next((e for e in order if f in self.holders[e]), self.source)
                         assign[src].append(f)
                     for src, ids in assign.items():
-                        self.start_flow(src, owner, ids, True, "progress-aware: " + ("reuse fragments already delivered" if src != "A" else "source sends only what no other holder has"))
+                        self.start_flow(src, owner, ids, True, "progress-aware: " + ("reuse fragments already delivered" if src != self.source else "source sends only what no other holder has"))
                         mb = len(ids) * self.manifest["frag_bytes"] / MB
-                        decision.append(f"{src}->{owner} {len(ids)} fragments ({mb:.0f} MiB){' already delivered to ' + src + ', reused' if src != 'A' else ' not yet anywhere else'}")
+                        decision.append(f"{src}->{owner} {len(ids)} fragments ({mb:.0f} MiB){' already delivered to ' + src + ', reused' if src != self.source else ' not yet anywhere else'}")
         return "; ".join(decision)
 
     def plan_aware(self, reason: str):
@@ -694,6 +705,9 @@ class Run:
             self.node_events.append({"node": lb, "event": m["event"], "t": t, **det})
             if m["event"] == "sink_bind":
                 self.bound[lb] = t
+                intended = self.manifest_at(t)
+                self.binds.append({"node": lb, "call": det.get("call"), "t_rel": self.rel_t(t), "move": self.owner_idx, "bound_version": det.get("sink_version"),
+                                   "intended_version": intended, "ok": None if det.get("sink_version") is None else det.get("sink_version") == intended})
             if m["event"] == "resume":
                 self.running = lb
             if m["event"] in ("full_send_start", "full_send_end") and det.get("xfer") in self.state_xfers:
@@ -719,7 +733,8 @@ class Run:
             self.metric_csv.row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
             return
         if kind == "FRAG_SENT":
-            rec = {"t_start": nc.to_orch(m["t_start"]), "t_end": nc.to_orch(m["t_end"]), "src": lb, "dst": m["dst"], "fid": m["fragment_id"], "bytes": m["bytes"], "flow": m["flow_id"]}
+            rec = {"t_start": nc.to_orch(m["t_start"]), "t_end": nc.to_orch(m["t_end"]), "src": lb, "dst": m["dst"], "fid": m["fragment_id"], "bytes": m["bytes"], "flow": m["flow_id"],
+                   "role": "source" if lb == self.source else "holder", "snapshot": self.manifest["sink_version"]}
             self.sent.append(rec)
             self.in_flight[m["dst"]].add(m["fragment_id"])
             fl = self.flows.get(m["flow_id"])
@@ -732,9 +747,14 @@ class Run:
             return
         if kind == "FRAG_RECV":
             rec = {"t_start": nc.to_orch(m["t_start"]), "t_end": nc.to_orch(m["t_end"]), "src": m["src"], "dst": lb, "fid": m["fragment_id"], "bytes": m["bytes"], "flow": m["flow_id"],
-                   "ok": bool(m["ok"]), "dup": bool(m["dup"]), "rejected": m.get("rejected"), "discarded": bool(m.get("discarded"))}
+                   "ok": bool(m["ok"]), "dup": bool(m["dup"]), "rejected": m.get("rejected"), "discarded": bool(m.get("discarded")),
+                   "cross_version": bool(m.get("cross_version")), "snapshot": m.get("active_version")}
             self.recv.append(rec)
             self.in_flight[lb].discard(m["fragment_id"])
+            if rec["rejected"] == "hash_stale":
+                self.rejected_stale += 1
+            if self.fresh and (rec["rejected"] or not rec["ok"]) and not rec["dup"] and self.policy not in AWARE and self.manifest is not None:
+                self.plan("frag")   # a stale fragment landed: its claim is released, the planner may assign it again
             if m.get("epoch", 0) < self.drop_epoch.get(lb, 0):
                 rec["discarded"] = True   # verified there before the node dropped the session's fragments
             if rec["discarded"]:
@@ -767,13 +787,16 @@ class Run:
         if self.mode == "full":
             mv = self.full_handoff(frm, to, i, t_req)
         else:
-            r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode=self.mode, recent_slots=self.recent_slots, timeout=120)
+            r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode=self.mode, recent_slots=self.recent_slots,
+                                    fresh=self.fresh, frag_bytes=self.a.frag_bytes, snapshot_k=len(self.snapshots), timeout=180)
             mv = {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": self.node(frm).to_orch(r["t_stop"]), "t_fg_sent": self.node(frm).to_orch(r["t_fg_sent"]),
-                  "call": r["call"], "fg_bytes": r["fg_bytes"], "mode": self.mode}
+                  "call": r["call"], "fg_bytes": r["fg_bytes"], "mode": self.mode, "was_bound": r.get("was_bound"), "fresh": bool(r.get("fresh_manifest"))}
             self.running = None
         self.owner_idx = i
         self.dyn2_state = {}
         self.moves.append(mv)
+        if mv.get("fresh"):
+            self.install_manifest(r, frm, mv)
         if to == self.final and i == len(self.edges) - 1:
             for evn in self.cap_events:
                 if evn.get("kind") == "half" and evn["S"] is None:
@@ -782,6 +805,50 @@ class Run:
         self.ev.log("move", t_req, **{k: (self.rel_t(v) if k.startswith("t_") else v) for k, v in mv.items()})
         self.p_current_row(t_req)
         return mv
+
+    def manifest_at(self, t: float) -> str | None:
+        """sink_version of the snapshot active at orchestrator time t (the intended snapshot for a bind at t)."""
+        v = None
+        for ti, ver in self.manifest_hist:
+            if ti <= t:
+                v = ver
+        return v
+
+    def install_manifest(self, reply: dict, frm: str, mv: dict):
+        """VACW: the leaving owner `frm` captured S_k. Cancel every flow of the superseded manifest (I1), make S_k active,
+        push MANIFEST_UPDATE to every other node and rebuild the holder view from their hash-valid holdings (1.4); `frm`
+        holds S_k whole and becomes the source role. Flows are planned by the caller (plan("move"), unchanged)."""
+        t_i0 = time.time()
+        new, old = reply["fresh_manifest"], self.manifest
+        n = len(new["frags"])
+        dirty = [f["id"] for f, g in zip(new["frags"], old["frags"]) if f["sha256"] != g["sha256"]]
+        self.manifest_hist.append((t_i0, new["sink_version"]))
+        cancelled = []
+        for fl in list(self.flows.values()):
+            if fl["active"]:
+                self.cancel_flow(fl, "manifest superseded by a fresh snapshot"); cancelled.append(fl["id"])
+        self.manifest = new; self.source = frm
+        valid = {e: set() for e in EDGES}; stale = {}; reports = {}
+        for lb in self.nodes_used:
+            if lb == frm:
+                valid[lb] = set(range(n)); stale[lb] = 0; continue
+            rp = self.node(lb).call("MANIFEST_UPDATE", manifest=new, timeout=120)
+            valid[lb] = set(rp["valid"]); stale[lb] = int(rp["n_stale"]); reports[lb] = {k: rp[k] for k in ("same", "complete", "owner", "bound")}
+        self.holders = valid; self.physical = {e: set(v) for e, v in valid.items()}
+        t_i1 = time.time()
+        others = [e for e in self.nodes_used if e not in (mv["to"], frm)]
+        avail = set().union(*(valid[e] for e in others)) if others else set()
+        snap = {"k": len(self.snapshots), "sink_version": new["sink_version"], "digest": new["sink_digest"], "captured_by": frm, "move": mv["i"], "call": mv["call"],
+                "prev_version": old["sink_version"], "dirty_frags": len(dirty), "content_reuse_potential": 1.0 - len(dirty) / n,
+                "t_captured_rel": self.rel_t(self.node(frm).to_orch(reply["t_captured"])), "capture": reply.get("capture"), "install_s": t_i1 - t_i0, "t_installed_rel": self.rel_t(t_i1),
+                "flows_cancelled": cancelled, "valid_by_node": {e: len(valid[e]) for e in self.nodes_used}, "invalidated_by_node": stale,
+                "available_verified_reuse": len(avail) / n, "available_elsewhere_by_node": {e: len(valid[e]) for e in others}, "node_reports": reports}
+        self.snapshots.append(snap)
+        mv.update({"t_captured": self.node(frm).to_orch(reply["t_captured"]), "t_manifest": t_i1, "capture_s": (reply.get("capture") or {}).get("capture_s"), "dirty_frags": len(dirty),
+                   "available_verified_reuse": len(avail) / n, "valid_at_new_owner": len(valid[mv["to"]])})
+        self.ev.log("manifest_active", t_i1, **{k: v for k, v in snap.items() if k not in ("node_reports",)})
+        self.log(f"  fresh snapshot S_{snap['k']} from {frm} (call {mv['call']}): {len(dirty)} / {n} fragments changed; valid elsewhere {snap['valid_by_node']}; "
+                 f"invalidated {stale}; {len(cancelled)} flows cancelled; install {t_i1 - t_i0:.2f} s")
 
     def full_handoff(self, frm: str, to: str, i: int, t_req: float) -> dict:
         """Full migration. If `frm` is generating, it stops, packs the whole state and sends it to `to`. If the state is
@@ -832,6 +899,9 @@ class Run:
             self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=session_id, t0=None)
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
         self.manifest = prep["manifest"]
+        self.snapshots.append({"k": 0, "sink_version": self.manifest["sink_version"], "digest": self.manifest["sink_digest"], "captured_by": "A", "move": 0, "call": a.migration_chunk,
+                               "prev_version": None, "dirty_frags": None, "content_reuse_potential": None, "t_captured_rel": None, "capture": None})
+        self.manifest_hist.append((time.time(), self.manifest["sink_version"]))
         self.holders = {e: set() for e in EDGES}; self.holders["A"] = set(range(len(self.manifest["frags"])))
         self.physical = {e: set() for e in EDGES}; self.physical["A"] = set(self.holders["A"])
         for lb in warm[1:]:
@@ -872,6 +942,7 @@ class Run:
             self.drain(0.05)
         self.handoff("A", self.edges[1], 1)
         d = self.plan("start")
+        self.moves[-1]["t_plan"] = time.time()
         if self.net is not None:
             self.net.start(self.moves[-1]["t_req"])
         self.holder_snaps.append((1, {e: set(v) for e, v in self.holders.items()}))
@@ -894,6 +965,7 @@ class Run:
                 frm, to = self.edges[next_move], self.edges[next_move + 1]
                 self.handoff(frm, to, next_move + 1)
                 d = self.plan("move")
+                self.moves[-1]["t_plan"] = time.time()
                 self.holder_snaps.append((next_move + 1, {e: set(v) for e, v in self.holders.items()}))
                 self.trace_state(f"move {frm}->{to}" + (" (final move)" if next_move == n_moves else ""), d)
                 if next_move == n_moves:
@@ -945,6 +1017,52 @@ class Run:
         return summary
 
     # ---------------- accounting
+    def vacw_summary(self, ok_first: list, tfm, S: int) -> dict:
+        """Version-aware Continuity Wavefront accounting (design section 6): per-move fresh transitions and the latency
+        decomposition, every bind vs the intended snapshot (H1a), the reuse triple for the final snapshot, source bytes by
+        snapshot (source role = capturing owner of the active snapshot; A for S_0), aggregate bytes, invalidated bytes."""
+        man = self.manifest; n = len(man["frags"]); fin = self.final; fb = man["frag_bytes"]
+        per_move = []
+        for mv in self.moves:
+            to = mv["to"]; lo = mv["t_req"]
+            nxt = next((m["t_req"] for m in self.moves if m["i"] == mv["i"] + 1), float("inf"))
+            ev = lambda name: next((e["t"] for e in self.node_events if e["node"] == to and e["event"] == name and lo - 1e-3 <= e["t"] < nxt), None)  # noqa: E731
+            t_ver, t_bind, t_plan = ev("sink_verified"), ev("sink_bind"), mv.get("t_plan")
+            t_man = mv.get("t_manifest")
+            d = lambda a_, b_: None if (a_ is None or b_ is None) else a_ - b_  # noqa: E731
+            per_move.append({"i": mv["i"], "from": mv["from"], "to": to, "was_bound": mv.get("was_bound"), "fresh": mv.get("fresh", False), "dirty_frags": mv.get("dirty_frags"),
+                             "available_verified_reuse": mv.get("available_verified_reuse"), "valid_at_new_owner": mv.get("valid_at_new_owner"),
+                             "wait_boundary_s": d(mv.get("t_stop"), lo), "fast_path_s": d(mv.get("t_fg_sent"), mv.get("t_stop")),
+                             "snapshot_capture_s": d(mv.get("t_captured"), mv.get("t_fg_sent")), "manifest_install_s": d(t_man, mv.get("t_captured")),
+                             "manifest_wait_s": d(t_man, mv.get("t_fg_sent")), "plan_after_move_s": d(t_plan, lo),
+                             "restoration_s": d(t_ver, t_plan), "bind_s": d(t_bind, t_ver), "bind_ready_s": d(t_bind, lo)})
+        final_ver = man["sink_version"]
+        src_by_snap = defaultdict(int); agg_by_snap = defaultdict(int)
+        for s_ in self.sent:
+            agg_by_snap[s_["snapshot"]] += s_["bytes"]
+            if s_["role"] == "source":
+                src_by_snap[s_["snapshot"]] += s_["bytes"]
+        total_sent = sum(s_["bytes"] for s_ in self.sent)
+        # reuse triple for the final snapshot
+        fin_snap = next((x for x in self.snapshots if x["sink_version"] == final_ver), None)
+        fin_mv = self.moves[-1] if self.moves else None
+        held_before = fin_mv.get("valid_at_new_owner") if (fin_mv and fin_mv.get("fresh")) else (len(self.holder_snaps[-1][1].get(fin, ())) if self.holder_snaps and fin_mv and not fin_mv.get("fresh") else None)
+        t_fm = tfm if tfm is not None else self.t0
+        from_holders = {r["fid"] for r in ok_first if r["dst"] == fin and r["t_end"] >= t_fm - 1e-3 and r["src"] != self.source and r.get("snapshot") == final_ver}
+        realized = (len(from_holders) + (held_before or 0)) / n
+        invalidated = sum(sum(x.get("invalidated_by_node", {}).values()) for x in self.snapshots)
+        return {"enabled": self.fresh, "source_final": self.source, "n_snapshots": len(self.snapshots), "snapshots": self.snapshots,
+                "fresh_transitions": sum(1 for mv in self.moves if mv.get("fresh")), "moves_with_bound_owner": sum(1 for mv in self.moves if mv.get("was_bound")),
+                "per_move": per_move, "binds": self.binds, "h1a_all_binds_intended": all(b["ok"] for b in self.binds if b["ok"] is not None) if self.binds else None,
+                "final_snapshot": {"sink_version": final_ver, "captured_by": self.source, "k": fin_snap["k"] if fin_snap else None,
+                                   "content_reuse_potential": fin_snap.get("content_reuse_potential") if fin_snap else None,
+                                   "available_verified_reuse": fin_mv.get("available_verified_reuse") if fin_mv else None, "realized_reuse": realized,
+                                   "realized_from_holders_frags": len(from_holders), "held_valid_at_final_move_frags": held_before},
+                "bytes_sinks": {"source_final_snapshot": src_by_snap[final_ver] / S, "source_total": sum(src_by_snap.values()) / S, "source_by_snapshot": {k: v / S for k, v in src_by_snap.items()},
+                                "aggregate": total_sent / S, "aggregate_by_snapshot": {k: v / S for k, v in agg_by_snap.items()}, "invalidated": invalidated * fb / S, "invalidated_frags": invalidated},
+                "manifest_hist_rel": [(self.rel_t(t), v) for t, v in self.manifest_hist],
+                "rejected_stale": self.rejected_stale, "cross_version_accepted": sum(1 for r in self.recv if r.get("cross_version") and r["ok"] and not r["dup"])}
+
     def finish(self, prep, ends, final_move_t):
         a = self.a
         man = self.manifest
@@ -966,9 +1084,9 @@ class Run:
                 wasted += r["bytes"]
             else:
                 dup += r["bytes"]
-            self.frag_csv.row(t_rel=f"{self.rel_t(r['t_end']):.4f}", event="recv", session_id=self.run_id, sink_version=man["sink_version"], fragment_id=r["fid"], src=r["src"], dst=r["dst"], bytes=r["bytes"], flow=r["flow"], ok=r["ok"], dup=r["dup"], classification=cls)
+            self.frag_csv.row(t_rel=f"{self.rel_t(r['t_end']):.4f}", event="recv", session_id=self.run_id, sink_version=r.get("snapshot") or man["sink_version"], fragment_id=r["fid"], src=r["src"], dst=r["dst"], bytes=r["bytes"], flow=r["flow"], ok=r["ok"], dup=r["dup"], classification=cls)
         for s in self.sent:
-            self.frag_csv.row(t_rel=f"{self.rel_t(s['t_end']):.4f}", event="sent", session_id=self.run_id, sink_version=man["sink_version"], fragment_id=s["fid"], src=s["src"], dst=s["dst"], bytes=s["bytes"], flow=s["flow"], ok="", dup="", classification="")
+            self.frag_csv.row(t_rel=f"{self.rel_t(s['t_end']):.4f}", event="sent", session_id=self.run_id, sink_version=s["snapshot"], fragment_id=s["fid"], src=s["src"], dst=s["dst"], bytes=s["bytes"], flow=s["flow"], ok="", dup="", classification="")
         total_sent = sum(s["bytes"] for s in self.sent)
         total_recv = sum(r["bytes"] for r in self.recv)
         in_transit_lost = max(0, total_sent - total_recv)  # bytes on the wire when a flow was cancelled (never completed)
@@ -1022,10 +1140,10 @@ class Run:
         single_owner = all(m["t_stop"] <= resume_ts.get(m["to"], float("inf")) for m in self.moves)
         links_used = sorted(link_bytes)
         chain_links = {f"{self.edges[i]}->{self.edges[i + 1]}" for i in range(len(self.edges) - 1)}
-        reused_bytes = sum(s["bytes"] for s in self.sent if s["src"] != "A")
+        reused_bytes = sum(s["bytes"] for s in self.sent if s["role"] != "source")
         first_fwd = {}
         for s in self.sent:
-            if s["src"] != "A":
+            if s["role"] != "source":
                 first_fwd[s["src"]] = min(first_fwd.get(s["src"], s["t_start"]), s["t_start"])
         complete_t = {e["node"]: e["t"] for e in self.node_events if e["event"] == "sink_complete"}
         fwd_before_complete = {n: (n not in complete_t or t < complete_t[n]) for n, t in first_fwd.items()}
@@ -1036,15 +1154,17 @@ class Run:
             "owner_sequence": owners_seq, "ownership_changed": owners_seq == self.edges,
             "single_owner": single_owner,
             # restart: only the source ever sends and nothing delivered to an abandoned owner is reused
-            "restart_discarded_progress": None if self.policy != "restart" else (all(s["src"] == "A" for s in self.sent) and reused_bytes == 0),
+            "restart_discarded_progress": None if self.policy not in ("restart", "restart_fresh") else (all(s["role"] == "source" for s in self.sent) and reused_bytes == 0),
             "relay_path_only_chain_links": None if self.policy not in ("relay", "relay_pipe") else all(k in chain_links for k in links_used),
             # meaningful only when the first hop was still incomplete at the first move (T_m < T_s)
             "relay_pipe_forwarded_before_complete": None if (self.policy != "relay_pipe" or ("B" in complete_t and self.moves[1:] and complete_t["B"] <= self.moves[1]["t_req"])) else (any(fwd_before_complete.values()) if fwd_before_complete else False),
-            "ours_reused_fragments": None if self.policy != "split" else reused_bytes > 0,
+            "ours_reused_fragments": None if self.policy not in ("split", "split_va") else reused_bytes > 0,
             "oracle_direct_only": None if self.policy != "direct" else links_used == [f"A->{fin}"],
             # full / cold restore no Sink fragments (not applicable); full checks its state digests below
-            "all_fragments_verified": None if self.mode != "fast" else (all(r["ok"] for r in self.recv if not r["dup"]) and ends[fin].get("sink_verified") is True),
-            "sink_version_consistent": not any(r["rejected"] for r in self.recv),
+            # fresh policies: a fragment of a superseded snapshot landing after the manifest change is rejected by hash by design
+            # (design 1.2); it is counted separately (vacw.rejected_stale), never as a version inconsistency
+            "all_fragments_verified": None if self.mode != "fast" else (all(r["ok"] for r in self.recv if not r["dup"] and r["rejected"] != "hash_stale") and ends[fin].get("sink_verified") is True),
+            "sink_version_consistent": not any(r["rejected"] and r["rejected"] != "hash_stale" for r in self.recv),
             "final_sink_digest_matches_source": ends[fin].get("sink_verified") if self.mode == "fast" else (fin_full.get("sink_digest_matches_manifest") if (self.mode == "full" and fin_full) else None),
             "full_state_digests_ok": None if self.mode != "full" else (bool(fin_full) and bool(fin_full.get("all_ok"))),
             "full_bit_exact_after_resume": None if self.mode != "full" else (bool(rows_final) and all((m["psnr"] or 0) >= 99 for m in rows_final if not m["missing"])),
@@ -1061,10 +1181,11 @@ class Run:
         }
         # ---- D0 accounting (preregistration v3, section 6)
         t_mv = tfm if tfm is not None else self.t0
-        src_pre = sum(s["bytes"] for s in self.sent if s["src"] == "A" and s["t_start"] < t_mv)
-        src_post = sum(s["bytes"] for s in self.sent if s["src"] == "A" and s["t_start"] >= t_mv)
+        src_pre = sum(s["bytes"] for s in self.sent if s["role"] == "source" and s["t_start"] < t_mv)
+        src_post = sum(s["bytes"] for s in self.sent if s["role"] == "source" and s["t_start"] >= t_mv)
         ok_first = [r for r in self.recv if r["ok"] and not r["dup"]]
-        b_fwd = sum(r["bytes"] for r in ok_first if r["dst"] == fin and r["src"] != "A")
+        b_fwd = sum(r["bytes"] for r in ok_first if r["dst"] == fin and r["src"] != self.source)
+        vacw = self.vacw_summary(ok_first, tfm, S)
         abandoned = [e for e in self.edges[1:-1]]
         verified_at = {e: {r["fid"] for r in ok_first if r["dst"] == e} for e in self.nodes_used if e != "A"}
         V = set().union(*(verified_at[e] for e in abandoned)) if abandoned else set()
@@ -1082,7 +1203,7 @@ class Run:
             still = (nxt or self.holders).get(e, set())
             retained[e] = (len(before & still) / len(before)) if before else None
         x_at_move = {e: len({r["fid"] for r in ok_first if r["dst"] == e and r["t_end"] <= t_mv}) / len(man["frags"]) for e in self.nodes_used if e != "A"}
-        version_events = sum(1 for e in self.node_events if e["event"] in ("fragment_rejected_version", "sink_version_mismatch")) + sum(1 for r in self.recv if r["rejected"])
+        version_events = sum(1 for e in self.node_events if e["event"] in ("fragment_rejected_version", "sink_version_mismatch")) + sum(1 for r in self.recv if r["rejected"] and r["rejected"] != "hash_stale")
         d0 = {"t_move_final_rel_s": self.rel_t(t_mv),
               "source_bytes_pre_move_sinks": src_pre / S, "source_bytes_post_move_sinks": src_post / S, "source_bytes_total_sinks": (src_pre + src_post) / S,
               "holder_forwarded_sinks": b_fwd / S, "aggregate_network_sinks": total_sent / S,
@@ -1204,7 +1325,7 @@ class Run:
                "t0_wall_by_node": {lb: self.t0 + self.node(lb).off for lb in self.nodes_used if lb in self.o.nodes},
                "known_caps_unchanged": self.known_caps == self.known_caps0}
         summary = {
-            "wrn": wrn,
+            "wrn": wrn, "vacw": vacw,
             "d0": d0, "per_move": per_move, "gpu_peak_mem_mb": {lb: {k: e.get(k) for k in ("peak_allocated_mb", "peak_reserved_mb")} for lb, e in ends.items()}, "execution_state": execution_state, "revisit": revisit, "cold_destination": cold_dest,
             "hybrid": None if self.net is None else {"n_network_sessions": self.net.N, "network_policy": self.net.policy, "network_run_dir": str(self.net.dir.relative_to(REPO_ROOT)),
                                                      "network_summary": {k: self.net_summary.get(k) for k in ("restored_sessions", "first_restored", "makespan_s", "bytes", "normalized", "validation", "stop_reason")},

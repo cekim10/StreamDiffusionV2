@@ -386,6 +386,8 @@ class FakeRuntime:
         self.fp_ver = 0
         self.promote_calls = {int(x) for x in str(args.dry_promote_calls or "").split(",") if x}
         self.base_record = None
+        self.staged = None       # VACW loopback: the last unpacked Sink image; bind() makes it the live Sink
+        self.n_dirty = 0         # dry promotions applied to the live Sink since the last bind (each dirties dry_dirty_frags fragments)
 
     def sink_value_fp(self):
         return [float(self.fp_ver)]
@@ -442,6 +444,8 @@ class FakeRuntime:
     def unpack(self, header, payload):
         if header["comp"] in ("inflight", "meta"):
             self.have_fast = True
+        if header["comp"] == "sink":
+            self.staged = np.frombuffer(bytes(payload), dtype=np.uint8).copy()
         return 0.0
 
     def recent_fp(self):
@@ -452,7 +456,20 @@ class FakeRuntime:
 
     def bind(self):
         self.bound = True; self.fp_ver += 1
+        if self.staged is not None:
+            self.sink_bytes = self.staged.copy(); self.n_dirty = 0   # the live Sink is exactly the bound image (I5 / I7 in the loopback)
         return 73
+
+    def dirty(self, c: int):
+        """Dry promotion at call c: change a known set of fragments of the live Sink (fragment j of the promotion's set
+        = (n_dirty * dry_dirty_frags + j) mod n_frags, first bytes of the fragment), so a fresh snapshot differs from the
+        bound image by a predictable fragment set."""
+        fb = int(self.args.dry_frag_bytes); nf = max(1, len(self.sink_bytes) // fb)
+        ids = [((self.n_dirty * self.args.dry_dirty_frags) + j) % nf for j in range(self.args.dry_dirty_frags)]
+        for fi in ids:
+            self.sink_bytes[fi * fb:fi * fb + 16] = self.rng.integers(0, 256, size=16, dtype=np.uint8)
+        self.n_dirty += 1
+        return ids
 
     def step(self, c, override=None, skip=False):
         if skip:
@@ -461,6 +478,7 @@ class FakeRuntime:
         time.sleep(self.args.dry_service_s)
         if self.bound and c in self.promote_calls:
             self.fp_ver += 1   # dry promotion (protocol test of the version-event accounting)
+            self.dirty(c)      # and the live Sink changes by a known fragment set (VACW loopback)
         self.decodes = [(time.time(), 4)]
         if self.cold:
             ps = 19.5 + self.rng.normal(0, 0.5)
@@ -559,14 +577,50 @@ class Node:
         frag_log = CsvLog(rd / "fragments.csv", ["t", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok"])
         sampler = ResourceSampler(rd / "network.csv", self.me, self.a.gpu_id if not self.a.dry_run else None, self.a.iface); sampler.start()
         self.run = {"id": h["run_id"], "dir": rd, "ev": ev, "metrics": metrics, "frag_log": frag_log, "sampler": sampler, "session_id": h["session_id"],
-                    "manifest": None, "sink_buf": None, "have": set(), "frag_ok": {}, "sink_complete_t": None, "sink_verified": None, "sink_verified_t": None,
+                    "manifest": None, "sink": None, "have": set(), "frag_ok": {}, "sink_complete_t": None, "sink_verified": None, "sink_verified_t": None,
                     "owner": False, "stop_owner": False, "gen_thread": None, "call": None, "bound_call": None, "rejoin_call": None, "first_out_t": None,
                     "sink_unpacked": False, "bind_requested": False, "pending_handoff": None,
                     "full_pack": None, "full_xfer": None, "dropped_flows": set(), "pending_cold": None, "n_owned": 0, "epoch": 0,
-                    "last_fp": None, "bind_at": None, "promotions": []}
+                    "last_fp": None, "bind_at": None, "promotions": [], "snapshots": [], "versions": set(), "await_manifest": False, "unpacked_version": None}
         self.flows = {}
         self.rt.reset_peak()   # G9: peak memory_allocated / reserved over this run
         return {}
+
+    def _build_sink_manifest(self, snap: dict, frag_bytes: int, k: int) -> tuple[dict, bytearray, dict]:
+        """Pack the Sink of `snap` into one contiguous host buffer; fragment table with per-fragment SHA-256; whole digest.
+        Returns (manifest, buffer, timings)."""
+        t0 = time.time()
+        header, bufs = self.rt.pack(snap, "sink")
+        buf = bytearray(header["nbytes"]); mv = memoryview(buf)
+        for t, b in zip(header["tensors"], bufs):
+            mv[t["offset"]:t["offset"] + t["nbytes"]] = memoryview(b).cast("B")
+        t1 = time.time()
+        digest = component_digest(payload_slices(header, buf))
+        frags = frag_table(header["nbytes"], frag_bytes)
+        futs = [_pool().submit(sha256_hex, mv[f["off"]:f["off"] + f["len"]]) for f in frags]
+        for f, fu in zip(frags, futs):
+            f["sha256"] = fu.result()
+        t2 = time.time()
+        r = self.run
+        man = {"session_id": r["session_id"], "sink_version": digest[:16], "sink_digest": digest, "nbytes": header["nbytes"], "header": header, "frags": frags,
+               "frag_bytes": int(frag_bytes), "snapshot_k": k}
+        return man, buf, {"pack_s": t1 - t0, "hash_s": t2 - t1}
+
+    def _install_store(self, man: dict, buf: bytearray, verified: bool):
+        """Make `man` this node's current manifest with `buf` as the buffer object fragments are served from / received into.
+        VACW (design section 1.2, Amendment 1): the store is {buf, man, hash}; `hash[f]` is the SHA-256 of the bytes held
+        for f; `have` = ids whose hash equals the current manifest's entry. A fresh capture installs a NEW buffer object
+        (flows started earlier keep the old one by reference); a manifest update keeps the buffer."""
+        r = self.run
+        with self.lock:
+            r["sink"] = {"buf": buf, "man": man, "hash": ({f["id"]: f["sha256"] for f in man["frags"]} if verified else {})}
+            r["manifest"] = man
+            r["versions"].add(man["sink_version"])
+            r["have"] = set(range(len(man["frags"]))) if verified else set()
+            r["frag_ok"] = {f["id"]: True for f in man["frags"]} if verified else {}
+            r["sink_complete_t"] = r["sink_verified_t"] = time.time() if verified else None
+            r["sink_verified"] = True if verified else None
+            r["sink_unpacked"] = False
 
     def cmd_source_prep(self, h):
         """A: run the session to chunk M, serialize, build the fragment table of the exact Sink serialization."""
@@ -577,30 +631,19 @@ class Node:
         t1 = time.time()
         snap = self.rt.serialize_live()
         t2 = time.time()
-        header, bufs = self.rt.pack(snap, "sink")
         # one contiguous host copy of the exact serialization (fragments are byte ranges of it)
-        buf = bytearray(header["nbytes"]); mv = memoryview(buf)
-        for t, b in zip(header["tensors"], bufs):
-            mv[t["offset"]:t["offset"] + t["nbytes"]] = memoryview(b).cast("B")
-        digest = component_digest(payload_slices(header, buf))
-        frags = frag_table(header["nbytes"], int(h["frag_bytes"]))
-        futs = [_pool().submit(sha256_hex, mv[f["off"]:f["off"] + f["len"]]) for f in frags]
-        for f, fu in zip(frags, futs):
-            f["sha256"] = fu.result()
+        man, buf, _tm = self._build_sink_manifest(snap, int(h["frag_bytes"]), 0)
         t3 = time.time()
-        r["manifest"] = {"session_id": r["session_id"], "sink_version": digest[:16], "sink_digest": digest, "nbytes": header["nbytes"], "header": header, "frags": frags, "frag_bytes": int(h["frag_bytes"])}
-        r["sink_buf"] = buf; r["have"] = set(range(len(frags))); r["frag_ok"] = {f["id"]: True for f in frags}
-        r["sink_complete_t"] = r["sink_verified_t"] = t3; r["sink_verified"] = True
+        self._install_store(man, buf, verified=True)
+        r["snapshots"].append({"k": 0, "digest": man["sink_digest"], "sink_version": man["sink_version"], "t": t3, "call": M})
         r["live_snap"] = snap; r["call"] = M; r["owner"] = True  # A owns execution (not generating until told)
-        self.event("source_prepared", t3, M=M, run_to_M_s=t1 - t0, serialize_s=t2 - t1, pack_hash_s=t3 - t2, sink_nbytes=header["nbytes"], n_frags=len(frags), sink_version=digest[:16])
-        return {"manifest": r["manifest"], "t_prepared": t3}
+        self.event("source_prepared", t3, M=M, run_to_M_s=t1 - t0, serialize_s=t2 - t1, pack_hash_s=t3 - t2, sink_nbytes=man["nbytes"], n_frags=len(man["frags"]), sink_version=man["sink_version"])
+        return {"manifest": man, "t_prepared": t3}
 
     def cmd_manifest(self, h):
         """B/C/D: learn the Sink's identity and layout; preallocate the receive buffer; provision GPU buffers."""
         r = self.run
-        r["manifest"] = h["manifest"]
-        r["sink_buf"] = bytearray(r["manifest"]["nbytes"])
-        r["have"] = set(); r["frag_ok"] = {}
+        self._install_store(h["manifest"], bytearray(h["manifest"]["nbytes"]), verified=False)
         self.rt.provision()
         if h.get("full_pool") and self.recv_pool is None:
             # same size rule as Phase 1's destination (largest component, the VAE caches, fits); kept for the process lifetime
@@ -609,6 +652,36 @@ class Node:
             self.recv_pool = RecvPool(n)
         self.event("provisioned", sink_nbytes=r["manifest"]["nbytes"], n_frags=len(r["manifest"]["frags"]), recv_pool_mb=self.recv_pool and len(self.recv_pool.bufs[0]) / MB)
         return {}
+
+    def cmd_manifest_update(self, h):
+        """VACW: a fresh snapshot S_k became the active manifest. The buffer is kept; a held fragment stays valid iff its
+        content hash equals the new manifest's entry (design section 1.2); the node reports its valid holdings. The node
+        that captured S_k already runs on it (no-op here). Bind / staging state is reset for the new snapshot."""
+        r = self.run
+        new = h["manifest"]
+        t0 = time.time()
+        with self.lock:
+            st = r["sink"]; old = r["manifest"]
+            same = old is not None and old["sink_version"] == new["sink_version"]
+            if not same:
+                assert st is not None and new["nbytes"] == old["nbytes"] and len(new["frags"]) == len(old["frags"]), "manifest layout changed within a session"
+                st["man"] = new; r["manifest"] = new; r["versions"].add(new["sink_version"])
+                valid = {f["id"] for f in new["frags"] if st["hash"].get(f["id"]) == f["sha256"]}
+                n_stale = sum(1 for fid, hsh in st["hash"].items() if hsh != new["frags"][fid]["sha256"])
+                r["have"] = valid; r["frag_ok"] = {fid: True for fid in valid}
+                complete = len(valid) == len(new["frags"])
+                r["sink_complete_t"] = t0 if complete else None
+                r["sink_verified"] = None; r["sink_verified_t"] = None
+                r["sink_unpacked"] = False
+            else:
+                valid = set(r["have"]); n_stale = 0; complete = False
+            r["await_manifest"] = False
+        if not same:
+            self.event("manifest_update", t0, sink_version=new["sink_version"], prev=old["sink_version"], snapshot_k=new.get("snapshot_k"), n_valid=len(valid), n_stale=n_stale,
+                       n_absent=len(new["frags"]) - len(valid) - n_stale, complete=complete)
+            if complete:
+                threading.Thread(target=self._verify_sink, args=(t0,), daemon=True).start()
+        return {"valid": sorted(valid), "n_stale": n_stale, "same": same, "complete": complete, "owner": r["owner"], "bound": r["bound_call"] is not None}
 
     def cmd_exec_handoff(self, h):
         """Current owner: stop at the next chunk boundary and hand over. mode "fast" (M1): ship in-flight rows + metadata
@@ -641,6 +714,8 @@ class Node:
             return {"t_stop": t_stop, "t_fg_sent": None, "t_packed": t_packed, "call": r["call"], "fg_bytes": 0, "state_bytes": nbytes}
         conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
         nbytes = 0
+        was_bound = r["bound_call"] is not None
+        fresh = bool(h.get("fresh")) and was_bound   # VACW: a bound owner captures S_k at the handoff boundary (design 1.1 / 1.3)
         n_rs = int(h.get("recent_slots", 0) or 0)
         fast_comps = ("inflight", "meta") + (("recent_n",) if n_rs > 0 else ())
         if mode == "fast" and n_rs > 0:
@@ -649,13 +724,25 @@ class Node:
             hdr, bufs = self.rt.pack(snap, comp, recent_n=n_rs) if comp == "recent_n" else self.rt.pack(snap, comp)
             send_msg(conn, "FG", {"from": self.label, "run_id": r["id"], "session_id": r["session_id"], **hdr}, bufs, None)
             nbytes += hdr["nbytes"]
-        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode, "recent_slots": n_rs}, b"", None)
+        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode, "recent_slots": n_rs, "fresh_pending": fresh}, b"", None)
         t_sent = time.time()
         conn.close()
+        out = {}
+        if fresh:
+            # S_k: the Sink this owner was generating on (the ring is frozen: generation stopped at the boundary), from the
+            # same serialization as the fast path; new buffer object (I3 / I4), per-fragment hashes, whole digest
+            k = int(h.get("snapshot_k") or len(r["snapshots"]))
+            man, buf, tm = self._build_sink_manifest(snap, int(h.get("frag_bytes") or r["manifest"]["frag_bytes"]), k)
+            t_cap = time.time()
+            self._install_store(man, buf, verified=True)
+            r["snapshots"].append({"k": k, "digest": man["sink_digest"], "sink_version": man["sink_version"], "t": t_cap, "call": r["call"]})
+            self.event("snapshot_captured", t_cap, call=r["call"], snapshot_k=k, sink_version=man["sink_version"], pack_s=tm["pack_s"], hash_s=tm["hash_s"], capture_s=t_cap - t_sent,
+                       n_frags=len(man["frags"]), prev_version=r["snapshots"][-2]["sink_version"] if len(r["snapshots"]) > 1 else None)
+            out = {"fresh_manifest": man, "t_captured": t_cap, "capture": {**tm, "capture_s": t_cap - t_sent}}
         del snap
         self._release_source_session()
-        self.event("exec_stop", t_stop, call=r["call"], to=h["to"], mode=mode, wait_boundary_s=t_stop - t_req, serialize_s=t_ser - t_stop, fg_bytes=nbytes, fg_send_s=t_sent - t_ser)
-        return {"t_stop": t_stop, "t_fg_sent": t_sent, "call": r["call"], "fg_bytes": nbytes}
+        self.event("exec_stop", t_stop, call=r["call"], to=h["to"], mode=mode, wait_boundary_s=t_stop - t_req, serialize_s=t_ser - t_stop, fg_bytes=nbytes, fg_send_s=t_sent - t_ser, was_bound=was_bound, fresh=fresh)
+        return {"t_stop": t_stop, "t_fg_sent": t_sent, "call": r["call"], "fg_bytes": nbytes, "was_bound": was_bound, **out}
 
     def _release_source_session(self):
         if self.label == "A":
@@ -716,6 +803,8 @@ class Node:
             n = len(r["have"])
             if self.label != "A":
                 r["have"] = set(); r["frag_ok"] = {}; r["sink_complete_t"] = None; r["sink_verified"] = None; r["sink_verified_t"] = None; r["sink_unpacked"] = False
+                if r["sink"] is not None:
+                    r["sink"]["hash"] = {}
                 r["epoch"] += 1   # FRAG_RECV reports carry the epoch they were added in: older ones were dropped here
         self.event("sink_dropped", fragments=n, flows=list(h.get("flows", [])), epoch=r["epoch"])
         return {"dropped": n, "epoch": r["epoch"]}
@@ -803,15 +892,19 @@ class Node:
         out = {"have": len(r["have"]), "n_frags": len(r["manifest"]["frags"]) if r["manifest"] else 0, "sink_verified": r["sink_verified"],
                "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb(),
                "baseline_record": getattr(self.rt, "base_record", None) if self.a.sink_fp else None, "promotion_calls": list(r["promotions"])}
+        out["snapshots"] = list(r["snapshots"]); out["versions_seen"] = sorted(r["versions"])
         self.rt.release()
-        r["sink_buf"] = None; r.pop("live_snap", None)
+        r["sink"] = None; r.pop("live_snap", None)
         self.run = None
         return out
 
     # ------------------------------------------------------------------ data plane: sender
     def _sender(self, fl: dict):
         r = self.run
-        man = r["manifest"]; mv = memoryview(r["sink_buf"])
+        # the flow binds its manifest and buffer object here (I3 / I4, Amendment 1): a fresh capture installs a new object,
+        # this flow keeps the old one by reference; a fragment is copied under the node lock immediately before it is sent
+        with self.lock:
+            st = r["sink"]; man = st["man"]; mv = memoryview(st["buf"])
         try:
             conn = tcp_connect(fl["host"], fl["port"], self.a.mss, timeout=60)
         except Exception as exc:  # noqa: BLE001
@@ -825,14 +918,18 @@ class Node:
                 if fl["cancel"] or (not fl["queue"] and fl["closed"]):
                     break
                 fid = int(fl["queue"].pop(0))
-            if fid not in r["have"]:
-                self.event("flow_skip_not_held", flow=fl["id"], fragment_id=fid); continue
             f = man["frags"][fid]
+            with self.lock:
+                held = st["hash"].get(fid)
+                data = bytes(mv[f["off"]:f["off"] + f["len"]]) if held == f["sha256"] else None
+            if data is None:
+                self.event("flow_skip_not_held", flow=fl["id"], fragment_id=fid, stale=held is not None); continue
             with fl["lock"]:
                 thr = fl["throttle"]
             t0 = time.time()
             send_msg(conn, "FRAG", {"session_id": r["session_id"], "sink_version": man["sink_version"], "fragment_id": fid, "byte_offset": f["off"], "length": f["len"],
-                                    "sha256": f["sha256"], "holder": self.label, "flow_id": fl["id"], "dst": fl["dst"]}, mv[f["off"]:f["off"] + f["len"]], thr)
+                                    "sha256": f["sha256"], "holder": self.label, "flow_id": fl["id"], "dst": fl["dst"]}, data, thr)
+            del data
             t1 = time.time()
             fl["sent"].add(fid); fl["bytes"] += f["len"]
             r["frag_log"].row(t=f"{t1:.6f}", event="sent", session_id=r["session_id"], sink_version=man["sink_version"], fragment_id=fid, src=self.label, dst=fl["dst"], bytes=f["len"], flow=fl["id"], ok="")
@@ -884,7 +981,9 @@ class Node:
                         recv_exact(conn, pl)
                     if kind == "FLOW_HELLO":
                         if hdr["sink_version"] != (r["manifest"] or {}).get("sink_version"):
-                            self.event("sink_version_mismatch", flow=hdr["flow_id"], got=hdr["sink_version"], expected=(r["manifest"] or {}).get("sink_version"))
+                            # a flow of a superseded snapshot reaching an updated node (VACW: cancelled by the orchestrator; its fragments are judged by hash)
+                            stale = hdr["sink_version"] in r["versions"]
+                            self.event("flow_version_stale" if stale else "sink_version_mismatch", flow=hdr["flow_id"], got=hdr["sink_version"], expected=(r["manifest"] or {}).get("sink_version"))
                     if kind == "FLOW_END":
                         break
                 else:
@@ -910,15 +1009,27 @@ class Node:
 
     def _recv_frag(self, conn, hdr: dict, pl: int):
         r = self.run
-        man = r["manifest"]
+        with self.lock:
+            man = r["manifest"]; st = r["sink"]
         fid = int(hdr["fragment_id"]); off = int(hdr["byte_offset"]); n = int(hdr["length"])
         ok = True; dup = False
-        if hdr["sink_version"] != man["sink_version"] or hdr["session_id"] != r["session_id"]:
-            recv_exact(conn, pl)  # drain; never combine fragments of different Sink versions
-            self.event("fragment_rejected_version", fragment_id=fid, got=hdr["sink_version"], expected=man["sink_version"], src=hdr["holder"])
-            self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=pl, t_start=time.time(), t_end=time.time(), ok=False, dup=False, rejected="version")
+        if hdr["session_id"] != r["session_id"]:
+            recv_exact(conn, pl)
+            self.event("fragment_rejected_version", fragment_id=fid, got=hdr["sink_version"], expected=man["sink_version"], src=hdr["holder"], reason="session")
+            self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=pl, t_start=time.time(), t_end=time.time(), ok=False, dup=False, rejected="session")
             return
         f = man["frags"][fid]
+        cross = hdr["sink_version"] != man["sink_version"]
+        if hdr["sha256"] != f["sha256"]:
+            # content check against this node's current manifest (design 1.2): a fragment of a superseded snapshot whose
+            # content the active snapshot does not need; under a single manifest this is exactly the old version test
+            stale = cross and hdr["sink_version"] in r["versions"]
+            recv_exact(conn, pl)  # drain; never combine fragments of different Sink versions
+            kind = "hash_stale" if stale else ("version" if cross else "hash")
+            self.event("fragment_rejected_hash" if stale else "fragment_rejected_version", fragment_id=fid, got=hdr["sink_version"], expected=man["sink_version"], src=hdr["holder"], reason=kind)
+            self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=pl, t_start=time.time(), t_end=time.time(), ok=False, dup=False, rejected=kind,
+                      sink_version=hdr["sink_version"], active_version=man["sink_version"])
+            return
         assert f["off"] == off and f["len"] == n == pl, (f, off, n, pl)
         if hdr["flow_id"] in r["dropped_flows"]:
             # M1 only: a fragment of a flow cancelled when this owner was abandoned, still on the wire after the drop
@@ -928,12 +1039,12 @@ class Node:
             return
         t_start = time.time()
         with self.lock:
-            dup = fid in r["have"]
+            dup = st["hash"].get(fid) == f["sha256"]   # already held with the right content
         if dup:
             recv_exact(conn, pl)  # already held: receive into scratch, do not overwrite verified bytes
             t_end = time.time()
         else:
-            view = memoryview(r["sink_buf"])[off:off + n]
+            scratch = bytearray(n); view = memoryview(scratch)
             got = 0
             while got < n:
                 k = conn.recv_into(view[got:], n - got)
@@ -945,29 +1056,40 @@ class Node:
             complete = False
             with self.lock:
                 epoch = r["epoch"]
-                if ok:
+                if ok and r["manifest"] is man:
+                    # verified: replace the fragment's bytes in place under the lock (a sender copies under the same lock: I3 / I4)
+                    memoryview(st["buf"])[off:off + n] = view
+                    st["hash"][fid] = f["sha256"]
                     r["have"].add(fid); r["frag_ok"][fid] = True
                     complete = len(r["have"]) == len(man["frags"]) and r["sink_complete_t"] is None
                     if complete:
                         r["sink_complete_t"] = t_end
+                elif ok:
+                    ok = False   # the manifest changed while this fragment was on the wire: judged against the one it was accepted under; re-sent if still needed
                 else:
                     r["frag_ok"][fid] = False
+            del view, scratch
             if complete:
                 threading.Thread(target=self._verify_sink, args=(t_end,), daemon=True).start()
+        if cross and ok and not dup:
+            self.event("fragment_accepted_cross_version", fragment_id=fid, got=hdr["sink_version"], active=man["sink_version"], src=hdr["holder"])
         r["frag_log"].row(t=f"{t_end:.6f}", event="recv", session_id=r["session_id"], sink_version=man["sink_version"], fragment_id=fid, src=hdr["holder"], dst=self.label, bytes=n, flow=hdr["flow_id"], ok=ok and not dup)
         self.send("FRAG_RECV", fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=n, t_start=t_start, t_end=t_end, ok=ok, dup=dup, t_send=hdr.get("t_send"),
-                  epoch=epoch if not dup else r["epoch"])
+                  epoch=epoch if not dup else r["epoch"], sink_version=hdr["sink_version"], active_version=man["sink_version"], cross_version=cross)
 
     def _verify_sink(self, t_complete: float):
         self._thread_init()
-        r = self.run; man = r["manifest"]
-        digest = component_digest(payload_slices(man["header"], r["sink_buf"]))
-        ok = digest == man["sink_digest"]
+        r = self.run
+        with self.lock:
+            st = r["sink"]; man = st["man"]
+        digest = component_digest(payload_slices(man["header"], st["buf"]))
         t_v = time.time()
         with self.lock:
-            r["sink_verified"] = ok; r["sink_verified_t"] = t_v
-        self.event("sink_complete", t_complete, n_frags=len(man["frags"]), bytes=man["nbytes"])
-        self.event("sink_verified", t_v, ok=ok, verify_s=t_v - t_complete, digest=digest[:16])
+            ok = digest == man["sink_digest"] and r["manifest"] is man   # I2: whole digest of the active snapshot
+            if r["manifest"] is man:
+                r["sink_verified"] = ok; r["sink_verified_t"] = t_v
+        self.event("sink_complete", t_complete, n_frags=len(man["frags"]), bytes=man["nbytes"], sink_version=man["sink_version"])
+        self.event("sink_verified", t_v, ok=ok, verify_s=t_v - t_complete, digest=digest[:16], sink_version=man["sink_version"])
         if ok and not r["owner"]:
             # not generating: stage the Sink on the GPU now so a later bind is immediate
             self._unpack_sink()
@@ -977,9 +1099,11 @@ class Node:
         if r["sink_unpacked"]:
             return
         t0 = time.time()
-        h2d = self.rt.unpack(dict(r["manifest"]["header"]), r["sink_buf"])
-        r["sink_unpacked"] = True
-        self.event("sink_h2d", h2d_s=h2d, staged_s=time.time() - t0)
+        with self.lock:
+            st = r["sink"]
+        h2d = self.rt.unpack(dict(st["man"]["header"]), st["buf"])
+        r["sink_unpacked"] = True; r["unpacked_version"] = st["man"]["sink_version"]
+        self.event("sink_h2d", h2d_s=h2d, staged_s=time.time() - t0, sink_version=st["man"]["sink_version"])
 
     # ------------------------------------------------------------------ execution ownership
     def _become_owner(self, go: dict):
@@ -990,6 +1114,7 @@ class Node:
         r["call"] = int(go["call"]); r["owner"] = True; r["stop_owner"] = False; r["first_out_t"] = None
         r["bound_call"] = None; r["rejoin_call"] = None; r["pending_cold"] = None; r["n_owned"] += 1
         r["last_fp"] = None; r["bind_at"] = None
+        r["await_manifest"] = bool(go.get("fresh_pending"))   # VACW: the leaving owner is capturing S_k; bind only after MANIFEST_UPDATE (I1 / I5)
         extra = {}
         if mode == "full":
             self.rt.restore_full()
@@ -1005,25 +1130,30 @@ class Node:
             have = self.rt.snap.get("have", set()) if getattr(self.rt, "snap", None) else set()
             if "recent_n" in have or int(go.get("recent_slots", 0) or 0) > 0:
                 self.event("recent_handoff_dst", call=r["call"], recent_slots=int(go.get("recent_slots", 0) or 0), fp=self.rt.recent_fp(), received="recent_n" in have)
-            if r["sink_verified"]:
+            if r["sink_verified"] and not r["await_manifest"]:
                 self._unpack_sink()
                 shifted = self.rt.bind()
                 r["bound_call"] = r["call"]; r["bind_at"] = r["call"]
-                self.event("sink_bind", call=r["call"], slots_rerotated=shifted, at_resume=True)
+                self.event("sink_bind", call=r["call"], slots_rerotated=shifted, at_resume=True, **self._bound_version())
         t1 = time.time()
         self.event("resume", t1, call=r["call"], src=go["from"], t_go_src=go["t_go"], restore_s=t1 - t0, gpu_mem_alloc_mb=self.rt.gpu_mem_mb(), mode=mode, ownership=r["n_owned"], **extra)
         r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
+
+    def _bound_version(self) -> dict:
+        with self.lock:
+            man = self.run["sink"]["man"]
+        return {"sink_version": man["sink_version"], "digest": man["sink_digest"][:16], "unpacked_version": self.run["unpacked_version"]}
 
     def _generate(self):
         self._thread_init()
         r = self.run
         while not r["stop_owner"]:
             c = r["call"]
-            if r["bound_call"] is None and r["sink_verified"] and r["pending_cold"] is None:
+            if r["bound_call"] is None and r["sink_verified"] and r["pending_cold"] is None and not r["await_manifest"]:
                 self._unpack_sink()
                 shifted = self.rt.bind()
                 r["bound_call"] = c; r["bind_at"] = c
-                self.event("sink_bind", call=c, slots_rerotated=shifted, at_resume=False)
+                self.event("sink_bind", call=c, slots_rerotated=shifted, at_resume=False, **self._bound_version())
             pc = r["pending_cold"]
             if pc is not None and c in (pc["skip"], pc["emit"]):
                 produced, ps, ss, dt, pos = self.rt.step(c, override=pc["frames"] if c == pc["emit"] else None, skip=c == pc["skip"] and c != pc["emit"])
@@ -1069,6 +1199,8 @@ def parse_args(argv=None):
     p.add_argument("--dry_sink_mb", type=int, default=64)
     p.add_argument("--dry_service_s", type=float, default=0.2)
     p.add_argument("--dry_promote_calls", type=str, default="", help="dry run: calls at which a bound fake Sink changes (version-event accounting test)")
+    p.add_argument("--dry_dirty_frags", type=int, default=3, help="dry run: fragments of the live fake Sink changed per dry promotion (VACW loopback)")
+    p.add_argument("--dry_frag_bytes", type=int, default=4 << 20, help="dry run: fragment size the dirty set is aligned to (= the orchestrator's --frag_bytes)")
     p.add_argument("--sink_fp", action="store_true", help="W / R / N: per-call Sink value fingerprints (baseline and owned calls) and owner-side promotion events")
     p.add_argument("--recent_slots", type=int, default=0, help="(unused: Experiment A passes recent_slots per run in EXEC_HANDOFF; kept for the dry-run driver)")
     p.add_argument("--block_ck", action="store_true", help="Task B: per-call block checksums of every (layer, key, row, sink slot) and all slot positions in the baseline record")

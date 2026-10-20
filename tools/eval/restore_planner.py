@@ -75,10 +75,10 @@ def parse_cap_events(spec):
 
 
 # ----------------------------------------------------------------------------------------------- planning at moves
-def holder_order(history, own, held, edges):
+def holder_order(history, own, held, edges, source=SOURCE):
     """Past owners newest first (never the source), then edges that hold verified fragments without having been owners
-    (pre-positioned holders)."""
-    holders = [e for e in reversed(history[:-1]) if e != own and e != SOURCE]
+    (pre-positioned holders). `source`: the node in the source role (A; VACW: the capturing owner of the active snapshot)."""
+    holders = [e for e in reversed(history[:-1]) if e != own and e != source]
     holders = list(dict.fromkeys(holders))
     holders += [e for e in edges if e != own and e not in holders and held[e]]
     return holders
