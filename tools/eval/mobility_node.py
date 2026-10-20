@@ -357,6 +357,7 @@ class GpuRuntime:
         if fr is not None and ref is not None:
             ps = float(np.mean([self.sa.psnr(ref[f].astype(np.float32) / 255.0, fr[f].astype(np.float32) / 255.0) for f in range(min(ref.shape[0], fr.shape[0]))]))
             ss = float(self.sa.ssim(ref[-1].astype(np.float32) / 255.0, fr[-1].astype(np.float32) / 255.0))
+        self.last_frames = fr   # Experiment RD: decoded output frames of this call (read-only; no effect on generation)
         return fr is not None, ps, ss, dt, self.sa.slot_positions(self.pl)["sink_slot_pos"]
 
     def release(self):
@@ -472,6 +473,7 @@ class FakeRuntime:
         return ids
 
     def step(self, c, override=None, skip=False):
+        self.last_frames = None
         if skip:
             self.decodes = []
             return False, None, None, 0.0, [0, 1, 6]
