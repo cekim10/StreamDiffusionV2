@@ -181,6 +181,25 @@ class GpuRuntime:
         sums = [layer["v"][:, s * fsl:(s + 1) * fsl].sum(dtype=torch.float64) for layer in self.sa.kv_layers(self.pl) for s in range(n)]
         return torch.stack(sums).tolist()
 
+    def block_checksums(self) -> dict:
+        """Task B: per (layer, key, row, sink slot) an order-sensitive int64 checksum of the bf16 block (int16 view x fixed
+        pseudo-random int64 weights, wrapping), plus every slot's RoPE position per layer and row. 360 checksums per call
+        on the GPU (~1.7 GB read); exact block identity up to hash collisions (2^-64 per block)."""
+        torch, fsl, n = self.torch, self.fsl, self.sink
+        if not hasattr(self, "_ck_w"):
+            g = torch.Generator(device="cpu").manual_seed(20261020)
+            self._ck_w = torch.randint(-(1 << 62), 1 << 62, (fsl * self.pl.generator.model.blocks[0].self_attn.k.out_features,), generator=g, dtype=torch.int64).to(self.device)
+        cks, pos = [], []
+        for layer in self.sa.kv_layers(self.pl):
+            rows = layer["k"].shape[0]
+            for key in ("k", "v"):
+                for b in range(rows):
+                    for s_ in range(n):
+                        blk = layer[key][b, s_ * fsl:(s_ + 1) * fsl].reshape(-1).view(torch.int16).to(torch.int64)
+                        cks.append(int((blk * self._ck_w[: blk.numel()]).sum().item()))
+            pos.append(layer["pos"].tolist())
+        return {"blocks": cks, "pos_all": pos}
+
     def baseline(self, M: int, N: int, keep_frames: bool = True, write_ref: bool = True):
         """The uninterrupted reference session (calls 0 .. M + N - 1). Also records per call the output-frame digest, the
         Sink value fingerprints (--sink_fp) and the sink-slot positions (`self.base_record`, written next to the reference
@@ -194,7 +213,8 @@ class GpuRuntime:
         for c in range(M + N):
             t0 = time.perf_counter(); fr = self.runner.step(session, c); torch.cuda.synchronize(self.device); times.append(time.perf_counter() - t0)
             self.base_record.append({"call": c, "frame_digest": frame_digest(fr), "sink_vfp": self.sink_value_fp() if self.args.sink_fp else None,
-                                     "sink_slot_pos": self.sa.slot_positions(self.pl)["sink_slot_pos"], "service_s": times[-1]})
+                                     "sink_slot_pos": self.sa.slot_positions(self.pl)["sink_slot_pos"], "service_s": times[-1],
+                                     **(self.block_checksums() if getattr(self.args, "block_ck", False) else {})})
             if fr is not None and keep_frames:
                 base[c] = fr
             self.runner.noise_hist[c] = float(session.noise_scale)
@@ -1047,6 +1067,7 @@ def parse_args(argv=None):
     p.add_argument("--dry_promote_calls", type=str, default="", help="dry run: calls at which a bound fake Sink changes (version-event accounting test)")
     p.add_argument("--sink_fp", action="store_true", help="W / R / N: per-call Sink value fingerprints (baseline and owned calls) and owner-side promotion events")
     p.add_argument("--recent_slots", type=int, default=0, help="(unused: Experiment A passes recent_slots per run in EXEC_HANDOFF; kept for the dry-run driver)")
+    p.add_argument("--block_ck", action="store_true", help="Task B: per-call block checksums of every (layer, key, row, sink slot) and all slot positions in the baseline record")
     p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
     # model / workload (same defaults as Phase 1)
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))

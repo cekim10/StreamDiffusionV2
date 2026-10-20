@@ -103,6 +103,33 @@ def analyse(rec: list[dict], classes: list[str]) -> dict:
             "P_w": pw, "stable_at_w": {w: {k: (v[k] <= 0.05 if v[k] is not None else None) for k in ("as_fed", "within_clip")} for w, v in pw.items()}}
 
 
+def rope_roundtrip(rt) -> dict:
+    """Task B: are re-rotated keys bitwise equivalent? Rotate sink-slot K blocks by +d then -d (the model's own
+    `_shift_temporal_rope`, float64 math, bf16 result) and compare with the originals; also composition d1 + d2 vs
+    sequential. Reported per d: bitwise-equal fraction, max abs error, max abs error / max |k|."""
+    import torch
+
+    from models.wan.causal_model import _shift_temporal_rope
+
+    model = rt.pl.generator.model
+    freqs = model.freqs.to(rt.device)
+    layers = rt.sa.kv_layers(rt.pl)
+    out = {}
+    for d in (1, 5, 45):
+        bit, maxabs, rel, comp = [], [], [], []
+        for li in (0, 15, 29):
+            for s_ in range(rt.sink):
+                k = layers[li]["k"][0, s_ * rt.fsl:(s_ + 1) * rt.fsl].clone()
+                r = _shift_temporal_rope(_shift_temporal_rope(k, freqs, d), freqs, -d)
+                bit.append(float((r == k).float().mean())); e = (r.float() - k.float()).abs().max().item()
+                maxabs.append(e); rel.append(e / max(k.float().abs().max().item(), 1e-9))
+                c2 = _shift_temporal_rope(_shift_temporal_rope(k, freqs, d), freqs, 3)
+                c1 = _shift_temporal_rope(k, freqs, d + 3)
+                comp.append((c2.float() - c1.float()).abs().max().item())
+        out[str(d)] = {"bitwise_equal_fraction_min": min(bit), "max_abs_err": max(maxabs), "max_rel_err": max(rel), "composition_max_abs_err": max(comp)}
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workload", required=True)
@@ -114,6 +141,7 @@ def main():
     ap.add_argument("--tag", default="", help="suffix of the output directory (e.g. war)")
     ap.add_argument("--out_root", default=str(ROOT / "results/evaluation/expW_W1"))
     ap.add_argument("--dry_run", action="store_true")
+    ap.add_argument("--block_ck", action="store_true", help="Task B: record per-call block checksums (K and V per layer / row / sink slot) and all slot positions")
     a = ap.parse_args()
     video, prompt = workload_paths(a.workload, a.loveu_dir)
     if a.video_path:
@@ -121,17 +149,26 @@ def main():
     import mobility_node as mn
 
     margs = mn.parse_args(["--label", "W1", "--video_path", str(video), "--prompt_file_path", str(prompt), "--seed", str(a.seed), "--gpu_id", str(a.gpu_id),
-                           "--migration_chunk", "0", "--post_chunks", str(a.calls), "--sink_fp"] + (["--dry_run", "--dry_service_s", "0.001"] if a.dry_run else []))
+                           "--migration_chunk", "0", "--post_chunks", str(a.calls), "--sink_fp"] + (["--block_ck"] if a.block_ck else []) + (["--dry_run", "--dry_service_s", "0.001"] if a.dry_run else []))
     T = 81 if a.dry_run and not video.exists() else frame_count(video)
     t0 = time.time()
     rt = mn.FakeRuntime(margs) if a.dry_run else mn.GpuRuntime(margs)
     rt.baseline(0, a.calls, keep_frames=False, write_ref=False)
     rec = rt.base_record
+    rope = None
+    if a.block_ck and not a.dry_run:
+        rope = rope_roundtrip(rt)
     classes = call_classes(T, a.calls)
     stats = analyse(rec, classes)
     out = Path(a.out_root) / f"{a.workload}_s{a.seed}{('_' + a.tag) if a.tag else ''}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
     promo = set(stats["promotion_calls"])
+    if a.block_ck and not a.dry_run:
+        with open(out / "w1_blocks.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["call", "blocks", "pos_all"])
+            for r in rec:
+                w.writerow([r["call"], json.dumps(r.get("blocks")), json.dumps(r.get("pos_all"))])
     with open(out / "w1_calls.csv", "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["call", "class", "promotion", "frame_digest", "service_s", "sink_slot_pos", "sink_vfp"])
@@ -142,7 +179,7 @@ def main():
             "prompt_file": str(prompt), "prompt": prompt.read_text(encoding="utf-8").strip() if prompt.exists() else None, "T_frames": T,
             "commit": commit, "host": platform.node(), "gpu_id": a.gpu_id, "dry_run": a.dry_run, "elapsed_s": time.time() - t0,
             "versions": {} if a.dry_run else {"torch": rt.torch.__version__, "gpu": rt.torch.cuda.get_device_name(rt.device)},
-            "n_fingerprint_values": len(rec[0]["sink_vfp"] or []), **stats}
+            "n_fingerprint_values": len(rec[0]["sink_vfp"] or []), "rope_roundtrip": rope, **stats}
     (out / "w1_summary.json").write_text(json.dumps(meta, indent=1))
     print(f"[W1] {a.workload} s{a.seed}: {len(stats['promotion_calls'])} promotions; P_25 as fed {stats['P_w']['25']['as_fed']}; -> {out}")
 

@@ -184,15 +184,15 @@ class Ctx:
         return r.returncode
 
     # ---------------- W1 on the hosts' GPU 0 (agents) or locally (dry)
-    def w1_units(self, units, tag=""):
+    def w1_units(self, units, tag="", root="expW_W1", extra=()):
         """units: [(workload, seed, video_override or None)]; one unit per host at a time; results copied back."""
-        out_root = ROOT / "results/evaluation" / ("_dryrun_expW_W1" if self.dry else "expW_W1")
+        out_root = ROOT / "results/evaluation" / (("_dryrun_" if self.dry else "") + root)
         done = lambda w, s: any((d / "w1_summary.json").exists() for d in out_root.glob(f"{w}_s{s}{('_' + tag) if tag else ''}_2*"))  # noqa: E731
         todo = [u for u in units if not done(u[0], u[1])]
         print(f"[wrn] W1{(' ' + tag) if tag else ''}: {len(todo)} of {len(units)} units to run", flush=True)
         if self.dry:
             for w, s, v in todo:
-                cmd = [self.py, "tools/eval/expw_w1.py", "--workload", w, "--seed", str(s), "--dry_run", "--out_root", str(out_root), "--calls", "330"]
+                cmd = [self.py, "tools/eval/expw_w1.py", "--workload", w, "--seed", str(s), "--dry_run", "--out_root", str(out_root), "--calls", "330"] + list(extra)
                 if tag:
                     cmd += ["--tag", tag]
                 subprocess.run(cmd, cwd=ROOT, check=False)
@@ -210,7 +210,7 @@ class Ctx:
                     if not queue_:
                         return
                     w, s, v = queue_.pop(0)
-                cmd = [".venv/bin/python", "tools/eval/expw_w1.py", "--workload", w, "--seed", str(s), "--gpu_id", "0", "--loveu_dir", LOVEU_DIR]
+                cmd = [".venv/bin/python", "tools/eval/expw_w1.py", "--workload", w, "--seed", str(s), "--gpu_id", "0", "--loveu_dir", LOVEU_DIR, "--out_root", str(out_root)] + list(extra)
                 if v:
                     cmd += ["--video_path", v]
                 if tag:
@@ -223,9 +223,9 @@ class Ctx:
                     with lock:
                         self.failures.append(f"W1 {w} s{s} on {lb}: rc {rc}")
                 if lb != "A":   # copy the result back to elves-01 (text files)
-                    for d in ag.glob(f"results/evaluation/expW_W1/{w}_s{s}{('_' + tag) if tag else ''}_2*"):
+                    for d in ag.glob(f"results/evaluation/{root}/{w}_s{s}{('_' + tag) if tag else ''}_2*"):
                         loc = ROOT / d; loc.mkdir(parents=True, exist_ok=True)
-                        for f in ("w1_calls.csv", "w1_summary.json"):
+                        for f in ("w1_calls.csv", "w1_summary.json", "w1_blocks.csv"):
                             try:
                                 (loc / f).write_text(ag.read(f"{d}/{f}"))
                             except RuntimeError as exc:
@@ -309,6 +309,11 @@ def do_a(c):
             c.bw = "100" if c.dry else "1000"
 
 
+def do_b(c):
+    """Task B: W1-style runs with per-call block checksums on the 10 Task-A units (results/evaluation/expW_B)."""
+    c.w1_units([(w, s, None) for w in A_WORKLOADS for s in (0, 1)], root="expW_B", extra=("--block_ck",))
+
+
 def do_m3dev(c):
     tag = f"_{c.a.tag}" if c.a.tag else ""
     for cell in (7, 8, 9, 10):
@@ -382,7 +387,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -397,7 +402,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:
