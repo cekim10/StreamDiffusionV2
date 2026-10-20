@@ -178,3 +178,8 @@ Full migration does not cover that path. No rolling synchronization is implement
   ablation); sustained-recovery gain uncertain (the only outcome that would make GO); 1 Gbps not run (cost 4.6 s per
   slot, NO-GO by construction).
 - Validity: `followup_common.md` section 3 (native: NIC peaks against the 9.4 Gbps physical cap, as in ExpD's native runs).
+
+**Experiment A frozen at commit `bfc2ce08ebdf8fa41fc7b6b229d8c4dfe5910b71` (2026-10-20):** matrix, metrics, consumption check and the go / no-go rule above;
+code `tools/proto_handoff.py` (recent_n), `tools/eval/mobility_node.py`, `tools/eval/mobility_orchestrate.py`
+(`--recent_slots`), `tools/eval/run_wrn.py a`, `tools/eval/aggregate_wrn.py` section A. Development data: the frozen
+ablation (2026-10-06/09), W2, the loopback. No Experiment A GPU run exists.
