@@ -44,15 +44,20 @@ Classification: **Main** / **Supporting** / **Limitation** / **Unsupported (must
   reference ~17 dB, Exp A n = 0 median over the first 6 calls); anything about perceived interruption; behaviour with a
   cold destination.
 
-**M1-2. The Sink is the state that must be restored; without it the stream never returns to the reference.** - *Main*
-- Wording: "The attention Sink is the durable component: a late-bound Sink returns the stream to the uninterrupted
-  trajectory, and no other recovery path does."
+**M1-2. Taking the Sink off the critical path does not prevent a later return to the reference, under bounded
+conditions; without the Sink the stream never returns.** - *Main (narrowed 2026-10-20)*
+- Wording: "Execution resumes without the attention Sink; when the Sink is bound later, the stream can return to the
+  uninterrupted trajectory - after one move at 1 Gbps it crosses back in 39 of 40 inputs and stays there in 31 - while
+  without the Sink it never does. How late the Sink may arrive is not established: after three moves (~71 Sink-less
+  calls) one refresh-heavy input never returns."
 - Evidence: W-H3 SUPPORTED - Cold restart reaches 35 dB in 0 qualifying units (last-10 medians 18-30 dB); W-H2 39 / 40
   units cross 35 dB after a late bind (bind at call 58-59, rejoin median 7 calls, range 3-40; `w2_table.csv`); ExpD
   scenario B: Cold restart never rejoins; background state study: Sink loss diverges in 31 / 31 runs.
 - Holds: single move, 1 Gbps, M = 34, horizon 100 calls (W2).
-- Counterexamples: audi-snow-trail s1 never crosses (W2); see E2E-3 / E2E-4.
-- Does NOT establish: sustained recovery (E2E-2); recovery after several moves (E2E-4).
+- Counterexamples: audi-snow-trail s1 never crosses (W2); 9 of 40 W2 units never hold 10 consecutive calls >= 35 dB
+  (`w2_table.csv`, `sustained_calls` empty); butterfly 0 / 18 after three moves (E2E-4).
+- Does NOT establish: a tolerable Sink delay ("the Sink may arrive late" in general); sustained recovery for
+  refresh-heavy inputs (E2E-2); recovery after several moves (E2E-4).
 
 **M1-3. Recent KV and VAE caches need not be transferred.** - *Supporting*
 - Wording: "Shipping recent KV slots with the fast path does not improve recovery and delays resumption."
@@ -173,12 +178,13 @@ alternative provider exists.** - *Main, with its stated limitation*
 the reference (~17 dB) until the Sink binds (~15 s at 1 Gbps, ~3 s native).
 
 **E2E-2. Single crossing vs sustained recovery after one move.** - *Supporting + Limitation*
-- Evidence: W-H2 39 / 40 single crossings (all 40 units valid after one re-run); **8 units never hold 10 consecutive
-  calls >= 35 dB** (train x2, street-artist-painting x2, butterfly x2, cricket-bat-practice s0, audi-snow-trail s0) and 9
+- Evidence: W-H2 39 / 40 single crossings (all 40 units valid after one re-run); sustained (10 consecutive calls >= 35 dB)
+  in 31 / 40: **8 crossing units never hold it** (train x2, street-artist-painting x2, butterfly x2, cricket-bat-practice
+  s0, audi-snow-trail s0) plus the non-crossing audi-snow-trail s1; 9
   end the horizon with a last-10 median < 35 dB (W2, 1 Gbps). At native bandwidth (Exp A) all 10 units tested,
   including four of those clips, sustain 35 dB 6-11 calls after the bind (observation, not a hypothesis of A).
-- Wording: "After one move, the stream crosses back to the reference in 39 of 40 inputs; refresh-heavy inputs may not
-  stay there at 1 Gbps."
+- Wording: "After one move at 1 Gbps, the stream crosses back to the reference in 39 of 40 inputs and stays there in 31;
+  refresh-heavy inputs may not stay there."
 - Does NOT establish: sustained recovery for refresh-heavy inputs at 1 Gbps; causality of bind latency (correlational).
 
 **E2E-3. Sink integrity** - see M2-3 (*Main*, as a property).
@@ -219,9 +225,10 @@ the reference (~17 dB) until the Sink binds (~15 s at 1 Gbps, ~3 s native).
 
 1. **Sub-second resumption** (M1-1): 0.67-0.69 s to first output across 20 inputs x 2 seeds and from 250 Mbps to native,
    80 x faster than Full migration at 1 Gbps (54.25 s), with 2.67 MiB of immediate state; warm destination.
-2. **The Sink is the state to restore, and it can arrive late** (M1-2, M1-3): without it the stream never returns
-   (0 units, 31 / 31 background runs); bound late it returns in 39 / 40 single-move units; shipping recent KV adds +0.9 s
-   per slot for no recovery gain (A NO-GO).
+2. **The Sink can be taken off the critical path** (M1-2, M1-3): generation resumes without it; bound after one move at
+   1 Gbps the stream crosses back to the reference in 39 / 40 inputs and stays in 31 / 40; without it, never (0 units,
+   31 / 31 background runs); shipping recent KV adds +0.9 s per slot for no recovery gain (A NO-GO). The tolerable Sink
+   delay is not established (three moves: butterfly 0 / 18).
 3. **Verified Sink integrity at every bind** (M2-3): digest-identical binds in every valid run, including 24 / 24 fresh
    and stale binds in VACW.
 4. **Progress preservation across repeated moves** (M2-1, M2-2): 87-99.6 % of redundant source bytes removed, discarded
