@@ -113,13 +113,13 @@ def rope_roundtrip(rt) -> dict:
 
     model = rt.pl.generator.model
     freqs = model.freqs.to(rt.device)
-    layers = rt.sa.kv_layers(rt.pl)
+    sample = rt.rope_sample   # sink K blocks (row 0) of three layers, captured at the end of the baseline
     out = {}
     for d in (1, 5, 45):
         bit, maxabs, rel, comp = [], [], [], []
-        for li in (0, 15, 29):
+        for li, kblk in sample.items():
             for s_ in range(rt.sink):
-                k = layers[li]["k"][0, s_ * rt.fsl:(s_ + 1) * rt.fsl].clone()
+                k = kblk[s_ * rt.fsl:(s_ + 1) * rt.fsl].clone()
                 r = _shift_temporal_rope(_shift_temporal_rope(k, freqs, d), freqs, -d)
                 bit.append(float((r == k).float().mean())); e = (r.float() - k.float()).abs().max().item()
                 maxabs.append(e); rel.append(e / max(k.float().abs().max().item(), 1e-9))

@@ -222,6 +222,10 @@ class GpuRuntime:
                 self.mem(f"baseline call {c}")
         self.base = base
         self.service_s = float(np.median(times[M:]))
+        if getattr(self.args, "block_ck", False):
+            # Task B RoPE round-trip test sample: sink K blocks of three layers (row 0), taken before the cache is released
+            layers = self.sa.kv_layers(self.pl)
+            self.rope_sample = {li: layers[li]["k"][0, :self.sink * self.fsl].clone() for li in (0, len(layers) // 2, len(layers) - 1)}
         if write_ref:
             self.write_reference()
             ref_record_path(self.args).write_text(json.dumps(self.base_record))
