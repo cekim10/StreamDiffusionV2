@@ -278,10 +278,14 @@ def n_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "reuse_dyn",
     return a
 
 
+V_POST = {8: ("800", "1200")}   # amendment 1 (2026-10-20): V8 needs ~330 s of restoration through the 31.25 Mbps ingress
+
+
 def v_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "split", "reuse_dyn", "reuse_dyn2")):
     pp, path, deg = V_CELLS[cell]
+    post, mx = V_POST.get(cell, ("400", "900"))
     a = ["--pp_configs", ",".join(f"{p}:{pp}" for p in policies), "--path", path, "--tm", "1e9", "--lookahead", "4" if c.dry else "10", "--budget", "1",
-         "--reps", reps, "--post_chunks", "400", "--max_run_s", "900"]
+         "--reps", reps, "--post_chunks", post, "--max_run_s", mx]
     if deg:
         kind, node, capv = deg.split(":"); d, mbps = capv.split("=")
         a += ["--cap_events", f"{kind}:{node}:{d}={float(mbps) / 10 if c.dry else mbps}"]
@@ -295,8 +299,10 @@ def do_m3dev(c):
 
 
 def do_v(c):
-    for cell in V_CELLS:
-        c.orch(f"expV_cell{cell}", v_args(c, cell), ["--sink_fp"], f"V cell {cell} ({V_LABEL[cell]})")
+    cells = [int(x) for x in c.a.cells.split(",")] if c.a.cells else list(V_CELLS)
+    tag = f"_{c.a.tag}" if c.a.tag else ""
+    for cell in cells:
+        c.orch(f"expV{tag}_cell{cell}", v_args(c, cell), ["--sink_fp"], f"V{tag} cell {cell} ({V_LABEL[cell]})")
 
 
 def do_w1(c):
@@ -364,7 +370,8 @@ def main():
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
     ap.add_argument("--wait_s", type=int, default=1800)
-    ap.add_argument("--tag", default="", help="m3dev: round tag (results in m3dev_<tag>_cell*; earlier rounds are kept)")
+    ap.add_argument("--tag", default="", help="m3dev: round tag (m3dev_<tag>_cell*); v: amendment tag (expV_<tag>_cell*); earlier runs are kept")
+    ap.add_argument("--cells", default="", help="v: comma list of V cells to run (default all)")
     ap.add_argument("--py", default=os.environ.get("PY") or (str(ROOT / ".venv/bin/python") if (ROOT / ".venv/bin/python").exists() else sys.executable))
     a = ap.parse_args()
     c = Ctx(a)

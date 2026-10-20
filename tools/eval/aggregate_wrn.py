@@ -353,10 +353,16 @@ V_CLASS = {1: "no change", 2: "alternative available", 3: "no alternative", 4: "
            6: "no alternative", 7: "no alternative", 8: "no alternative"}
 
 
+V_AMENDED = {1: "expV_a1_cell1", 2: "expV_a1_cell2", 3: "expV_a1_cell3", 8: "expV_a1_cell8"}   # amendment 1 re-runs supersede the originals
+
+
 def agg_v(dry):
     res = {}
     for cell in range(1, 9):
-        g = by_cfg(runs_in(f"expV_cell{cell}", dry), lambda r: r["policy"])
+        exp = V_AMENDED.get(cell, f"expV_cell{cell}")
+        if cell in V_AMENDED and not (EV / (("_dryrun_" if dry else "") + exp)).exists():
+            exp = f"expV_cell{cell}"   # amendment runs not present yet: the superseded originals are shown, flagged
+        g = by_cfg(runs_in(exp, dry), lambda r: r["policy"])
         pol = {}
         for p in ("reuse_aware_in", "split", "reuse_dyn", "reuse_dyn2"):
             v, inap = valid_reps(g.get(p, []), need_applicable=False)
@@ -389,6 +395,7 @@ def agg_v(dry):
             c1 = diff_le(v2["bind"], v1["bind"], 1.0)
             out["V-H4"] = verdict(None if c1 is None else (c1 and v2["B_source"].x <= v1["B_source"].x + 0.05 and v2["replans"].x <= v1["replans"].x)) + f" (v2 vs v1: bind {v2['bind']} vs {v1['bind']}, B_src {v2['B_source']} vs {v1['B_source']}, re-plans {v2['replans']} vs {v1['replans']})"
         out["policies"] = {p: {k: (repr(v) if isinstance(v, Val) else v) for k, v in x.items()} for p, x in pol.items()}
+        out["source"] = exp + ("" if exp.startswith("expV_a1") or cell not in V_AMENDED else " (SUPERSEDED by amendment 1; re-run pending)")
         res[str(cell)] = out
     return res
 
@@ -422,7 +429,7 @@ def main():
         L.append(f"| {k} | {v['class']} | {v['verdict']} | {v['effect']} |")
     L += ["", "## V (M3-v2 holdout)", "", "| cell | class | verdict (v2 vs at moves) | V-H4 (v2 vs v1) |", "|---|---|---|---|"]
     for k, v in out["V"].items():
-        L.append(f"| V{k} | {v['class']} | {v['verdict']} | {v.get('V-H4')} |")
+        L.append(f"| V{k} | {v['class']} | {v['verdict']} | {v.get('V-H4')} |" + (f" {v['source']}" if "SUPERSEDED" in v.get("source", "") else ""))
     (OUT / f"{pre}wrn_results.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
 

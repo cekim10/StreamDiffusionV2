@@ -23,3 +23,10 @@
 | tools/eval/aggregate_wrn.py | 7d63bf1f61e208e5ac36388c96c197d2f32012ab762bad6baf43261d0a6e70e4 |
 | expN/m3v2_design.md | 0823ab062c872824f212ddb08bf8f13e74fa0065e84e57eceff6bd023e2045b0 |
 | expN/m3v2_holdout_plan.md | 8a09a7e865aea42eb19e31e9917fc4b74536a9712637d570694723353a32aae0 |
+
+## Amendment 1 (2026-10-20; `expN/m3v2_holdout_plan.md` Amendment 1)
+
+Harness fix (placement-window guard in `plan_aware`; not in the M3-v2 algorithm) and V8's run window (`post_chunks`
+800 / `max_run_s` 1200). V1-V3 and V8 are re-run as `expV_a1_cell*`; the first-run directories are kept and flagged
+superseded; V4-V7 stand. `tools/eval/mobility_orchestrate.py` after the fix differs from the frozen hash only by the
+guard (commit recorded in git).

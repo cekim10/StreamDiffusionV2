@@ -72,3 +72,22 @@ closed). No universal M3 claim: the paper's statement is per class, as for N.
 Freeze M3-v2 (algorithm, parameters: probe 4 fragments, min 8 fragments per span, 2-fragment margin, v1's thresholds
 unchanged) and this plan in one commit after the GPU regression on N cells 7-10 passes its pre-written conditions
 (`m3v2_design.md` section 6); then run V1-V8 in order; aggregate; report with every negative result.
+
+## Amendment 1 (2026-10-20, after the first holdout run; the frozen text above is unchanged; original runs kept)
+
+Two correctness issues found in the first run of V1-V8 (`expV_cell*`, commit 91faa0a), neither in the M3-v2 algorithm:
+1. **Harness bug under proportional placement (cells V1-V3, policies at moves / M3-v1 / M3-v2):** `plan_aware` had no
+   placement-window guard; when D's small placement flow finished at ~3.0 s it re-planned and cancelled the placement
+   flows to B and C ("owner moved: retarget"), leaving B with 0.08 Sink instead of 0.43 and C with 0.08 instead of 0.22
+   (M1 + M2 uses a different planner and received the full placement). Top-1 placement (ExpD C / D, N) never exposed it
+   because its single flow ends at the move. The AWARE policies in V1-V3 therefore did not run the preregistered
+   condition, and V2's "V-H2 NOT SUPPORTED" is an artefact (with 0.08 Sink at B its degradation was irrelevant).
+   **Fix:** `plan_aware` ignores `flow_done` while the source still owns execution (`owner_idx == 0`). **Re-run:** V1-V3,
+   all four policies, 3 reps (36 runs), as `expV_a1_cell{1,2,3}`; the originals stay on disk, flagged superseded.
+2. **Run window too short for V8:** without placement the whole remaining 0.75 Sink crosses the 31.25 Mbps ingress
+   (~330 s), but `post_chunks` 400 ends the call window 222 s after the trigger: every policy stopped at progress 0.80
+   (`window_exhausted`), so V8 is censored for all four policies (the plan's "~110 s" estimate was wrong). **Fix:**
+   `post_chunks` 800 and `max_run_s` 1200 for V8 only. **Re-run:** V8, four policies, 3 reps (12 runs), as
+   `expV_a1_cell8`.
+Verdict rules, thresholds, cells and policies are unchanged; the aggregator uses the `_a1` runs for V1-V3 and V8 and
+the original runs for V4-V7. The first-run V4-V7 results are unaffected (top-1 or no placement) and stand.

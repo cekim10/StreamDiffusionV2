@@ -482,6 +482,12 @@ class Run:
         network harness). Per-fragment arrivals do not re-plan."""
         if reason not in ("start", "move", "flow_done"):
             return ""
+        if self.owner_idx == 0 and reason == "flow_done":
+            # placement window (before the first move): the source still owns execution and the only flows are the
+            # placement flows to the candidates; a finished placement flow must not retarget the others (Experiment V
+            # amendment 1, 2026-10-20: with proportional placement D's small flow finished first and this call cancelled
+            # the flows to B and C; top-1 placement never exposed it because its single flow ends at the move)
+            return ""
         owner, flen = self.owner, self.manifest["frag_bytes"]
         n_all = set(range(len(self.manifest["frags"])))
         for fl in list(self.flows.values()):
