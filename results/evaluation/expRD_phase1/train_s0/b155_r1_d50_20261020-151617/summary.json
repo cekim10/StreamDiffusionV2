@@ -1,0 +1,148 @@
+{
+ "condition": {
+  "id": "b155_r1_d50",
+  "phase": 1,
+  "workload": "train",
+  "seed": 0,
+  "structure": "r1",
+  "d": 50,
+  "anchor": 155,
+  "resets": [
+   105
+  ],
+  "binds": [
+   155
+  ],
+  "sink_source": "withheld",
+  "end": 254
+ },
+ "t_first_reset": 105,
+ "final_bind": 155,
+ "sinkless_calls": 50,
+ "events": [
+  {
+   "call": 105,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "ee871c400d11805f",
+   "reset_s": 3.081320457160473
+  },
+  {
+   "call": 155,
+   "op": "bind",
+   "sha": "ee871c400d11805f",
+   "packed_at": 105,
+   "slots_rerotated": 93,
+   "bind_s": 0.09820882976055145
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 155,
+   "sha": "ee871c400d11805f628a877f234a840ff1620fc023afeac88d21fa174cec61bb",
+   "packed_at": 105
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  105
+ ],
+ "realized_binds": [
+  155
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 33.82419870196014,
+  "crossed": true,
+  "cross_call": 179,
+  "cross_after_bind": 24,
+  "sustained": false,
+  "sustain_call": null,
+  "first_call": 155,
+  "last_call": 254
+ },
+ "gap_psnr": 16.88564219897784,
+ "reference_sink_changes": [
+  108,
+  110,
+  112,
+  113,
+  118,
+  127,
+  128,
+  135,
+  153
+ ],
+ "no_reference": {
+  "sinkless": {
+   "n_transitions": 200,
+   "E_O": 9.954610278606415,
+   "E_R": 6.973881980180741,
+   "E_ratio": 1.4274130687752797,
+   "band": "less consistent with input motion",
+   "motion_ratio": 1.3064559352473468,
+   "possibly_static": false
+  },
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 6.592002794146538,
+   "E_R": 6.4426366746425625,
+   "E_ratio": 1.0231840047867145,
+   "band": "comparable",
+   "motion_ratio": 1.0417934312851156,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 7.211643242835999,
+   "E_R": 7.317395484447479,
+   "E_ratio": 0.985547830257877,
+   "band": "comparable",
+   "motion_ratio": 1.0031272482088067,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 105,
+    "spike_O": 4.665072220746828,
+    "spike_R": 1.1815601582258886
+   },
+   {
+    "kind": "bind",
+    "call": 155,
+    "spike_O": 1.0755176748766986,
+    "spike_R": 0.8929340236589517
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 162.5502223968506,
+ "valid": true,
+ "workload": "train",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-03",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 156.71034455299377,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/train.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/train_prompt.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

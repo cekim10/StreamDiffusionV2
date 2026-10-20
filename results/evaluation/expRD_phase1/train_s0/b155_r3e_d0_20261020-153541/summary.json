@@ -1,0 +1,212 @@
+{
+ "condition": {
+  "id": "b155_r3e_d0",
+  "phase": 1,
+  "workload": "train",
+  "seed": 0,
+  "structure": "r3e",
+  "d": 0,
+  "anchor": 155,
+  "resets": [
+   105,
+   130,
+   155
+  ],
+  "binds": [
+   105,
+   130,
+   155
+  ],
+  "sink_source": "withheld",
+  "end": 254
+ },
+ "t_first_reset": 105,
+ "final_bind": 155,
+ "sinkless_calls": 0,
+ "events": [
+  {
+   "call": 105,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "ee871c400d11805f",
+   "reset_s": 3.0513986572623253
+  },
+  {
+   "call": 105,
+   "op": "bind",
+   "sha": "ee871c400d11805f",
+   "packed_at": 105,
+   "slots_rerotated": 0,
+   "bind_s": 0.10055415332317352
+  },
+  {
+   "call": 130,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "6a1f75629fbe2e99",
+   "reset_s": 3.154077596962452
+  },
+  {
+   "call": 130,
+   "op": "bind",
+   "sha": "6a1f75629fbe2e99",
+   "packed_at": 130,
+   "slots_rerotated": 0,
+   "bind_s": 0.10291536152362823
+  },
+  {
+   "call": 155,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "10e52a45ff47bf21",
+   "reset_s": 3.226746089756489
+  },
+  {
+   "call": 155,
+   "op": "bind",
+   "sha": "10e52a45ff47bf21",
+   "packed_at": 155,
+   "slots_rerotated": 0,
+   "bind_s": 0.10002364218235016
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 105,
+   "sha": "ee871c400d11805f628a877f234a840ff1620fc023afeac88d21fa174cec61bb",
+   "packed_at": 105
+  },
+  {
+   "call": 130,
+   "sha": "6a1f75629fbe2e99d1b808d499d4551e9813b6e7ab7c80be1107451726912662",
+   "packed_at": 130
+  },
+  {
+   "call": 155,
+   "sha": "10e52a45ff47bf21f74f12ba27b2b165ef9c68a8313a4802d12af2b7234bea0b",
+   "packed_at": 155
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  105,
+  130,
+  155
+ ],
+ "realized_binds": [
+  105,
+  130,
+  155
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 40.04600726662845,
+  "crossed": true,
+  "cross_call": 166,
+  "cross_after_bind": 11,
+  "sustained": true,
+  "sustain_call": 166,
+  "first_call": 155,
+  "last_call": 254
+ },
+ "gap_psnr": null,
+ "reference_sink_changes": [
+  108,
+  110,
+  112,
+  113,
+  118,
+  127,
+  128,
+  135,
+  153
+ ],
+ "no_reference": {
+  "sinkless": null,
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 7.596441105008125,
+   "E_R": 6.4426366746425625,
+   "E_ratio": 1.179088855795143,
+   "band": "comparable",
+   "motion_ratio": 1.157771558861029,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 7.34991717338562,
+   "E_R": 7.317395484447479,
+   "E_ratio": 1.0044444350462214,
+   "band": "comparable",
+   "motion_ratio": 1.004943314623198,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 105,
+    "spike_O": 4.178899091763515,
+    "spike_R": 1.1815601582258886
+   },
+   {
+    "kind": "reset",
+    "call": 130,
+    "spike_O": 8.324141728556445,
+    "spike_R": 4.346865537914082
+   },
+   {
+    "kind": "reset",
+    "call": 155,
+    "spike_O": 3.149992572707854,
+    "spike_R": 0.8929340236589517
+   },
+   {
+    "kind": "bind",
+    "call": 105,
+    "spike_O": 4.178899091763515,
+    "spike_R": 1.1815601582258886
+   },
+   {
+    "kind": "bind",
+    "call": 130,
+    "spike_O": 8.324141728556445,
+    "spike_R": 4.346865537914082
+   },
+   {
+    "kind": "bind",
+    "call": 155,
+    "spike_O": 3.149992572707854,
+    "spike_R": 0.8929340236589517
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 171.47470426559448,
+ "valid": true,
+ "workload": "train",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-03",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 156.71034455299377,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/train.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/train_prompt.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

@@ -1,0 +1,130 @@
+{
+ "condition": {
+  "id": "b155_r1_d0",
+  "phase": 1,
+  "workload": "butterfly-feeding-slow-motion",
+  "seed": 0,
+  "structure": "r1",
+  "d": 0,
+  "anchor": 155,
+  "resets": [
+   155
+  ],
+  "binds": [
+   155
+  ],
+  "sink_source": "withheld",
+  "end": 254
+ },
+ "t_first_reset": 155,
+ "final_bind": 155,
+ "sinkless_calls": 0,
+ "events": [
+  {
+   "call": 155,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "8ccb9b5d802a6931",
+   "reset_s": 3.0315484032034874
+  },
+  {
+   "call": 155,
+   "op": "bind",
+   "sha": "8ccb9b5d802a6931",
+   "packed_at": 155,
+   "slots_rerotated": 0,
+   "bind_s": 0.09992136061191559
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 155,
+   "sha": "8ccb9b5d802a69314422b7c9c526072cae5531a3b4357e1a26a4d2439e836d8b",
+   "packed_at": 155
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  155
+ ],
+ "realized_binds": [
+  155
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 34.64413204940888,
+  "crossed": true,
+  "cross_call": 165,
+  "cross_after_bind": 10,
+  "sustained": true,
+  "sustain_call": 219,
+  "first_call": 155,
+  "last_call": 254
+ },
+ "gap_psnr": null,
+ "reference_sink_changes": [],
+ "no_reference": {
+  "sinkless": null,
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 11.74676479101181,
+   "E_R": 10.596914905309678,
+   "E_ratio": 1.108507985199163,
+   "band": "comparable",
+   "motion_ratio": 1.0771451074960077,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 10.791465783119202,
+   "E_R": 10.742858350276947,
+   "E_ratio": 1.0045246275485893,
+   "band": "comparable",
+   "motion_ratio": 1.0053722239136076,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 155,
+    "spike_O": 3.7820950431440084,
+    "spike_R": 0.4510703181596702
+   },
+   {
+    "kind": "bind",
+    "call": 155,
+    "spike_O": 3.7820950431440084,
+    "spike_R": 0.4510703181596702
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 166.341965675354,
+ "valid": true,
+ "workload": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-01",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 158.32484126091003,
+ "video": "data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

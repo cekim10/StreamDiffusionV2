@@ -1,0 +1,130 @@
+{
+ "condition": {
+  "id": "b175_r1_d0",
+  "phase": 1,
+  "workload": "audi-snow-trail",
+  "seed": 0,
+  "structure": "r1",
+  "d": 0,
+  "anchor": 175,
+  "resets": [
+   175
+  ],
+  "binds": [
+   175
+  ],
+  "sink_source": "withheld",
+  "end": 274
+ },
+ "t_first_reset": 175,
+ "final_bind": 175,
+ "sinkless_calls": 0,
+ "events": [
+  {
+   "call": 175,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "b801988e490252b8",
+   "reset_s": 2.9600098989903927
+  },
+  {
+   "call": 175,
+   "op": "bind",
+   "sha": "b801988e490252b8",
+   "packed_at": 175,
+   "slots_rerotated": 0,
+   "bind_s": 0.09834553953260183
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 175,
+   "sha": "b801988e490252b87c8db03b94b47e77f895eda3a144f253e855a8ad2fee504c",
+   "packed_at": 175
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  175
+ ],
+ "realized_binds": [
+  175
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 32.35860294798444,
+  "crossed": true,
+  "cross_call": 190,
+  "cross_after_bind": 15,
+  "sustained": true,
+  "sustain_call": 210,
+  "first_call": 175,
+  "last_call": 274
+ },
+ "gap_psnr": null,
+ "reference_sink_changes": [],
+ "no_reference": {
+  "sinkless": null,
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 12.015675008296967,
+   "E_R": 10.601062101125716,
+   "E_ratio": 1.1334406773280796,
+   "band": "comparable",
+   "motion_ratio": 1.197977891235431,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 9.066591215133666,
+   "E_R": 9.032209134101867,
+   "E_ratio": 1.0038066081643289,
+   "band": "comparable",
+   "motion_ratio": 0.9854505229695628,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 175,
+    "spike_O": 6.990543328324397,
+    "spike_R": 1.0093972023981514
+   },
+   {
+    "kind": "bind",
+    "call": 175,
+    "spike_O": 6.990543328324397,
+    "spike_R": 1.0093972023981514
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 173.0036120414734,
+ "valid": true,
+ "workload": "audi-snow-trail",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-02",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 156.1711449623108,
+ "video": "data/loveu_tgve_2023/audi-snow-trail.mp4",
+ "prompt_file": "data/loveu_tgve_2023/audi-snow-trail__multiple.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

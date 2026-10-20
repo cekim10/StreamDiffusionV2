@@ -1,0 +1,183 @@
+{
+ "condition": {
+  "id": "b155_r1_d75_rep2",
+  "phase": 1,
+  "workload": "butterfly-feeding-slow-motion",
+  "seed": 0,
+  "structure": "r1",
+  "d": 75,
+  "anchor": 155,
+  "resets": [
+   80
+  ],
+  "binds": [
+   155
+  ],
+  "sink_source": "withheld",
+  "end": 254,
+  "determinism_repeat_of": "b155_r1_d75"
+ },
+ "t_first_reset": 80,
+ "final_bind": 155,
+ "sinkless_calls": 75,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "7ba13fdee4ed283f",
+   "reset_s": 2.8586337342858315
+  },
+  {
+   "call": 155,
+   "op": "bind",
+   "sha": "7ba13fdee4ed283f",
+   "packed_at": 80,
+   "slots_rerotated": 97,
+   "bind_s": 0.10046256333589554
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 155,
+   "sha": "7ba13fdee4ed283fca239a4c125bb2b9a51a25acf6b6f12aa4f6e7421bcc8044",
+   "packed_at": 80
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  80
+ ],
+ "realized_binds": [
+  155
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 28.83881356993404,
+  "crossed": false,
+  "cross_call": null,
+  "cross_after_bind": null,
+  "sustained": false,
+  "sustain_call": null,
+  "first_call": 155,
+  "last_call": 254
+ },
+ "gap_psnr": 18.231471270579473,
+ "reference_sink_changes": [
+  81,
+  82,
+  86,
+  87,
+  89,
+  90,
+  92,
+  93,
+  94,
+  95,
+  98,
+  100,
+  101,
+  103,
+  105,
+  106,
+  108,
+  110,
+  111,
+  113,
+  114,
+  116,
+  119,
+  122,
+  124,
+  125,
+  127,
+  130,
+  132,
+  133,
+  134,
+  135,
+  138,
+  140,
+  142,
+  143,
+  146,
+  148,
+  149,
+  150,
+  151,
+  153,
+  154
+ ],
+ "no_reference": {
+  "sinkless": {
+   "n_transitions": 300,
+   "E_O": 13.420810594558716,
+   "E_R": 10.78838384628296,
+   "E_ratio": 1.244005662551832,
+   "band": "comparable",
+   "motion_ratio": 1.1870190476946794,
+   "possibly_static": false
+  },
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 10.660787308216095,
+   "E_R": 10.596914905309678,
+   "E_ratio": 1.0060274526574158,
+   "band": "comparable",
+   "motion_ratio": 0.9851488077330366,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 10.816797912120819,
+   "E_R": 10.742858350276947,
+   "E_ratio": 1.006882671206585,
+   "band": "comparable",
+   "motion_ratio": 0.987551130148663,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 80,
+    "spike_O": 1.9653341828277386,
+    "spike_R": 0.6953966401155819
+   },
+   {
+    "kind": "bind",
+    "call": 155,
+    "spike_O": 0.5404328855628941,
+    "spike_R": 0.4510703181596702
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 164.18650364875793,
+ "valid": true,
+ "workload": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-01",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 158.32484126091003,
+ "video": "data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

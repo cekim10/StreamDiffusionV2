@@ -1,0 +1,227 @@
+{
+ "condition": {
+  "id": "b155_r3c_d100",
+  "phase": 1,
+  "workload": "butterfly-feeding-slow-motion",
+  "seed": 0,
+  "structure": "r3c",
+  "d": 100,
+  "anchor": 155,
+  "resets": [
+   55,
+   88,
+   122
+  ],
+  "binds": [
+   155
+  ],
+  "sink_source": "withheld",
+  "end": 254
+ },
+ "t_first_reset": 55,
+ "final_bind": 155,
+ "sinkless_calls": 100,
+ "events": [
+  {
+   "call": 55,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "2da1323a350c3064",
+   "reset_s": 3.017643630504608
+  },
+  {
+   "call": 88,
+   "op": "reset_inside_episode",
+   "sink": "kept",
+   "sha": "2da1323a350c3064",
+   "reset_s": 1.0968806594610214
+  },
+  {
+   "call": 122,
+   "op": "reset_inside_episode",
+   "sink": "kept",
+   "sha": "2da1323a350c3064",
+   "reset_s": 1.0763460099697113
+  },
+  {
+   "call": 155,
+   "op": "bind",
+   "sha": "2da1323a350c3064",
+   "packed_at": 55,
+   "slots_rerotated": 95,
+   "bind_s": 0.09853848814964294
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 155,
+   "sha": "2da1323a350c3064de2691e43872a31955f48b70cde535a9a9a17ef189fd29e7",
+   "packed_at": 55
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  55,
+  88,
+  122
+ ],
+ "realized_binds": [
+  155
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 28.15298397613607,
+  "crossed": false,
+  "cross_call": null,
+  "cross_after_bind": null,
+  "sustained": false,
+  "sustain_call": null,
+  "first_call": 155,
+  "last_call": 254
+ },
+ "gap_psnr": 18.186715503579837,
+ "reference_sink_changes": [
+  57,
+  58,
+  59,
+  60,
+  61,
+  63,
+  65,
+  66,
+  67,
+  70,
+  71,
+  74,
+  76,
+  78,
+  79,
+  81,
+  82,
+  86,
+  87,
+  89,
+  90,
+  92,
+  93,
+  94,
+  95,
+  98,
+  100,
+  101,
+  103,
+  105,
+  106,
+  108,
+  110,
+  111,
+  113,
+  114,
+  116,
+  119,
+  122,
+  124,
+  125,
+  127,
+  130,
+  132,
+  133,
+  134,
+  135,
+  138,
+  140,
+  142,
+  143,
+  146,
+  148,
+  149,
+  150,
+  151,
+  153,
+  154
+ ],
+ "no_reference": {
+  "sinkless": {
+   "n_transitions": 400,
+   "E_O": 14.139958686828614,
+   "E_R": 11.003615665435792,
+   "E_ratio": 1.2850284049128144,
+   "band": "less consistent with input motion",
+   "motion_ratio": 1.1940349885025903,
+   "possibly_static": false
+  },
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 10.48177745938301,
+   "E_R": 10.596914905309678,
+   "E_ratio": 0.9891348145233311,
+   "band": "comparable",
+   "motion_ratio": 0.9907806072954254,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 10.789873325824738,
+   "E_R": 10.742858350276947,
+   "E_ratio": 1.004376393508584,
+   "band": "comparable",
+   "motion_ratio": 0.9848052199632944,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 55,
+    "spike_O": 2.099994415224998,
+    "spike_R": 0.6444682379313569
+   },
+   {
+    "kind": "reset",
+    "call": 88,
+    "spike_O": 2.362762570317654,
+    "spike_R": 0.838287318121547
+   },
+   {
+    "kind": "reset",
+    "call": 122,
+    "spike_O": 3.624690453084457,
+    "spike_R": 0.8938517620554152
+   },
+   {
+    "kind": "bind",
+    "call": 155,
+    "spike_O": 0.5430681908368725,
+    "spike_R": 0.4510703181596702
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 172.26348209381104,
+ "valid": true,
+ "workload": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-01",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 158.32484126091003,
+ "video": "data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

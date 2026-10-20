@@ -1,0 +1,231 @@
+{
+ "condition": {
+  "id": "b155_r3e_d0",
+  "phase": 1,
+  "workload": "butterfly-feeding-slow-motion",
+  "seed": 0,
+  "structure": "r3e",
+  "d": 0,
+  "anchor": 155,
+  "resets": [
+   105,
+   130,
+   155
+  ],
+  "binds": [
+   105,
+   130,
+   155
+  ],
+  "sink_source": "withheld",
+  "end": 254
+ },
+ "t_first_reset": 105,
+ "final_bind": 155,
+ "sinkless_calls": 0,
+ "events": [
+  {
+   "call": 105,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "a98e7396ba49bd32",
+   "reset_s": 3.0198438465595245
+  },
+  {
+   "call": 105,
+   "op": "bind",
+   "sha": "a98e7396ba49bd32",
+   "packed_at": 105,
+   "slots_rerotated": 0,
+   "bind_s": 0.10056418925523758
+  },
+  {
+   "call": 130,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "5ccff01b337052d6",
+   "reset_s": 3.0888217985630035
+  },
+  {
+   "call": 130,
+   "op": "bind",
+   "sha": "5ccff01b337052d6",
+   "packed_at": 130,
+   "slots_rerotated": 0,
+   "bind_s": 0.09923670440912247
+  },
+  {
+   "call": 155,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "c8fff89763b633ab",
+   "reset_s": 3.1471214443445206
+  },
+  {
+   "call": 155,
+   "op": "bind",
+   "sha": "c8fff89763b633ab",
+   "packed_at": 155,
+   "slots_rerotated": 0,
+   "bind_s": 0.1021830216050148
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 105,
+   "sha": "a98e7396ba49bd3248055c4c945ecdb43cce3c7cb17eda89e0b28c8a4ab4a58c",
+   "packed_at": 105
+  },
+  {
+   "call": 130,
+   "sha": "5ccff01b337052d6577b5833374cef5e9ecf2be22d129760212fab37099d06ac",
+   "packed_at": 130
+  },
+  {
+   "call": 155,
+   "sha": "c8fff89763b633ab28a5e27bcfd2b0d4f321874837a1ccf7128dc654b46f3382",
+   "packed_at": 155
+  }
+ ],
+ "withheld_rule_ok": true,
+ "prefix_identical_to_reference": true,
+ "missing_calls_after_first_reset": [],
+ "realized_resets": [
+  105,
+  130,
+  155
+ ],
+ "realized_binds": [
+  105,
+  130,
+  155
+ ],
+ "trajectory": {
+  "n": 100,
+  "T": 30.84810500226356,
+  "crossed": false,
+  "cross_call": null,
+  "cross_after_bind": null,
+  "sustained": false,
+  "sustain_call": null,
+  "first_call": 155,
+  "last_call": 254
+ },
+ "gap_psnr": null,
+ "reference_sink_changes": [
+  106,
+  108,
+  110,
+  111,
+  113,
+  114,
+  116,
+  119,
+  122,
+  124,
+  125,
+  127,
+  130,
+  132,
+  133,
+  134,
+  135,
+  138,
+  140,
+  142,
+  143,
+  146,
+  148,
+  149,
+  150,
+  151,
+  153,
+  154
+ ],
+ "no_reference": {
+  "sinkless": null,
+  "post_bind_20": {
+   "n_transitions": 80,
+   "E_O": 11.74895743727684,
+   "E_R": 10.596914905309678,
+   "E_ratio": 1.1087148988419187,
+   "band": "comparable",
+   "motion_ratio": 1.0816739359083787,
+   "possibly_static": false
+  },
+  "terminal_10": {
+   "n_transitions": 40,
+   "E_O": 10.664596915245056,
+   "E_R": 10.742858350276947,
+   "E_ratio": 0.9927150268131504,
+   "band": "comparable",
+   "motion_ratio": 1.0049682410578415,
+   "possibly_static": false
+  },
+  "event_spikes": [
+   {
+    "kind": "reset",
+    "call": 105,
+    "spike_O": 2.0802486996410523,
+    "spike_R": 0.3712582046857258
+   },
+   {
+    "kind": "reset",
+    "call": 130,
+    "spike_O": 2.8241303762442844,
+    "spike_R": 0.8971332051262508
+   },
+   {
+    "kind": "reset",
+    "call": 155,
+    "spike_O": 3.5940983693727113,
+    "spike_R": 0.4510703181596702
+   },
+   {
+    "kind": "bind",
+    "call": 105,
+    "spike_O": 2.0802486996410523,
+    "spike_R": 0.3712582046857258
+   },
+   {
+    "kind": "bind",
+    "call": 130,
+    "spike_O": 2.8241303762442844,
+    "spike_R": 0.8971332051262508
+   },
+   {
+    "kind": "bind",
+    "call": 155,
+    "spike_O": 3.5940983693727113,
+    "spike_R": 0.4510703181596702
+   }
+  ],
+  "flow": {
+   "method": "OpenCV Farneback",
+   "pyr_scale": 0.5,
+   "levels": 3,
+   "winsize": 15,
+   "iterations": 3,
+   "poly_n": 5,
+   "poly_sigma": 1.2,
+   "flags": 0,
+   "resolution": "1/4, grayscale"
+  }
+ },
+ "elapsed_s": 174.497136592865,
+ "valid": true,
+ "workload": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "phase": 1,
+ "commit": "454cc037dda983db00f071f71d18b6d3eeb7fc06",
+ "host": "elves-01",
+ "gpu_id": 0,
+ "dry_run": false,
+ "baseline_s": 158.32484126091003,
+ "video": "data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}
