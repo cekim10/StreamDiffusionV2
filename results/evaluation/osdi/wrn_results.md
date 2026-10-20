@@ -53,3 +53,10 @@ Manipulation check (c = 0): {'2.0': 'MET (discarded M1 only 1.028 vs 0.750)', '4
 | V6 | no alternative | V-H3 SUPPORTED (bind 87.588 vs 87.747, B_src 1.000 vs 1.000, re-plans 0.000) | SUPPORTED (v2 vs v1: bind 87.588 vs 86.818, B_src 1.000 vs 1.253, re-plans 0.000 vs 5.000) |
 | V7 | no alternative | V-H3 SUPPORTED (bind 15.241 vs 15.092, B_src 1.000 vs 1.000, re-plans 0.000) | SUPPORTED (v2 vs v1: bind 15.241 vs 15.605, B_src 1.000 vs 1.170, re-plans 0.000 vs 2.000) |
 | V8 | no alternative | V-H3 SUPPORTED (bind 335.286 vs 335.733, B_src 1.000 vs 1.000, re-plans 0.000) | SUPPORTED (v2 vs v1: bind 335.286 vs 335.428, B_src 1.000 vs 1.000, re-plans 0.000 vs 0.000) |
+
+## A (M1 recent-KV handoff, native bandwidth)
+
+- n = 1 slots: NO-GO (sustained 10 vs 10, terminal 42.1 vs 42.3 dB, TTFO 1.62 vs 0.68 s, fast-path bytes 578 MB, consumed ok 10/10, outputs differ 10/10)
+- n = 2 slots: NO-GO (sustained 10 vs 10, terminal 42.2 vs 42.3 dB, TTFO 2.47 vs 0.68 s, fast-path bytes 1153 MB, consumed ok 10/10, outputs differ 10/10)
+- n = 3 slots: NO-GO (sustained 10 vs 10, terminal 42.2 vs 42.3 dB, TTFO 3.37 vs 0.68 s, fast-path bytes 1728 MB, consumed ok 10/10, outputs differ 10/10)
+- n = 0 baseline: {'units': 10, 'sustained': 10, 'terminal_median': 42.2782, 'ttfo_median': 0.6807831525802612, 'gap_median': 17.021283333333333, 'fg_bytes_median': 2799408.0, 'consumed_ok': 0, 'differs_from_n0': 0}

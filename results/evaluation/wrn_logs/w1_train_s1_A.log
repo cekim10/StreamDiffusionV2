@@ -1,0 +1,17 @@
+2026-10-20 01:17:39,547 - SingleGPUInference - INFO - Single GPU inference pipeline manager initialized
+2026-10-20 01:17:42,526 - SingleGPUInference - INFO - Loading checkpoint from /home/ckim151/StreamDiffusionV2/ckpts/wan_causal_dmd_v2v/model.pt
+/home/ckim151/StreamDiffusionV2/.venv/lib/python3.10/site-packages/torchvision/io/video.py:197: UserWarning: The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.
+  warnings.warn("The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.")
+[W1] gpu mem after model load: allocated 13789 MB, reserved 15640 MB
+[W1] gpu mem after baseline session start: allocated 20103 MB, reserved 24876 MB
+[W1] gpu mem baseline call 0: allocated 20120 MB, reserved 24876 MB
+[W1] gpu mem baseline call 329: allocated 20149 MB, reserved 26348 MB
+[W1] gpu mem after baseline cleanup: allocated 16752 MB, reserved 19032 MB
+Traceback (most recent call last):
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/expw_w1.py", line 188, in <module>
+    main()
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/expw_w1.py", line 160, in main
+    rope = rope_roundtrip(rt)
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/expw_w1.py", line 122, in rope_roundtrip
+    k = layers[li]["k"][0, s_ * rt.fsl:(s_ + 1) * rt.fsl].clone()
+TypeError: 'NoneType' object is not subscriptable

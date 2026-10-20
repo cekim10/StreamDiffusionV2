@@ -1,0 +1,510 @@
+
+=== 2026-10-19T23:29:35.576768 A dog seed 0 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_dog_s0 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1557511)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 233437)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 556 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.22 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261019-233221: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.69s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.2 s, bound 2.58 s, continuity-ready 3.17 s, rejoin 7.39 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6879 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261019-233349: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.05s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.63s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.63 s, Sink received 3.12 s, bound 3.53 s, continuity-ready 4.12 s, rejoin 8.35 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6744 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261019-233518: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.78s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.42s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.47 s, Sink received 3.92 s, bound 4.37 s, continuity-ready 4.97 s, rejoin 9.2 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6677 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261019-233648: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.72s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  68.43s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.47 s, Sink received 4.84 s, bound 5.38 s, continuity-ready 5.99 s, rejoin 10.26 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6979 Mbps
+[orch] done: 4 runs under results/evaluation/expA_dog_s0/
+
+=== 2026-10-19T23:39:21.721521 A dog seed 1 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_dog_s1 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 1 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1565298)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 237163)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.03 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261019-234207: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.23s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.68s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.42 s, bound 3.18 s, continuity-ready 3.77 s, rejoin 7.99 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6275 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261019-234335: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.01s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.98s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.68 s, Sink received 3.19 s, bound 3.59 s, continuity-ready 4.2 s, rejoin 8.46 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6577 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261019-234505: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.87s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.75s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.51 s, Sink received 3.89 s, bound 4.39 s, continuity-ready 4.98 s, rejoin 9.19 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.8 dB | ingress peak 6879 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261019-234635: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.64s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.19s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.35 s, Sink received 4.89 s, bound 5.24 s, continuity-ready 5.84 s, rejoin 10.05 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.8 dB | ingress peak 6342 Mbps
+[orch] done: 4 runs under results/evaluation/expA_dog_s1/
+
+=== 2026-10-19T23:49:06.954385 A audi-snow-trail seed 0 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_audi-snow-trail_s0 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path data/loveu_tgve_2023/audi-snow-trail.mp4 --prompt_file_path data/loveu_tgve_2023/audi-snow-trail__multiple.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1572813)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 240913)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset -0.00 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.17 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261019-235152: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.20s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.27 s, bound 2.6 s, continuity-ready 3.21 s, rejoin 9.89 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.4 dB | ingress peak 6744 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261019-235321: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.06s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.85s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.63 s, Sink received 3.12 s, bound 3.51 s, continuity-ready 4.11 s, rejoin 10.77 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.4 dB | ingress peak 6778 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261019-235451: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.78s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.42s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.42 s, Sink received 3.91 s, bound 4.3 s, continuity-ready 4.9 s, rejoin 11.56 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.6 dB | ingress peak 6442 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261019-235621: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.68s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.29s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.38 s, Sink received 4.8 s, bound 5.25 s, continuity-ready 5.85 s, rejoin 12.51 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.6 dB | ingress peak 6744 Mbps
+[orch] done: 4 runs under results/evaluation/expA_audi-snow-trail_s0/
+
+=== 2026-10-19T23:58:52.604684 A audi-snow-trail seed 1 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_audi-snow-trail_s1 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path data/loveu_tgve_2023/audi-snow-trail.mp4 --prompt_file_path data/loveu_tgve_2023/audi-snow-trail__multiple.txt --seed 1 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1580196)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 244686)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 552 ms/chunk, mss 1388, clock offset -0.03 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-000143: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.83s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.69 s, Sink received 2.29 s, bound 2.6 s, continuity-ready 3.2 s, rejoin 9.88 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.5 dB | ingress peak 6677 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-000311: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.06s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.64s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.63 s, Sink received 3.11 s, bound 3.5 s, continuity-ready 4.1 s, rejoin 10.79 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.5 dB | ingress peak 6812 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-000441: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.93s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.80s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.53 s, Sink received 3.96 s, bound 4.44 s, continuity-ready 5.04 s, rejoin 11.69 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.6 dB | ingress peak 6778 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-000611: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.64s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.20s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.36 s, Sink received 4.84 s, bound 5.24 s, continuity-ready 5.83 s, rejoin 12.48 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.6 dB | ingress peak 6711 Mbps
+[orch] done: 4 runs under results/evaluation/expA_audi-snow-trail_s1/
+
+=== 2026-10-20T00:08:43.447413 A butterfly-feeding-slow-motion seed 0 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_butterfly-feeding-slow-motion_s0 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1587720)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 248577)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 552 ms/chunk, mss 1388, clock offset -0.05 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-001133: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.69s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.24 s, bound 2.61 s, continuity-ready 3.22 s, rejoin 7.44 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.1 dB | ingress peak 6812 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-001302: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.01s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.25s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.58 s, Sink received 3.04 s, bound 3.51 s, continuity-ready 4.11 s, rejoin 8.38 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.1 dB | ingress peak 6812 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-001432: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.78s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.43s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.48 s, Sink received 3.91 s, bound 4.37 s, continuity-ready 4.96 s, rejoin 9.19 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.8 dB | ingress peak 6644 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-001602: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.65s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.64s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.37 s, Sink received 4.74 s, bound 5.28 s, continuity-ready 5.89 s, rejoin 10.12 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.8 dB | ingress peak 6879 Mbps
+[orch] done: 4 runs under results/evaluation/expA_butterfly-feeding-slow-motion_s0/
+
+=== 2026-10-20T00:18:34.205971 A butterfly-feeding-slow-motion seed 1 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_butterfly-feeding-slow-motion_s1 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 1 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1595314)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 252364)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 552 ms/chunk, mss 1388, clock offset +0.08 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-002119: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.75s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.26 s, bound 2.55 s, continuity-ready 3.16 s, rejoin 7.39 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 40.2 dB | ingress peak 6744 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-002248: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.05s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.41s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.67 s, Sink received 3.18 s, bound 3.57 s, continuity-ready 4.17 s, rejoin 8.4 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.9 dB | ingress peak 6577 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-002418: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.82s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.44s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.46 s, Sink received 3.89 s, bound 4.33 s, continuity-ready 4.93 s, rejoin 9.14 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.9 dB | ingress peak 6711 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-002548: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.68s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.42s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.39 s, Sink received 4.96 s, bound 5.29 s, continuity-ready 5.89 s, rejoin 10.12 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 39.9 dB | ingress peak 6442 Mbps
+[orch] done: 4 runs under results/evaluation/expA_butterfly-feeding-slow-motion_s1/
+
+=== 2026-10-20T00:28:20.834301 A circus-ball-act seed 0 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_circus-ball-act_s0 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path data/loveu_tgve_2023/circus-ball-act.mp4 --prompt_file_path data/loveu_tgve_2023/circus-ball-act__background.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1602818)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 256113)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 555 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 552 ms/chunk, mss 1388, clock offset +0.10 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-003106: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.98s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.69 s, Sink received 2.32 s, bound 2.61 s, continuity-ready 3.23 s, rejoin 7.46 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.7 dB | ingress peak 6677 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-003235: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.03s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.63s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.61 s, Sink received 3.13 s, bound 3.5 s, continuity-ready 4.09 s, rejoin 8.32 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.3 dB | ingress peak 6644 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-003404: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.80s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.48s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.45 s, Sink received 3.85 s, bound 4.37 s, continuity-ready 4.96 s, rejoin 9.19 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.3 dB | ingress peak 6812 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-003534: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.78s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.54s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.45 s, Sink received 4.94 s, bound 5.34 s, continuity-ready 5.93 s, rejoin 10.16 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 41.3 dB | ingress peak 6476 Mbps
+[orch] done: 4 runs under results/evaluation/expA_circus-ball-act_s0/
+
+=== 2026-10-20T00:38:06.287156 A circus-ball-act seed 1 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_circus-ball-act_s1 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path data/loveu_tgve_2023/circus-ball-act.mp4 --prompt_file_path data/loveu_tgve_2023/circus-ball-act__background.txt --seed 1 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1610249)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 259861)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 551 ms/chunk, mss 1388, clock offset +0.05 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-004051: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.83s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.17 s, bound 2.59 s, continuity-ready 3.19 s, rejoin 7.43 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 6946 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-004220: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.02s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.80s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.61 s, Sink received 3.0 s, bound 3.52 s, continuity-ready 4.12 s, rejoin 7.74 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 44.0 dB | ingress peak 7046 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-004349: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.13s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.92s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.77 s, Sink received 4.19 s, bound 4.68 s, continuity-ready 5.27 s, rejoin 8.89 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.8 dB | ingress peak 6711 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-004520: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.70s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.27s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.4 s, Sink received 4.81 s, bound 5.28 s, continuity-ready 5.87 s, rejoin 9.48 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.8 dB | ingress peak 6912 Mbps
+[orch] done: 4 runs under results/evaluation/expA_circus-ball-act_s1/
+
+=== 2026-10-20T00:47:52.450389 A train seed 0 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_train_s0 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path examples/train.mp4 --prompt_file_path examples/train_prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1617667)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 263640)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.00 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.05 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-005047: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.00s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.2 s, bound 2.6 s, continuity-ready 3.21 s, rejoin 8.07 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.2 dB | ingress peak 6879 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-005216: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.99s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.80s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.57 s, Sink received 3.04 s, bound 3.47 s, continuity-ready 4.07 s, rejoin 8.92 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.3 dB | ingress peak 6979 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-005346: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.85s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.27s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.51 s, Sink received 4.0 s, bound 4.38 s, continuity-ready 4.98 s, rejoin 9.86 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.3 dB | ingress peak 6510 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-005517: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.63s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  68.01s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.34 s, Sink received 4.76 s, bound 5.26 s, continuity-ready 5.87 s, rejoin 10.72 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.3 dB | ingress peak 6845 Mbps
+[orch] done: 4 runs under results/evaluation/expA_train_s0/
+
+=== 2026-10-20T00:57:50.055176 A train seed 1 (recent_slots 0-3): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expA_train_s1 --skip_done --validity wrn --bw 0 --policies reuse_dyn --hops 1 --tm 1e9 --reps 1 --migration_chunk 34 --post_chunks 130 --horizon_calls 100 --max_run_s 600 --recent_slots 0,1,2,3 --launch '--node_extra=--video_path examples/train.mp4 --prompt_file_path examples/train_prompt.txt --seed 1 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 1625238)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 267451)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 556 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 5c1e826
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.14 ms, dry_run=False, commit 5c1e826
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_20261020-010040: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  64.89s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 0.68 s, Sink received 2.25 s, bound 2.62 s, continuity-ready 3.23 s, rejoin 8.71 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 35.0 dB | ingress peak 6778 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=1_20261020-010209: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.02s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  65.71s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 1.62 s, Sink received 3.05 s, bound 3.51 s, continuity-ready 4.11 s, rejoin 9.55 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 35.1 dB | ingress peak 6845 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=2_20261020-010338: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   1.80s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  66.34s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 2.44 s, Sink received 3.86 s, bound 4.33 s, continuity-ready 4.93 s, rejoin 10.36 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 35.1 dB | ingress peak 6845 Mbps
+[orch] === run policy=reuse_dyn_bw=native_rho=none_tm=inf_rep=1_rs=3_20261020-010508: OTTER event-driven (shared planner, E-pilot v2 thresholds), bw native Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   2.64s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 0 Mbps)
+        next   A->B 412 fragments
+[orch] t=  67.30s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven (shared planner, E-pilot v2 thresholds) @ native Mbps rho None: after final move: first output 3.37 s, Sink received 4.81 s, bound 5.25 s, continuity-ready 5.84 s, rejoin 11.27 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 35.1 dB | ingress peak 6543 Mbps
+[orch] done: 4 runs under results/evaluation/expA_train_s1/
