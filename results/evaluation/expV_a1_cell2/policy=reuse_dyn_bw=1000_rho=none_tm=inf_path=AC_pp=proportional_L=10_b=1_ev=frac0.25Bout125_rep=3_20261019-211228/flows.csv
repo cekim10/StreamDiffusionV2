@@ -1,0 +1,9 @@
+flow,src,dst,t_start_rel,t_end_rel,n_frags,bytes,rate_bps_last,cancelled,reason
+f1_AB,A,B,0.0054,10.2134,179,750780416,1000000000,False,prepos proportional: speculative fragments to candidate B
+f2_AC,A,C,0.0087,7.0840,90,377487360,500000000,False,prepos proportional: speculative fragments to candidate C
+f3_AD,A,D,0.0123,3.0264,30,125829120,333333333,False,prepos proportional: speculative fragments to candidate D
+f4_AC,A,C,10.2145,21.0789,236,987039136,1000000000,False,reuse_dyn: source sends the rest
+f5_BC,B,C,10.2208,12.3324,21,88080384,333333333,True,reuse_dyn: reuse fragments held at B
+f6_DC,D,C,10.2255,13.1692,30,125829120,437500000,False,reuse_dyn: reuse fragments held at D
+f7_BC,B,C,12.3380,15.5799,16,67108864,125000000,True,replan: 128 fragments moved from B
+f8_BC,B,C,15.5830,20.6423,19,79691776,125000000,False,replan: 19 fragments moved from B
