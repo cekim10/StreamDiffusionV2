@@ -10,3 +10,18 @@
   validation). It must not change the frozen schedules, outcomes, thresholds or rules; a correctness bug found later is
   a dated amendment.
 - **Prior evidence only:** W2, Experiment A, VACW (fidelity targets in Phase 0). Nothing of them is modified.
+
+## Implementation record (2026-10-20, before any GPU run)
+
+- **Implementation commit:** `24ad3302f82e8792b2a85a0c156c5b8dfba39623`. Files: `tools/eval/rd_schedule.py` (frozen schedules), `rd_emulate.py` (runner),
+  `rd_metrics.py` (section 5 outcomes), `aggregate_rd.py` (Phase 0 gate, Phase 1 verdicts), `run_rd.py` (driver),
+  `test_rd.py`; `mobility_node.GpuRuntime.step` keeps the decoded frames of the call (read-only, no effect on generation).
+- **CPU / dry validation (`python tools/eval/test_rd.py`): ALL PASS.** Phase 1 = 100 runs; every schedule valid; Sink-less
+  calls = d in every condition; the five Phase 0 schedules equal the recorded moves and binds of their frozen target
+  runs; on the fake runtime every run is valid, r3c packs its Sink once and keeps it through two resets, r3e packs one
+  Sink per episode, the stale replay (P0-3) rebinds the trigger Sink three times and the fresh replay (P0-4) binds three
+  different Sinks; outcome functions on synthetic traces; no-reference metrics on synthetic frames in an OpenCV 4.10
+  environment (output = reference -> ratio 1.00 "comparable"; static output flagged; flicker -> "less consistent").
+  The full dry pipeline (`run_rd.py all --dry`) runs end to end (gate and verdicts not meaningful on fake PSNR).
+- **Not exercised without a GPU:** the real `GpuRuntime` path in one process (Phase 0 is its test), OpenCV in the hosts'
+  environment (checked by `run_rd.py preflight`).
