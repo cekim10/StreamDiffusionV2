@@ -1,0 +1,8 @@
+flow,src,dst,t_start_rel,t_end_rel,n_frags,bytes,rate_bps_last,cancelled,reason
+f1_AB,A,B,0.0056,10.2458,299,1254096896,1000000000,False,prepos top1: speculative fragments to candidate B
+f2_AC,A,C,10.2471,16.4855,113,471139744,750000000,False,reuse_dyn2: source sends the rest
+f3_BC,B,C,10.2533,19.4457,94,394264576,250000000,True,reuse_dyn2: reuse fragments held at B
+f4_BC,B,C,19.4460,21.9860,19,79691776,250000000,True,replan v2: 201 fragments stay at B
+f5_AC,A,C,19.4492,19.6245,4,16777216,750000000,False,replan v2: 4 fragments moved from B
+f6_BC,B,C,21.9862,26.6865,35,146800640,250000000,False,replan v2: 35 fragments stay at B
+f7_AC,A,C,21.9887,28.1357,147,616562688,1000000000,False,replan v2: 147 fragments moved from B

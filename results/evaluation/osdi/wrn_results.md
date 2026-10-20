@@ -40,3 +40,16 @@ Manipulation check (c = 0): {'2.0': 'MET (discarded M1 only 1.028 vs 0.750)', '4
 | 8 | no alternative | N-H3 NOT SUPPORTED (bind 18.560 vs 15.013, B_src 1.027 vs 1.000, re-plans 3.000) | harmful |
 | 9 | alternative available | N-H2 NOT SUPPORTED (bind 15.072 vs 113.398, re-plans 3.000, dups 0.000) | beneficial (traffic flagged) |
 | 10 | no alternative | N-H3 NOT SUPPORTED (bind 113.891 vs 117.752, B_src 1.229 vs 1.000, re-plans 29.000) | beneficial (traffic flagged) |
+
+## V (M3-v2 holdout)
+
+| cell | class | verdict (v2 vs at moves) | V-H4 (v2 vs v1) |
+|---|---|---|---|
+| V1 | no change | V-H1 SUPPORTED (re-plans 0.000, bind 14.418 vs 14.422, B_src 1.000 vs 1.000) | SUPPORTED (v2 vs v1: bind 14.418 vs 14.402, B_src 1.000 vs 1.000, re-plans 0.000 vs 0.000) |
+| V2 | alternative available | V-H2 NOT SUPPORTED (bind 13.867 vs 13.938, re-plans 0.000, dups 0.000) | SUPPORTED (v2 vs v1: bind 13.867 vs 13.983, B_src 1.000 vs 1.000, re-plans 0.000 vs 0.000) |
+| V3 | no alternative | V-H3 SUPPORTED (bind 23.805 vs 23.437, B_src 1.000 vs 1.000, re-plans 0.000) | SUPPORTED (v2 vs v1: bind 23.805 vs 23.345, B_src 1.000 vs 1.000, re-plans 0.000 vs 0.000) |
+| V4 | alternative available | V-H2 SUPPORTED (bind 19.118 vs 38.322, re-plans 2.000, dups 0.000) | NOT SUPPORTED (v2 vs v1: bind 19.118 vs 15.058, B_src 1.367 vs 1.411, re-plans 2.000 vs 3.000) |
+| V5 | alternative available | V-H2 SUPPORTED (bind 21.566 vs 122.077, re-plans 2.000, dups 0.000) | NOT SUPPORTED (v2 vs v1: bind 21.566 vs 17.425, B_src 1.231 vs 1.338, re-plans 2.000 vs 3.000) |
+| V6 | no alternative | V-H3 SUPPORTED (bind 87.588 vs 87.747, B_src 1.000 vs 1.000, re-plans 0.000) | SUPPORTED (v2 vs v1: bind 87.588 vs 86.818, B_src 1.000 vs 1.253, re-plans 0.000 vs 5.000) |
+| V7 | no alternative | V-H3 SUPPORTED (bind 15.241 vs 15.092, B_src 1.000 vs 1.000, re-plans 0.000) | SUPPORTED (v2 vs v1: bind 15.241 vs 15.605, B_src 1.000 vs 1.170, re-plans 0.000 vs 2.000) |
+| V8 | no alternative | V-H3 NOT EVALUABLE (censoring) (bind >235.174 vs >236.348, B_src 0.785 vs 0.785, re-plans 0.000) | NOT EVALUABLE (censoring) (v2 vs v1: bind >235.174 vs >236.327, B_src 0.785 vs 0.783, re-plans 0.000 vs 0.000) |
