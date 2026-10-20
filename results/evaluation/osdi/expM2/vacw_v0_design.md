@@ -1,4 +1,6 @@
-# Version-aware Continuity Wavefront v0 (M2 extension): design and preregistration DRAFT (2026-10-20; not frozen; not implemented; nothing run)
+# Version-aware Continuity Wavefront v0 (M2 extension): design and preregistration (FROZEN 2026-10-20; record `../vacw_v0_freeze.md`; not implemented at the freeze; nothing run)
+
+Revision history: draft 89f2334; review corrections (I5 scope, I3 / I4 buffer ownership, H2 reuse definitions, H1b wording, exposure criterion) applied before the freeze.
 
 Mechanism names: M1 Temporal State Decomposition, M2 Continuity Wavefront, M3 Restoration Graph Morphing. Experiment A
 is frozen NO-GO; M1, M3-v1, M3-v2 and every frozen result (ExpD, W / R / N, V, A, B) are unchanged. Inputs from Task B
@@ -26,8 +28,8 @@ New in v0 (and nothing else):
 2. **Content-hash reuse across snapshots**: a held fragment is valid for S_k iff its SHA-256 equals S_k's entry for that
    id, regardless of which snapshot it was received under; the version tag check becomes a hash check.
 3. **Single active snapshot** (assumption, enforced): at any time exactly one manifest is the restoration target; a
-   holder's `sink_buf` holds at most one byte image per fragment id (the newest verified), and an id may be overwritten
-   only when no active flow still serves the old bytes (section 2.4).
+   node holds at most one verified byte image per fragment id (the newest), stored as an **immutable per-fragment
+   object** (section 2, I3 / I4), so replacing it never mutates bytes an outgoing flow is sending.
 
 ## 1. State machine
 
@@ -43,14 +45,17 @@ S_0 = A's snapshot at chunk M (as today). For each move k >= 1 from owner O_k to
 
 ### 1.2 Per-node fragment state (per fragment id f, per node)
 
-`ABSENT -> RECEIVING -> VERIFIED(h)` where h is the SHA-256 of the bytes in `sink_buf[f]`; `VERIFIED(h)` is *valid for
-the active snapshot* iff `h == S_active.sha256[f]`, else *stale* (kept, reusable if a later snapshot has the same hash,
-which happens when a block changes back; otherwise it is overwritten by the next valid receipt). Transitions:
-- `recv(f, bytes, h')`: if `h' != S_active.sha256[f]` -> reject (not a version mismatch any more: a **content**
-  mismatch; logged `fragment_rejected_hash`); if `f` is VERIFIED(h) with h == h' -> duplicate (scratch, unchanged);
-  if `f` is VERIFIED(h) stale and **no active outgoing flow is serving f** -> overwrite, VERIFIED(h'); if an active flow
-  serves f -> receive into scratch and retry after the flow ends (section 2.4).
-- `drop` (M1 only, as today).
+`ABSENT -> RECEIVING -> VERIFIED(h)` where h is the SHA-256 of the immutable `bytes` object stored for f (`store[f]`);
+`VERIFIED(h)` is *valid for the active snapshot* iff `h == S_active.sha256[f]`, else *stale* (kept; reusable if a later
+snapshot has the same hash, otherwise replaced by the next valid receipt). Transitions:
+- `recv(f, bytes, h')`: the node verifies `h' == sha256(bytes)` and compares h' with **its current manifest's** entry
+  for f: equal -> if `store[f]` exists with the same hash, duplicate (dropped); else `store[f] = bytes` (rebinding the
+  dict entry; any outgoing flow still holding the previous object keeps it alive); not equal -> rejected and logged
+  `fragment_rejected_hash`. No ordering assumption between `MANIFEST_UPDATE` and in-flight fragments is needed: a
+  fragment of an older flow that arrives after the update is accepted iff its hash matches the new manifest (its
+  content is then exactly what the new snapshot needs), and one that arrives before the update is judged against the
+  old manifest and becomes stale or valid at the update by its hash.
+- `drop` (M1 only, as today: the store is cleared; objects referenced by draining flows survive until those end).
 
 ### 1.3 Owner states
 
@@ -80,15 +85,24 @@ source only for S_0).
   equal to S_active's **and** the whole-buffer digest equals S_active's digest. Hash-equal fragments received under an
   older snapshot are byte-identical by construction (SHA-256), so reuse never mixes *content*; the whole digest guards
   the table itself.
-- **I3 (immutable transfer view):** every byte ever sent comes from a host buffer that is never modified after its
-  capture (S_k buffers are write-once; `sink_buf` writes only replace a stale id's bytes under the rule of I4).
-- **I4 (safe replacement):** a holder overwrites `sink_buf[f]` only if (a) the new bytes verify against S_active and
-  (b) no active outgoing flow of this node has f in its remaining queue or in flight; otherwise the receipt is parked
-  (scratch) and applied when the flow ends. With one active snapshot, (b) can only arise during the cancellation window
-  of a superseded flow (I1), which is bounded by one fragment's transmission.
-- **I5 (freshness):** the Sink bound by O_{k+1} equals the Sink O_k was generating on at the handoff boundary (S_k),
-  byte for byte, when O_k was bound; equals S_{k-1} otherwise. (This is what the frozen harness violates at rho <= 1:
-  it binds S_0 at every owner.)
+- **I3 (immutable transfer view; buffer ownership and lifetime):** fragments live as immutable `bytes` objects
+  (`store[f]`, one per id); a snapshot capture produces 412 such objects from a write-once D2H buffer. An outgoing flow
+  takes references to the objects of the fragments it will send **when it starts** and sends from those references;
+  the objects stay alive until the flow terminates (Python reference counting pins them), whatever the store does
+  meanwhile. Today's shared `sink_buf` + `memoryview` (which an in-place receive could mutate under an active sender)
+  is replaced by this store; the contiguous image needed for the GPU unpack is assembled from the store at bind time
+  (one 1.6 GB host copy, ~0.3 s, counted in the bind component of H3).
+- **I4 (safe replacement):** receiving a newer fragment rebinds `store[f]`; it never writes into an existing object, so
+  bytes referenced by an active outgoing flow cannot change. A flow started under a superseded manifest is cancelled by
+  the orchestrator (I1); fragments it already sent are judged by hash at the receiver (section 1.2). Memory: a node
+  holds at most one object per id in the store plus the objects pinned by draining flows (bounded by the fragments in
+  those flows' queues, <= 1 Sink), i.e. <= 2 Sinks in the worst case, usually ~1.
+- **I5 (Sink-snapshot freshness; scope):** the Sink bound by O_{k+1} equals, byte for byte, the Sink O_k was
+  generating on at the handoff boundary (S_k) when O_k was bound, and S_{k-1} otherwise. (The frozen harness binds S_0
+  at every owner, violating this at rho <= 1.) **I5 is a statement about the Sink only:** the recent KV window and the
+  VAE caches are still reconstructed at O_{k+1} (M1 unchanged), so a fresh Sink does **not** imply equivalence of the
+  whole generation state with O_k's, nor visual continuity; H1b measures the latter separately and a H1b failure with
+  I5 / H1a holding is not an integrity fault.
 - **I6 (progress preservation):** a fragment VERIFIED at an abandoned owner with hash equal to S_active's entry is
   never re-sent from the capturing owner if the planner can assign it to that holder (M2 rule unchanged); dropped only
   under M1 only.
@@ -103,8 +117,9 @@ active flow) and I7 (positions in the snapshot) are what make a hash match suffi
 | where | change |
 |---|---|
 | `mobility_node.py` `cmd_exec_handoff` | after the fast path, if `r["bound_call"] is not None`: `snap = self.rt.serialize_live()` (sink + positions only), pack `sink`, build `frag_table` + SHA-256s (existing `component_digest` / `frag_table`), swap `sink_buf` to the new buffer (old buffer kept until flows end), set `have` = all ids, return the new manifest in the handoff reply (`fresh_manifest`); log `snapshot_captured` with D2H, pack and hash times |
-| `mobility_node.py` `_recv_frag` | replace the `sink_version` equality test by `hdr["sha256"] == man["frags"][fid]["sha256"]` (content check against the active manifest); stale-overwrite rule I4 (parked receipts, applied at `flow_end`) |
-| `mobility_node.py` `cmd_manifest` | accept a **manifest update** mid-run: keep `sink_buf`, recompute `have` = ids whose stored hash equals the new manifest's (hashes of stored fragments are kept in `frag_ok` as the SHA-256, not a bool), report `(id, sha256)` holdings |
+| `mobility_node.py` fragment store | replace `sink_buf` (shared bytearray + memoryview sends) by `store: dict[id -> bytes]` with `hash_of[id]`; `_recv_frag` receives into a fresh `bytes`, verifies, rebinds; `_sender` takes object references at flow start and sends from them (I3 / I4); `_unpack_sink` assembles the contiguous image from the store in manifest order before the H2D (one host copy; timed) |
+| `mobility_node.py` `_recv_frag` | replace the `sink_version` equality test by `hdr["sha256"] == man["frags"][fid]["sha256"]` (content check against the node's current manifest); log `fragment_rejected_hash` |
+| `mobility_node.py` `cmd_manifest` | accept a **manifest update** mid-run: keep the store, recompute `have` = ids whose stored hash equals the new manifest's, report `(id, sha256)` holdings; a node that captured S_k installs its 412 objects directly |
 | `mobility_orchestrate.py` `handoff` | if the reply carries `fresh_manifest`: `manifest_active = fresh`, push `MANIFEST_UPDATE` to every node, rebuild `holders[e]` from the reported holdings, cancel flows of the superseded manifest, then `plan("move")` (existing); record `t_snapshot`, `t_manifest` per move |
 | `mobility_orchestrate.py` planning | provider of fragments no holder validly holds = the capturing owner (`SOURCE` role per snapshot: `self.source_of[S_k]`), M2 / M3 rules unchanged; `holder_order` unchanged |
 | `mobility_orchestrate.py` accounting | per move: snapshot capture time, manifest wait (handoff -> first plan), fragment restoration (first plan -> Sink verified), bind; bytes by role (capturing owner vs holders vs A); **logical reuse** = fragments of S_k verified at the new owner from holders / 412; dirty fraction of S_k vs S_{k-1} |
@@ -120,9 +135,11 @@ Estimated size: ~250 lines; no change to transport, fragment format (header alre
   replace SHA-256 for *dirtiness* but not for the transport's integrity check, so v0 keeps SHA-256. The capture happens
   **after** the fast path and after the owner stops generating, so TTFO is unaffected; it adds a **manifest wait** of
   ~0.8-1.3 s before the new owner's restoration plan (measured, part of H3's decomposition).
-- **Host memory:** the capturing owner holds two Sink-sized buffers briefly (old `sink_buf` until its flows end, new
-  S_k): peak 2 x 1.6 GB; every other node holds one `sink_buf` (as today) plus scratch for parked receipts (<= a few
-  fragments). Bound: **<= 2 Sinks per node** (3.2 GB host), no change on the GPU (the live ring is the Sink).
+- **Host memory:** the store holds one object per id (1 Sink); objects of a superseded snapshot stay alive only while
+  a draining flow references them (<= the fragments in that flow's queue); the capturing owner additionally holds the
+  write-once D2H buffer until its 412 objects are cut from it (then released) and, at bind, every node assembles one
+  contiguous image (1 Sink, released after the H2D). Bound: **<= 2 Sinks per node** (3.2 GB host) at any instant, ~1
+  Sink in steady state; no change on the GPU.
 - **Metadata:** 412 SHA-256 strings per manifest (~27 KB) per move; holdings reports 412 x (id, hash) per node per
   manifest change.
 - **4 MiB fragment / 4.57 MiB block misalignment (kept in v0):** a changed block dirties the 2-3 fragments that overlap
@@ -148,44 +165,62 @@ Estimated size: ~250 lines; no change to transport, fragment format (header alre
   0 (refresh-heavy; W1: 356 refresh slot-rows / 300 calls). **Policies:** `restart_fresh` (M1 only, fresh snapshots:
   byte upper bound), `split` (frozen M2: stale S_0; reported as today's behaviour), `split_va` (v0). 3 reps:
   2 x 2 x 3 x 3 = **36 runs** (~2.5 h).
-- **Measured per run:** per move k: whether O_k was bound, dirty fraction of S_k vs S_{k-1} (hash table diff), snapshot
-  capture time, manifest wait, fragment restoration time, bind time; bound-Sink digest vs intended snapshot; PSNR at
-  the final owner after bind (first crossing, sustained 10 calls, median of the last 10 calls); **logical reuse** at the
-  final owner = fragments verified from holders / 412; **source bytes** = bytes sent by the capturing owner of the
-  final snapshot (role-based: A for S_0, O_k for S_k) / Sink; **aggregate network bytes** = all fragment bytes on all
-  links / Sink; discarded bytes (Phase 1 definition (a)).
+- **Measured per run:** per move k: whether O_k was bound (**fresh transition** = bound owner -> generation -> fresh
+  snapshot -> handoff), snapshot capture time, manifest wait, fragment restoration time, bind time (assembly + H2D +
+  bind); bound-Sink digest vs intended snapshot; PSNR at the final owner after bind (first crossing, sustained 10
+  calls, median of the last 10 calls); three reuse quantities for the final snapshot S_K: **content reuse potential**
+  = |{f : S_K.sha256[f] == S_{K-1}.sha256[f]}| / 412 (hash-table diff); **available verified reuse** = |{f : some node
+  other than the final owner and the capturing owner holds f verified with hash S_K.sha256[f] at the final move's
+  plan time}| / 412; **realized reuse** = fragments of S_K that the final owner verified from a node other than the
+  capturing owner (or already held) / 412; **source bytes** = bytes sent by the capturing owner of S_K / Sink (A for
+  S_0); **aggregate network bytes** = all fragment bytes on all links / Sink; discarded bytes (Phase 1 definition (a))
+  and **invalidated bytes** (verified fragments whose hash no longer matches the active snapshot) separately.
+- **Exposure criterion (fixed now):** a cell's freshness-related hypotheses (H1a's fresh binds, H2, H3) are judged only
+  if, in every valid rep of `split_va`, at least one fresh transition occurred (an owner bound, generated and was then
+  left, producing S_k != S_{k-1} by at least one fragment); a cell without it is **NOT EVALUABLE (no fresh transition)**
+  for those hypotheses, and the fact is reported. Recorded prediction: at rho = 1 (T_m 14.05 s) the first owner's
+  bind-ready at 1 Gbps is ~15.1-15.5 s (ExpD G3, R rho 1: binds after the owner is left), so the **rho = 1 cells may
+  not exercise the fresh path** and would be NOT EVALUABLE; rho = 0.5 (T_m 28.1 s; R: B bound at 14.5 s and promoted
+  at 18.6 s before leaving) is expected to exercise it in every run. The matrix is kept as instructed; a NOT EVALUABLE
+  rho = 1 cell is itself the finding that the fresh path needs T_m > T_s.
 - **Hypotheses (thresholds from the frozen R / W texts; decision rules fixed at the freeze):**
 
 | | H1a snapshot integrity | H1b post-bind quality | H2 bytes | H3 latency |
 |---|---|---|---|---|
 | unit | every `split_va` run (12) | every `split_va` run | rho x workload cell (4) | rho x workload cell |
-| metric | bound Sink digest == intended snapshot's digest (S_k of the last bound owner, else S_{k-1}) at every bind | PSNR >= 35 dB within the horizon at the final owner (single crossing; sustained reported) | source bytes of `split_va` vs `restart_fresh`; logical reuse | bind-ready after the final move, `split_va` vs `restart_fresh`, decomposed |
-| success | 100 % of binds (12 / 12 runs, every bound owner) | >= 11 of 12 runs (the frozen W rule's 80 % over 12 units rounds up to 10; 11 required here because the workload is fixed) | source bytes(`split_va`) <= source bytes(`restart_fresh`) - 0.9 x reuse_measured x 1 Sink, with reuse_measured = the hash-table reuse of the run (not a constant), **and** aggregate network bytes(`split_va`) <= aggregate(`restart_fresh`) + 0.05 | bind-ready(`split_va`) <= bind-ready(`restart_fresh`) + 1.0 s |
+| metric | bound Sink digest == intended snapshot's digest (S_k of the last bound owner, else S_{k-1}) at every bind | PSNR >= 35 dB within the horizon at the final owner (**single crossing**, as W / ExpD; sustained 10-call recovery and the last-10-call median are reported and are not claimed as continuity) | source bytes of `split_va` vs `restart_fresh`, against the run's **available verified reuse** | bind-ready after the final move, `split_va` vs `restart_fresh`, decomposed |
+| success | 100 % of binds (12 / 12 runs, every bound owner) | >= 11 of 12 runs. **This is a newly preregistered, stricter threshold** (the frozen W rule's 80 % would be 10 of 12); chosen because the workload diversity here is two clips | source bytes(`split_va`) <= source bytes(`restart_fresh`) - 0.9 x R_avail x 1 Sink, where R_avail = the median available verified reuse of the cell's `split_va` runs (measured per run, not a constant), **and** aggregate network bytes(`split_va`) <= aggregate(`restart_fresh`) + 0.05. Content reuse potential and realized reuse are reported next to it (realized <= available <= potential is a consistency check) | bind-ready(`split_va`) <= bind-ready(`restart_fresh`) + 1.0 s |
 | failure | any bind whose digest differs from the intended snapshot | <= 10 of 12 | either clause | > 1.0 s |
-| NOT EVALUABLE | < 12 valid runs | - | < 3 valid reps of either policy in a cell | as H2; censoring per `followup_common.md` section 3 |
+| NOT EVALUABLE | < 12 valid runs | - | < 3 valid reps of either policy in a cell; exposure criterion not met | as H2; censoring per `followup_common.md` section 3 |
 
-  H1a and H1b are separate: a quality failure with H1a passing is a property of restoring a fresh-but-changing Sink,
-  not an integrity fault; an integrity failure is a harness bug regardless of PSNR. **H2's denominator** is one Sink
-  (1,725,236,640 B); "source bytes" counts only the capturing owner of the active snapshot (holders' forwarded bytes are
-  counted in aggregate network bytes, never in source bytes); the 0.9 factor allows fragments in flight at the move.
-  **H3's decomposition** (snapshot capture + manifest wait + restoration + bind) is reported for every move; the
-  threshold applies to the total after the final move.
+  H1a and H1b are separate: a quality failure with H1a passing is a property of restoring a fresh Sink into a node whose
+  recent KV and VAE state are reconstructed (I5 scope), not an integrity fault; an integrity failure is a harness bug
+  regardless of PSNR. **H2's denominator** is one Sink (1,725,236,640 B); "source bytes" counts only the capturing
+  owner of the active snapshot (holders' forwarded bytes are counted in aggregate network bytes, never in source
+  bytes); available verified reuse, not hash equality, is the basis because an identical fragment helps only if a
+  reachable holder still has it verified; the 0.9 factor allows fragments in flight at the move. **H3's
+  decomposition** (snapshot capture + manifest wait + fragment restoration + bind incl. assembly) is reported for every
+  move; the threshold applies to the total after the final move.
 - **Descriptive, reported next to the verdicts:** `split` (stale) in every cell: its digest matches S_0 (correct for
   what it restores), its PSNR after bind, its bytes; the measured dirty fraction per move against the Task B prediction
   (dog ~0.21 after 25 calls, ~0.36 after 50; butterfly ~0.34 / ~0.50); the 4 MiB-vs-block amplification per move.
 - **Recorded predictions:** H1a supported (by construction, the test is of the implementation); H1b uncertain for
-  butterfly (W2: it crossed 35 dB but did not sustain at 1 Gbps); H2 supported at rho 1 (reuse ~0.7-0.8), borderline at
-  rho 0.5 on butterfly (reuse ~0.5); H3 uncertain: the manifest wait (~1 s) is paid where `restart_fresh` starts sending
-  at once, while holder forwarding in parallel should recover it at rho 1.
+  butterfly (W2: it crossed 35 dB but did not sustain at 1 Gbps); exposure: rho 0.5 cells exercise the fresh path,
+  rho 1 cells may not (NOT EVALUABLE); H2 at rho 0.5: potential ~0.64 (dog) / ~0.50 (butterfly) after ~50 calls,
+  available reuse lower (the previous owner B is the only holder of S_1-valid fragments besides the capturing owner C
+  at the move to D, and B holds only what it received), so the saving is bounded by what B holds and is valid;
+  H3 uncertain: the manifest wait (~1 s) and the assembly (~0.3 s) are paid where `restart_fresh` starts sending at
+  once, while holder forwarding in parallel may recover it.
 
 ## 7. GO / NO-GO (fixed before any run)
 
-- **GO (adopt v0 as the M2 extension for the paper):** H1a supported, H2 supported in >= 3 of 4 cells, H3 supported in
-  >= 3 of 4 cells, H1b supported.
-- **CONDITIONAL (keep v0 as a correctness fix only):** H1a supported and H1b supported, but H2 or H3 fails in >= 2
-  cells: the paper states that fresh snapshots are required for correctness at rho <= 1 and that the byte / latency
-  benefit of hash reuse is limited by realignment churn (Task B numbers), with v0 kept as the mechanism and the frozen
-  M2 reported as the rho >= 2 special case.
+- **GO (adopt v0 as the M2 extension for the paper):** H1a supported, H1b supported, and H2 and H3 each supported in
+  every **evaluable** cell with at least two evaluable cells (if only the rho 0.5 cells are evaluable, GO is stated for
+  the T_m > T_s regime only).
+- **CONDITIONAL (keep v0 as a correctness fix only):** H1a supported and H1b supported, but H2 or H3 fails in an
+  evaluable cell: the paper states that fresh snapshots are required for correctness at rho <= 1 and that the byte /
+  latency benefit of hash reuse is limited by realignment churn and holder availability (Task B numbers, measured
+  available reuse), with v0 kept as the mechanism and the frozen M2 reported as the rho >= 2 special case.
 - **NO-GO:** any H1a failure after re-run of the affected runs (implementation fault), or H1b <= 10 of 12 with H1a
   passing (fresh-but-changing Sinks do not restore continuity on these workloads): keep the frozen M2, state the stable-
   version assumption and the rho <= 1 limitation explicitly.
