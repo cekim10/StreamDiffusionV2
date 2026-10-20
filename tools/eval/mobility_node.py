@@ -262,8 +262,8 @@ class GpuRuntime:
         self.mem("after serialize")
         return snap
 
-    def pack(self, snap: dict, comp: str):
-        return self.pack_component(snap, comp, self.sink, self.fsl)
+    def pack(self, snap: dict, comp: str, recent_n: int = 0):
+        return self.pack_component(snap, comp, self.sink, self.fsl, recent_n=recent_n)
 
     # --- destination side
     def provision(self):
@@ -280,10 +280,24 @@ class GpuRuntime:
         return header.get("h2d_s")
 
     def restore_fast(self):
-        self.sa.restore_state(self.pl, self.pm, self.session, self.snap, {"meta", "inflight"})
+        # Task A: a received recent_n component sits in the snapshot's recent region (zeros elsewhere); restoring the
+        # "recent" component then writes exactly the transferred slots into the live ring (the rest stays zero, as in M1)
+        comps = {"meta", "inflight"} | ({"recent"} if "recent_n" in self.snap.get("have", set()) else set())
+        self.sa.restore_state(self.pl, self.pm, self.session, self.snap, comps)
         for block in self.pl.generator.model.blocks:
             block.self_attn.adapt_sink_thr = -1  # refresh frozen until the true Sink binds
         self.torch.cuda.synchronize(self.device)
+
+    def recent_fp(self) -> dict:
+        """Task A consumption check: per layer, the live ring's recent-slot positions and value fingerprints (float64 sums
+        per row and slot); logged by the source at the handoff and by the destination before its first call."""
+        torch, fsl, sink = self.torch, self.fsl, self.sink
+        out = {}
+        for li, layer in enumerate(self.sa.kv_layers(self.pl)):
+            n = layer["pos"].shape[1]
+            out[li] = {"pos": layer["pos"][:, sink:].tolist(),
+                       "vsum": [[float(layer["v"][b, s * fsl:(s + 1) * fsl].sum(dtype=torch.float64)) for s in range(sink, n)] for b in range(layer["pos"].shape[0])]}
+        return out
 
     def bind(self) -> int:
         shifted = self.bind_sink_into_live(self.pl, self.snap, self.sink, self.fsl, self.device, self.cfg_thr, refresh_was_frozen=True)
@@ -372,7 +386,12 @@ class FakeRuntime:
     def serialize_live(self):
         return {}
 
-    def pack(self, snap, comp):
+    def pack(self, snap, comp, recent_n=0):
+        if comp == "recent_n":
+            n = int(recent_n)
+            b = self.rng.integers(0, 256, size=max(1, n) << 20, dtype=np.uint8)
+            return {"comp": comp, "tensors": [{"name": "kv/0/k/0/3", "offset": 0, "nbytes": len(b), "shape": [len(b)], "dtype": "bf16"}], "nbytes": len(b) if n else 0, "d2h_s": 0.0,
+                    "scalars": {"recent_slots": {"0": [[3, 4, 5][:n]]}}}, [b] if n else []
         if comp == "sink":
             b = self.sink_bytes
             n = len(b) // 4
@@ -400,6 +419,9 @@ class FakeRuntime:
         if header["comp"] in ("inflight", "meta"):
             self.have_fast = True
         return 0.0
+
+    def recent_fp(self):
+        return {}
 
     def restore_fast(self):
         pass
@@ -595,11 +617,15 @@ class Node:
             return {"t_stop": t_stop, "t_fg_sent": None, "t_packed": t_packed, "call": r["call"], "fg_bytes": 0, "state_bytes": nbytes}
         conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
         nbytes = 0
-        for comp in (("inflight", "meta") if mode == "fast" else ()):
-            hdr, bufs = self.rt.pack(snap, comp)
+        n_rs = int(h.get("recent_slots", 0) or 0)
+        fast_comps = ("inflight", "meta") + (("recent_n",) if n_rs > 0 else ())
+        if mode == "fast" and n_rs > 0:
+            self.event("recent_handoff_src", call=r["call"], recent_slots=n_rs, fp=self.rt.recent_fp())
+        for comp in (fast_comps if mode == "fast" else ()):
+            hdr, bufs = self.rt.pack(snap, comp, recent_n=n_rs) if comp == "recent_n" else self.rt.pack(snap, comp)
             send_msg(conn, "FG", {"from": self.label, "run_id": r["id"], "session_id": r["session_id"], **hdr}, bufs, None)
             nbytes += hdr["nbytes"]
-        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode}, b"", None)
+        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode, "recent_slots": n_rs}, b"", None)
         t_sent = time.time()
         conn.close()
         del snap
@@ -952,6 +978,9 @@ class Node:
             extra = {"cold_restart_ms": ms}
         else:
             self.rt.restore_fast()
+            have = self.rt.snap.get("have", set()) if getattr(self.rt, "snap", None) else set()
+            if "recent_n" in have or int(go.get("recent_slots", 0) or 0) > 0:
+                self.event("recent_handoff_dst", call=r["call"], recent_slots=int(go.get("recent_slots", 0) or 0), fp=self.rt.recent_fp(), received="recent_n" in have)
             if r["sink_verified"]:
                 self._unpack_sink()
                 shifted = self.rt.bind()
@@ -1017,6 +1046,7 @@ def parse_args(argv=None):
     p.add_argument("--dry_service_s", type=float, default=0.2)
     p.add_argument("--dry_promote_calls", type=str, default="", help="dry run: calls at which a bound fake Sink changes (version-event accounting test)")
     p.add_argument("--sink_fp", action="store_true", help="W / R / N: per-call Sink value fingerprints (baseline and owned calls) and owner-side promotion events")
+    p.add_argument("--recent_slots", type=int, default=0, help="(unused: Experiment A passes recent_slots per run in EXEC_HANDOFF; kept for the dry-run driver)")
     p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
     # model / workload (same defaults as Phase 1)
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))

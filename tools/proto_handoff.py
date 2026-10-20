@@ -198,13 +198,37 @@ def bytes_to_tensor(meta: dict, raw: memoryview, device):
     return t.to(device)
 
 
-def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: str = "async") -> tuple[dict, list]:
-    """Serialize one component of a serialize_state() snapshot into (header, [buffers]). D2H happens here."""
+def recent_slot_selection(snap: dict, sink: int, n: int) -> dict:
+    """Task A (M1 recent-KV handoff): per layer and row, the indices of the n recent slots (sink .. num_kv_cache - 1)
+    with the largest RoPE positions (KV_POS_EMPTY slots excluded). {layer: [[idx, ...] per row]}."""
+    sel = {}
+    for li, r in enumerate(snap["ring"]):
+        pos = r["pos"]
+        rows = []
+        for b in range(pos.shape[0]):
+            cand = [(int(pos[b, s].item()), s) for s in range(sink, pos.shape[1]) if int(pos[b, s].item()) > -(1 << 29)]
+            rows.append([s for _, s in sorted(cand, reverse=True)[:n]])
+        sel[li] = rows
+    return sel
+
+
+def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: str = "async", recent_n: int = 0) -> tuple[dict, list]:
+    """Serialize one component of a serialize_state() snapshot into (header, [buffers]). D2H happens here.
+    comp "recent_n": the `recent_n` most recent slots per layer and row (Task A), with their indices in the header."""
     import torch
 
     t0 = time.perf_counter()
     parts: list[tuple[str, dict, np.ndarray]] = []
-    if comp in ("sink", "recent"):
+    sel = None
+    if comp == "recent_n":
+        sel = recent_slot_selection(snap, sink, recent_n)
+        for li, layer in enumerate(snap["kv"]):
+            for b, idxs in enumerate(sel[li]):
+                for s in idxs:
+                    for key in ("k", "v"):
+                        m, bts = tensor_to_bytes(layer[key][b:b + 1, s * fsl:(s + 1) * fsl])
+                        parts.append((f"kv/{li}/{key}/{b}/{s}", m, bts))
+    elif comp in ("sink", "recent"):
         lo, hi = (0, sink * fsl) if comp == "sink" else (sink * fsl, None)
         for li, layer in enumerate(snap["kv"]):
             for key in ("k", "v"):
@@ -232,6 +256,8 @@ def pack_component(snap: dict, comp: str, sink: int, fsl: int, checksum: str = "
     torch.cuda.synchronize()
     d2h_s = time.perf_counter() - t0
     header = {"comp": comp, "tensors": [], "scalars": {}, "d2h_s": d2h_s}
+    if sel is not None:
+        header["scalars"]["recent_slots"] = {str(li): rows for li, rows in sel.items()}
     buffers = []
     off = 0
     for name, m, b in parts:
@@ -266,7 +292,16 @@ def unpack_into_snapshot(header: dict, payload, device, snap: dict, sink: int, f
     torch.cuda.synchronize(device)
     header["h2d_s"] = time.perf_counter() - t0
     comp = header["comp"]
-    if comp in ("sink", "recent"):
+    if comp == "recent_n":
+        for li_s, rows in header["scalars"]["recent_slots"].items():
+            li = int(li_s)
+            for b, idxs in enumerate(rows):
+                for s in idxs:
+                    for key in ("k", "v"):
+                        snap["kv"][li][key][b:b + 1, s * fsl:(s + 1) * fsl] = tensors[f"kv/{li}/{key}/{b}/{s}"]
+        snap.setdefault("have", set()).add("recent_n")
+        snap["recent_slots"] = header["scalars"]["recent_slots"]
+    elif comp in ("sink", "recent"):
         for li in range(len(snap["kv"])):
             for key in ("k", "v"):
                 t = tensors[f"kv/{li}/{key}"]

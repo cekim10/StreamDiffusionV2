@@ -196,9 +196,10 @@ def done_validly(a, tag: str) -> str | None:
 
 
 class Run:
-    def __init__(self, orch, policy: str, bw_mbps: float, tm: float, rho, rep: int, hops: int, path=None, prepos=None):
+    def __init__(self, orch, policy: str, bw_mbps: float, tm: float, rho, rep: int, hops: int, path=None, prepos=None, recent_slots: int = 0):
         self.o = orch; self.a = orch.a
         self.policy, self.bw, self.tm, self.rho, self.rep = policy, bw_mbps, tm, rho, rep
+        self.recent_slots = int(recent_slots)   # Experiment A: recent ring slots sent with the fast path (0 = frozen M1)
         self.edges = list(path) if path else EDGES[:hops + 1]
         assert self.edges[0] == "A" and "A" not in self.edges[1:] and all(x != y for x, y in zip(self.edges, self.edges[1:])), \
             "path must start at A, never return to A, and change owner at every move (revisits of B, C, D are allowed)"
@@ -220,7 +221,7 @@ class Run:
         self.candidates = [e for e in EDGES if e != "A"] if prepos else []
         self.nodes_used = list(dict.fromkeys(self.edges + self.candidates))
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}_{stamp}"
+        self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}{('_rs=' + str(self.recent_slots)) if self.recent_slots else ''}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
             self.caps = {(d, n): bw_mbps * 1e6 for d in ("out", "in") for n in EDGES}
@@ -766,7 +767,7 @@ class Run:
         if self.mode == "full":
             mv = self.full_handoff(frm, to, i, t_req)
         else:
-            r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode=self.mode, timeout=120)
+            r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode=self.mode, recent_slots=self.recent_slots, timeout=120)
             mv = {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": self.node(frm).to_orch(r["t_stop"]), "t_fg_sent": self.node(frm).to_orch(r["t_fg_sent"]),
                   "call": r["call"], "fg_bytes": r["fg_bytes"], "mode": self.mode}
             self.running = None
@@ -1209,6 +1210,7 @@ class Run:
                                                      "network_summary": {k: self.net_summary.get(k) for k in ("restored_sessions", "first_restored", "makespan_s", "bytes", "normalized", "validation", "stop_reason")},
                                                      "network_sessions": [dict(r) for r in __import__("csv").DictReader(open(self.net.dir / "sessions.csv"))]},
             "run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep, "path": self.edges, "hosts": hosts,
+            "recent_slots": self.recent_slots,
             "sink_bytes": S, "n_frags": len(man["frags"]), "frag_bytes": man["frag_bytes"], "sink_version": man["sink_version"],
             "t_final_move_rel_s": self.rel_t(tfm), "moves": [{k: (self.rel_t(v) if k.startswith("t_") else v) for k, v in m.items()} for m in self.moves],
             "transfer_start_rel_s": self.rel_t(first_sent),
@@ -1419,6 +1421,7 @@ def main():
     ap.add_argument("--dyn_period", type=float, default=0.5); ap.add_argument("--dyn_window", type=float, default=2.0)
     ap.add_argument("--dyn_warmup", type=float, default=2.0); ap.add_argument("--dyn_eps", type=float, default=2.0)
     ap.add_argument("--dyn_rel", type=float, default=0.10); ap.add_argument("--dyn_ctrl", type=float, default=0.3)
+    ap.add_argument("--recent_slots", type=str, default="", help="Experiment A: comma list of recent ring slots sent with the fast path per run (0 = frozen M1 fast path)")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
     ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")
     ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")
@@ -1474,7 +1477,9 @@ def main():
             else:
                 assert a.ts, "--ts (measured T_s) is required to derive T_m from rho"
                 tms = [(a.ts / float(r), float(r)) for r in a.rhos.split(",")]
+            rss = [int(x) for x in a.recent_slots.split(",")] if a.recent_slots else [0]
             for rep in range(a.rep_start, a.rep_start + a.reps):
+              for rs in rss:
                 for tm, rho in tms:
                     for pol, ppol in combos:
                         path = [x for x in a.path.split(",") if x] or None
@@ -1483,10 +1488,10 @@ def main():
                             assert path and len(path) == 2, "--prepos needs --path A,<dest>"
                             pp = {"policy": ppol, "probs": [float(x) for x in a.probs.split(",")], "L": a.lookahead, "b": a.budget, "dest": path[1], "tau": 7.5}
                         if a.skip_done:
-                            prev = done_validly(a, run_tag(a, pol, a.bw, tm, rho, rep, path, pp))
+                            prev = done_validly(a, run_tag(a, pol, a.bw, tm, rho, rep, path, pp) + (f"_rs={rs}" if rs else ""))
                             if prev:
                                 print(f"[orch] skip (valid run exists): {prev}", flush=True); continue
-                        r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops, path=path, prepos=pp)
+                        r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops, path=path, prepos=pp, recent_slots=rs)
                         results.append(r.execute())
             (EVAL_ROOT / a.experiment).mkdir(parents=True, exist_ok=True)
     finally:

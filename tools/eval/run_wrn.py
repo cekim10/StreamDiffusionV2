@@ -13,6 +13,7 @@
     python tools/eval/run_wrn.py all                  # w1, w2, r, n, war in the frozen order
     python tools/eval/run_wrn.py m3dev                # M3-v2 development regression: N cells 7-10, at-moves / v1 / v2, 1 rep (not evidence)
     python tools/eval/run_wrn.py v                    # Experiment V holdout (M3-v2 plan): cells V1-V8 x 4 policies x 3 reps
+    python tools/eval/run_wrn.py a                    # Experiment A (M1 recent-KV handoff): 5 workloads x 2 seeds x n in {0,1,2,3}, native bandwidth
     add --dry for the loopback protocol test (fake nodes on 127.0.0.1, scaled bandwidth; never reported)
 
 Orchestrator invocations use --skip_done --validity wrn, so a re-start resumes and invalid runs get at most 2 re-runs.
@@ -162,6 +163,8 @@ class Ctx:
             m = args[args.index("--migration_chunk") + 1] if "--migration_chunk" in args else "30"
             pc = args[args.index("--post_chunks") + 1] if "--post_chunks" in args else "300"
             dry_extra = [x for x in node_extra if x in ("--sink_fp",)] + (["--dry_promote_calls", self.a.dry_promote] if self.a.dry_promote else [])
+            if "--recent_slots" in node_extra:
+                i = node_extra.index("--recent_slots"); dry_extra += node_extra[i:i + 2]
             self.dry_nodes(["--migration_chunk", m, "--post_chunks", pc] + dry_extra, "--hybrid_net" in args)
             cmd += ["--dyn_probe", "1",   # 16-fragment fake Sink: a 4-fragment probe would be a quarter of it
                     "--dry_run", "--nodes", "A=127.0.0.1:29911:29912,B=127.0.0.1:29921:29922,C=127.0.0.1:29931:29932,D=127.0.0.1:29941:29942",
@@ -292,6 +295,20 @@ def v_args(c: Ctx, cell: int, reps="3", policies=("reuse_aware_in", "split", "re
     return a
 
 
+A_WORKLOADS = ["dog", "audi-snow-trail", "butterfly-feeding-slow-motion", "circus-ball-act", "train"]   # osdi/m1m2_followup.md Task A rule
+
+
+def do_a(c):
+    """Experiment A: OTTER event-driven, single move at M = 34, horizon 100 calls, native bandwidth, recent_slots n."""
+    for w in A_WORKLOADS:
+        for seed in (0, 1):
+            args = ["--policies", "reuse_dyn", "--hops", "1", "--tm", "1e9", "--reps", "1", "--migration_chunk", "34", "--post_chunks", "130",
+                    "--horizon_calls", "100", "--max_run_s", "600", "--recent_slots", "0,1,2,3"]
+            c.bw = "0"   # native (unshaped)
+            c.orch(f"expA_{w}_s{seed}", args, node_extra(w, seed), f"A {w} seed {seed} (recent_slots 0-3)")
+            c.bw = "100" if c.dry else "1000"
+
+
 def do_m3dev(c):
     tag = f"_{c.a.tag}" if c.a.tag else ""
     for cell in (7, 8, 9, 10):
@@ -365,7 +382,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -380,7 +397,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:

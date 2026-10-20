@@ -153,3 +153,28 @@ assumed bitwise equivalent:** re-rotation in bf16 is lossy; before any canonical
 compares re-rotated keys with the source's keys at the same position (bitwise and max abs error) and the resulting
 outputs (PSNR against the uninterrupted reference), as the current bind already re-rotates and ExpD's bit-exactness of
 Full migration does not cover that path. No rolling synchronization is implemented.
+
+## Experiment A preregistration (M1 recent-KV handoff; to be frozen at the commit that implements it; nothing run)
+
+- **Question:** does sending the n most recent ring slots with the fast path (n in {1, 2, 3}) turn M1's transient gap into a
+  sustained recovery on workloads where the frozen W2 showed none, and at what TTFO and byte cost?
+- **Unit:** (workload, seed): dog, audi-snow-trail, butterfly-feeding-slow-motion, circus-ball-act, train x seeds 0, 1 = 10
+  units (rule: dog + the four distinct workloads with the lowest W2 last-10-call median PSNR). **Factor:** n in
+  {0, 1, 2, 3} slots (n = 0 = the frozen M1 fast path, byte-identical code path). **Fixed:** OTTER event-driven
+  (`reuse_dyn`), single move A -> B at M = 34, horizon 100 calls (133), **native bandwidth** (unshaped, ~9.4 Gbps), k = 2,
+  one run per (unit, n): **40 runs**, 10 orchestrator invocations (n is a per-run handoff parameter).
+- **Primary metrics** (per run): TTFO (s); fast-path bytes actually sent (`fg_bytes`, measured); sustained rejoin = the
+  first call >= the bind call from which PSNR >= 35 dB holds for 10 consecutive calls (censored at 133); terminal PSNR =
+  median of calls 124-133; Sink bind-ready (s). Descriptive: gap PSNR (mean of the first 6 post-trigger calls),
+  single-crossing rejoin (reported, never the success measure).
+- **Consumption check** (harness correctness, per run with n > 0): the destination's live ring before its first call
+  holds, for every transferred slot, the same position and value fingerprint the source logged at the handoff
+  (`recent_handoff_src` / `recent_handoff_dst` events), and its PSNR series over the first 6 post-trigger calls differs
+  from the n = 0 run's. A run failing either check is a harness fault and is listed, not counted.
+- **Go / no-go (decision rule fixed now; `tools/eval/aggregate_wrn.py` section A):** for each n* in {1, 2, 3}: GO iff
+  (units with a sustained rejoin at n* - units at n = 0 >= 3) or (median terminal PSNR at n* - at n = 0 >= 3.0 dB), and
+  (median TTFO at n* - at n = 0) <= 1.5 s; NOT EVALUABLE if fewer than 8 of 10 units have a valid run at n* or at n = 0.
+- **Recorded predictions:** TTFO +0.5-0.6 s per slot at native bandwidth (575 MB per slot); gap PSNR +~10 dB (frozen
+  ablation); sustained-recovery gain uncertain (the only outcome that would make GO); 1 Gbps not run (cost 4.6 s per
+  slot, NO-GO by construction).
+- Validity: `followup_common.md` section 3 (native: NIC peaks against the 9.4 Gbps physical cap, as in ExpD's native runs).

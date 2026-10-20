@@ -400,11 +400,91 @@ def agg_v(dry):
     return res
 
 
+# ---------------------------------------------------------------- A (M1 recent-KV handoff, osdi/m1m2_followup.md Task A)
+A_WORKLOADS = ["dog", "audi-snow-trail", "butterfly-feeding-slow-motion", "circus-ball-act", "train"]
+
+
+def a_unit(w, seed, n, dry):
+    rs = [r for r in runs_in(f"expA_{w}_s{seed}", dry) if r["policy"] == "reuse_dyn" and r["valid"] and int(r["s"].get("recent_slots", 0) or 0) == n]
+    if not rs:
+        return None
+    r = rs[-1]; d = r["dir"]; s_ = r["s"]
+    fin = s_["path"][-1]
+    m = {int(x["call"]): x for x in csv.DictReader(open(d / "metrics.csv", newline="")) if x["owner"] == fin}
+    ps = {c: float(x["psnr"]) for c, x in m.items() if x["psnr"] not in ("", "None") and c <= LAST}
+    bind_call = s_["final"]["bind_call"]
+    sus = None
+    if bind_call is not None:
+        for c in range(bind_call, LAST - 8):
+            if all(ps.get(x, 0) >= 35.0 for x in range(c, c + 10)):
+                sus = c; break
+    tail = [ps[c] for c in range(LAST - 9, LAST + 1) if c in ps]
+    gap = [ps[c] for c in range(M_W, M_W + 6) if c in ps]
+    ev = list(csv.DictReader(open(d / "events.csv", newline="")))
+    src_fp = next((json.loads(e["detail"]) for e in ev if e["event"].endswith(":recent_handoff_src")), None)
+    dst_fp = next((json.loads(e["detail"]) for e in ev if e["event"].endswith(":recent_handoff_dst")), None)
+    consumed = None
+    if src_fp and dst_fp and src_fp.get("fp") and dst_fp.get("fp"):
+        # every transferred slot (the n most recent per layer / row at the source) must show the same position and
+        # value sum in the destination's live ring before its first call
+        ok, n_chk = True, 0
+        for li, src in src_fp["fp"].items():
+            dst = dst_fp["fp"].get(li)
+            if dst is None:
+                ok = False; continue
+            for b, row in enumerate(src["pos"]):
+                order = sorted(range(len(row)), key=lambda i: -row[i])[: int(src_fp["recent_slots"])]
+                for i in order:
+                    n_chk += 1
+                    if row[i] != dst["pos"][b][i] or abs(src["vsum"][b][i] - dst["vsum"][b][i]) > 1e-3 * max(1.0, abs(src["vsum"][b][i])):
+                        ok = False
+        consumed = {"ok": ok, "slots_checked": n_chk, "received": dst_fp.get("received")}
+    return {"run": d.name, "ttfo_s": s_["latency_after_final_move_s"]["first_output"], "bind_s": s_["latency_after_final_move_s"]["continuity_ready"],
+            "fg_bytes": sum((mv.get("fg_bytes") or 0) for mv in s_["moves"]), "bind_call": bind_call, "sustained_call": sus,
+            "sustained_calls": None if sus is None or bind_call is None else sus - bind_call, "terminal_median": statistics.median(tail) if tail else None,
+            "gap_mean": (sum(gap) / len(gap)) if gap else None, "first_output_psnr": ps.get(M_W), "consumed": consumed, "ps": ps}
+
+
+def agg_a(dry):
+    units = {}
+    for w in A_WORKLOADS:
+        for seed in (0, 1):
+            for n in (0, 1, 2, 3):
+                units[(w, seed, n)] = a_unit(w, seed, n, dry)
+    out = {"units": {f"{w}_s{s}_n{n}": ({k: v for k, v in u.items() if k != "ps"} if u else None) for (w, s, n), u in units.items()}}
+    # outputs differ from n = 0 (the slots were attended to): PSNR series of the first 6 post-trigger calls differ
+    for (w, s, n), u in units.items():
+        u0 = units.get((w, s, 0))
+        if u and u0 and n > 0:
+            u["differs_from_n0"] = any(abs(u["ps"].get(c, 0) - u0["ps"].get(c, 0)) > 1e-6 for c in range(M_W, M_W + 6))
+            out["units"][f"{w}_s{s}_n{n}"]["differs_from_n0"] = u["differs_from_n0"]
+    per_n = {}
+    for n in (0, 1, 2, 3):
+        us = [u for (w, s, nn), u in units.items() if nn == n and u]
+        per_n[n] = {"units": len(us), "sustained": sum(1 for u in us if u["sustained_call"] is not None),
+                    "terminal_median": statistics.median([u["terminal_median"] for u in us if u["terminal_median"] is not None]) if us else None,
+                    "ttfo_median": statistics.median([u["ttfo_s"] for u in us if u["ttfo_s"] is not None]) if us else None,
+                    "gap_median": statistics.median([u["gap_mean"] for u in us if u["gap_mean"] is not None]) if us else None,
+                    "fg_bytes_median": statistics.median([u["fg_bytes"] for u in us]) if us else None,
+                    "consumed_ok": sum(1 for u in us if (u.get("consumed") or {}).get("ok")), "differs_from_n0": sum(1 for u in us if u.get("differs_from_n0"))}
+    base = per_n[0]
+    verdicts = {}
+    for n in (1, 2, 3):
+        p = per_n[n]
+        if p["units"] < 8 or base["units"] < 8:
+            verdicts[n] = f"{NE} (units n={n}: {p['units']}, n=0: {base['units']})"; continue
+        gain = (p["sustained"] - base["sustained"] >= 3) or (p["terminal_median"] - base["terminal_median"] >= 3.0)
+        cost_ok = (p["ttfo_median"] - base["ttfo_median"]) <= 1.5
+        verdicts[n] = ("GO" if (gain and cost_ok) else "NO-GO") + f" (sustained {p['sustained']} vs {base['sustained']}, terminal {p['terminal_median']:.1f} vs {base['terminal_median']:.1f} dB, TTFO {p['ttfo_median']:.2f} vs {base['ttfo_median']:.2f} s, fast-path bytes {p['fg_bytes_median'] / 1e6:.0f} MB, consumed ok {p['consumed_ok']}/{p['units']}, outputs differ {p['differs_from_n0']}/{p['units']})"
+    out["per_n"] = per_n; out["verdicts"] = verdicts
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args()
-    out = {"W": agg_w(a.dry), "R": agg_r(a.dry), "N": agg_n(a.dry), "V": agg_v(a.dry)}
+    out = {"W": agg_w(a.dry), "R": agg_r(a.dry), "N": agg_n(a.dry), "V": agg_v(a.dry), "A": agg_a(a.dry)}
     pre = "_dryrun_" if a.dry else ""
     units = out["W"].pop("units")
     with open(OUT / f"{pre}w2_table.csv", "w", newline="") as fh:
@@ -430,6 +510,10 @@ def main():
     L += ["", "## V (M3-v2 holdout)", "", "| cell | class | verdict (v2 vs at moves) | V-H4 (v2 vs v1) |", "|---|---|---|---|"]
     for k, v in out["V"].items():
         L.append(f"| V{k} | {v['class']} | {v['verdict']} | {v.get('V-H4')} |" + (f" {v['source']}" if "SUPERSEDED" in v.get("source", "") else ""))
+    L += ["", "## A (M1 recent-KV handoff, native bandwidth)", ""]
+    for n, v in out["A"]["verdicts"].items():
+        L.append(f"- n = {n} slots: {v}")
+    L.append(f"- n = 0 baseline: {out['A']['per_n'][0]}")
     (OUT / f"{pre}wrn_results.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
 
