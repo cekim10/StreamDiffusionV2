@@ -158,8 +158,13 @@ alternative provider exists.** - *Main, with its stated limitation*
   only active provider (probe + confirmation delay).
 - Holds: dog seed 0, single move, one magnitude and onset per cell, frozen parameters (min_frags 8, 2-fragment margins,
   probe 4).
-- Does NOT establish: performance under realistic, continuously varying traces (ExpT paused); multi-move or multi-
-  session behaviour of v2 on GPUs; ExpD end-to-end numbers for v2 (ExpD and R used M3-v1).
+- **End-to-end with repeated moves (M3E, `expM3E/m3e_report.md`, 2026-10-20): H1-H7 all SUPPORTED** - contention
+  43.1 vs 57.2 s (M1 only); holder bottleneck 20.7 s vs 52.1 s (at moves) and 78.5 s (M1 + M2) with 2 re-plans; 0
+  re-plans and no harm under ingress / source bottlenecks and without change; TTFO and GPU service time unchanged.
+  M3-v2 is 5.2 s slower than M1 only in the holder-bottleneck case (M1 only avoids the holder at 2.0 Sinks of source
+  traffic). Dog only, rho 2.
+- Does NOT establish: performance under realistic, continuously varying traces (ExpT paused); behaviour on other inputs
+  (WX pending); four concurrent M3-v2 GPU sessions (M3E S1 used network-level M3-v1 competitors).
 
 **M3-3. The frozen M3-v1 rule mis-models shared ingress and oscillates.** - *Limitation (motivates v2; report)*
 - Evidence: N-H1 NOT SUPPORTED cell 7 (1 false-positive re-plan per rep, +0.22 Sink), N-H3 NOT SUPPORTED cells 8 (+3.5 s)
@@ -280,9 +285,8 @@ and freshness of the restored Sink.
    mismatch vs workload), at least for butterfly plus 1-2 other refresh-heavy clips with dog as control. This decides
    whether the paper states a bound ("recovers if the Sink binds within N calls") or only a limitation.
 3. **Generality of M1:** at least one more model or resolution for resumption and the Sink-necessity result.
-4. **Final-M3 end-to-end coverage:** the paper's M3 (v2) has GPU evidence only from V; either re-run the ExpD scenarios
-   that motivate M3 (F / G / contention) with v2 under a new preregistration, or present those results explicitly as
-   M3-v1.
+4. **Final-M3 end-to-end coverage:** closed by M3E (2026-10-20): the ExpD E / F / B configurations re-run with M3-v2
+   plus two negative cases, all seven hypotheses supported (dog only; WX extends the inputs).
 5. **A stronger baseline or a documented reason for its absence:** C/R blocked by driver and privileges (documented);
    a Sink pre-copy baseline is the reviewer-expected comparison for slow mobility.
 
