@@ -1,0 +1,45 @@
+
+=== 2026-10-20T20:53:51.652419 M3E S3: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expM3E_S3 --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn2 --hops 3 --ts 14.05 --rhos 2 --reps 3 --migration_chunk 30 --post_chunks 400 --max_run_s 600 --dyn_probe 4 --cap_events 'D>=0.5:D:in=62.5' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2368637)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 612157)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2199536)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 295603)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 559 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit b5b0625
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset -0.10 ms, dry_run=False, commit b5b0625
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 555 ms/chunk, mss 1388, clock offset -0.63 ms, dry_run=False, commit b5b0625
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 555 ms/chunk, mss 1388, clock offset -0.11 ms, dry_run=False, commit b5b0625
+[orch] skip (valid run exists): policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=1_20261020-193754
+[orch] skip (valid run exists): policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=1_20261020-194048
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=1_20261020-205912: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.68s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t= 149.00s run end
+        held   A: 100.0%, B:  50.5%, C:  52.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.17 s, Sink received 117.16 s, bound 117.83 s, continuity-ready 118.43 s, rejoin 122.68 s | traffic 2.04x, waste 0.18x, reused 1640 MiB | PSNR after bind 42.1 dB | ingress peak 1007 Mbps
+[orch] skip (valid run exists): policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=2_20261020-194634
+[orch] skip (valid run exists): policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=2_20261020-194928
+[orch] skip (valid run exists): policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=2_20261020-195221
+[orch] skip (valid run exists): policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=3_20261020-195514
+[orch] skip (valid run exists): policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=3_20261020-195808
+[orch] skip (valid run exists): policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=3_20261020-200100
+[orch] done: 1 runs under results/evaluation/expM3E_S3/

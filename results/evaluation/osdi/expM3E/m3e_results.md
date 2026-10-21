@@ -4,11 +4,11 @@
 |---|---|
 | H1 | SUPPORTED |
 | H2 | SUPPORTED |
-| H3 | NOT EVALUABLE (< 3 valid reps or cap event not fired) |
+| H3 | SUPPORTED |
 | H5 | SUPPORTED |
 | H4 | SUPPORTED |
-| H6 | NOT EVALUABLE (a scenario not evaluable) |
-| H7 | NOT EVALUABLE (a scenario not evaluable) |
+| H6 | SUPPORTED |
+| H7 | SUPPORTED |
 
 **M3-v2 is reported as the end-to-end M3 (H1, H2, H4 supported; H3, H5 not failed)**
 
@@ -23,7 +23,7 @@
 | S2 | reuse_aware_in | 3 / 3 | 52.134 | 1.04 | 1.032 | 2.026 | [0, 0, 0] ([0, 0, 0]) | 0.5420 | [0, 0, 0] | - |
 | S3 | restart | 3 / 3 | 118.499 | 0.98 | 2.019 | 2.019 | [0, 0, 0] ([0, 0, 0]) | 0.5434 | [0, 0, 0] | - |
 | S3 | split | 3 / 3 | 117.517 | 1.05 | 1.034 | 2.028 | [0, 0, 0] ([0, 0, 0]) | 0.5429 | [0, 0, 0] | - |
-| S3 | reuse_dyn2 | 2 / 3 | 117.440 | 1.06 | 1.035 | 2.028 | [0, 0] ([0, 0]) | 0.5427 | [0, 0] | - |
+| S3 | reuse_dyn2 | 3 / 4 | 118.400 | 1.08 | 1.036 | 2.028 | [0, 0, 0] ([0, 0, 0]) | 0.5427 | [0, 0, 0] | - |
 | S4 | restart | 3 / 3 | 15.335 | 1.11 | 2.028 | 2.028 | [0, 0, 0] ([0, 0, 0]) | 0.5404 | [0, 0, 0] | - |
 | S4 | split | 3 / 3 | 15.379 | 1.11 | 1.036 | 2.031 | [0, 0, 0] ([0, 0, 0]) | 0.5411 | [0, 0, 0] | - |
 | S4 | reuse_dyn2 | 3 / 3 | 15.326 | 1.04 | 1.027 | 2.026 | [0, 0, 0] ([0, 0, 0]) | 0.5408 | [0, 0, 0] | - |
