@@ -305,6 +305,31 @@ def vacw_args(c: Ctx, rho: str, reps="3"):
     return ["--policies", VACW_POLICIES, "--hops", "3", "--ts", c.ts, "--rhos", rho, "--reps", reps, "--migration_chunk", "30", "--post_chunks", "300", "--max_run_s", "600"]
 
 
+M3E_POL = {"S1": "restart,split,reuse_dyn2", "S2": "restart,split,reuse_dyn2,reuse_aware_in", "S3": "restart,split,reuse_dyn2",
+           "S4": "restart,split,reuse_dyn2", "S5": "restart,split,reuse_dyn2"}   # osdi/expM3E/preregistration.md (frozen abf74d6)
+
+
+def m3e_args(c: Ctx, sc: str, reps: str):
+    """A -> B -> C -> D at rho 2, 1 Gbps, dog seed 0, trigger at chunk 30; M3-v2 probe 4 (dry: 1, set by orch())."""
+    a = ["--policies", M3E_POL[sc], "--hops", "3", "--ts", c.ts, "--rhos", "2", "--reps", reps, "--migration_chunk", "30", "--post_chunks", "400", "--max_run_s", "600"]
+    if not c.dry:
+        a += ["--dyn_probe", "4"]
+    if sc == "S1":
+        a += ["--hybrid_net", "3"]
+    cap = {"S2": f"D>=0.5:C:out={c.deg}", "S3": f"D>=0.5:D:in={c.deg}", "S5": f"D>=0.5:A:out={c.deg}"}.get(sc)
+    if cap:
+        a += ["--cap_events", cap]
+    return a
+
+
+def do_m3e(c, shakedown=False):
+    """M3E: five scenarios (S1 contention, S2 holder bottleneck, S3 ingress bottleneck, S4 no change, S5 source bottleneck);
+    shakedown = one rep per policy per scenario (expM3E_shk_S*), not evidence."""
+    for sc in ("S4", "S2", "S3", "S5", "S1"):
+        exp = f"expM3E_{'shk_' if shakedown else ''}{sc}"
+        c.orch(exp, m3e_args(c, sc, "1" if shakedown else "3"), node_extra("dog", 0), f"M3E {'shakedown ' if shakedown else ''}{sc}")
+
+
 def do_vacw(c):
     """VACW v0 (frozen 9137bc9): A -> B -> C -> D, rho {0.5, 1}, 1 Gbps, dog / butterfly seed 0, 3 policies x 3 reps = 36 runs."""
     tag = f"_{c.a.tag}" if c.a.tag else ""
@@ -402,7 +427,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -417,7 +442,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:
