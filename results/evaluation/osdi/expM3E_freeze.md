@@ -9,3 +9,14 @@
   the frozen scenarios, metrics, thresholds or rules; M1, M2 and M3-v2 are not modified.
 - **Evidence classes:** historical M3-v1 (ExpD, N), M3-v2 development / holdout (N regressions, V) and new M3E data are
   never pooled.
+
+## Implementation record (2026-10-20, before any GPU run)
+
+- **Implementation commit:** `14551bda52ec4486d2762b93144aa86369d78830`: `tools/eval/run_wrn.py` (`m3e_shk`, `m3e`), `tools/eval/aggregate_m3e.py`,
+  `tools/eval/check_m3e_shakedown.py`. No change to M1, M2, M3-v2, the orchestrator or the node.
+- **Loopback shakedown (fake runtime, 16 runs, one per policy per scenario): PASS 16 / 16** - every run valid under the
+  W / R / N rules, completed (rejoin + tail), bind observed, applicable, path A-B-C-D at rho 2, TTFO and the
+  move-to-bind chunk service time measurable, no duplicate bytes; the progress-triggered cap event fired exactly once
+  in every S2 / S3 / S5 run; S1 carried 3 network sessions, all restored; M3-v2 ran with the configured probe size.
+- **GPU shakedown and sweep:** `python tools/eval/run_wrn.py m3e_shk` -> `check_m3e_shakedown.py`; on PASS
+  `run_wrn.py m3e` -> `aggregate_m3e.py`.
