@@ -59,3 +59,16 @@ nothing in the rules, thresholds or schedules was changed after the freeze. The 
 
 Seed 0 only; three refresh-heavy inputs; two anchors; PSNR-to-reference and the section 5.2 metrics only; the d = 0
 anomaly and train's anchor dependence are unexplained.
+
+## 5. RD-X exploratory follow-up (2026-10-20; `followup_rdx.md`; not part of the pre-registered verdicts)
+
+6 real one-hop runs at 320 Mbps (`results/evaluation/expRDX_*`, all valid under the W / R / N rules) and 6 emulation
+replays of their realized schedules (`expRD_phasex/`); table `rdx_results.md`.
+- Realized schedule: reset at call 80, bind at call 154 in every run (74 Sink-less calls; bind 43.8-44.3 s after the
+  move), close to RD Phase 1's r1 d = 75 at anchor 155.
+- Real outcomes (both reps identical): butterfly T 28.6 dB, no crossing; audi-snow-trail T 27.7 dB, no crossing; dog
+  T 44.9 dB, crosses and sustains. The nearest Phase 1 condition gave 28.8 / 27.8 / 45.7 dB.
+- Replays: same crossing and sustained outcome, abs dT 0.00 dB, per-call abs dPSNR 0.00 dB (median and max) in all 6.
+- Reading (descriptive): a real single move whose Sink arrives after ~74 calls behaves like the emulated Sink-less
+  window of that length, and the emulation reproduces real migration exactly on the realized schedule, now also on a
+  bandwidth-limited link. Together with Phase 0, 11 of 11 real runs are reproduced call by call.
