@@ -1,7 +1,8 @@
 # Experiment WX - workload expansion of the core mobility experiments: preregistration DRAFT (2026-10-20)
 
-Status: **FINAL DRAFT (decisions closed 2026-10-20); to be frozen when roadmap step 2 starts, after the M3E result
-(D4).** Nothing implemented or run. Roadmap step 2 (`../evaluation_roadmap.md`). No frozen result (ExpD, W / R / N, V, A,
+Status: **FROZEN** (freeze record `../expWX_freeze.md`), after the M3E result (D4). Revised before the freeze by the
+policy-matrix audit of section 4.1 (X5 gains M1 only; 144 runs). Nothing implemented or run at the freeze. M3E's frozen
+results and its seven verdicts are not changed. Roadmap step 2 (`../evaluation_roadmap.md`). No frozen result (ExpD, W / R / N, V, A,
 B, VACW, RD, M3E) is modified.
 
 ## 1. Purpose
@@ -44,10 +45,29 @@ yield fully applicable runs, and only the per-run check decides.
 | X2 | R c = 0, rho 4 | no contention | M1 only, M1 + M2 | R-H1, R-H2, R-H3(a) |
 | X3 | M3E S4 (+ R c = 0, rho 2) | rho 2, no change | M1 only, M1 + M2, M3-v2 | R-H1, R-H2, R-H3(a); M3E H4, H6, H7 |
 | X4 | M3E S1 (ExpD E, G6) | rho 2, 3 network-level M3-v1 sessions on A's egress | M1 only, M1 + M2, M3-v2 | M3E H1 (same scope limits as M3E S1) |
-| X5 | M3E S2 (ExpD F, G7) | rho 2, `D>=0.5:C:out=62.5` | M1 + M2, M3-v2, OTTER at moves | M3E H2 |
+| X5 | M3E S2 (ExpD F, G7) | rho 2, `D>=0.5:C:out=62.5` | M1 only, M1 + M2, M3-v2, OTTER at moves | M3E H2 |
 | X6 | M3E S3 | rho 2, `D>=0.5:D:in=62.5` | M1 + M2, M3-v2 | M3E H3 |
 
 M3E S5 (source bottleneck) is not replicated (D2). M3-v1 is not re-run.
+
+### 4.1 Policy-matrix audit (every imported hypothesis can be evaluated as frozen)
+
+| imported hypothesis (frozen text) | configs | policies the frozen rule needs | present |
+|---|---|---|---|
+| R-H1 redundant source traffic (B_source(M1 + M2) <= 1.10 and reduction >= 75 %; NE if R(M1 only) < 0.10) | X1, X2, X3 | M1 only, M1 + M2 | yes |
+| R-H2 discarded work (<= 0.10 Sink) + manipulation check (M1 only discarded >= 0.75 x 2 / rho at rho 2, 4) | X1, X2, X3 | M1 only, M1 + M2 | yes |
+| R-H3(a) latency without contention (abs difference <= 1.0 s) | X1, X2, X3 | M1 only, M1 + M2 | yes |
+| M3E H1 contention | X4 | M1 only, M1 + M2, M3-v2 | yes |
+| M3E H2 holder bottleneck (<= 0.5 x at moves and <= 0.5 x M1 + M2; <= 2 re-plans, <= 1 probe of <= 4 fragments, 0 duplicates; B_source <= 1.35, "approximately 65 % of M1 only's ~1.0 redundant Sink") | X5 | M1 + M2, M3-v2, at moves; **M1 only** for the source-byte rationale | **added** (the draft omitted M1 only; M3E S2 included it) |
+| M3E H3 no harm, ingress | X6 | M1 + M2, M3-v2 | yes |
+| M3E H4 no change | X3 | M1 + M2, M3-v2 | yes |
+| M3E H6 TTFO / H7 GPU service time | X3-X6 | M1 + M2, M3-v2 | yes; scope note below |
+
+Notes fixed at the freeze: (i) H2's source-byte threshold stays the frozen absolute 1.35 Sinks; the M1-only runs of X5
+report, per workload, the fraction of M1 only's redundant source bytes (B_source(M1 only) - 1) that M3-v2 removes,
+next to the verdict, so the threshold's rationale is checked on every input. (ii) M3E's H6 / H7 were frozen over
+S1-S5; WX evaluates them per configuration on X3-X6 with the same thresholds, and the WX-level H6 / H7 statement covers
+X3-X6 only (S5 is not replicated, D2).
 
 ## 5. Hypotheses and decision rule
 
@@ -79,14 +99,14 @@ probes, chunk service time (move -> bind), validity, applicability, network-sess
 | X2 | 2 | 6 |
 | X3 | 3 | 9 |
 | X4 | 3 | 9 |
-| X5 | 3 | 9 |
+| X5 | 4 | 12 |
 | X6 | 2 | 6 |
-| per workload | | **45** |
-| **total (3 workloads)** | | **135** |
+| per workload | | **48** |
+| **total (3 workloads)** | | **144** |
 
-~2-3 min per run plus one node start per (configuration, workload) invocation (18 x ~4 min): **~6.5-7.5 h of exclusive
-use of GPU 0 on all four hosts**; can be split into three sessions, one per workload. Shakedown before the sweep: one
-run per policy of X3 and X5 on each workload (18 runs, ~50 min; not evidence).
+~2-3 min per run plus one node start per (configuration, workload) invocation (18 x ~4 min): **~7-8 h of exclusive use
+of GPU 0 on all four hosts**; can be split into three sessions, one per workload. Shakedown before the sweep: one run per
+policy of X3 and X5 on each workload (7 x 3 = 21 runs, ~1 h; harness checks only, not evidence).
 
 ## 8. Implementation
 
@@ -96,7 +116,7 @@ harness.
 
 ## 9. Decisions (closed 2026-10-20)
 
-- **D1** - all three additional workloads (135 runs).
+- **D1** - all three additional workloads (144 runs after the section 4.1 audit).
 - **D2** - M3E S5 is not replicated.
 - **D3** - R at c = 3 is not added (X4 covers contention at rho 2).
 - **D4** - WX runs after the M3E result; it is frozen at that point without changing its rules.
