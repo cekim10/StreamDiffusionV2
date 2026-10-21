@@ -1,0 +1,980 @@
+
+=== 2026-10-20T18:49:28.092482 M3E S4: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expM3E_S4 --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn2 --hops 3 --ts 14.05 --rhos 2 --reps 3 --migration_chunk 30 --post_chunks 400 --max_run_s 600 --dyn_probe 4 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2301696)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 560891)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2150190)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 145246)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset -0.00 ms, dry_run=False, commit 31dc895
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset -0.11 ms, dry_run=False, commit 31dc895
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset -0.01 ms, dry_run=False, commit 31dc895
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 558 ms/chunk, mss 1388, clock offset +0.10 ms, dry_run=False, commit 31dc895
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_rep=1_20261020-185448: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.58s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  47.22s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.11 s, Sink received 14.49 s, bound 14.85 s, continuity-ready 15.45 s, rejoin 20.92 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 41.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_rep=1_20261020-185601: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.29s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.59s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active C->D (199 left, 333 Mbps), B->D (103 left, 333 Mbps), A->D (110 left, 333 Mbps)
+        next   C->D 199 fragments (796 MiB) already delivered to C, reused; B->D 103 fragments (412 MiB) already delivered to B, reused; A->D 110 fragments (440 MiB) not yet anywhere else
+[orch] t=  47.14s run end
+        held   A: 100.0%, B:  50.7%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.11 s, Sink received 14.41 s, bound 14.81 s, continuity-ready 15.4 s, rejoin 20.87 s | traffic 2.03x, waste 0.06x, reused 1636 MiB | PSNR after bind 41.0 dB | ingress peak 1018 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_rep=1_20261020-185713: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.54s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t=  47.09s run end
+        held   A: 100.0%, B:  50.5%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.07 s, Sink received 14.37 s, bound 14.79 s, continuity-ready 15.39 s, rejoin 20.83 s | traffic 2.03x, waste 0.17x, reused 1632 MiB | PSNR after bind 41.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_rep=2_20261020-185824: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.33s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.54s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  47.05s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.07 s, Sink received 14.43 s, bound 14.71 s, continuity-ready 15.31 s, rejoin 20.74 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 41.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_rep=2_20261020-185936: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.60s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active C->D (199 left, 333 Mbps), B->D (103 left, 333 Mbps), A->D (110 left, 333 Mbps)
+        next   C->D 199 fragments (796 MiB) already delivered to C, reused; B->D 103 fragments (412 MiB) already delivered to B, reused; A->D 110 fragments (440 MiB) not yet anywhere else
+[orch] t=  47.18s run end
+        held   A: 100.0%, B:  50.7%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.11 s, Sink received 14.41 s, bound 14.78 s, continuity-ready 15.38 s, rejoin 20.83 s | traffic 2.03x, waste 0.06x, reused 1636 MiB | PSNR after bind 41.0 dB | ingress peak 1018 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_rep=2_20261020-190048: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.20s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.54s move C->D (final move)
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active A->D (109 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (152 left, 333 Mbps)
+        next   A->D 109 fragments; B->D 151 fragments; C->D 152 fragments
+[orch] t=  46.96s run end
+        held   A: 100.0%, B:  50.0%, C:  52.4%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.04 s, Sink received 14.34 s, bound 14.7 s, continuity-ready 15.3 s, rejoin 20.72 s | traffic 2.03x, waste 0.17x, reused 1644 MiB | PSNR after bind 41.0 dB | ingress peak 1018 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_rep=3_20261020-190200: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.58s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  46.99s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.13 s, Sink received 14.49 s, bound 14.74 s, continuity-ready 15.33 s, rejoin 20.76 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 41.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_rep=3_20261020-190311: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.19s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.49s move C->D (final move)
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active C->D (202 left, 333 Mbps), B->D (101 left, 333 Mbps), A->D (109 left, 333 Mbps)
+        next   C->D 202 fragments (808 MiB) already delivered to C, reused; B->D 101 fragments (404 MiB) already delivered to B, reused; A->D 109 fragments (436 MiB) not yet anywhere else
+[orch] t=  47.05s run end
+        held   A: 100.0%, B:  50.0%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 0.98 s, Sink received 14.31 s, bound 14.66 s, continuity-ready 15.26 s, rejoin 20.7 s | traffic 2.02x, waste 0.04x, reused 1640 MiB | PSNR after bind 41.0 dB | ingress peak 1018 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_rep=3_20261020-190423: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.21s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.53s move C->D (final move)
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active A->D (108 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (153 left, 333 Mbps)
+        next   A->D 108 fragments; B->D 151 fragments; C->D 153 fragments
+[orch] t=  47.05s run end
+        held   A: 100.0%, B:  50.0%, C:  52.4%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 0.98 s, Sink received 14.33 s, bound 14.73 s, continuity-ready 15.33 s, rejoin 20.76 s | traffic 2.03x, waste 0.16x, reused 1648 MiB | PSNR after bind 41.0 dB | ingress peak 1018 Mbps
+[orch] done: 9 runs under results/evaluation/expM3E_S4/
+
+=== 2026-10-20T19:06:36.129751 M3E S2: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expM3E_S2 --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn2,reuse_aware_in --hops 3 --ts 14.05 --rhos 2 --reps 3 --migration_chunk 30 --post_chunks 400 --max_run_s 600 --dyn_probe 4 --cap_events 'D>=0.5:C:out=62.5' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2311275)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 568110)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2157584)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 165529)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 31dc895
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset +0.05 ms, dry_run=False, commit 31dc895
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset -0.01 ms, dry_run=False, commit 31dc895
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 556 ms/chunk, mss 1388, clock offset +0.07 ms, dry_run=False, commit 31dc895
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=1_20261020-191201: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.59s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  47.28s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.13 s, Sink received 14.47 s, bound 14.9 s, continuity-ready 15.5 s, rejoin 20.97 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 41.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=1_20261020-191314: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.40s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.71s move C->D (final move)
+        held   A: 100.0%, B:  51.5%, C:  47.6%, D:   0.0%
+        active C->D (196 left, 333 Mbps), B->D (104 left, 333 Mbps), A->D (112 left, 333 Mbps)
+        next   C->D 196 fragments (784 MiB) already delivered to C, reused; B->D 104 fragments (416 MiB) already delivered to B, reused; A->D 112 fragments (448 MiB) not yet anywhere else
+[orch] t= 108.37s run end
+        held   A: 100.0%, B:  51.5%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.22 s, Sink received 75.65 s, bound 76.02 s, continuity-ready 76.62 s, rejoin 82.11 s | traffic 2.04x, waste 0.07x, reused 1628 MiB | PSNR after bind 39.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=1_20261020-191527: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.57s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t=  50.12s run end
+        held   A: 100.0%, B:  50.7%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.05 s, Sink received 19.3 s, bound 19.51 s, continuity-ready 20.11 s, rejoin 23.81 s | traffic 2.03x, waste 0.32x, reused 1392 MiB | PSNR after bind 38.4 dB | ingress peak 1018 Mbps
+[orch] === run policy=reuse_aware_in_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=1_20261020-191642: OTTER at moves (bottleneck-aware assignment, shared planner), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.26s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.53s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.8%, D:   0.0%
+        active A->D (109 left, 333 Mbps), B->D (152 left, 333 Mbps), C->D (151 left, 333 Mbps)
+        next   A->D 109 fragments; B->D 152 fragments; C->D 151 fragments
+[orch] t=  83.00s run end
+        held   A: 100.0%, B:  50.5%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER at moves (bottleneck-aware assignment, shared planner) @ 1000.0 Mbps rho 2.0: after final move: first output 1.02 s, Sink received 51.28 s, bound 51.88 s, continuity-ready 52.48 s, rejoin 56.74 s | traffic 2.03x, waste 0.17x, reused 1640 MiB | PSNR after bind 39.4 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=2_20261020-191829: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.19s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.43s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  46.78s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 0.97 s, Sink received 14.34 s, bound 15.02 s, continuity-ready 15.62 s, rejoin 21.1 s | traffic 2.02x, waste 1.02x, reused 0 MiB | PSNR after bind 40.8 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=2_20261020-191941: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.20s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.51s move C->D (final move)
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active C->D (202 left, 333 Mbps), B->D (101 left, 333 Mbps), A->D (109 left, 333 Mbps)
+        next   C->D 202 fragments (808 MiB) already delivered to C, reused; B->D 101 fragments (404 MiB) already delivered to B, reused; A->D 109 fragments (436 MiB) not yet anywhere else
+[orch] t= 111.10s run end
+        held   A: 100.0%, B:  50.0%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 0.98 s, Sink received 78.88 s, bound 79.37 s, continuity-ready 79.96 s, rejoin 84.8 s | traffic 2.02x, waste 0.04x, reused 1640 MiB | PSNR after bind 39.6 dB | ingress peak 1040 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=2_20261020-192157: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.58s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (110 left, 333 Mbps), B->D (152 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 110 fragments; B->D 152 fragments; C->D 150 fragments
+[orch] t=  51.85s run end
+        held   A: 100.0%, B:  50.7%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.03 s, Sink received 19.48 s, bound 20.11 s, continuity-ready 20.71 s, rejoin 25.61 s | traffic 2.03x, waste 0.32x, reused 1396 MiB | PSNR after bind 38.9 dB | ingress peak 1040 Mbps
+[orch] === run policy=reuse_aware_in_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=2_20261020-192313: OTTER at moves (bottleneck-aware assignment, shared planner), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.51s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (110 left, 333 Mbps), B->D (152 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 110 fragments; B->D 152 fragments; C->D 150 fragments
+[orch] t=  82.00s run end
+        held   A: 100.0%, B:  50.7%, C:  51.5%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER at moves (bottleneck-aware assignment, shared planner) @ 1000.0 Mbps rho 2.0: after final move: first output 1.04 s, Sink received 50.76 s, bound 51.54 s, continuity-ready 52.13 s, rejoin 55.76 s | traffic 2.02x, waste 0.17x, reused 1632 MiB | PSNR after bind 39.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=3_20261020-192500: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.18s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.26s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.47s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t=  47.00s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.01 s, Sink received 14.37 s, bound 14.73 s, continuity-ready 15.33 s, rejoin 20.76 s | traffic 2.02x, waste 1.02x, reused 0 MiB | PSNR after bind 41.0 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=3_20261020-192612: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.24s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active B->C (201 left, 500 Mbps), A->C (211 left, 500 Mbps)
+        next   B->C 201 fragments (804 MiB) already delivered to B, reused; A->C 211 fragments (844 MiB) not yet anywhere else
+[orch] t=  14.48s move C->D (final move)
+        held   A: 100.0%, B:  50.2%, C:  48.5%, D:   0.0%
+        active C->D (200 left, 333 Mbps), B->D (101 left, 333 Mbps), A->D (111 left, 333 Mbps)
+        next   C->D 200 fragments (800 MiB) already delivered to C, reused; B->D 101 fragments (404 MiB) already delivered to B, reused; A->D 111 fragments (444 MiB) not yet anywhere else
+[orch] t= 108.53s run end
+        held   A: 100.0%, B:  50.2%, C:  51.7%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 0.97 s, Sink received 77.58 s, bound 77.91 s, continuity-ready 78.53 s, rejoin 82.81 s | traffic 2.02x, waste 0.05x, reused 1628 MiB | PSNR after bind 39.2 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=3_20261020-192825: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.55s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t=  51.96s run end
+        held   A: 100.0%, B:  50.5%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.07 s, Sink received 19.47 s, bound 20.24 s, continuity-ready 20.83 s, rejoin 25.75 s | traffic 2.03x, waste 0.32x, reused 1392 MiB | PSNR after bind 38.9 dB | ingress peak 1018 Mbps
+[orch] === run policy=reuse_aware_in_bw=1000_rho=2_tm=7.025_ev=Dge0.5Cout62.5_rep=3_20261020-192942: OTTER at moves (bottleneck-aware assignment, shared planner), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.37s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.65s move C->D (final move)
+        held   A: 100.0%, B:  51.2%, C:  47.6%, D:   0.0%
+        active A->D (112 left, 333 Mbps), B->D (153 left, 333 Mbps), C->D (147 left, 333 Mbps)
+        next   A->D 112 fragments; B->D 153 fragments; C->D 147 fragments
+[orch] t=  80.47s run end
+        held   A: 100.0%, B:  51.2%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER at moves (bottleneck-aware assignment, shared planner) @ 1000.0 Mbps rho 2.0: after final move: first output 1.16 s, Sink received 49.3 s, bound 50.0 s, continuity-ready 50.59 s, rejoin 54.26 s | traffic 2.03x, waste 0.18x, reused 1628 MiB | PSNR after bind 39.5 dB | ingress peak 1040 Mbps
+[orch] done: 12 runs under results/evaluation/expM3E_S2/
+
+=== 2026-10-20T19:32:28.230617 M3E S3: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expM3E_S3 --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn2 --hops 3 --ts 14.05 --rhos 2 --reps 3 --migration_chunk 30 --post_chunks 400 --max_run_s 600 --dyn_probe 4 --cap_events 'D>=0.5:D:in=62.5' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2324635)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 578933)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2167536)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 193727)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 559 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 31dc895
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.04 ms, dry_run=False, commit 31dc895
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 556 ms/chunk, mss 1388, clock offset -0.15 ms, dry_run=False, commit 31dc895
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 558 ms/chunk, mss 1388, clock offset -0.09 ms, dry_run=False, commit 31dc895
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=1_20261020-193754: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.58s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t= 149.16s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.12 s, Sink received 117.31 s, bound 117.92 s, continuity-ready 118.52 s, rejoin 122.77 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 42.1 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=1_20261020-194048: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.20s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.72s move C->D (final move)
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active C->D (202 left, 333 Mbps), B->D (101 left, 333 Mbps), A->D (109 left, 333 Mbps)
+        next   C->D 202 fragments (808 MiB) already delivered to C, reused; B->D 101 fragments (404 MiB) already delivered to B, reused; A->D 109 fragments (436 MiB) not yet anywhere else
+[orch] t= 148.02s run end
+        held   A: 100.0%, B:  50.0%, C:  53.6%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.2 s, Sink received 116.58 s, bound 116.92 s, continuity-ready 117.52 s, rejoin 121.76 s | traffic 2.04x, waste 0.06x, reused 1652 MiB | PSNR after bind 41.9 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=1_20261020-194340: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.55s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t= 149.04s run end
+        held   A: 100.0%, B:  50.5%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.07 s, Sink received 117.01 s, bound 117.88 s, continuity-ready 118.48 s, rejoin 122.75 s | traffic 2.03x, waste 0.17x, reused 1632 MiB | PSNR after bind 42.1 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=2_20261020-194634: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.20s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.44s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t= 149.06s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 0.98 s, Sink received 117.22 s, bound 117.9 s, continuity-ready 118.5 s, rejoin 122.74 s | traffic 2.02x, waste 1.02x, reused 0 MiB | PSNR after bind 42.1 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=2_20261020-194928: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.26s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.50s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.5%, D:   0.0%
+        active C->D (200 left, 333 Mbps), B->D (102 left, 333 Mbps), A->D (110 left, 333 Mbps)
+        next   C->D 200 fragments (800 MiB) already delivered to C, reused; B->D 102 fragments (408 MiB) already delivered to B, reused; A->D 110 fragments (440 MiB) not yet anywhere else
+[orch] t= 148.67s run end
+        held   A: 100.0%, B:  50.5%, C:  51.7%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.01 s, Sink received 116.98 s, bound 117.54 s, continuity-ready 118.14 s, rejoin 122.38 s | traffic 2.02x, waste 0.05x, reused 1632 MiB | PSNR after bind 42.1 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=2_20261020-195221: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.58s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t= 147.96s run end
+        held   A: 100.0%, B:  50.7%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.04 s, Sink received 116.22 s, bound 116.84 s, continuity-ready 117.44 s, rejoin 121.68 s | traffic 2.03x, waste 0.18x, reused 1632 MiB | PSNR after bind 41.9 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=3_20261020-195514: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.21s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.44s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t= 148.81s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 0.98 s, Sink received 117.21 s, bound 117.67 s, continuity-ready 118.27 s, rejoin 122.52 s | traffic 2.02x, waste 1.02x, reused 0 MiB | PSNR after bind 42.1 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=3_20261020-195808: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.57s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.5%, D:   0.0%
+        active C->D (200 left, 333 Mbps), B->D (102 left, 333 Mbps), A->D (110 left, 333 Mbps)
+        next   C->D 200 fragments (800 MiB) already delivered to C, reused; B->D 102 fragments (408 MiB) already delivered to B, reused; A->D 110 fragments (440 MiB) not yet anywhere else
+[orch] t= 147.87s run end
+        held   A: 100.0%, B:  50.5%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.05 s, Sink received 116.42 s, bound 116.71 s, continuity-ready 117.31 s, rejoin 121.56 s | traffic 2.03x, waste 0.05x, reused 1636 MiB | PSNR after bind 41.9 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Din62.5_rep=3_20261020-200100: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active A->C (210 left, 500 Mbps), B->C (202 left, 500 Mbps)
+        next   A->C 210 fragments; B->C 202 fragments
+[orch] t=  14.58s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (110 left, 333 Mbps), B->D (152 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 110 fragments; B->D 152 fragments; C->D 150 fragments
+[orch] t= 148.90s run end
+        held   A: 100.0%, B:  50.7%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.08 s, Sink received 117.04 s, bound 117.8 s, continuity-ready 118.4 s, rejoin 122.64 s | traffic 2.03x, waste 0.17x, reused 1636 MiB | PSNR after bind 42.2 dB | ingress peak 1007 Mbps
+[orch] done: 9 runs under results/evaluation/expM3E_S3/
+
+=== 2026-10-20T20:04:55.198345 M3E S5: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expM3E_S5 --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn2 --hops 3 --ts 14.05 --rhos 2 --reps 3 --migration_chunk 30 --post_chunks 400 --max_run_s 600 --dyn_probe 4 --cap_events 'D>=0.5:A:out=62.5' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2341946)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 591406)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2180628)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 239341)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 559 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 31dc895
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset -0.17 ms, dry_run=False, commit 31dc895
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset -0.12 ms, dry_run=False, commit 31dc895
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 555 ms/chunk, mss 1388, clock offset -0.10 ms, dry_run=False, commit 31dc895
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=1_20261020-201015: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.62s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t= 149.07s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.15 s, Sink received 117.34 s, bound 117.88 s, continuity-ready 118.48 s, rejoin 122.72 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 42.2 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=1_20261020-201310: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.28s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.59s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active C->D (199 left, 333 Mbps), B->D (103 left, 333 Mbps), A->D (110 left, 333 Mbps)
+        next   C->D 199 fragments (796 MiB) already delivered to C, reused; B->D 103 fragments (412 MiB) already delivered to B, reused; A->D 110 fragments (440 MiB) not yet anywhere else
+[orch] t=  61.11s run end
+        held   A: 100.0%, B:  50.5%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.1 s, Sink received 28.92 s, bound 29.33 s, continuity-ready 29.93 s, rejoin 34.81 s | traffic 2.03x, waste 0.05x, reused 1636 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=1_20261020-201435: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.30s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.57s move C->D (final move)
+        held   A: 100.0%, B:  50.7%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t=  61.08s run end
+        held   A: 100.0%, B:  50.7%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.06 s, Sink received 29.55 s, bound 29.83 s, continuity-ready 30.43 s, rejoin 34.69 s | traffic 2.03x, waste 0.18x, reused 1632 MiB | PSNR after bind 41.3 dB | ingress peak 1040 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=2_20261020-201601: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.24s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.39s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.63s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t= 149.37s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.19 s, Sink received 117.54 s, bound 118.25 s, continuity-ready 118.85 s, rejoin 123.09 s | traffic 2.03x, waste 1.03x, reused 0 MiB | PSNR after bind 42.2 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=2_20261020-201856: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.28s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active B->C (201 left, 500 Mbps), A->C (211 left, 500 Mbps)
+        next   B->C 201 fragments (804 MiB) already delivered to B, reused; A->C 211 fragments (844 MiB) not yet anywhere else
+[orch] t=  14.59s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.1%, D:   0.0%
+        active C->D (198 left, 333 Mbps), B->D (102 left, 333 Mbps), A->D (112 left, 333 Mbps)
+        next   C->D 198 fragments (792 MiB) already delivered to C, reused; B->D 102 fragments (408 MiB) already delivered to B, reused; A->D 112 fragments (448 MiB) not yet anywhere else
+[orch] t=  61.45s run end
+        held   A: 100.0%, B:  50.5%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.09 s, Sink received 30.2 s, bound 30.95 s, continuity-ready 31.55 s, rejoin 35.17 s | traffic 2.03x, waste 0.06x, reused 1628 MiB | PSNR after bind 39.6 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=2_20261020-202022: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.55s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t=  60.94s run end
+        held   A: 100.0%, B:  50.5%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.08 s, Sink received 29.4 s, bound 29.78 s, continuity-ready 30.38 s, rejoin 34.61 s | traffic 2.03x, waste 0.17x, reused 1632 MiB | PSNR after bind 41.3 dB | ingress peak 1040 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=3_20261020-202148: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.32s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 1000 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.53s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 1000 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] t= 149.22s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.04 s, Sink received 117.41 s, bound 117.91 s, continuity-ready 118.51 s, rejoin 122.75 s | traffic 2.02x, waste 1.02x, reused 0 MiB | PSNR after bind 42.2 dB | ingress peak 1007 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=3_20261020-202442: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.20s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.51s move C->D (final move)
+        held   A: 100.0%, B:  50.0%, C:  49.0%, D:   0.0%
+        active C->D (202 left, 333 Mbps), B->D (101 left, 333 Mbps), A->D (109 left, 333 Mbps)
+        next   C->D 202 fragments (808 MiB) already delivered to C, reused; B->D 101 fragments (404 MiB) already delivered to B, reused; A->D 109 fragments (436 MiB) not yet anywhere else
+[orch] t=  61.04s run end
+        held   A: 100.0%, B:  50.0%, C:  52.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 0.97 s, Sink received 28.44 s, bound 29.01 s, continuity-ready 29.61 s, rejoin 34.46 s | traffic 2.02x, waste 0.04x, reused 1640 MiB | PSNR after bind 39.6 dB | ingress peak 1040 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_ev=Dge0.5Aout62.5_rep=3_20261020-202608: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.27s move B->C
+        held   A: 100.0%, B:  48.8%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.54s move C->D (final move)
+        held   A: 100.0%, B:  50.5%, C:  48.3%, D:   0.0%
+        active A->D (111 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (150 left, 333 Mbps)
+        next   A->D 111 fragments; B->D 151 fragments; C->D 150 fragments
+[orch] t=  61.29s run end
+        held   A: 100.0%, B:  50.5%, C:  51.9%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.05 s, Sink received 29.55 s, bound 30.47 s, continuity-ready 31.09 s, rejoin 34.75 s | traffic 2.03x, waste 0.17x, reused 1632 MiB | PSNR after bind 41.4 dB | ingress peak 1040 Mbps
+[orch] done: 9 runs under results/evaluation/expM3E_S5/
+
+=== 2026-10-20T20:28:35.168391 M3E S1: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expM3E_S1 --skip_done --validity wrn --bw 1000 --policies restart,split,reuse_dyn2 --hops 3 --ts 14.05 --rhos 2 --reps 3 --migration_chunk 30 --post_chunks 400 --max_run_s 600 --dyn_probe 4 --hybrid_net 3 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2353768)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 600937)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 2189215)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 266755)
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched restore node A on elves-01.be.ucsc.edu (pid 2353842)
+[orch] launched restore node B on elves-02.be.ucsc.edu (pid 601009)
+[orch] launched restore node C on elves-03.be.ucsc.edu (pid 2189282)
+[orch] launched restore node D on elves-04.be.ucsc.edu (pid 266831)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 31dc895
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.02 ms, dry_run=False, commit 31dc895
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 555 ms/chunk, mss 1388, clock offset -0.08 ms, dry_run=False, commit 31dc895
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 559 ms/chunk, mss 1388, clock offset +0.06 ms, dry_run=False, commit 31dc895
+[orch] restore node A = elves-01 commit 31dc895
+[orch] restore node B = elves-02 commit 31dc895
+[orch] restore node C = elves-03 commit 31dc895
+[orch] restore node D = elves-04 commit 31dc895
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_hybrid=3_rep=1_20261020-203406: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.32s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 250 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.79s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 250 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] restart N=3 moves=2 rho=2: restored 3/3, median first 71.9 s, makespan 72.4 s, coverage 0.19, source 3.94 S, total 3.94 S, unused 0.94 S | A tx peak 1065.6 Mbps, valid True
+[orch] t=  89.42s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.23 s, Sink received 56.17 s, bound 56.78 s, continuity-ready 57.39 s, rejoin 61.63 s | traffic 1.26x, waste 0.26x, reused 0 MiB | PSNR after bind 39.4 dB | ingress peak 268 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_hybrid=3_rep=1_20261020-203608: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.21s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B all fragments
+[orch] t=   7.32s move B->C
+        held   A: 100.0%, B:  12.1%, C:   0.0%, D:   0.0%
+        active B->C (50 left, 500 Mbps), A->C (362 left, 250 Mbps)
+        next   B->C 50 fragments (200 MiB) already delivered to B, reused; A->C 362 fragments (1448 MiB) not yet anywhere else
+[orch] t=  14.52s move C->D (final move)
+        held   A: 100.0%, B:  12.9%, C:  24.0%, D:   0.0%
+        active C->D (99 left, 500 Mbps), A->D (313 left, 250 Mbps)
+        next   C->D 99 fragments (396 MiB) already delivered to C, reused; A->D 313 fragments (1252 MiB) not yet anywhere else
+[orch] reuse_fixed N=3 moves=2 rho=2: restored 3/3, median first 55.7 s, makespan 55.8 s, coverage 0.25, source 3.00 S, total 4.50 S, unused 0.00 S | A tx peak 1057.7 Mbps, valid True
+[orch] t=  74.95s run end
+        held   A: 100.0%, B:  12.9%, C:  25.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.01 s, Sink received 41.92 s, bound 42.21 s, continuity-ready 42.82 s, rejoin 47.08 s | traffic 1.38x, waste 0.02x, reused 596 MiB | PSNR after bind 40.7 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_hybrid=3_rep=1_20261020-203748: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.32s move B->C
+        held   A: 100.0%, B:  12.4%, C:   0.0%, D:   0.0%
+        active A->C (361 left, 250 Mbps), B->C (51 left, 500 Mbps)
+        next   A->C 361 fragments; B->C 51 fragments
+[orch] t=  14.60s move C->D (final move)
+        held   A: 100.0%, B:  12.9%, C:  24.5%, D:   0.0%
+        active A->D (311 left, 250 Mbps), B->D (26 left, 250 Mbps), C->D (75 left, 250 Mbps)
+        next   A->D 311 fragments; B->D 26 fragments; C->D 75 fragments
+[orch] reuse_dyn N=3 moves=2 rho=2: restored 3/3, median first 55.7 s, makespan 55.7 s, coverage 0.25, source 3.00 S, total 4.50 S, unused 0.09 S | A tx peak 1057.7 Mbps, valid True
+[orch] t=  74.95s run end
+        held   A: 100.0%, B:  12.9%, C:  25.5%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.04 s, Sink received 41.83 s, bound 42.37 s, continuity-ready 42.97 s, rejoin 47.23 s | traffic 1.38x, waste 0.08x, reused 608 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_hybrid=3_rep=2_20261020-203928: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 250 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.65s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 250 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] restart N=3 moves=2 rho=2: restored 3/3, median first 71.9 s, makespan 72.3 s, coverage 0.19, source 3.94 S, total 3.94 S, unused 0.94 S | A tx peak 1058.8 Mbps, valid True
+[orch] t=  88.78s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.06 s, Sink received 56.03 s, bound 56.32 s, continuity-ready 56.91 s, rejoin 61.15 s | traffic 1.26x, waste 0.26x, reused 0 MiB | PSNR after bind 39.4 dB | ingress peak 268 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_hybrid=3_rep=2_20261020-204122: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B all fragments
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:  12.4%, C:   0.0%, D:   0.0%
+        active B->C (51 left, 500 Mbps), A->C (361 left, 250 Mbps)
+        next   B->C 51 fragments (204 MiB) already delivered to B, reused; A->C 361 fragments (1444 MiB) not yet anywhere else
+[orch] t=  14.52s move C->D (final move)
+        held   A: 100.0%, B:  12.9%, C:  24.3%, D:   0.0%
+        active C->D (100 left, 500 Mbps), A->D (312 left, 250 Mbps)
+        next   C->D 100 fragments (400 MiB) already delivered to C, reused; A->D 312 fragments (1248 MiB) not yet anywhere else
+[orch] reuse_fixed N=3 moves=2 rho=2: restored 3/3, median first 55.7 s, makespan 55.8 s, coverage 0.25, source 3.00 S, total 4.50 S, unused 0.00 S | A tx peak 1066.0 Mbps, valid True
+[orch] t=  75.13s run end
+        held   A: 100.0%, B:  12.9%, C:  25.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 0.97 s, Sink received 41.86 s, bound 42.63 s, continuity-ready 43.23 s, rejoin 47.46 s | traffic 1.38x, waste 0.01x, reused 604 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_hybrid=3_rep=2_20261020-204302: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.32s move B->C
+        held   A: 100.0%, B:  12.4%, C:   0.0%, D:   0.0%
+        active A->C (361 left, 250 Mbps), B->C (51 left, 500 Mbps)
+        next   A->C 361 fragments; B->C 51 fragments
+[orch] t=  14.47s move C->D (final move)
+        held   A: 100.0%, B:  12.9%, C:  24.5%, D:   0.0%
+        active A->D (311 left, 250 Mbps), B->D (26 left, 250 Mbps), C->D (75 left, 250 Mbps)
+        next   A->D 311 fragments; B->D 26 fragments; C->D 75 fragments
+[orch] reuse_dyn N=3 moves=2 rho=2: restored 3/3, median first 55.7 s, makespan 55.7 s, coverage 0.25, source 3.00 S, total 4.50 S, unused 0.09 S | A tx peak 1064.4 Mbps, valid True
+[orch] t=  75.13s run end
+        held   A: 100.0%, B:  12.9%, C:  25.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.01 s, Sink received 41.8 s, bound 42.56 s, continuity-ready 43.16 s, rejoin 47.43 s | traffic 1.38x, waste 0.07x, reused 608 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=restart_bw=1000_rho=2_tm=7.025_hybrid=3_rep=3_20261020-204443: Restart, bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments from scratch
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->C (412 left, 250 Mbps)
+        next   discard progress at B; A->C 412 fragments from scratch
+[orch] t=  14.59s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->D (412 left, 250 Mbps)
+        next   discard progress at B; discard progress at C; A->D 412 fragments from scratch
+[orch] restart N=3 moves=2 rho=2: restored 3/3, median first 71.9 s, makespan 72.3 s, coverage 0.19, source 3.94 S, total 3.94 S, unused 0.94 S | A tx peak 1066.5 Mbps, valid True
+[orch] t=  89.14s run end
+        held   A: 100.0%, B:   0.0%, C:   0.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Restart @ 1000.0 Mbps rho 2.0: after final move: first output 1.02 s, Sink received 55.92 s, bound 56.63 s, continuity-ready 57.23 s, rejoin 61.46 s | traffic 1.26x, waste 0.26x, reused 0 MiB | PSNR after bind 39.4 dB | ingress peak 279 Mbps
+[orch] === run policy=split_bw=1000_rho=2_tm=7.025_hybrid=3_rep=3_20261020-204637: Reuse, fixed routing (holders forward; source sends the rest), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B all fragments
+[orch] t=   7.32s move B->C
+        held   A: 100.0%, B:  12.1%, C:   0.0%, D:   0.0%
+        active B->C (50 left, 500 Mbps), A->C (362 left, 250 Mbps)
+        next   B->C 50 fragments (200 MiB) already delivered to B, reused; A->C 362 fragments (1448 MiB) not yet anywhere else
+[orch] t=  14.65s move C->D (final move)
+        held   A: 100.0%, B:  12.9%, C:  24.0%, D:   0.0%
+        active C->D (99 left, 500 Mbps), A->D (313 left, 250 Mbps)
+        next   C->D 99 fragments (396 MiB) already delivered to C, reused; A->D 313 fragments (1252 MiB) not yet anywhere else
+[orch] reuse_fixed N=3 moves=2 rho=2: restored 3/3, median first 55.7 s, makespan 55.7 s, coverage 0.25, source 3.00 S, total 4.50 S, unused 0.00 S | A tx peak 1058.1 Mbps, valid True
+[orch] t=  75.16s run end
+        held   A: 100.0%, B:  12.9%, C:  25.2%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 1000.0 Mbps rho 2.0: after final move: first output 1.08 s, Sink received 41.92 s, bound 42.64 s, continuity-ready 43.24 s, rejoin 47.48 s | traffic 1.38x, waste 0.02x, reused 596 MiB | PSNR after bind 39.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_hybrid=3_rep=3_20261020-204817: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.31s move B->C
+        held   A: 100.0%, B:  12.1%, C:   0.0%, D:   0.0%
+        active A->C (362 left, 250 Mbps), B->C (50 left, 500 Mbps)
+        next   A->C 362 fragments; B->C 50 fragments
+[orch] t=  14.52s move C->D (final move)
+        held   A: 100.0%, B:  12.9%, C:  24.0%, D:   0.0%
+        active A->D (313 left, 250 Mbps), B->D (26 left, 250 Mbps), C->D (73 left, 250 Mbps)
+        next   A->D 313 fragments; B->D 26 fragments; C->D 73 fragments
+[orch] reuse_dyn N=3 moves=2 rho=2: restored 3/3, median first 55.7 s, makespan 55.8 s, coverage 0.25, source 3.00 S, total 4.50 S, unused 0.09 S | A tx peak 1065.2 Mbps, valid True
+[orch] t=  75.04s run end
+        held   A: 100.0%, B:  12.9%, C:  25.0%, D: 100.0%
+        active -
+        next   stop reason: rejoin+tail
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.01 s, Sink received 41.93 s, bound 42.48 s, continuity-ready 43.08 s, rejoin 47.36 s | traffic 1.38x, waste 0.08x, reused 596 MiB | PSNR after bind 40.7 dB | ingress peak 973 Mbps
+[orch] done: 9 runs under results/evaluation/expM3E_S1/

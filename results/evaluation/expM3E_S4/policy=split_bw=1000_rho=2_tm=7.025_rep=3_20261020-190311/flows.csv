@@ -1,0 +1,7 @@
+flow,src,dst,t_start_rel,t_end_rel,n_frags,bytes,rate_bps_last,cancelled,reason
+f1_AB,A,B,0.1827,7.1865,206,864026624,1000000000,True,source -> first owner
+f2_BC,B,C,7.1871,14.4529,107,448790528,500000000,True,progress-aware: reuse fragments already delivered
+f3_AC,A,C,7.1891,14.4694,108,452984832,1000000000,True,progress-aware: source sends only what no other holder has
+f4_CD,C,D,14.4700,28.3773,202,847249408,1000000000,False,progress-aware: reuse fragments already delivered
+f5_BD,B,D,14.4752,24.7257,101,423624704,333333333,False,progress-aware: reuse fragments already delivered
+f6_AD,A,D,14.4802,25.1944,109,454362528,500000000,False,progress-aware: source sends only what no other holder has
