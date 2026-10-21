@@ -7,3 +7,12 @@
   (dog from frozen R / M3E); 144 runs; policy-matrix audit section 4.1.
 - **Not frozen here:** driver, aggregator and shakedown check (commit recorded below). M1, M2, M3-v2 and every prior
   result (including M3E's seven verdicts) unchanged.
+
+## Implementation record (2026-10-20, before any GPU run)
+
+- **Implementation commit:** `e576643b0976e80a7ed9f5eadae0477ad6203fde` (`run_wrn.py wx_shk / wx`, `aggregate_wx.py`, `check_wx_shakedown.py`). No change to
+  M1, M2, M3-v2, the harness or any prior result.
+- **Loopback shakedown (fake runtime, X3 and X5 x 3 workloads, 21 runs): PASS 21 / 21** - valid, completed, bind
+  observed, applicable, path A-B-C-D at rho 2, TTFO and chunk service measurable, no duplicates, cap event once in every
+  X5 run, configured probe size. Aggregator exercised on the dry tree (dog frozen verdicts read correctly).
+- **GPU:** `run_wrn.py wx_shk` -> `check_wx_shakedown.py`; on PASS `run_wrn.py wx` -> `aggregate_wx.py`.
