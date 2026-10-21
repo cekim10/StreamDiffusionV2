@@ -1,7 +1,8 @@
 # Experiment WX - workload expansion of the core mobility experiments: preregistration DRAFT (2026-10-20)
 
-Status: **DRAFT, not frozen. Nothing implemented or run.** Roadmap step 2 (`../evaluation_roadmap.md`). No frozen result
-(ExpD, W / R / N, V, A, B, VACW, RD, M3E) is modified. Open decisions in section 9.
+Status: **FINAL DRAFT (decisions closed 2026-10-20); to be frozen when roadmap step 2 starts, after the M3E result
+(D4).** Nothing implemented or run. Roadmap step 2 (`../evaluation_roadmap.md`). No frozen result (ExpD, W / R / N, V, A,
+B, VACW, RD, M3E) is modified.
 
 ## 1. Purpose
 
@@ -26,8 +27,14 @@ Dog (the frozen results) is the reference workload; its numbers are cited from R
 Frozen M2 restores one Sink snapshot per restoration. Only rho >= 1 is used, where no intermediate owner binds before
 it is left (R: B binds at 14.4-15.0 s > T_m = 14.05 s at rho 1). A run with an owner-side Sink promotion before the
 final bind, a fragment-version rejection or a digest mismatch is **inapplicable** (W / R / N rule) and NOT EVALUABLE for
-every hypothesis comparing it. Refresh-heavy inputs make this check more likely to bind than on dog; the count is
-reported.
+every hypothesis comparing it; the count is reported.
+
+**Promotion frequency characterizes the workload; it does not by itself make a run invalid or inapplicable.** The W1
+promotion counts in section 2 describe how often each input's Sink changes when it is generated on. Snapshot-version
+validity is decided per run by the rule above: refresh is frozen at an owner until it binds, and at rho >= 1 no
+intermediate owner binds before it is left, so promotions at the source before the trigger are inside the snapshot and
+promotions at the final owner after its bind do not affect the restored version. A frequently promoting input may still
+yield fully applicable runs, and only the per-run check decides.
 
 ## 4. Configurations (A -> B -> C -> D, trigger at chunk 30, 1 Gbps, warm destinations, `--post_chunks 400`)
 
@@ -47,10 +54,12 @@ M3E S5 (source bottleneck) is not replicated (D2). M3-v1 is not re-run.
 Each hypothesis listed in section 4 is evaluated **per workload** exactly as frozen (R: `expR/preregistration.md`
 section 7; M3E: `expM3E/preregistration.md` section 6), with the same NOT EVALUABLE, censoring and validity rules.
 
-**Generality statement (fixed now):** for each hypothesis, the paper reports "supported on k of 4 workloads" (dog from
-the frozen R / M3E results plus the three WX workloads), with every NOT SUPPORTED and NOT EVALUABLE cell listed. A claim
-is stated without a workload qualifier only if it is supported on all four; otherwise it is stated with the workloads on
-which it holds. No pooling of runs across workloads.
+**Generality statement (fixed now):** for each hypothesis, the paper reports "supported on k of 4 tested inputs" (dog,
+i.e. the cat video with the dog prompt, from the frozen R / M3E results, plus the three WX inputs), with every NOT
+SUPPORTED and NOT EVALUABLE cell listed. **Generalization claims are limited to these four video inputs with their
+prompts, seed 0, the one model and the tested configurations**; no claim extends to other inputs, seeds, models or
+network conditions. A claim is stated without a per-input qualifier only if it is supported on all four; otherwise it
+is stated with the inputs on which it holds. No pooling of runs across inputs.
 
 **Recorded predictions:** R-H1 / R-H2 hold on every workload (progress preservation does not depend on content);
 R-H3(a) holds (ingress-bound); M3E H1, H2, H4 behave as on dog; H3 at risk where refresh-heavy inputs change the GPU
@@ -85,10 +94,9 @@ Driver entries reusing `run_wrn.py` (R and M3E argument builders with the worklo
 applies the frozen R and M3E rule code per workload and adds the generality table. No change to M1, M2, M3-v2 or the
 harness.
 
-## 9. Open decisions (close before the freeze)
+## 9. Decisions (closed 2026-10-20)
 
-- **D1** - three workloads (135 runs, ~7 h) or two (butterfly + train, 90 runs, ~4.5 h)? Recommended: three.
-- **D2** - add M3E S5 (+18 runs)? Recommended: no (H5's question is about the planner, not the content).
-- **D3** - add R at c = 3 for rho 1 (+18 runs) to replicate R-H3(b) at both rho values? Recommended: no; X4 covers rho 2.
-- **D4** - run WX before or after the M3E result? Recommended: after, so that X3-X6 replicate hypotheses whose dog
-  result is known (no change to WX's rules either way).
+- **D1** - all three additional workloads (135 runs).
+- **D2** - M3E S5 is not replicated.
+- **D3** - R at c = 3 is not added (X4 covers contention at rho 2).
+- **D4** - WX runs after the M3E result; it is frozen at that point without changing its rules.

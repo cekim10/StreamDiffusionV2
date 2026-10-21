@@ -1,135 +1,154 @@
-# Experiment XB - external migration baselines (re-implemented): preregistration DRAFT (2026-10-20)
+# Experiment XB - external migration baselines (re-implemented): preregistration REVISED DRAFT (2026-10-20)
 
-Status: **DRAFT, not frozen. Nothing implemented or run.** Roadmap step 3 (`../evaluation_roadmap.md`). No frozen result
-is modified; no M1 / M2 / M3-v2 change. Open decisions in section 10; **D1 (the fairness rule) must be closed first**.
+Status: **REVISED DRAFT, not frozen. Nothing implemented or run.** Roadmap step 3 (`../evaluation_roadmap.md`).
+Revision of 950e12f with decisions D1, D2, D4 closed, a calibration plan for the D3 parameters (section 4), and XH1
+split by baseline class. **No implementation or run until this revision and the calibration plan are reviewed.** The
+switchover / round parameters are fixed by the calibration of section 4 before the main sweep. No frozen result is
+modified; no M1 / M2 / M3-v2 change.
 
-## 1. Purpose and scope of the comparison
+## 1. Purpose and baseline classes
 
 No published system migrates streaming video diffusion sessions. XB compares OTTER with the two closest recent migration
 methods, both from LLM serving (autoregressive transformers with a KV cache), **re-implemented inside OTTER's harness**
-(same model, transport, caps, fragment table and timing boundaries), plus one internal ablation:
+(same model, transport, caps, fragment table, timing boundaries). The paper names them "Llumnix-style pre-copy" and
+"ServerlessLLM-style recompute" and compares principles, not the original systems (different workload, framework,
+cluster). VM post-copy and edge proactive synchronization are related work only; proactive placement is OTTER's own M3
+(ExpD C / D).
 
-| name | origin (principle only) | what it does here |
-|---|---|---|
-| **Pre-copy (Llumnix-style)** | Llumnix, OSDI '24 (live migration of a request's KV cache, pipelined with decoding) | after the trigger the source keeps generating and serving; state is copied to the destination in rounds; each round sends what changed since the previous one; then a short stop-and-copy and the destination resumes with all copied state |
-| **Recompute (ServerlessLLM-style)** | ServerlessLLM, OSDI '24 (migrate tokens, not KV; the destination recomputes the KV) | the destination rebuilds the state by re-running the session from its inputs; the source keeps serving until the destination has caught up (or a round limit is hit) |
-| **Wait-for-Sink (internal ablation)** | - | M1 fast path, but the destination does not generate until the Sink is bound (no Sink-less generation) |
-| Full migration (existing) | - | stop, copy the whole 6.02 GiB state, resume (ExpD) |
-| OTTER | - | M1 + frozen M2 + M3-v2 (`reuse_dyn2`) |
+| class | method | what it does | final state at the destination |
+|---|---|---|---|
+| **exact, full state** | Full migration (existing) | stop, copy all 6.02 GiB, resume | bit-exact |
+| | **P-full** (Llumnix-style pre-copy) | source keeps generating and serving; all components copied in rounds (changed fragments only after round 1); short stop-and-copy; destination resumes | bit-exact |
+| | **R-full** (ServerlessLLM-style recompute) | destination re-runs the session from call 0 from the input frames (same per-call seeds); source keeps serving until it catches up | bit-exact by construction |
+| **hybrid (uses OTTER's M1)** | **P-sink** | the Sink is pre-copied in rounds while the source serves; at switchover the rest goes by OTTER's M1 fast path and the destination rebuilds recent KV / VAE caches as in M1 | Sink exact, ephemeral state rebuilt |
+| | **Wait-for-Sink** (internal ablation) | M1 fast path, but no generation until the Sink is bound | Sink exact, ephemeral rebuilt |
+| **approximate** | **R-win** (approximate recomputation) | the destination re-runs only the last W input chunks from a fresh session | not exact (Sink not reproduced) |
+| system | OTTER | M1 + frozen M2 + M3-v2 (`reuse_dyn2`) | Sink exact after bind; Sink-less generation until then |
 
-These are not the original systems (different workload, framework, cluster); the paper names them "Llumnix-style
-pre-copy" and "ServerlessLLM-style recompute" and compares principles, not products. VM post-copy and edge proactive
-synchronization are related work only; proactive placement is OTTER's own M3 (ExpD C / D).
+**Where the original assumptions break (measured, not assumed):** Llumnix relies on an append-only KV cache; here the
+Sink changes (refresh, RoPE realignment: Task B, half of the Sink's K every ~45 calls) and the recent KV and VAE caches
+change every call. ServerlessLLM relies on fast parallel prefill; here every chunk depends on the previous chunk's output,
+so recomputation costs about as much as generation (state study: full replay of 30 chunks 17.2 s, bit-exact, ~570 ms per
+history chunk).
 
-**Where the original assumptions break (to be measured, not assumed):** Llumnix relies on an append-only KV cache; here
-the Sink changes (refresh, RoPE realignment: Task B, half of the Sink's K every ~45 calls) and the recent KV and VAE
-caches change every call. ServerlessLLM relies on fast parallel prefill; here every chunk depends on the
-previous chunk's output, so recomputation costs about as much as generation (state study: full replay of 30 chunks
-17.2 s, bit-exact, ~570 ms per history chunk).
+## 2. Fairness rule (D1: option (b), closed)
 
-## 2. Fairness rule (D1, to be closed before anything else)
+After the trigger the source **may keep generating and delivering** (pre-copy, recompute); this is allowed and charged.
+Three quantities are always reported separately and never combined into one score:
 
-Pre-copy and recompute let the **source keep generating after the trigger**. If that is free, they never interrupt the
-stream and keep the reference trajectory, so the comparison hinges on what serving from the old host costs.
+1. **Local resumption** (TTFO-local): time from the trigger (or the final move) until the user's **current** edge delivers
+   its first chunk.
+2. **Delivery gap**: the longest interval in which **no** chunk is delivered to the user from any host.
+3. **Remote-serving cost**: chunks and seconds delivered from a host other than the user's current edge after the trigger
+   (or after each move), and, where measurable:
+   - **remote delivery network cost**: bytes of the delivered output stream that cross the inter-edge path, measured by
+     encoding each remotely served chunk with a fixed codec and setting (H.264, fixed CRF, chosen in calibration) and
+     summing the encoded sizes;
+   - **remote delivery latency**: the measured round-trip time between the serving host and the current edge on the
+     testbed (ping, per run). The testbed is one LAN, so this is a floor; WAN or radio latency is **not emulated** and is
+     stated as unmeasured.
 
-- **Option (a) - no remote serving:** at the trigger the user's connection to the old host ends; anything the source
-  generates afterwards is not delivered. Pre-copy / recompute then deliver nothing until the destination resumes.
-- **Option (b) - remote serving allowed and charged (recommended):** the source keeps serving; every chunk delivered
-  from a host other than the user's current edge counts as **remote-served**, reported as remote-serving time and
-  remote chunk count, and never as interruption-free local service. With repeated moves (rho >= 1) the user leaves the
-  intended destination before pre-copy or recompute finishes; the method then restarts toward the new edge (no reuse
-  of the abandoned copy, as in the original methods) and remote serving continues.
+With repeated moves the user may leave the intended destination before a copy or replay finishes; the method then
+restarts toward the user's new edge from the serving host (no reuse of the abandoned copy, as in the original methods)
+and remote serving continues.
 
-Under either option all methods are reported on the same timeline; under (b) a method may look better on continuity
-and worse on locality, and both are reported.
+## 3. Method parameters
 
-## 3. Method definitions (fixed parameters)
+- **P-full / P-sink rounds:** round 1 sends the component set; round r >= 2 sends fragments whose content hash changed
+  since last sent (4 MiB fragments, VACW hashing). Switchover threshold (dirty set size), round limit and the
+  non-convergence rule are **fixed by the calibration** (section 4) before the main sweep.
+- **R-full rounds:** the destination replays while the source serves; switchover when the destination is within a lag
+  threshold, else after a round limit (then the source stops and the destination finishes catching up while nothing is
+  delivered). Lag threshold and round limit fixed by the calibration.
+- **R-win window W:** fixed by the calibration from W in {1, 3, 6} (the existing replay variants).
+- **Wait-for-Sink, Full migration, OTTER:** no parameters (frozen implementations).
 
-- **Pre-copy, two variants.** (P-full) all state components (Sink, recent KV, VAE caches, meta, in-flight);
-  (P-sink) Sink only by pre-copy, the rest by OTTER's M1 fast path at the switchover (recent KV and VAE rebuilt as in
-  M1). Rounds: round 1 sends the whole component set; round r >= 2 sends the fragments whose content hash changed
-  since they were last sent (content hashes per 4 MiB fragment, as VACW). **Switchover** when a round's dirty set is
-  <= 64 MiB, or after 6 rounds, or when a round's dirty bytes do not shrink by >= 10 % (non-convergence); then the
-  source stops at a chunk boundary and sends the final dirty set plus immediate state. Predicted: P-full does not
-  converge at 1 Gbps (every call rewrites one recent-KV ring slot, ~0.54 GiB, and updates the VAE feature caches,
-  up to 2.8 GiB: a dirty rate far above 1 Gbps; the actual per-call dirty bytes are measured in the shakedown);
-  P-sink converges or hits the round limit depending on refresh / realignment.
-- **Recompute, two variants.** (R-full) the destination replays the session from call 0 from the input frames
-  (transferred, measured bytes) with the same per-call seeds (bit-exact by construction); (R-win) it replays only the
-  last W = 3 chunks (the earlier single-handoff `replay` policy; not exact). Multi-round: the source keeps serving
-  while the destination replays; switchover when the destination is <= 1 chunk behind, or after 6 rounds (then the
-  source stops and the destination finishes catching up while nothing is delivered). Predicted: R-full never catches up
-  with a source generating at the same per-chunk cost, so the round limit decides; its catch-up stall grows with the
-  session length.
-- **Wait-for-Sink:** destination resumes generation only at Sink bind; TTFO = bind-ready.
-- **OTTER, Full migration:** frozen implementations.
+## 4. Calibration plan (before the main sweep; baseline-favorable; not evidence)
 
-## 4. Scenarios
+Goal: give each baseline its best parameters for the tested setting, so that the main comparison is not won by a poorly
+tuned baseline.
+
+- **Setting:** XB1 single move, dog, 1 Gbps, trigger chunk 30; 1 run per parameter setting (the runtime is deterministic;
+  timing jitter is checked by repeating the selected setting twice).
+- **Grids:**
+  - P-full and P-sink: dirty-set threshold {16, 64, 256} MiB x round limit {3, 6, 10}; non-convergence rule fixed at
+    "stop when a round's dirty bytes shrink by < 10 %" (9 settings each, 18 runs).
+  - R-full: lag threshold {1, 2} chunks x round limit {3, 6, 10} (6 runs).
+  - R-win: W in {1, 3, 6} (3 runs).
+  - Remote delivery cost: H.264 CRF {23, 28} on the remotely served chunks of the P-sink calibration runs (offline, no
+    extra runs).
+- **Selection rule (fixed now, favoring the baseline):** for each method, the setting with the smallest TTFO-local among
+  valid runs whose final state passes the exactness check of its class (P-full, R-full bit-exact; P-sink Sink digest);
+  ties broken by the smaller delivery gap, then by fewer remote-served chunks. For R-win, the W with the highest
+  terminal PSNR (section 6), ties to the smaller TTFO-local. The selected values are written into this document and
+  frozen with it **before** any main-sweep run.
+- **Cost:** ~30 runs, ~1.5 h of GPU 0 on two hosts (single move uses A and B only).
+
+## 5. Scenarios (main sweep)
 
 | id | mobility | network | workloads | methods |
 |---|---|---|---|---|
-| XB1 | single move A -> B at trigger chunk 30 | 1 Gbps | dog, butterfly-feeding-slow-motion (seed 0) | all seven (OTTER, Full, Wait-for-Sink, P-full, P-sink, R-full, R-win) |
-| XB2 | single move, trigger chunk 120 (longer session) | 1 Gbps | dog | OTTER, P-sink, R-full |
+| XB1 | single move A -> B at trigger chunk 30 | 1 Gbps | dog, butterfly-feeding-slow-motion (seed 0) | all seven |
+| XB2 | single move, trigger chunk 120 | 1 Gbps | dog | OTTER, P-sink, R-full |
 | XB3 | A -> B -> C -> D, rho 1 | 1 Gbps | dog | OTTER, Full, Wait-for-Sink, P-sink, R-full |
 | XB4 | A -> B -> C -> D, rho 2 | 1 Gbps | dog | as XB3 |
 
-XB2 isolates the dependence of recompute on session length. P-full and R-win are only in XB1 (their outcome there
-decides whether they matter).
+D4 closed: no further workloads in XB3 / XB4 (WX covers input breadth for OTTER). P-full and R-win (D2: kept) appear in
+XB1 only.
 
-## 5. Metrics (all on the orchestrator clock, relative to the trigger or the final move)
+## 6. Metrics
 
-- **Local resumption:** time until the user's **current** edge produces its first chunk (TTFO-local).
-- **Delivery gap:** longest interval with no chunk delivered to the user from any host (option (b)) or from the
-  current edge (option (a)).
-- **Remote serving (option b):** seconds and chunks delivered from a host other than the current edge.
-- **Trajectory:** PSNR against the uninterrupted run (single crossing, sustained 10 calls, terminal median), as RD
-  section 5.1; pre-copy and R-full are expected bit-exact after switchover.
-- **Bytes:** source egress, total network bytes, including pre-copy rounds and transferred inputs.
-- **GPU work:** destination GPU-seconds spent before it serves (recompute), extra source GPU-seconds while serving
-  remotely.
-- **Convergence:** rounds, dirty bytes per round, switchover reason.
+Local resumption, delivery gap, remote-serving cost (chunks, seconds, remote delivery bytes, LAN RTT) as section 2;
+trajectory (PSNR vs the uninterrupted run: single crossing, sustained 10 calls, terminal median of calls b + 90 .. b + 99
+or the last 10 delivered calls), bytes (source egress, total network, transferred inputs, pre-copy rounds), destination
+GPU-seconds before serving, extra source GPU-seconds while serving remotely, convergence (rounds, dirty bytes per round,
+switchover reason).
 
-## 6. Hypotheses (medians over 3 valid reps; thresholds fixed at the freeze)
+## 7. Hypotheses (medians over 3 valid reps; thresholds fixed at the freeze)
 
-| id | statement | success | prediction |
-|---|---|---|---|
-| XH1 | OTTER resumes locally much sooner than every baseline (XB1, both workloads) | TTFO-local(OTTER) <= 0.1 x each baseline's | OTTER ~0.7 s; Wait-for-Sink ~15 s; P-sink >= ~15 s; Full ~54 s; R-full ~17 s + rounds |
-| XH2 | pre-copy of the full state does not converge at 1 Gbps (XB1) | P-full ends by the round limit or the non-convergence rule in every run | as stated |
-| XH3 | recompute cost grows with session length (XB1 vs XB2, dog) | R-full's destination GPU-seconds before serving at trigger 120 >= 3 x at trigger 30 | ~4x |
-| XH4 | under repeated mobility the baselines that wait for state accumulate remote serving or delivery gap (XB3, XB4) | remote-serving time (b) or delivery gap (a) of P-sink and R-full >= 5 x OTTER's TTFO-local at rho 1 and rho 2 | the user leaves before the copy or replay completes |
-| XH5 | OTTER's trajectory cost is reported, not hidden | descriptive: OTTER's gap PSNR and rejoin vs the bit-exact baselines | OTTER diverges until bind (~17 dB), baselines do not |
+| id | class | statement | success | prediction |
+|---|---|---|---|---|
+| **XH1a** | exact, full state (Full, P-full, R-full) | OTTER resumes locally much sooner than every method that moves or recomputes the whole state (XB1, both workloads) | TTFO-local(OTTER) <= 0.25 x each exact method's | OTTER ~0.7 s; Full ~54 s; P-full >= 35 s; R-full >= 17 s |
+| **XH1b** | hybrid and approximate (P-sink, Wait-for-Sink, R-win) | OTTER resumes locally sooner; the price is reported next to it | TTFO-local(OTTER) <= each method's TTFO-local - 1.0 s; descriptive (no threshold): delivery gap, remote-serving cost, trajectory of each | Wait-for-Sink ~15 s; P-sink >= ~15 s with no delivery gap but remote serving; R-win 5.8-7.1 s (earlier single-handoff replay) and never rejoins; OTTER rejoins after bind |
+| XH2 | exact | full-state pre-copy does not converge at 1 Gbps (XB1) | P-full ends by the round limit or the non-convergence rule in every run | every call rewrites one recent-KV ring slot (~0.54 GiB) and updates the VAE caches (up to 2.8 GiB) |
+| XH3 | exact | recompute cost grows with session length (XB1 vs XB2, dog) | R-full's destination GPU-seconds before serving at trigger 120 >= 3 x at trigger 30 | ~4 x |
+| XH4 | hybrid and exact, repeated mobility | methods that wait for state accumulate remote serving or delivery gap when the user keeps moving (XB3, XB4) | remote-serving seconds of P-sink and R-full >= 5 x OTTER's TTFO-local at rho 1 and 2 | the user leaves before the copy or replay completes |
+| XH5 | all | OTTER's trajectory cost is reported, not hidden | descriptive: OTTER's gap PSNR and rejoin vs the exact and hybrid baselines | OTTER diverges until bind (~17 dB), exact / hybrid baselines do not |
 
-NOT EVALUABLE: < 3 valid reps of a compared method; censoring per `followup_common.md` section 3. Every baseline's
-numbers are reported in every scenario whether or not a hypothesis uses them.
+No hypothesis combines local resumption, delivery gap and remote-serving cost into one figure of merit. NOT EVALUABLE:
+< 3 valid reps of a compared method; censoring per `followup_common.md` section 3. Every method's numbers are reported
+in every scenario.
 
-## 7. Validity
+## 8. Validity
 
-W / R / N run rules (all fragments verified, digest, NIC checks, GPU 0 idle, one commit); for recompute, the replayed
-state's frame digests vs the reference (R-full must be bit-exact; a mismatch is a harness fault); pre-copy's final
-state digest vs the source's at switchover.
+W / R / N run rules (all fragments verified, digest, NIC checks, GPU 0 idle, one commit); exactness checks per class
+(R-full replayed frame digests vs the reference; P-full and P-sink final state digest vs the source at switchover);
+remote-serving accounting checked against the delivered-chunk log (each chunk delivered once).
 
-## 8. Runs, runtime, occupancy
+## 9. Runs, runtime, occupancy
 
-XB1: 7 methods x 2 workloads x 3 reps = 42; XB2: 3 x 3 = 9; XB3: 5 x 3 = 15; XB4: 15 -> **81 runs**. Recompute runs
-take longer (catch-up). Estimate **~5-6 h** of exclusive use of GPU 0 on the four hosts, plus a shakedown (one run per
-method and scenario, ~1 h).
+Calibration ~30 runs (~1.5 h, two hosts). Main sweep: XB1 7 x 2 x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 15 ->
+**81 runs**, ~5-6 h of exclusive use of GPU 0 on the four hosts, plus a shakedown (one run per method and scenario,
+~1 h).
 
-## 9. Implementation (not started)
+## 10. Implementation (after review; not started)
 
-1. Pre-copy: the source keeps generating after the trigger while a copier thread sends rounds; per-round content hashes
-   (VACW snapshot capture and hash comparison reused); switchover protocol; P-full packs every component.
-2. Recompute: destination replay from inputs (the state-study `replay_full` / `replay_W` code paths moved into the
-   node), input-frame transfer, round bookkeeping and switchover.
-3. Wait-for-Sink: node flag that defers generation until bind.
-4. Remote-serving accounting (which host delivered each chunk vs the user's current edge) and the delivery-gap metric.
-5. Loopback tests of every method, then the shakedown. No change to OTTER's mechanisms.
+1. Pre-copy: source keeps generating after the trigger while a copier sends rounds; per-round content hashes (VACW
+   snapshot capture and hash comparison reused); switchover protocol; P-full packs every component; P-sink hands the
+   rest to M1.
+2. Recompute: destination replay from inputs (the state-study `replay_full` / `replay_W` paths moved into the node),
+   input-frame transfer, rounds, switchover.
+3. Wait-for-Sink: node flag deferring generation until bind.
+4. Delivery accounting: per delivered chunk, the serving host and the user's current edge; delivery gap; remote-served
+   chunk encoding (H.264) for remote delivery bytes; per-run RTT between hosts.
+5. Loopback tests of every method, calibration, then shakedown. No change to OTTER's mechanisms.
 
-## 10. Open decisions (close before the freeze)
+## 11. Decisions
 
-- **D1** - fairness rule (a) or (b)? Recommended: (b), remote serving allowed and charged.
-- **D2** - keep P-full and R-win (XB1 only) or drop them (-12 runs)? Recommended: keep; they show why the simple
-  versions fail.
-- **D3** - pre-copy switchover parameters (64 MiB, 6 rounds, 10 % shrink) and recompute round limit (6): keep as
-  written or adjust before the freeze.
-- **D4** - add a refresh-heavy workload to XB3 / XB4 (+30 runs)? Recommended: no (WX covers workload breadth for
-  OTTER; XB is about the methods).
+- **D1 (closed)** - option (b): remote serving allowed and charged; local resumption, delivery gap and remote-serving
+  cost reported separately; remote delivery bytes and LAN RTT where measurable.
+- **D2 (closed)** - P-full and R-win kept; R-win labelled approximate recomputation; P-sink labelled a hybrid baseline
+  using M1.
+- **D3 (open until calibration)** - switchover / round parameters fixed by the section-4 calibration and recorded here
+  before the main sweep.
+- **D4 (closed)** - no further workloads in XB3 / XB4.
