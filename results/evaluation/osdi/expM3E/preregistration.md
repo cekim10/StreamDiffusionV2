@@ -1,7 +1,9 @@
-# Experiment M3E - final OTTER (M3-v2) end-to-end validation: preregistration DRAFT (2026-10-20)
+# Experiment M3E - final OTTER (M3-v2) end-to-end validation: preregistration (2026-10-20)
 
-Status: **DRAFT, not frozen. Nothing implemented or run.** No frozen result (ExpD, W / R / N, V, A, B, VACW, RD) is
-modified. Open decisions are in section 10 and must be closed before the freeze.
+Status: **FROZEN** (freeze record `../expM3E_freeze.md`). Draft 055c58f revised before the freeze with decisions D1-D5
+(section 10), the S1 scope statement (section 4) and the H2 rationale wording; every other hypothesis, threshold,
+validity rule, negative case and the 48-run matrix unchanged. Nothing implemented or run at the freeze. No frozen
+result (ExpD, W / R / N, V, A, B, VACW, RD) is modified.
 
 ## 1. Purpose and evidence classes
 
@@ -48,9 +50,13 @@ per-node caps 1 Gbps unless a cap event says otherwise, warm destinations, `--po
 | **S4** | ExpD B rho 2 / G7 no-change clause | no network change | **no change** (false-positive regression check) | M1 only, M1 + M2, M3-v2 |
 | **S5** | new (N cell 8 class, repeated mobility) | A's egress drops to 62.5 Mbps when D holds 50 % (`D>=0.5:A:out=62.5`) | **source bottleneck: fragments only A holds cannot move** (negative case) | M1 only, M1 + M2, M3-v2 |
 
-S1 note (as ExpD): only one session generates; the three network sessions are network-level (`restore_node.py`),
-their planner is the network-level mapping of the GPU policy (`hybrid_net.NET_POLICY`: `restart` -> restart, `split`
--> reuse_fixed, `reuse_dyn2` -> **reuse_dyn (v1)**, because v2 is not implemented in the network-level harness; see D3).
+**S1 scope (D3).** S1 evaluates **one M3-v2 GPU generation session competing for the source's egress with three
+network-level restoration sessions** (`restore_node.py`, real-size Sinks, no generation). The network sessions do not
+run M3-v2: their planner is the network-level mapping of the GPU policy (`hybrid_net.NET_POLICY`: `restart` -> restart,
+`split` -> reuse_fixed, `reuse_dyn2` -> **reuse_dyn, i.e. M3-v1**), because M3-v2 is not implemented in the
+network-level harness. S1 is never described as contention among four M3-v2 sessions or four GPU sessions; H1 and every
+GPU metric refer to the one GPU session, and the claim is limited to "an M3-v2 GPU session under source-egress
+contention from three M3-v1 network-level sessions". The network sessions' completion times are reported separately.
 
 ## 5. Metrics (per run; all exist in the harness unless marked new)
 
@@ -70,7 +76,7 @@ their planner is the network-level mapping of the GPU policy (`hybrid_net.NET_PO
 | id | scenario | success (all clauses) | failure | prediction (source) |
 |---|---|---|---|---|
 | **H1** contention | S1 | M3-v2 bind-ready <= M1 only - 3.5 s (G6 threshold) **and** <= M1 + M2 + 1.0 s; M3-v2 B_source <= M1 + M2 + 0.05 | any clause | v2 ~43 s vs M1 only ~57 s (ExpD G6: 42.8 / 43.1 / 57.1 s, v1); 0 re-plans |
-| **H2** holder bottleneck | S2 | M3-v2 bind-ready <= 0.5 x OTTER at moves **and** <= 0.5 x M1 + M2; <= 2 re-plans and <= 1 probe (<= 4 fragments) per run; 0 duplicates; B_source <= 1.35 (removes >= 2/3 of M1 only's ~1.0 redundant Sink) | any clause | v2 16-21 s (G7 v1: 15.8 s; V2 / V4 / V5: v2 +0-4 s vs v1); B_source ~1.2-1.3 (v1 1.19; v2 in V2 1.31); at moves ~52 s; M1 + M2 ~78 s |
+| **H2** holder bottleneck | S2 | M3-v2 bind-ready <= 0.5 x OTTER at moves **and** <= 0.5 x M1 + M2; <= 2 re-plans and <= 1 probe (<= 4 fragments) per run; 0 duplicates; B_source <= 1.35 (removes approximately 65 % of M1 only's ~1.0 redundant Sink: ExpD F M1 only 2.02 Sinks) | any clause | v2 16-21 s (G7 v1: 15.8 s; V2 / V4 / V5: v2 +0-4 s vs v1); B_source ~1.2-1.3 (v1 1.19; v2 in V2 1.31); at moves ~52 s; M1 + M2 ~78 s |
 | **H3** no harm, ingress | S3 | M3-v2: 0 re-plans and <= 1 probe per run; bind-ready <= M1 + M2 + 1.0 s; B_source <= M1 + M2 + 0.02 | any clause | 0 re-plans (V6, V8); all policies ~120 s |
 | **H4** no change | S4 | M3-v2: 0 re-plans and 0 probes in every rep; bind-ready within 1.0 s of M1 + M2; B_source <= M1 + M2 + 0.01 | any clause | 0 re-plans (V1); ~15.1-15.5 s |
 | **H5** no harm, source | S5 | as H3 against M1 + M2 in S5 | any clause | 0 re-plans (V7); v1's N cell-8 harm (+3.5 s) absent |
@@ -130,16 +136,12 @@ No commit or pull on the testbed while it runs.
    repeated mobility, which no previous v2 run exercised) before any GPU run.
 No change to M1, M2, M3-v2 or their parameters.
 
-## 10. Open decisions (close before the freeze)
+## 10. Decisions (closed 2026-10-20, before the freeze)
 
-- **D1** - re-run M3-v1 (`reuse_dyn`) as a same-commit reference in S1-S5 (+15 runs, ~45 min)? Without it, v1-vs-v2
-  statements rest on cross-commit comparisons with ExpD / N. Recommended: no (the paper's M3 is v2; v1 stays historical).
-- **D2** - keep OTTER at moves in S2 only (G7's primary comparator)? Recommended: yes.
-- **D3** - S1 network sessions use the v1 network-level planner under the v2 GPU policy (current mapping), or implement
-  v2 in `restore_orchestrate.py` (code change, new regression test)? Recommended: keep the mapping and state it; the
-  hypothesis concerns the GPU session.
-- **D4** - a second workload for S2 (holder bottleneck), e.g. butterfly-feeding-slow-motion (+12 runs)? Its Sink
-  promotes frequently but no intermediate owner binds at rho 2, so the stable-snapshot scope holds. Recommended: only if
-  the time budget allows; dog keeps comparability with ExpD.
-- **D5** - include ExpD G (revisit A -> B -> C -> D -> B) as a sixth scenario (+9 runs)? Recommended: no; v1's revisit
-  result stays historical, v2 has no revisit-specific logic.
+- **D1** - M3-v1 is not re-run. v1-vs-v2 statements rest on the historical ExpD / N results and the V holdout and are
+  labelled cross-commit.
+- **D2** - OTTER at moves (`reuse_aware_in`) is kept in S2 only, as G7's primary comparator.
+- **D3** - S1 keeps the existing network-level mapping (network sessions run M3-v1); the claim is limited as stated in
+  section 4.
+- **D4** - no second workload (dog only, comparable with ExpD).
+- **D5** - no revisit scenario (ExpD G stays historical).
