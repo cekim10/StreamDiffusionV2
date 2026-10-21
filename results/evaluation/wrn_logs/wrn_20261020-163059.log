@@ -1,0 +1,93 @@
+
+=== 2026-10-20T16:31:00.065378 RD-X butterfly-feeding-slow-motion one hop 320 Mbps: .venv/bin/python tools/eval/mobility_orchestrate.py --experiment expRDX_butterfly-feeding-slow-motion --skip_done --validity wrn --bw 320 --policies split --hops 1 --tm 1e9 --reps 2 --migration_chunk 80 --post_chunks 200 --horizon_calls 190 --max_run_s 600 --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2220543)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 517991)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 46e25c5
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.68 ms, dry_run=False, commit 46e25c5
+[orch] === run policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-163450: Reuse, fixed routing (holders forward; source sends the rest), bw 320.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 320 Mbps)
+        next   A->B all fragments
+[orch] t= 118.08s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 320.0 Mbps rho None: after final move: first output 0.68 s, Sink received 43.59 s, bound 43.84 s, continuity-ready 44.43 s, rejoin None s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 29.5 dB | ingress peak 336 Mbps
+[orch] === run policy=split_bw=320_rho=none_tm=inf_rep=2_20261020-163738: Reuse, fixed routing (holders forward; source sends the rest), bw 320.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 320 Mbps)
+        next   A->B all fragments
+[orch] t= 118.86s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 320.0 Mbps rho None: after final move: first output 0.67 s, Sink received 43.69 s, bound 44.32 s, continuity-ready 44.92 s, rejoin None s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 29.5 dB | ingress peak 336 Mbps
+[orch] done: 2 runs under results/evaluation/expRDX_butterfly-feeding-slow-motion/
+
+=== 2026-10-20T16:41:26.950718 RD-X audi-snow-trail one hop 320 Mbps: .venv/bin/python tools/eval/mobility_orchestrate.py --experiment expRDX_audi-snow-trail --skip_done --validity wrn --bw 320 --policies split --hops 1 --tm 1e9 --reps 2 --migration_chunk 80 --post_chunks 200 --horizon_calls 190 --max_run_s 600 --launch '--node_extra=--video_path data/loveu_tgve_2023/audi-snow-trail.mp4 --prompt_file_path data/loveu_tgve_2023/audi-snow-trail__multiple.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2228298)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 521710)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 46e25c5
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset -0.01 ms, dry_run=False, commit 46e25c5
+[orch] === run policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-164522: Reuse, fixed routing (holders forward; source sends the rest), bw 320.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 320 Mbps)
+        next   A->B all fragments
+[orch] t= 117.98s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 320.0 Mbps rho None: after final move: first output 0.69 s, Sink received 43.68 s, bound 43.99 s, continuity-ready 44.59 s, rejoin None s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 27.8 dB | ingress peak 336 Mbps
+[orch] === run policy=split_bw=320_rho=none_tm=inf_rep=2_20261020-164810: Reuse, fixed routing (holders forward; source sends the rest), bw 320.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 320 Mbps)
+        next   A->B all fragments
+[orch] t= 118.21s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 320.0 Mbps rho None: after final move: first output 0.67 s, Sink received 43.68 s, bound 43.92 s, continuity-ready 44.52 s, rejoin None s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 27.8 dB | ingress peak 336 Mbps
+[orch] done: 2 runs under results/evaluation/expRDX_audi-snow-trail/
+
+=== 2026-10-20T16:51:58.351740 RD-X dog one hop 320 Mbps: .venv/bin/python tools/eval/mobility_orchestrate.py --experiment expRDX_dog --skip_done --validity wrn --bw 320 --policies split --hops 1 --tm 1e9 --reps 2 --migration_chunk 80 --post_chunks 200 --horizon_calls 190 --max_run_s 600 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0 --sink_fp'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 2235917)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 525424)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 557 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 46e25c5
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 553 ms/chunk, mss 1388, clock offset -0.26 ms, dry_run=False, commit 46e25c5
+[orch] === run policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548: Reuse, fixed routing (holders forward; source sends the rest), bw 320.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.21s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 320 Mbps)
+        next   A->B all fragments
+[orch] t= 118.07s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 320.0 Mbps rho None: after final move: first output 0.68 s, Sink received 43.71 s, bound 44.09 s, continuity-ready 44.68 s, rejoin 49.49 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 44.2 dB | ingress peak 336 Mbps
+[orch] === run policy=split_bw=320_rho=none_tm=inf_rep=2_20261020-165836: Reuse, fixed routing (holders forward; source sends the rest), bw 320.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 320 Mbps)
+        next   A->B all fragments
+[orch] t= 118.16s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Reuse, fixed routing (holders forward; source sends the rest) @ 320.0 Mbps rho None: after final move: first output 0.67 s, Sink received 43.68 s, bound 44.03 s, continuity-ready 44.63 s, rejoin 49.46 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 44.2 dB | ingress peak 336 Mbps
+[orch] done: 2 runs under results/evaluation/expRDX_dog/
