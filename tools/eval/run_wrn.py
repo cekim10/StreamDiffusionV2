@@ -333,6 +333,40 @@ def do_m3e(c, shakedown=False):
         c.orch(exp, m3e_args(c, sc, "1" if shakedown else "3"), node_extra("dog", 0), f"M3E {'shakedown ' if shakedown else ''}{sc}")
 
 
+WX_WL = {"bfly": "butterfly-feeding-slow-motion", "audi": "audi-snow-trail", "train": "train"}   # osdi/expWX/preregistration.md (frozen a181126)
+WX_CFG = {"X1": ("1", "restart,split", None, False), "X2": ("4", "restart,split", None, False),
+          "X3": ("2", "restart,split,reuse_dyn2", None, False), "X4": ("2", "restart,split,reuse_dyn2", None, True),
+          "X5": ("2", "restart,split,reuse_dyn2,reuse_aware_in", "C:out", False), "X6": ("2", "split,reuse_dyn2", "D:in", False)}
+
+
+def wx_args(c: Ctx, x: str, reps: str):
+    rho, pols, cap, hybrid = WX_CFG[x]
+    a = ["--policies", pols, "--hops", "3", "--ts", c.ts, "--rhos", rho, "--reps", reps, "--migration_chunk", "30", "--post_chunks", "400", "--max_run_s", "600"]
+    if not c.dry:
+        a += ["--dyn_probe", "4"]
+    if hybrid:
+        a += ["--hybrid_net", "3"]
+    if cap:
+        node, d = cap.split(":")
+        a += ["--cap_events", f"D>=0.5:{node}:{d}={c.deg}"]
+    return a
+
+
+def do_wx(c, shakedown=False):
+    """WX: X1-X6 on butterfly / audi-snow-trail / train (seed 0); shakedown = X3 and X5, one rep per policy.
+    --cells filters configurations (X1..X6) and / or workloads (bfly, audi, train) for re-runs."""
+    only = {x for x in (c.a.cells or "").split(",") if x}
+    for ws, w in WX_WL.items():
+        for x in (("X3", "X5") if shakedown else ("X3", "X5", "X6", "X4", "X1", "X2")):
+            if only and not ({x, ws} & only):
+                continue
+            if only and any(k in WX_CFG for k in only) and x not in only:
+                continue
+            if only and any(k in WX_WL for k in only) and ws not in only:
+                continue
+            c.orch(f"expWX_{'shk_' if shakedown else ''}{ws}_{x}", wx_args(c, x, "1" if shakedown else "3"), node_extra(w, 0), f"WX {'shakedown ' if shakedown else ''}{ws} {x}")
+
+
 def do_vacw(c):
     """VACW v0 (frozen 9137bc9): A -> B -> C -> D, rho {0.5, 1}, 1 Gbps, dog / butterfly seed 0, 3 policies x 3 reps = 36 runs."""
     tag = f"_{c.a.tag}" if c.a.tag else ""
@@ -430,7 +464,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -445,7 +479,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:
