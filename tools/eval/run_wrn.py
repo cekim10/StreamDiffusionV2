@@ -325,7 +325,10 @@ def m3e_args(c: Ctx, sc: str, reps: str):
 def do_m3e(c, shakedown=False):
     """M3E: five scenarios (S1 contention, S2 holder bottleneck, S3 ingress bottleneck, S4 no change, S5 source bottleneck);
     shakedown = one rep per policy per scenario (expM3E_shk_S*), not evidence."""
+    only = [x for x in (c.a.cells or "").split(",") if x]   # re-runs: --cells S3 limits the invocation to those scenarios
     for sc in ("S4", "S2", "S3", "S5", "S1"):
+        if only and sc not in only:
+            continue
         exp = f"expM3E_{'shk_' if shakedown else ''}{sc}"
         c.orch(exp, m3e_args(c, sc, "1" if shakedown else "3"), node_extra("dog", 0), f"M3E {'shakedown ' if shakedown else ''}{sc}")
 
@@ -433,7 +436,7 @@ def main():
     ap.add_argument("--agent_hosts", default=None)
     ap.add_argument("--wait_s", type=int, default=1800)
     ap.add_argument("--tag", default="", help="m3dev: round tag (m3dev_<tag>_cell*); v: amendment tag (expV_<tag>_cell*); earlier runs are kept")
-    ap.add_argument("--cells", default="", help="v: comma list of V cells to run (default all)")
+    ap.add_argument("--cells", default="", help="v: comma list of V cells to run (default all); m3e / m3e_shk: comma list of scenarios (S1..S5) for re-runs")
     ap.add_argument("--py", default=os.environ.get("PY") or (str(ROOT / ".venv/bin/python") if (ROOT / ".venv/bin/python").exists() else sys.executable))
     a = ap.parse_args()
     c = Ctx(a)
