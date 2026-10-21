@@ -16,3 +16,13 @@
   observed, applicable, path A-B-C-D at rho 2, TTFO and chunk service measurable, no duplicates, cap event once in every
   X5 run, configured probe size. Aggregator exercised on the dry tree (dog frozen verdicts read correctly).
 - **GPU:** `run_wrn.py wx_shk` -> `check_wx_shakedown.py`; on PASS `run_wrn.py wx` -> `aggregate_wx.py`.
+
+## Shakedown check correction (2026-10-21; harness check only, no frozen rule changed)
+
+The GPU shakedown (21 runs, `expWX_shk_*`) was valid in every run under the W / R / N rules, with the bind observed, the
+cap event fired once in every X5 run and every run applicable; the shakedown check nevertheless reported 0 / 21 because
+its "completed" item required the run to end by rejoin + tail. On these three inputs the final owner never reached
+35 dB after three moves under any policy (maximum 30.2-34.1 dB; consistent with RD), so every run ended by the call
+window at call 429 (~242 s). The item was corrected to "not cut by max_run_s" (window end and rejoin are recorded);
+re-checked on the same runs: PASS 21 / 21. No mechanism, configuration, hypothesis, threshold or validity rule changed.
+Consequence: every WX run lasts the full window (~4.5 min including setup), so the 144-run sweep takes ~11-12 h.

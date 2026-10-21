@@ -33,7 +33,9 @@ def main():
                     fails.append(f"{ws} {x} {p}: no run"); rows.append((ws, x, p, "MISSING", {})); continue
                 r = run_rec(ds[-1], a.dry); s = r["s"]; e = extra(r)
                 args = json.load(open(ds[-1] / "config.json"))["args"]
-                ck = {"valid (W / R / N rules)": r["valid"], "completed": e["stop"] not in ("deadline", "window_exhausted"),
+                # completed = not cut by max_run_s; ending by the call window is expected where the final owner never
+                # reaches 35 dB (refresh-heavy inputs after three moves; RD) and is recorded, not failed (2026-10-21)
+                ck = {"valid (W / R / N rules)": r["valid"], "completed (not deadline)": not str(e["stop"]).startswith("deadline"),
                       "bind observed": not r["bind"].censored, "applicable": bool(r["applicable"]), "path A,B,C,D at rho 2": s["path"] == ["A", "B", "C", "D"] and s.get("rho") == rho,
                       "workload video": Path(args.get("node_extra", "")).name != "" and (w in args.get("node_extra", "") or (w == "train" and "train.mp4" in args.get("node_extra", ""))),
                       "TTFO recorded": e["ttfo"] is not None, "chunk service measurable": e["chunk_s_move_to_bind"] is not None, "no duplicate bytes": e["dup_bytes"] == 0}
@@ -45,7 +47,8 @@ def main():
                     ck["probe size"] = int(args.get("dyn_probe", 0)) == (1 if a.dry else 4)
                 bad = [k for k, v in ck.items() if not v]
                 fails += [f"{ws} {x} {p}: {k} {r['why'] if k.startswith('valid') else ''}" for k in bad]
-                rows.append((ws, x, p, "PASS" if not bad else "FAIL " + "; ".join(bad), {"bind": repr(r["bind"]), "B_source": r["B_source"], "replans": r["replans"], "applicable": r["applicable"], "stop": e["stop"]}))
+                rows.append((ws, x, p, "PASS" if not bad else "FAIL " + "; ".join(bad), {"bind": repr(r["bind"]), "B_source": r["B_source"], "replans": r["replans"], "applicable": r["applicable"], "stop": e["stop"],
+                                                                            "rejoin": (s.get("wrn") or {}).get("termination", {}).get("rejoin_observed")}))
     L = [f"# WX shakedown check{' (DRY RUN)' if a.dry else ''}", "", f"**{'PASS' if not fails else 'FAIL'}** ({sum(1 for r in rows if r[3] == 'PASS')} / {len(rows)} runs)", "",
          "| workload | config | policy | result | details |", "|---|---|---|---|---|"] + [f"| {ws} | {x} | {p} | {res} | {det} |" for ws, x, p, res, det in rows]
     od = ROOT / "results/evaluation/osdi/expWX"
