@@ -14,6 +14,11 @@
     python tools/eval/run_wrn.py m3dev                # M3-v2 development regression: N cells 7-10, at-moves / v1 / v2, 1 rep (not evidence)
     python tools/eval/run_wrn.py v                    # Experiment V holdout (M3-v2 plan): cells V1-V8 x 4 policies x 3 reps
     python tools/eval/run_wrn.py a                    # Experiment A (M1 recent-KV handoff): 5 workloads x 2 seeds x n in {0,1,2,3}, native bandwidth
+    python tools/eval/run_wrn.py xb_gate              # XB real-GPU exactness gate: P-full, R-full (--xb_verify_state) x dog, butterfly; then check_xb_gate.py
+    python tools/eval/run_wrn.py xb_cal               # XB calibration grid (27 runs, A and B only); then aggregate_xb_cal.py
+    python tools/eval/run_wrn.py xb_cal_rep           # 2 repeats of each selected setting (8 runs); then aggregate_xb_cal.py (jitter rule)
+    python tools/eval/run_wrn.py xb_cal_jitter        # only if aggregate_xb_cal.py flags a method: 2 more runs per setting of that method
+    python tools/eval/run_wrn.py xb_lossy             # D5 lossy-input sensitivity (8 runs) - only after the XB freeze
     add --dry for the loopback protocol test (fake nodes on 127.0.0.1, scaled bandwidth; never reported)
 
 Orchestrator invocations use --skip_done --validity wrn, so a re-start resumes and invalid runs get at most 2 re-runs.
@@ -134,7 +139,7 @@ class Ctx:
         """Single-configuration invocations (W2: --policies without --rhos / --pp_configs): skip the whole invocation,
         including the node start, when every policy already has `reps` valid runs (the orchestrator's --skip_done only
         checks after the nodes are up, ~2 min of model load per invocation)."""
-        if "--policies" not in args or "--rhos" in args or "--pp_configs" in args:
+        if "--policies" not in args or "--rhos" in args or "--pp_configs" in args or any(x.startswith("--xb") for x in args):
             return False
         pols = args[args.index("--policies") + 1].split(",")
         reps = int(args[args.index("--reps") + 1]) if "--reps" in args else 1
@@ -367,6 +372,72 @@ def do_wx(c, shakedown=False):
             c.orch(f"expWX_{'shk_' if shakedown else ''}{ws}_{x}", wx_args(c, x, "1" if shakedown else "3"), node_extra(w, 0), f"WX {'shakedown ' if shakedown else ''}{ws} {x}")
 
 
+XB_WL = {"dog": "dog", "bfly": "butterfly-feeding-slow-motion"}   # osdi/expXB/preregistration.md (draft; XB1 workloads)
+XB_GRID = {"precopy_full": ";".join(f"thr={t}:rl={r}" for t in (16, 64, 256) for r in (3, 6, 10)),
+           "precopy_sink": ";".join(f"thr={t}:rl={r}" for t in (16, 64, 256) for r in (3, 6, 10)),
+           "recompute_full": ";".join(f"lag={g}:rl={r}" for g in (1, 2) for r in (3, 6, 10)),
+           "recompute_win": "W=1;W=3;W=6"}
+
+
+def xb_node_extra(w):
+    v, p = paths(w)
+    return ["--video_path", v, "--prompt_file_path", p, "--seed", "0"]
+
+
+def xb_args(c: Ctx, policies: str, reps="1", rep_start="1"):
+    """XB1: single move A -> B at trigger chunk 30, 1 Gbps. Pre-copy rounds and R-full replay keep the source generating
+    for up to ~10 min, so those methods need a long reference window."""
+    long_ = any(p in policies for p in ("precopy", "recompute_full"))
+    post = "1500" if (c.dry or long_) else "400"
+    mx = "600" if c.dry else ("1800" if long_ else "900")
+    return ["--policies", policies, "--hops", "1", "--tm", "1e9", "--reps", reps, "--rep_start", rep_start, "--migration_chunk", "30", "--post_chunks", post,
+            "--max_run_s", mx, "--xb_horizon", "20" if c.dry else "100"]
+
+
+def xb_selection(c: Ctx) -> dict:
+    p = ROOT / "results/evaluation/osdi/expXB" / ("_dryrun_calibration_selection.json" if c.dry else "calibration_selection.json")
+    if not p.exists():
+        sys.exit(f"[wrn] {p} missing: run tools/eval/aggregate_xb_cal.py{' --dry' if c.dry else ''} first")
+    return json.loads(p.read_text())
+
+
+def do_xb_gate(c):
+    for ws, w in XB_WL.items():
+        c.orch(f"expXB_gate_{ws}", xb_args(c, "precopy_full,recompute_full") + ["--xb_verify_state"], xb_node_extra(w), f"XB exactness gate {ws}")
+
+
+def do_xb_cal(c):
+    only = {x for x in (c.a.cells or "").split(",") if x}
+    for pol, grid in XB_GRID.items():
+        if only and pol not in only:
+            continue
+        c.orch("expXB_cal", xb_args(c, pol) + ["--xb_grid", grid], xb_node_extra("dog"), f"XB calibration {pol} ({grid.count(';') + 1} settings)")
+
+
+def do_xb_cal_rep(c):
+    for pol, x in xb_selection(c).items():
+        if x.get("selected"):
+            c.orch("expXB_cal", xb_args(c, pol, reps="2", rep_start="2") + ["--xb_grid", x["selected"]], xb_node_extra("dog"), f"XB calibration repeats {pol} {x['selected']}")
+
+
+def do_xb_cal_jitter(c):
+    for pol, x in xb_selection(c).items():
+        if x.get("jitter_recalibrate"):
+            c.orch("expXB_cal", xb_args(c, pol, reps="2", rep_start="2") + ["--xb_grid", XB_GRID[pol]], xb_node_extra("dog"), f"XB jitter re-calibration {pol}")
+
+
+def do_xb_lossy(c):
+    """D5 (approved 2026-10-22): XB1, dog and butterfly, R-full and R-win at their selected settings, H.264 CRF 23 and 28,
+    1 rep each = 8 runs; descriptive sensitivity, never exact recomputation. Only after the XB freeze."""
+    if not c.dry and not (ROOT / "results/evaluation/osdi/expXB_freeze.md").exists():
+        sys.exit("[wrn] XB is not frozen (results/evaluation/osdi/expXB_freeze.md missing): the lossy-input runs come after the freeze")
+    sel = xb_selection(c)
+    for ws, w in XB_WL.items():
+        for pol in ("recompute_full", "recompute_win"):
+            grid = ";".join(f"{sel[pol]['selected']}:codec={cd}" for cd in ("h264_crf23", "h264_crf28"))
+            c.orch(f"expXB_lossy_{ws}", xb_args(c, pol) + ["--xb_grid", grid], xb_node_extra(w), f"XB lossy inputs {ws} {pol}")
+
+
 def do_vacw(c):
     """VACW v0 (frozen 9137bc9): A -> B -> C -> D, rho {0.5, 1}, 1 Gbps, dog / butterfly seed 0, 3 policies x 3 reps = 36 runs."""
     tag = f"_{c.a.tag}" if c.a.tag else ""
@@ -464,7 +535,8 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx"])
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx",
+                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_jitter", "xb_lossy"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -479,7 +551,8 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx}[a.what](c)
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx,
+             "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:

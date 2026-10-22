@@ -1,6 +1,10 @@
 # Experiment XB - external migration baselines (re-implemented): preregistration REVISED DRAFT (2026-10-20)
 
-Status: **REVISED DRAFT 4 (2026-10-22), not frozen.** Draft 4 adds section 3.2 (recompute input transfer: lossless
+Status: **REVISED DRAFT 5 (2026-10-22), not frozen.** Draft 5 (decisions of 2026-10-22): D5 approved (8 lossy-input
+runs); remote delivery accounting implemented, with measured and estimated bytes kept apart (section 2.2); codec
+availability checked on every node (section 3.2); real-GPU exactness gates before calibration (section 3.3); R-win's
+calibration rule kept and its whole W trade-off reported (section 4). **The 35-run calibration runs only after the gate
+passes; the main sweep only after the calibration is reviewed and this document is frozen.** Draft 4 added section 3.2 (recompute input transfer: lossless
 FFV1 as the primary codec, chosen by the CPU-only validation in `codec_validation.md`; lossy H.264 sensitivity; raw
 upper bound; accounting rules) and decision D5. **No GPU calibration until the codec validation is reviewed.**
 Draft 3 (2026-10-21) was approved for implementation preparation. Corrections of
@@ -48,12 +52,10 @@ Three quantities are always reported separately and never combined into one scor
 2. **Delivery gap**: the longest interval in which **no** chunk is delivered to the user from any host.
 3. **Remote-serving cost**: chunks and seconds delivered from a host other than the user's current edge after the trigger
    (or after each move), and, where measurable:
-   - **remote delivery network cost**: bytes of the delivered output stream that cross the inter-edge path, measured by
-     encoding each remotely served chunk with a fixed codec and setting (H.264, fixed CRF, chosen in calibration) and
-     summing the encoded sizes;
-   - **remote delivery latency**: the measured round-trip time between the serving host and the current edge on the
-     testbed (ping, per run). The testbed is one LAN, so this is a floor; WAN or radio latency is **not emulated** and is
-     stated as unmeasured.
+   - **remote delivery network cost (ESTIMATED)**: the H.264 size of the remotely served output (section 2.2); CRF 23
+     reported, CRF 28 as sensitivity;
+   - **remote delivery latency**: the measured LAN round-trip time between the hosts (section 2.2). The testbed is one
+     LAN, so this is a floor; WAN or radio latency is **not emulated and not measured**, and the paper says so.
 
 With repeated moves the user may leave the intended destination before a copy or replay finishes; the method then
 restarts toward the user's new edge from the serving host (no reuse of the abandoned copy, as in the original methods)
@@ -70,6 +72,24 @@ and remote serving continues.
 
 No hypothesis turns one notion into evidence for another (e.g. no delivery-gap result is read as trajectory recovery,
 and no correctness result as visual continuity).
+
+### 2.2 Delivery accounting: measured vs estimated (implemented 2026-10-22, `tools/eval/xb_delivery.py`)
+
+| quantity | kind | how |
+|---|---|---|
+| TTFO-local | measured | per edge change (trigger, then each move): first chunk delivered by the user's current edge; censored if none before the next move |
+| delivery gap | measured | longest interval without a delivered chunk from any host, from the trigger to the last delivered chunk |
+| remote-served chunks and duration | measured | chunks whose serving host differs from the user's edge at delivery; content time (4 frames at 16 fps per chunk) and wall time per stretch (edge change to the stretch's last remote chunk) |
+| transmitted bytes | **measured** | bytes actually sent on the testbed: state fragments, pre-copy rounds, encoded input history (section 3.2) |
+| remote delivery bytes | **ESTIMATED** | the serving node encodes each chunk it serves to a user at another edge, live: libx264, yuv420p, preset veryfast, tune zerolatency (no B-frames, one packet per frame), CRF 23 and CRF 28; a new stream with a keyframe starts whenever the serving host or the user's edge changes. The output stream is **not transmitted** on the testbed; these bytes are never added to the measured transmitted bytes |
+| LAN RTT | measured | TCP echo of an empty message on the data plane, 20 samples per host pair per run, before the trigger; median, p95, min; includes Python and TCP stack overhead |
+| WAN / radio latency | not measured | not emulated; stated as a limitation |
+
+Remote delivery is encoded only in the pre-copy and recompute runs (their mode serves remotely). OTTER, Full migration
+and Wait-for-Sink stop the source at its chunk boundary; their remote-served chunks (at most the chunk in flight at a
+move) are counted, and their bytes are not estimated. Per-call cost in the pre-copy and recompute runs: one output
+frame digest (output equivalence, section 3.3) on the generation thread and the delivery encoding on a separate thread
+(about 10 ms per chunk for both CRFs on a laptop CPU); both are recorded.
 
 ## 3. Method parameters
 
@@ -156,6 +176,25 @@ not planned.
    encode CPU seconds, decode CPU seconds, replay input-wait seconds, segment exactness and, for lossy runs, the
    minimum input PSNR.
 
+### 3.3 Real-GPU exactness gates (before any calibration run)
+
+Gate runs: XB1 setting (A -> B, trigger chunk 30, 1 Gbps, seed 0), dog and butterfly-feeding-slow-motion, P-full and
+R-full at their default parameters (P-full threshold 64 MiB, round limit 6; R-full lag 1, round limit 6), with
+`--xb_verify_state`. That is 4 runs (`run_wrn.py xb_gate`, checked by `check_xb_gate.py`). The timing of gate runs is not
+used.
+
+- **P-full** passes iff the run is valid, all five components (in-flight, meta, recent KV, Sink, VAE caches) match the
+  source's digests at the atomic switchover boundary, and every delivered call of the destination after the switchover
+  is bit-identical to the uninterrupted reference (output frame digest per call), with at least 50 calls checked.
+- **R-full** passes iff the run is valid (lossless inputs bit-exact), the replayed state matches the source's state
+  digests at its stop boundary for all five components, and every delivered call after the resume is bit-identical to
+  the reference, with at least 50 calls checked.
+- Any failure stops the XB GPU work before calibration. The failing component or the first mismatching call is reported,
+  and the method is not classified exact until a reviewed fix passes the gate.
+
+In every later XB run, P-full and R-full also record output equivalence per call. Calibration eligibility (rule 1)
+uses the first post-switchover call; the whole post-switchover count is reported.
+
 ## 4. Calibration plan (before the main sweep; baseline-favorable; not evidence)
 
 Goal: give each baseline its best parameters in the tested setting, so that no comparison is won against a poorly
@@ -175,8 +214,12 @@ tuned baseline. Calibration runs are kept and reported (full grid in the appendi
 | **total** | | | **35** |
 
 One run per setting suffices because generation is deterministic (WX / M3E reps agree within 0.1 dB and ~0.5 s); the
-two repeats of each selected setting check timing jitter. Remote delivery bytes are computed offline from the P-sink
-calibration runs at H.264 CRF 23 and 28 (no extra runs); CRF 23 is reported in the main sweep, CRF 28 as sensitivity.
+two repeats of each selected setting check timing jitter. Estimated remote delivery bytes (CRF 23 and 28) are recorded
+live in every calibration run (section 2.2).
+
+**Order:** gate (section 3.3) passes -> grid (27 runs, `run_wrn.py xb_cal`) -> `aggregate_xb_cal.py` selects -> repeats
+(8 runs, `xb_cal_rep`) -> `aggregate_xb_cal.py` applies the jitter rule -> re-calibration only if triggered
+(`xb_cal_jitter`) -> the grid and the selection are reviewed -> freeze.
 
 **Selection rules (fixed now; lexicographic, baseline-favorable on the metric XH1 compares):**
 1. Eligibility: the run is valid (W / R / N rules) and passes its class's correctness check (section 3.1: P-full whole-
@@ -186,7 +229,9 @@ calibration runs at H.264 CRF 23 and 28 (no extra runs); CRF 23 is reported in t
 2. Primary criterion, P-full, P-sink, R-full: smallest TTFO-local; settings within 5 % of the smallest are tied, and the
    tie goes to the smallest delivery gap, then to the fewest remote-served chunks, then to the smaller threshold / round
    limit.
-3. R-win: among W whose terminal PSNR is within 1.0 dB of the best W, the smallest TTFO-local.
+3. R-win (rule unchanged): among W whose terminal PSNR is within 1.0 dB of the best W, the smallest TTFO-local. The
+   whole W in {1, 3, 6} trade-off is reported: TTFO-local, delivery gap, remote-served chunks, terminal PSNR, first
+   call >= 35 dB, sustained 10 calls.
 4. **Alternative setting:** for every applicable baseline (P-full, P-sink, R-full, R-win) the eligible setting with the
    smallest delivery gap is also recorded (ties as in rule 2). It is reported in the calibration table and, where it
    differs from the selected setting, also run in XB1 (3 reps x 2 workloads per differing baseline, at most 4 x 6 = 24
@@ -198,7 +243,14 @@ calibration runs at H.264 CRF 23 and 28 (no extra runs); CRF 23 is reported in t
    chunks, rounds, dirty bytes per round, switchover reason, correctness result) are written into this document and
    frozen with it before the shakedown.
 
-**Cost:** 35 runs on GPU 0 of A and B, ~1.5-2 h.
+**Cost:** 35 runs on GPU 0 of A and B, ~3-4 h. Pre-copy rounds and R-full replay keep the source generating for up to
+~10 min, so these invocations use a 1,530-call reference window: each node start runs a ~10-15 min reference baseline
+and holds its frames in host memory (~7 GB per node).
+
+**Open point found in the dry run (decision before the GPU calibration):** rule 2's secondary tie-breaks have no
+tolerance. In the dry grid, P-full settings with identical behavior were separated by 0.05 s of delivery-gap noise.
+Proposal: apply the same 5 % tie band to the delivery gap and to remote-served chunks before falling back to the
+smaller threshold and round limit. Rule 3 (R-win) is unchanged.
 
 ## 5. Scenarios (main sweep)
 
@@ -249,18 +301,19 @@ remote-serving accounting checked against the delivered-chunk log (each chunk de
 
 | phase | runs | hosts | time |
 |---|---|---|---|
-| calibration (section 4) | 35 | A, B | ~1.5-2 h |
+| calibration (section 4) | 35 | A, B | ~3-4 h |
 | shakedown (one run per method and scenario: XB1 7 x 2, XB2 3, XB3 5, XB4 5) | 27 | A-D | ~1.5 h |
 | main sweep: XB1 7 x 2 workloads x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 5 x 3 = 15 | **81** | A-D | ~5-6 h |
 | alternative min-gap settings in XB1 (only where they differ, rule 4) | 0-24 | A, B | 0-1.5 h |
 | jitter-triggered re-calibration (rule 5, only if triggered) | 0-54 | A, B | 0-3 h |
-| lossy-input sensitivity (section 3.2, D5 proposal: XB1, R-full and R-win at their selected settings, CRF 23 and 28, dog and butterfly, 1 rep) | 8 | A, B | ~0.5 h |
-| **total GPU runs** | **151-229** | | **~8.5-14.5 h** |
+| real-GPU exactness gate (section 3.3, before calibration) | 4 | A, B | ~0.5-1 h |
+| lossy-input sensitivity (section 3.2, D5 approved: XB1, R-full and R-win at their selected settings, CRF 23 and 28, dog and butterfly, 1 rep; after the freeze) | 8 | A, B | ~0.5 h |
+| **total GPU runs** | **155-233** | | **~9-15.5 h** |
 
 Shakedown and calibration are not evidence. Exclusive use of GPU 0 on the listed hosts; no commit or pull on the
 testbed while a phase runs.
 
-## 10. Implementation (status 2026-10-22: items 1-3 implemented and loopback-tested; item 4 pending)
+## 10. Implementation (status 2026-10-22: items 1-5 implemented and loopback-tested; no GPU run yet)
 
 1. Pre-copy: source keeps generating after the trigger while a copier sends rounds; per-round content hashes (VACW
    snapshot capture and hash comparison reused); switchover protocol; P-full packs every component; P-sink hands the
@@ -269,8 +322,9 @@ testbed while a phase runs.
    encoded input-frame transfer with per-segment bit-exactness checks (section 3.2; `tools/eval/xb_codec.py`), rounds,
    switchover.
 3. Wait-for-Sink: node flag deferring generation until bind.
-4. Delivery accounting: per delivered chunk, the serving host and the user's current edge; delivery gap; remote-served
-   chunk encoding (H.264) for remote delivery bytes; per-run RTT between hosts.
+4. Delivery accounting (section 2.2): per delivered chunk, the serving host and the user's current edge; delivery gap;
+   live H.264 encoding of remotely served chunks (estimated bytes); per-run LAN RTT; codec preflight on every node
+   (FFV1 bit-exact round trip, libx264), required for validity. Exactness gates (section 3.3).
 5. Loopback tests of every method, calibration, then shakedown. No change to OTTER's mechanisms.
 
 ## 11. Decisions
@@ -282,5 +336,6 @@ testbed while a phase runs.
 - **D3 (open until calibration)** - switchover / round parameters fixed by the section-4 calibration and recorded here
   before the main sweep.
 - **D4 (closed)** - no further workloads in XB3 / XB4.
-- **D5 (open)** - lossy-input sensitivity runs. Proposal: 8 runs (section 9), descriptive only, never evidence for
-  XH1-XH5. Alternative: report the lossy cases from the CPU validation only (bytes and input PSNR), with no GPU runs.
+- **D5 (closed 2026-10-22, approved)** - 8 lossy-input sensitivity runs (section 9): XB1 only, dog and butterfly, R-full
+  and R-win, H.264 CRF 23 and 28, one rep each; descriptive, never exact recomputation, never evidence for XH1-XH5.
+  FFV1 stays the primary lossless codec.

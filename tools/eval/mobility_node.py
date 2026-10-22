@@ -93,6 +93,29 @@ def frame_digest(fr) -> str | None:
     return None if fr is None else hashlib.blake2b(np.ascontiguousarray(fr).tobytes(), digest_size=16).hexdigest()
 
 
+def codec_support() -> dict:
+    """XB preflight, reported in HELLO: PyAV present, FFV1 lossless round trip bit-exact, libx264 encodes (remote delivery
+    estimate, lossy-input sensitivity) and H.264 decodes."""
+    try:
+        import av
+
+        import xb_codec as xc
+    except Exception as exc:  # noqa: BLE001
+        return {"av": None, "ffv1_roundtrip": False, "libx264": False, "error": repr(exc)}
+    out = {"av": av.__version__}
+    f = xc.synthetic_clip(64, 64, 3)
+    try:
+        out["ffv1_roundtrip"] = bool(np.array_equal(xc.decode(xc.encode(f, "ffv1"), "ffv1"), f))
+    except Exception as exc:  # noqa: BLE001
+        out["ffv1_roundtrip"] = False; out["ffv1_error"] = repr(exc)
+    try:
+        out["libx264"] = xc.decode(xc.encode(f, "h264_crf23"), "h264_crf23").shape == f.shape
+        out["libx264_delivery"] = xc.DeliveryEncoder().push(0, f)["bytes"][23] > 0
+    except Exception as exc:  # noqa: BLE001
+        out["libx264"] = False; out["libx264_error"] = repr(exc)
+    return out
+
+
 class CachedReference:
     """PSNR reference for a cold-started node: the uninterrupted same-seed frames a warm node computed on this host.
     Loaded in a background thread (not on the critical path); a call not loaded yet is read directly from the file."""
@@ -596,7 +619,7 @@ class Node:
             self.send("HELLO", host_info=host_info(self.a.gpu_id), mss_effective=effective_mss(self.ctl), mss_warnings=list(MSS_WARNINGS),
                       service_s=self.rt.service_s, dry_run=self.a.dry_run, data_port=self.a.data_port, k=self.rt.k, pid=os.getpid(),
                       cold_start=bool(self.a.cold_start), t_main=T_MAIN, t_runtime_ready=self.t_runtime_ready, t_listen=self.t_listen,
-                      reference=str(self.ref_path) if self.ref_path else "baseline", commit=_git_commit())
+                      reference=str(self.ref_path) if self.ref_path else "baseline", commit=_git_commit(), codecs=self._codecs())
             try:
                 while True:
                     hdr, payload = recv_msg(self.ctl)
@@ -638,7 +661,13 @@ class Node:
                     "sink_unpacked": False, "bind_requested": False, "pending_handoff": None,
                     "full_pack": None, "full_xfer": None, "dropped_flows": set(), "pending_cold": None, "n_owned": 0, "epoch": 0,
                     "last_fp": None, "bind_at": None, "promotions": [], "snapshots": [], "versions": set(), "await_manifest": False, "unpacked_version": None,
-                    "xb": None, "xb_snap_req": None, "xb_store": None, "xb_rc": None, "wait_sink": False}
+                    "xb": None, "xb_snap_req": None, "xb_store": None, "xb_rc": None, "wait_sink": False,
+                    "exact_check": bool(h.get("exact_check")), "delivery": h.get("delivery"), "user_edge": h.get("user_edge"), "deliv_q": None, "deliv_thread": None}
+        if self.run["delivery"]:
+            import queue
+
+            self.run["deliv_q"] = queue.Queue()
+            self.run["deliv_thread"] = threading.Thread(target=self._delivery_worker, args=(self.run,), daemon=True); self.run["deliv_thread"].start()
         self.flows = {}
         self.rt.reset_peak()   # G9: peak memory_allocated / reserved over this run
         return {}
@@ -951,6 +980,8 @@ class Node:
             with r["xb_rc"]["cv"]:
                 r["xb_rc"]["cv"].notify_all()
         self.rt.restore_inputs()
+        if r.get("deliv_q") is not None:
+            r["deliv_q"].put(None); r["deliv_thread"].join(timeout=120)
         r["full_pack"] = None
         r["sampler"].finish(); r["metrics"].close(); r["frag_log"].close()
         net = (r["dir"] / "network.csv").read_text() if (r["dir"] / "network.csv").exists() else ""
@@ -1268,6 +1299,82 @@ class Node:
         rc["input_wait_s"] += time.time() - t0
         return not rc["cancel"]
 
+    def _codecs(self):
+        if not hasattr(self, "_codec_info"):
+            self._codec_info = codec_support()
+        return self._codec_info
+
+    def _ref_match(self, c: int, ps) -> bool | None:
+        """Output equivalence: this call's output frames are bit-identical to the uninterrupted reference (frame digest)."""
+        if self.a.dry_run:
+            return ps == 99.0
+        rec = getattr(self.rt, "base_record", None)
+        if not rec or c >= len(rec) or rec[c].get("frame_digest") is None:
+            return None
+        return frame_digest(self.rt.last_frames) == rec[c]["frame_digest"]
+
+    def _delivery_worker(self, r: dict):
+        """Estimated remote delivery bytes (nothing is sent): encode each chunk this node serves to a user at another edge."""
+        import xb_codec as xc
+
+        enc = xc.DeliveryEncoder(r["delivery"])
+        while True:
+            item = r["deliv_q"].get()
+            if item is None:
+                return
+            c, key, frames = item
+            if frames is None:
+                if not self.a.dry_run:
+                    continue
+                first, chunk = self._xb_frames_geom(); frames = self.rt.input_history().frames(first + chunk * c, first + chunk * (c + 1))
+            try:
+                res = enc.push(key, np.asarray(frames))
+            except Exception as exc:  # noqa: BLE001
+                self.event("xb_delivery_error", call=c, error=repr(exc)); continue
+            self.event("xb_delivery_enc", call=c, ownership=key[0], user_edge=key[1], frames=int(len(frames)),
+                       bytes_crf23=res["bytes"].get(23), bytes_crf28=res["bytes"].get(28), keyframes=res["keyframes"].get(23), enc_s=res["enc_s"])
+
+    def cmd_user_edge(self, h):
+        if self.run is not None:
+            self.run["user_edge"] = h["edge"]
+        return {}
+
+    def cmd_rtt_probe(self, h):
+        """Host-to-host round-trip time on the data plane (TCP echo of an empty message; LAN only, includes the
+        Python and TCP stack overhead)."""
+        conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=30)
+        out = []
+        try:
+            for i in range(int(h.get("n") or 20)):
+                t0 = time.perf_counter()
+                send_msg(conn, "ECHO", {"seq": i}, b"", None)
+                recv_msg(conn)
+                out.append((time.perf_counter() - t0) * 1e3)
+        finally:
+            conn.close()
+        return {"rtt_ms": out}
+
+    def _state_digests(self, call: int) -> dict:
+        """Per-component digests of the live session state (the components Full migration moves)."""
+        if self.a.dry_run:
+            return {comp: f"dry:{comp}:{call}" for comp in FULL_COMPS}
+        snap = self.rt.serialize_live()
+        out = {}
+        for comp in FULL_COMPS:
+            header, buf = self._xb_pack(snap, comp)
+            out[comp] = component_digest(payload_slices(header, buf))
+            del buf
+        del snap
+        return out
+
+    def cmd_xb_state_digests(self, h):
+        """Source of a recompute exactness gate: digests of its state at the stop boundary (it is not generating)."""
+        r = self.run
+        t0 = time.time()
+        d = self._state_digests(r["call"])
+        self.event("xb_source_state_digests", call=r["call"], digest_s=time.time() - t0)
+        return {"digests": d, "call": r["call"], "digest_s": time.time() - t0}
+
     def cmd_recompute_start(self, h):
         """Destination of a recompute task. full: replay the session from call 0 up to `target` (rounds driven by the
         orchestrator); win: nothing until RECOMPUTE_FINISH."""
@@ -1311,6 +1418,16 @@ class Node:
             t_round = time.time()
         if rc["cancel"]:
             self.event("xb_recompute_cancelled", task=rc["task"], dest_call=rc["dest_call"]); return
+        if rc.get("verify"):
+            # exactness gate (--xb_verify_state; timing of such runs is not used): the replayed state at the resume call vs
+            # the source's state at its stop boundary, per component
+            t0 = time.time()
+            if not self.a.dry_run:
+                self.rt.session = rc["session"]
+            mine = self._state_digests(rc["dest_call"])
+            ok = {comp: mine.get(comp) == dg for comp, dg in rc["verify"].items()}
+            self.event("xb_recompute_state_verified", task=rc["task"], call=rc["dest_call"], ok=bool(ok) and all(ok.values()) and set(ok) == set(FULL_COMPS),
+                       components_ok=ok, verify_s=time.time() - t0)
         self._recompute_resume(rc)
 
     def _recompute_resume(self, rc: dict):
@@ -1335,6 +1452,7 @@ class Node:
         """The source stopped after call c - 1: finish the replay up to c and resume there."""
         rc = self.run["xb_rc"]
         rc["src"] = h.get("src")
+        rc["verify"] = h.get("verify_digests")
         if rc["variant"] == "full":
             with rc["cv"]:
                 rc["finish"] = int(h["call"]); rc["cv"].notify_all()
@@ -1419,6 +1537,10 @@ class Node:
                     else:
                         # no reuse across targets: inputs of a cancelled / other task are dropped
                         self.event("xb_inputs_discarded", task=hdr["task"], bytes=pl, f_lo=hdr.get("f_lo"), f_hi=hdr.get("f_hi"))
+                elif kind == "ECHO":
+                    if pl:
+                        recv_exact(conn, pl)
+                    send_msg(conn, "ECHO_R", {"seq": hdr.get("seq")}, b"", None)
                 elif kind in ("FLOW_HELLO", "FLOW_END"):
                     if pl:
                         recv_exact(conn, pl)
@@ -1627,12 +1749,15 @@ class Node:
                     r["promotions"].append(c)
                     self.event("sink_promotion", call=c, n_changed=len(changed), changed=changed[:96], bound=r["bound_call"] is not None, ownership=r["n_owned"])
                 r["last_fp"] = fp
+            ref_match = self._ref_match(c, ps) if (r["exact_check"] and produced) else None
+            if r["deliv_q"] is not None and produced and r["user_edge"] not in (None, self.label):
+                r["deliv_q"].put((c, (r["n_owned"], r["user_edge"]), self.rt.last_frames))   # served to a user at another edge
             row = {"call": c, "t_out": t_out, "owner": self.label, "chunk_s": dt, "psnr": ps, "ssim": ss, "missing": not produced,
                    "sink_bound": r["bound_call"] is not None and c >= r["bound_call"], "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), "sink_slot_pos": pos,
                    "t_decode": dec[-1][0] if dec else None, "n_frames": sum(n for _, n in dec),
                    "sink_vfp": None if fp is None else json.dumps(fp), "promotion": promo, "fp_ms": fp_ms}
             r["metrics"].row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
-            self.send("METRIC", **{k: v for k, v in row.items() if k != "sink_vfp"})
+            self.send("METRIC", **{k: v for k, v in row.items() if k != "sink_vfp"}, **({"ref_match": ref_match} if ref_match is not None else {}))
             r["call"] = c + 1
             if r["call"] >= self.a.migration_chunk + self.a.post_chunks:
                 self.event("window_exhausted", call=r["call"]); break

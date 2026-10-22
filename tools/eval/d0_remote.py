@@ -7,6 +7,8 @@ instead of ssh, which is not available between the testbed hosts. Run on elves-0
     pull                   git pull --ff-only on the hosts whose repo is behind (no other git operation)
     probe NAME SCRIPT      run a read-only bash probe on elves-02..04, write results/evaluation/osdi/d0/NAME/<host>.txt
     recover                copy back node_{B,C,D}/fragments.csv of restore_* runs; never overwrites a local file
+    codecs                 XB preflight on all four hosts: PyAV, FFV1 bit-exact round trip, libx264 (exit 1 if any fails);
+                           writes results/evaluation/osdi/expXB/codec_hosts.json
 """
 
 from __future__ import annotations
@@ -103,14 +105,38 @@ def recover(a):
         print(f"node {lb} ({host_of(ag)}): copied {new}, already present {kept}")
 
 
+def codecs(a):
+    import json
+
+    code = ("import json, sys; sys.path.insert(0, 'tools/eval'); import mobility_node as mn; "
+            "print(json.dumps(mn.codec_support()))")
+    res, bad = {}, []
+    for lb, ag in agents(("A",) + REMOTE, a.agent_hosts).items():
+        r = sh(ag, [".venv/bin/python", "-c", code], timeout=300)
+        try:
+            v = json.loads(r["stdout"].strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            v = {"error": (r["stderr"] or r["stdout"]).strip()[-400:]}
+        v["host"] = host_of(ag); res[lb] = v
+        ok = v.get("ffv1_roundtrip") is True and v.get("libx264") is True
+        print(f"{lb} {v['host']}: {'OK' if ok else 'FAIL'} {v}")
+        if not ok:
+            bad.append(lb)
+    if len(res) < 4:
+        bad.append("not all four agents reachable")
+    (ROOT / "results/evaluation/osdi/expXB/codec_hosts.json").write_text(json.dumps(res, indent=1))
+    print("codecs OK on all four hosts" if not bad else f"codec check FAILED: {bad}")
+    sys.exit(1 if bad else 0)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--agent_hosts", default=None)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("status"); sub.add_parser("gpu_idle"); sub.add_parser("pull"); sub.add_parser("recover")
+    sub.add_parser("status"); sub.add_parser("gpu_idle"); sub.add_parser("pull"); sub.add_parser("recover"); sub.add_parser("codecs")
     p = sub.add_parser("probe"); p.add_argument("name"); p.add_argument("script")
     a = ap.parse_args()
-    {"status": status, "gpu_idle": gpu_idle, "pull": pull, "probe": probe, "recover": recover}[a.cmd](a)
+    {"status": status, "gpu_idle": gpu_idle, "pull": pull, "probe": probe, "recover": recover, "codecs": codecs}[a.cmd](a)
 
 
 if __name__ == "__main__":

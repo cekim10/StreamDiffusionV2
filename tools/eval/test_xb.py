@@ -129,6 +129,19 @@ def main():
                 need_lo = 5 + 4 * (call - 3) - 1
                 check(min(a for a, b in rng) <= need_lo and max(b for a, b in rng) == 5 + 4 * call, f"recompute_win: window frames [{need_lo}, {5 + 4 * call}) covered by {rng}")
             check(I["enc_cpu_s"] > 0 and I["decode_cpu_s"] > 0, f"{pol}: encode {I['enc_cpu_s']:.2f} s, decode {I['decode_cpu_s']:.2f} s CPU recorded")
+    for pol in ("precopy_full", "precopy_sink", "recompute_full", "recompute_win"):
+        d = R.get(pol)
+        if d is None:
+            continue
+        s = json.load(open(d / "summary.json")); D = s["delivery"]
+        est = D["remote_delivery_bytes_ESTIMATED"]
+        check(D["remote_chunks"] > 0 and est["crf23"] > est["crf28"] > 0 and est["remote_chunks_not_encoded"] == 0,
+              f"{pol}: {D['remote_chunks']} remote-served chunks ({D['remote_wall_s']:.1f} s wall), estimated delivery bytes CRF 23 {est['crf23'] >> 10} KiB / CRF 28 {est['crf28'] >> 10} KiB")
+        check(D["ttfo_local_final_s"] is not None and D["delivery_gap_s"] is not None and s["rtt_measured_lan"].get("A-B", {}).get("median_ms") is not None,
+              f"{pol}: TTFO-local {D['ttfo_local_final_s']:.2f} s, delivery gap {D['delivery_gap_s']:.2f} s, LAN RTT A-B {s['rtt_measured_lan']['A-B']['median_ms']:.2f} ms")
+        if pol in ("precopy_full", "recompute_full"):
+            eq = D["output_equivalence"][-1]
+            check(eq["checked"] > 0 and eq["matching"] == eq["checked"], f"{pol}: output equivalence after switchover {eq['matching']} / {eq['checked']} calls")
     d = R.get("split_wait")
     if d is not None:
         ev = events(d); m = metrics(d)
@@ -136,6 +149,16 @@ def main():
         bcall = bind[0]["detail"]["call"] if bind else None
         before = [r for r in m if r["owner"] == "B" and bcall is not None and int(r["call"]) < bcall]
         check(bool(bind) and not before, f"split_wait: no Sink-less generation at B (bind at call {bcall}, {len(before)} chunks before it)")
+    print("- exactness gate (R-full state digests vs the source at the stop boundary; P-full digests + output equivalence)")
+    RG = run("_xbtest_gate", "precopy_full,recompute_full", 1, "1e9", ["--xb_verify_state"])
+    for pol, d in RG.items():
+        s = json.load(open(d / "summary.json"))
+        ok, why = run_validity_xb(s, d, dry=True)
+        check(ok and s["xb_params"]["verify_state"], f"gate {pol}: valid {why}")
+        if pol == "recompute_full":
+            check(s["validation"].get("recompute_state_verified") is True, "gate recompute_full: replayed state digests == source digests (dry: protocol only)")
+        r = subprocess.run([PY, "tools/eval/check_xb_gate.py", "--root", str(d.parent)], cwd=ROOT, capture_output=True, text=True)
+        check(r.returncode == 0 and "PASS" in r.stdout, f"gate checker on {pol}: {r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-300:]}")
     print("- lossy input sensitivity (H.264 CRF 23), single move")
     R3 = run("_xbtest_lossy", "recompute_full,recompute_win", 1, "1e9", ["--xb_codec", "h264_crf23"])
     for pol, d in R3.items():

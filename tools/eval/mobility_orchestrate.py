@@ -190,6 +190,19 @@ def run_tag(a, policy, bw_mbps, tm, rho, rep, path, prepos) -> str:
     return f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}"
 
 
+XB_GRID_KEYS = {"thr": ("xb_threshold_mib", float), "rl": ("xb_round_limit", int), "lag": ("xb_lag", int), "W": ("xb_window", int), "codec": ("xb_codec", str)}
+
+
+def xb_settings(spec: str) -> list[dict]:
+    return [dict(kv.split("=") for kv in item.split(":")) for item in spec.split(";") if item.strip()]
+
+
+def apply_xb_setting(a, st: dict):
+    for k, v in st.items():
+        name, typ = XB_GRID_KEYS[k]
+        setattr(a, name, typ(v))
+
+
 def done_validly(a, tag: str) -> str | None:
     """--skip_done: a completed run directory of this configuration and rep whose run is valid (Experiment D rules, or the
     W / R / N rules with --validity wrn). W / R / N: after 3 attempts (1 + 2 re-runs, followup_common.md section 3) the
@@ -279,7 +292,7 @@ class Run:
         (self.dir / "git_commit.txt").write_text(git_commit() + "\n")
         self.ev = EventLog(self.dir / "events.csv", "orchestrator")
         self.frag_csv = CsvLog(self.dir / "fragments.csv", ["t_rel", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok", "dup", "classification"])
-        self.metric_csv = CsvLog(self.dir / "metrics.csv", ["call", "t_out_rel", "owner", "owner_idx", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "lag_hops", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode_rel", "n_frames"])
+        self.metric_csv = CsvLog(self.dir / "metrics.csv", ["call", "t_out_rel", "owner", "owner_idx", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "lag_hops", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode_rel", "n_frames", "ref_match"])
         self.pcur_csv = CsvLog(self.dir / "p_current.csv", ["t_rel", "owner", "p_current", "held_A", "held_B", "held_C", "held_D"])
         self.flow_csv = CsvLog(self.dir / "flows.csv", ["flow", "src", "dst", "t_start_rel", "t_end_rel", "n_frags", "bytes", "rate_bps_last", "cancelled", "reason"])
         self.trace = open(self.dir / "trace.txt", "w")
@@ -746,7 +759,7 @@ class Run:
             lag = EDGES.index(lb) - max([EDGES.index(e) for e in self.bound] + [0])
             row = {"call": m["call"], "t_out_rel": self.rel_t(t), "owner": lb, "owner_idx": EDGES.index(lb), "chunk_s": m["chunk_s"], "psnr": m["psnr"], "ssim": m["ssim"], "missing": m["missing"],
                    "sink_bound": m["sink_bound"], "lag_hops": lag, "gpu_mem_alloc_mb": m["gpu_mem_alloc_mb"], "sink_slot_pos": m["sink_slot_pos"],
-                   "t_decode_rel": self.rel_t(nc.to_orch(m.get("t_decode"))) if m.get("t_decode") else None, "n_frames": m.get("n_frames")}
+                   "t_decode_rel": self.rel_t(nc.to_orch(m.get("t_decode"))) if m.get("t_decode") else None, "n_frames": m.get("n_frames"), "ref_match": m.get("ref_match")}
             self.metrics.append(row)
             self.metric_csv.row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
             return
@@ -1132,6 +1145,10 @@ class Run:
         r = self.node(t["src"]).call("EXEC_STOP", timeout=120)   # the source stops at its chunk boundary
         c = int(r["call"])
         t["state"] = "finishing"; t["stop_call"] = c; t["finish_reason"] = reason
+        verify = None
+        if self.a.xb_verify_state and t["kind"] == "recompute_full":
+            # exactness gate only (timing of such runs is not used): the source's state digests at its stop boundary
+            verify = self.node(t["src"]).call("XB_STATE_DIGESTS", timeout=900)["digests"]
         hi = FIRST_FRAMES + CHUNK_FRAMES * c
         if t["kind"] == "recompute_full":
             lo = t["sent_hi"]
@@ -1143,7 +1160,7 @@ class Run:
             self.node(t["src"]).call("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], f_lo=lo, f_hi=hi, codec=t["codec"], rate_bps=t["rate"],
                                      part=len(t["frame_ranges"]) + 1, timeout=300)
             t["frame_ranges"].append([lo, hi]); t["sent_hi"] = hi
-        self.node(t["dst"]).call("RECOMPUTE_FINISH", call=c, src=t["src"])
+        self.node(t["dst"]).call("RECOMPUTE_FINISH", call=c, src=t["src"], verify_digests=verify)
         self.ev.log("xb_recompute_finish", task=t["id"], call=c, reason=reason)
 
     def xb_input_accounting(self):
@@ -1179,10 +1196,22 @@ class Run:
         never reused); an owner change happens only at a completed switchover."""
         o, a = self.o, self.a
         self.gpu0_before = o.gpu0_state(self.nodes_used)
+        import xb_codec as xc
+
         for lb in self.nodes_used:
-            self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=self.run_id, t0=None)
+            # exact_check: per-call output digest vs the reference; delivery: estimated remote delivery bytes (H.264 CRF 23 / 28)
+            # of every chunk a node serves while the user is at another edge (the user is at edges[1] from the trigger on)
+            self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=self.run_id, t0=None, exact_check=True,
+                               delivery=list(xc.DELIVERY_CRFS), user_edge=self.edges[1])
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
         self.manifest = prep["manifest"]
+        # measured LAN round-trip time between every pair of hosts of the run (TCP echo on the data plane; untimed)
+        self.rtt = {}
+        for i, s_ in enumerate(self.nodes_used):
+            for d_ in self.nodes_used[i + 1:]:
+                nd = self.o.node_spec[d_]
+                v = sorted(self.node(s_).call("RTT_PROBE", to_host=nd["host"], to_port=nd["data"], n=20, timeout=60)["rtt_ms"])
+                self.rtt[f"{s_}-{d_}"] = {"median_ms": v[len(v) // 2], "p95_ms": v[min(len(v) - 1, int(0.95 * len(v)))], "min_ms": v[0], "n": len(v)}
         rec = self.policy.startswith("recompute")
         self.input_check = {}
         for lb in self.nodes_used:
@@ -1212,6 +1241,8 @@ class Run:
                 to = self.edges[self.user_idx]
                 self.moves.append({"i": self.user_idx, "from": self.edges[next_move], "to": to, "t_req": now, "t_stop": None, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "xb"})
                 self.ev.log("move", now, to=to, serving=self.running)
+                for lb in self.nodes_used:
+                    self.node(lb).cast("USER_EDGE", edge=to)
                 if self.xb_task is not None and self.xb_task["state"] == "copy":
                     self._xb_cancel()
                 if self.xb_task is None and self.running != to:
@@ -1247,6 +1278,11 @@ class Run:
                       "gpu0_idle_before_run": None if self.gpu0_before is None else all("error" not in v and v["others_mib"] < 1024 and v["util_pct"] <= 5 for v in self.gpu0_before.values()),
                       "switchovers_verified": (all(x is True for x in sw_ok) if sw_ok else None), "n_switchovers": len(self.xb_switches),
                       "final_edge_served": self.running == self.edges[-1], "stop_reason": self.stop_reason}
+        codecs = {lb: self.node(lb).hello.get("codecs") or {} for lb in self.nodes_used}
+        validation["codecs_ok"] = all(v.get("ffv1_roundtrip") is True and v.get("libx264") is True for v in codecs.values())
+        sv = [e for e in self.node_events if e["event"] == "xb_recompute_state_verified"]
+        if sv:
+            validation["recompute_state_verified"] = all(e.get("ok") in (True, "True") for e in sv)
         inputs = self.xb_input_accounting()
         if inputs is not None:
             validation["input_check"] = all(v is True for v in self.input_check.values())
@@ -1254,17 +1290,26 @@ class Run:
             validation["inputs_exact_at_switchovers"] = (all(sw.get("inputs_exact") is True for sw in inputs["switchovers"]) if inputs["switchovers"] else None)
         summary = {"run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
                    "path": self.edges, "hosts": hosts, "t0_wall": self.t0, "migration_chunk": a.migration_chunk,
-                   "xb_params": {"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window, "horizon": a.xb_horizon},
+                   "xb_params": {"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window, "horizon": a.xb_horizon,
+                                 "codec": a.xb_codec, "verify_state": bool(a.xb_verify_state)},
+                   "rtt_measured_lan": self.rtt, "codecs": codecs,
                    "moves": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in m.items()} for m in self.moves],
                    "tasks": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in t.items()} for t in self.xb_tasks],
                    "switchovers": [{**sw, "t": self.rel_t(sw["t"])} for sw in self.xb_switches], "inputs": inputs,
                    "validation": validation, "node_end": {lb: {k: v for k, v in e.items() if k not in ("network_csv", "baseline_record")} for lb, e in ends.items()},
                    "source_prep": {k: v for k, v in prep.items() if k != "manifest"}}
+        self.metric_csv.close()
+        try:
+            from xb_delivery import delivery_metrics
+
+            summary["delivery"] = delivery_metrics(summary, self.metrics, self.node_events)
+        except Exception as exc:  # noqa: BLE001
+            summary["delivery"] = {"error": repr(exc)}
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
         (self.dir / "config.json").write_text(json.dumps({"experiment": a.experiment, "policy": self.policy, "args": vars(a), "nodes": self.o.node_spec}, indent=1, default=str))
         (self.dir / "host_info.json").write_text(json.dumps({lb: {"hello": {k: v for k, v in self.node(lb).hello.items() if k != "kind"}, "clock_sync": self.node(lb).sync} for lb in self.nodes_used}, indent=1, default=str))
         self.log(f"{POLICY_LABEL[self.policy]}: {len(self.xb_switches)} switchovers, verified {validation['switchovers_verified']}, stop {self.stop_reason}")
-        self.metric_csv.close(); self.trace.close()
+        self.trace.close()
         return summary
 
     # ---------------- accounting
@@ -1799,6 +1844,8 @@ def main():
     ap.add_argument("--xb_min_shrink", type=float, default=0.10, help="XB pre-copy: non-convergence when a round shrinks by less than this")
     ap.add_argument("--xb_lag", type=int, default=1, help="XB recompute-full: switchover when the destination is within this many calls")
     ap.add_argument("--xb_window", type=int, default=3, help="XB recompute-win: replay window W")
+    ap.add_argument("--xb_verify_state", action="store_true", help="XB exactness gate: R-full compares the replayed state with the source's state digests at the stop boundary (timing of such runs is not used)")
+    ap.add_argument("--xb_grid", type=str, default="", help="XB calibration: settings run one after the other in this invocation, ';'-separated, each 'thr=16:rl=3' / 'lag=1:rl=6' / 'W=3' / 'codec=h264_crf23'")
     ap.add_argument("--xb_codec", type=str, default="ffv1", help="XB recompute: input-history codec (tools/eval/xb_codec.py; ffv1 = primary lossless, h264_crf23 / h264_crf28 = lossy sensitivity, raw = upper bound)")
     ap.add_argument("--xb_horizon", type=int, default=100, help="XB: calls generated at the final edge after its switchover before the run ends")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
@@ -1866,12 +1913,15 @@ def main():
                         if ppol:
                             assert path and len(path) == 2, "--prepos needs --path A,<dest>"
                             pp = {"policy": ppol, "probs": [float(x) for x in a.probs.split(",")], "L": a.lookahead, "b": a.budget, "dest": path[1], "tau": 7.5}
-                        if a.skip_done:
-                            prev = done_validly(a, run_tag(a, pol, a.bw, tm, rho, rep, path, pp) + (f"_rs={rs}" if rs else ""))
-                            if prev:
-                                print(f"[orch] skip (valid run exists): {prev}", flush=True); continue
-                        r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops, path=path, prepos=pp, recent_slots=rs)
-                        results.append(r.execute())
+                        for st in (xb_settings(a.xb_grid) if (pol in XB and a.xb_grid) else [None]):
+                            if st is not None:
+                                apply_xb_setting(a, st)
+                            if a.skip_done:
+                                prev = done_validly(a, run_tag(a, pol, a.bw, tm, rho, rep, path, pp) + (f"_rs={rs}" if rs else ""))
+                                if prev:
+                                    print(f"[orch] skip (valid run exists): {prev}", flush=True); continue
+                            r = Run(o, pol, a.bw, tm, rho, rep, hops=a.hops, path=path, prepos=pp, recent_slots=rs)
+                            results.append(r.execute())
             (EVAL_ROOT / a.experiment).mkdir(parents=True, exist_ok=True)
     finally:
         if not a.keep_nodes:

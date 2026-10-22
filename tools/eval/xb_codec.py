@@ -125,3 +125,53 @@ def covered(have: list[tuple[int, int]], lo: int, hi: int) -> bool:
         if pos >= hi:
             return True
     return pos >= hi
+
+
+# ---------------------------------------------------------------- estimated remote delivery bytes (nothing is transmitted)
+DELIVERY_CRFS = (23, 28)   # CRF 23 reported, CRF 28 sensitivity (preregistration section 2)
+
+
+class DeliveryEncoder:
+    """Encodes the output stream that a host serving a user at another edge would have to send toward that edge: H.264
+    (libx264, yuv420p, preset veryfast, tune zerolatency: no B-frames, no lookahead, one packet per frame) at each CRF.
+    A new stream (starting with a keyframe) begins whenever its key (ownership, user edge) changes. The encoded sizes are
+    an ESTIMATE of remote delivery bytes: the testbed does not transmit the output stream."""
+
+    def __init__(self, crfs=DELIVERY_CRFS, fps: int = 16):
+        self.crfs, self.fps = tuple(int(c) for c in crfs), fps
+        self.key = None
+        self.ctx = {}
+        self.n = 0
+
+    def _open(self, w: int, h: int):
+        import fractions
+
+        import av
+
+        self.ctx = {}
+        for crf in self.crfs:
+            cc = av.CodecContext.create("libx264", "w")
+            cc.width, cc.height, cc.pix_fmt = w, h, "yuv420p"
+            cc.time_base = fractions.Fraction(1, self.fps); cc.framerate = fractions.Fraction(self.fps, 1)
+            cc.options = {"crf": str(crf), "preset": "veryfast", "tune": "zerolatency"}
+            self.ctx[crf] = cc
+        self.n = 0
+
+    def push(self, key, frames: np.ndarray) -> dict:
+        """Encode one chunk's frames [n, H, W, 3] uint8; returns {crf: (bytes, keyframes)} and the encode time."""
+        import time as _t
+
+        import av
+
+        t0 = _t.perf_counter()
+        if key != self.key or not self.ctx:
+            self._open(frames.shape[2], frames.shape[1]); self.key = key
+        out = {crf: [0, 0] for crf in self.crfs}
+        for f in frames:
+            vf = av.VideoFrame.from_ndarray(np.ascontiguousarray(f), format="rgb24")
+            for crf, cc in self.ctx.items():
+                vf.pts = self.n
+                for p in cc.encode(vf):
+                    out[crf][0] += p.size; out[crf][1] += int(p.is_keyframe)
+            self.n += 1
+        return {"bytes": {crf: v[0] for crf, v in out.items()}, "keyframes": {crf: v[1] for crf, v in out.items()}, "enc_s": _t.perf_counter() - t0}
