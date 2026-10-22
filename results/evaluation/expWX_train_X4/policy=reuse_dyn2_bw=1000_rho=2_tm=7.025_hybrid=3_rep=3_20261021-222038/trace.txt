@@ -1,0 +1,18 @@
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_hybrid=3_rep=3_20261021-222038: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 250 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.44s move B->C
+        held   A: 100.0%, B:  12.4%, C:   0.0%, D:   0.0%
+        active A->C (361 left, 250 Mbps), B->C (51 left, 500 Mbps)
+        next   A->C 361 fragments; B->C 51 fragments
+[orch] t=  14.59s move C->D (final move)
+        held   A: 100.0%, B:  13.1%, C:  24.3%, D:   0.0%
+        active A->D (312 left, 250 Mbps), B->D (27 left, 250 Mbps), C->D (73 left, 250 Mbps)
+        next   A->D 312 fragments; B->D 27 fragments; C->D 73 fragments
+[orch] t= 248.40s run end
+        held   A: 100.0%, B:  13.1%, C:  25.2%, D: 100.0%
+        active -
+        next   stop reason: window_exhausted
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.09 s, Sink received 41.86 s, bound 42.34 s, continuity-ready 42.95 s, rejoin None s | traffic 1.38x, waste 0.08x, reused 604 MiB | PSNR after bind 30.8 dB | ingress peak 1007 Mbps
