@@ -3,7 +3,8 @@
 instead of ssh, which is not available between the testbed hosts. Run on elves-01.
 
     status                 agent reachability, repo commit and GPU 0 processes on every host
-    gpu_idle               exit 1 unless GPU 0 has no compute process on all four hosts and all repos are on one commit
+    gpu_idle [--hosts A,B] exit 1 unless GPU 0 has no compute process on the listed hosts (default: all four) and all four
+                           repos are on one commit (a job checks only the GPUs it uses, so XB on A / B and VC on D can share the testbed)
     pull                   git pull --ff-only on the hosts whose repo is behind (no other git operation)
     probe NAME SCRIPT      run a read-only bash probe on elves-02..04, write results/evaluation/osdi/d0/NAME/<host>.txt
     recover                copy back node_{B,C,D}/fragments.csv of restore_* runs; never overwrites a local file
@@ -59,9 +60,12 @@ def status(a):
 
 def gpu_idle(a):
     ags = agents(("A",) + REMOTE, a.agent_hosts)
+    check = [x for x in (getattr(a, "hosts", "") or "A,B,C,D").split(",") if x]
     bad, commits = [], set()
     for lb, ag in ags.items():
         commits.add(sh(ag, ["git", "rev-parse", "HEAD"])["stdout"].strip())
+        if lb not in check:
+            continue
         g = sh(ag, ["nvidia-smi", "-i", "0", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"])
         if g["rc"] != 0 or g["stdout"].strip():
             bad.append(f"{lb} {host_of(ag)} GPU 0: {g['stdout'].strip() or g['stderr'].strip()}")
@@ -69,7 +73,7 @@ def gpu_idle(a):
         bad.append("not all four agents reachable")
     if len(commits) != 1:
         bad.append(f"repos on different commits: {sorted(c[:7] for c in commits)}")
-    print("\n".join(bad) if bad else "GPU 0 idle on all four hosts; one commit")
+    print("\n".join(bad) if bad else f"GPU 0 idle on {','.join(check)}; one commit on all four hosts")
     sys.exit(1 if bad else 0)
 
 
@@ -133,7 +137,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--agent_hosts", default=None)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("status"); sub.add_parser("gpu_idle"); sub.add_parser("pull"); sub.add_parser("recover"); sub.add_parser("codecs")
+    sub.add_parser("status"); sub.add_parser("gpu_idle").add_argument("--hosts", default="", help="comma list of labels whose GPU 0 must be idle (default all four)"); sub.add_parser("pull"); sub.add_parser("recover"); sub.add_parser("codecs")
     p = sub.add_parser("probe"); p.add_argument("name"); p.add_argument("script")
     a = ap.parse_args()
     {"status": status, "gpu_idle": gpu_idle, "pull": pull, "probe": probe, "recover": recover, "codecs": codecs}[a.cmd](a)

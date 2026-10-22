@@ -105,11 +105,13 @@ class Ctx:
         self.failures = []
 
     # ---------------- GPU / loopback orchestrator invocations
-    def wait_idle(self, what):
+    def wait_idle(self, what, hosts: str = ""):
+        """GPU 0 idle on `hosts` (default all four; XB one-hop invocations pass "A,B" so a VC unit on D does not block
+        them) and all four repos on one commit. A preflight only: run validity rules are unchanged."""
         if self.dry:
             return
         t0 = time.time()
-        while subprocess.run([self.py, "tools/eval/d0_remote.py", "gpu_idle"], cwd=ROOT).returncode != 0:
+        while subprocess.run([self.py, "tools/eval/d0_remote.py", "gpu_idle"] + (["--hosts", hosts] if hosts else []), cwd=ROOT).returncode != 0:
             if time.time() - t0 > self.a.wait_s:
                 sys.exit(f"[wrn] GPU 0 not idle / commits differ after {self.a.wait_s} s; stopping before {what}")
             time.sleep(60)
@@ -162,7 +164,9 @@ class Ctx:
         if self.already_done(experiment, args):
             print(f"[wrn] skip {what}: every policy already has its valid runs", flush=True)
             return 0
-        self.wait_idle(what)
+        hops = int(args[args.index("--hops") + 1]) if "--hops" in args else 3
+        # XB invocations use only the labels of their path (one hop: A and B); every other experiment keeps the four-host check
+        self.wait_idle(what, ",".join("ABCD"[:hops + 1]) if any(x.startswith("--xb") for x in args) or ("--policies" in args and any(p in args[args.index("--policies") + 1] for p in ("precopy", "recompute", "split_wait"))) else "")
         cmd = [self.py, "tools/eval/mobility_orchestrate.py", "--experiment", experiment, "--skip_done", "--validity", "wrn", "--bw", self.bw] + args
         if self.dry:
             m = args[args.index("--migration_chunk") + 1] if "--migration_chunk" in args else "30"

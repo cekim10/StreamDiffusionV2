@@ -126,3 +126,38 @@ A failing G1 or G2 stops VC; the mismatch is reported.
 - DOVER only if D8 enables it.
 
 The exact commands are given with the VC-0 code.
+
+## 9. VC-0 status (2026-10-22) and deviations from this plan
+
+**Decisions applied (2026-10-22):**
+- VC runs on host D, with C as the spare (`run_vc.py --host`).
+- GPU-idle checks are scoped to the job's hosts. `d0_remote.py gpu_idle --hosts`; XB invocations in `run_wrn.py` check
+  only their path's hosts. Every other experiment keeps the four-host check, and no run-validity rule changed.
+- DOVER is excluded: no V6 code path, no weight download.
+- G1, G2 and G3 are implemented in `vc_check.py`.
+- WFS records its skipped input calls, its stall, and the input-to-output alignment after the resume.
+- V5 uses within-window aggregation (frames -> call -> window) with a preregistered moving block bootstrap
+  (`aggregate_vc.py`: block 5 calls, sensitivity 3 and 10, 10,000 resamples, seed 0).
+
+**Implemented:**
+- `vc_schedules.py` and `vc_schedules.json`: 28 conditions, every one checked against its source run.
+- `vc_emulate.py`, `vc_frames.py`, `vc_playback.py`, `vc_metrics.py`, `vc_check.py`, `aggregate_vc.py`, `run_vc.py`.
+- `test_vc.py`, run locally on the fake runtime and CPU: ALL PASS. It covers the schedules, dry emulation of seven
+  conditions on two inputs, G3, four G3 negative cases, the G1 / G2 comparison logic against the real runs' own logs,
+  the playback model, the metric self-test and the aggregation.
+- The real-model self-test (DINO, DINOv2, CLIP) and G1 / G2 / G3 on the GPU have **not run yet**; they run on host D
+  through `run_vc.py vc0`.
+
+**Deviations (for review before VC-1):**
+
+| id | plan / draft text | implemented | why |
+|---|---|---|---|
+| D-VC-1 | playback at 16 fps (draft 3 section 4.2) | both 16 fps and a rate matched to the measured delivery cadence (4 frames per post-bind chunk interval); the rate-matched table is primary in the report, and 16 fps stays in the json | the realized runs deliver one 4-frame chunk every ~0.60 s (about 6.7 fps). At 16 fps even REF stalls continuously (dry check: 224 stalls, 79 s), so the 16 fps model cannot separate conditions. **Decision needed:** adopt the rate-matched model in the draft |
+| D-VC-2 | V1 local median "over the 16 preceding calls (RD definition)" | the RD definition as coded: median of the **8 preceding frame transitions** (`rd_metrics.no_reference`) | the draft text misstates RD's definition; the code follows RD. **Decision needed:** correct the draft text |
+| D-VC-3 | V1 at a cold restart | COLD's event transition spans the skipped call (last frame of c - 1 to the first emitted frame at c + 1), flagged `across_gap` | RD's code drops transitions across a missing call, which would leave COLD without a V1 |
+| D-VC-4 | stall definition not specified beyond "frame not delivered" | a stall counts when the picture freezes for at least one display-frame interval; shorter lateness from cadence jitter is reported separately as total lateness | cadence differences of about 1 % between runs otherwise produce many microsecond "stalls" (dry check: 105 for COLD) |
+| D-VC-5 | timelines | COLD-L has no realized run: the W2 cold run's timeline is shifted to call 80, labelled "copied". WFS has no realized run: its timeline is derived (hold = the paired run's move-to-bind time, then the paired run's first-output latency and cadence), labelled "derived". Both are emulated conditions, not reproductions of real runs | no real COLD at call 80 or real Wait-for-Sink run exists; XB1's Wait-for-Sink runs, once made, allow a check |
+| D-VC-6 | VC-0 GPU set "G1 and G2, about 20 min" | dog OT-L (G1), COLD-1 (G2) and WFS-1 (G3 on a WFS stream), REF frames, and the real-model metric self-test; about 30-40 min | G3 needs a WFS stream to check its alignment rule; the self-test checks the model code before VC-1 |
+| D-VC-7 | WFS skipped input calls | the harness skips none: it generates every input call in order after the hold (a delay). The input chunks a real-time player that drops the backlog would skip (move call .. + ceil(hold / 0.25 s) - 1) are recorded. Outputs are paired with REF only on the same input chunk | as decided: never compare mismatched input calls |
+| D-VC-8 | audi-snow-trail OT-1 "the earlier valid one" | the later W2 run (20261019-135751); the earlier one is invalid under the W / R / N rules (NIC peak > 1.15 x cap) | consistent with the rule; noted because the bind call is 59, not 58 |
+| D-VC-9 | V5 preprocessing | DINO / DINOv2: the ImageNet evaluation transform (shorter side 256, center crop 224). CLIP: OpenAI's transform (shorter side 224, center crop 224) with the OpenAI normalization constants | stated for reproducibility |

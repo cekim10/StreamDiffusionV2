@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Experiment VC conditions from frozen runs (osdi/expVC/preregistration.md draft 3, section 3.3; implementation_plan.md
+section 3). Nothing here runs a model.
+
+Every condition: the calls at which operations happen (M1 resets, Sink binds, a cold restart), the horizon, the span
+of saved frames, the source run(s), and the delivery timeline used by the last-frame-hold playback model, labelled
+"realized" (the run's delivered-chunk times), "derived" (constructed from realized quantities, rule stated) or "copied"
+(another input's or schedule's times; counterfactual).
+
+    python tools/eval/vc_schedules.py            # -> results/evaluation/osdi/expVC/vc_schedules.json
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import statistics as st
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools/eval"))
+
+INPUTS = ("dog", "train", "butterfly-feeding-slow-motion", "audi-snow-trail")
+WX_SHORT = {"butterfly-feeding-slow-motion": "bfly", "audi-snow-trail": "audi", "train": "train"}
+PRE = 16          # saved calls before the first operation
+HORIZON = 100     # calls b .. b + 99 after the final bind
+K = 2             # Stream-Batch depth of the model (denoising steps); output at call c is input chunk c - (K - 1)
+EV = ROOT / "results/evaluation"
+
+
+def _valid_runs(pattern: str) -> list[Path]:
+    from wrn_validity import run_validity_wrn
+    out = []
+    for d in sorted(EV.glob(pattern)):
+        try:
+            s = json.load(open(d / "summary.json"))
+        except OSError:
+            continue
+        if run_validity_wrn(s, d, dry=False)[0]:
+            out.append(d)
+    return out
+
+
+def _first_valid(pattern: str) -> Path:
+    runs = _valid_runs(pattern)
+    if not runs:
+        raise SystemExit(f"no valid run matches {pattern}")
+    return runs[0]
+
+
+def _timeline(d: Path) -> dict:
+    """call -> delivery time (s, relative to the run's t0 = first move request) of every delivered chunk at or after t0."""
+    out = {}
+    for r in csv.DictReader(open(d / "metrics.csv", newline="")):
+        if r["missing"] in ("True", "true") or not r["t_out_rel"]:
+            continue
+        t = float(r["t_out_rel"])
+        if t >= 0:
+            out[int(r["call"])] = t
+    return out
+
+
+def _cadence(tl: dict, after_call: int) -> float:
+    calls = sorted(c for c in tl if c >= after_call)
+    dts = [tl[b] - tl[a] for a, b in zip(calls, calls[1:]) if b == a + 1]
+    return st.median(dts)
+
+
+def _rel(d: Path) -> str:
+    return str(d.relative_to(ROOT))
+
+
+def _cond(cid, inp, kind, resets, binds, end, label, sources, timeline, cold_call=None, counterfactual=False, extra=None):
+    first = min(resets + ([cold_call] if cold_call is not None else []))
+    c = {"id": cid, "input": inp, "kind": kind, "label": label, "resets": resets, "binds": binds, "cold_call": cold_call, "sink_source": "withheld",
+         "end": end, "frames_from": first - PRE, "frames_to": end, "sources": sources, "counterfactual": counterfactual, "timeline": timeline}
+    c.update(extra or {})
+    return c
+
+
+def build() -> dict:
+    out = {"rules": {"PRE": PRE, "HORIZON": HORIZON, "K": K, "timeline_t0": "first move request of the source run",
+                     "pre_move_timeline": "calls before the first move are placed at the run's median post-bind cadence, the last one at t = 0 (synthesized; no pre-move rows are logged)"},
+           "inputs": {}}
+    dog_rdx = _first_valid("expRDX_dog/policy=split_*_rep=1_*")
+    for inp in INPUTS:
+        conds = []
+        # OT-1: W2 single move, 1 Gbps
+        w2 = _first_valid(f"expW_W2_{inp}_s0/policy=reuse_dyn_*")
+        s = json.load(open(w2 / "summary.json"))
+        m1, b1 = int(s["moves"][0]["call"]), int(s["final"]["bind_call"])
+        tl1 = _timeline(w2); cad1 = _cadence(tl1, b1)
+        conds.append(_cond("OT-1", inp, "ot", [m1], [b1], b1 + HORIZON - 1, "OTTER single move 1 Gbps (W2 realized; policy reuse_dyn, one move from one source: no M3 behavior evaluated)",
+                           [_rel(w2)], {"kind": "realized", "t_by_call": tl1, "cadence_s": cad1, "bind_rel_s": s["final"]["sink_bind_rel_s"], "move_t": [0.0]}))
+        # OT-L: RD-X single move, 320 Mbps (train: dog's schedule, counterfactual)
+        rdx = _first_valid(f"expRDX_{inp}/policy=split_*_rep=1_*") if inp != "train" else dog_rdx
+        s = json.load(open(rdx / "summary.json"))
+        mL, bL = int(s["moves"][0]["call"]), int(s["final"]["bind_call"])
+        tlL = _timeline(rdx); cadL = _cadence(tlL, bL)
+        cf = inp == "train"
+        conds.append(_cond("OT-L", inp, "ot", [mL], [bL], bL + HORIZON - 1,
+                           ("counterfactual replay under a copied schedule (dog's RD-X run); not a realized train run" if cf else "OTTER single move 320 Mbps (RD-X realized; policy split)"),
+                           [_rel(rdx)], {"kind": "copied" if cf else "realized", "t_by_call": tlL, "cadence_s": cadL, "bind_rel_s": s["final"]["sink_bind_rel_s"], "move_t": [0.0]},
+                           counterfactual=cf))
+        # OT-R: M1 + M2 (split) repeated mobility, rho 2
+        rr = _first_valid(f"expWX_{WX_SHORT[inp]}_X3/policy=split_*_rep=1_*") if inp != "dog" else _first_valid("expM3E_S4/policy=split_*_rep=1_*")
+        s = json.load(open(rr / "summary.json"))
+        mR = [int(m["call"]) for m in s["moves"]]; bR = int(s["final"]["bind_call"])
+        tlR = _timeline(rr)
+        conds.append(_cond("OT-R", inp, "ot", mR, [bR], bR + HORIZON - 1, "M1 + M2 (policy split) repeated mobility A->B->C->D, rho 2; not M3-v2",
+                           [_rel(rr)], {"kind": "realized", "t_by_call": tlR, "cadence_s": _cadence(tlR, bR), "bind_rel_s": s["final"]["sink_bind_rel_s"],
+                                        "move_t": [float(m["t_req"]) for m in s["moves"]]}))
+        # WFS-1 / WFS-L: reset and bind before the same call (RD d = 0); hold = the paired run's move -> bind time
+        for ot in (conds[0], conds[1]):
+            m, end = ot["resets"][0], ot["end"]
+            hold = float(ot["timeline"]["bind_rel_s"])
+            ttfo = ot["timeline"]["t_by_call"][m]          # the run's first output after the move (M1 resume latency incl. the first call)
+            cad = ot["timeline"]["cadence_s"]
+            tl = {c: hold + ttfo + (c - m) * cad for c in range(m, end + 1)}
+            skipped_live = list(range(m, m + int(hold // 0.25) + (1 if hold % 0.25 else 0)))   # input chunks a real-time camera produces during the hold
+            conds.append(_cond(f"WFS-{ot['id'][-1]}", inp, "wfs", [m], [m], end,
+                               f"Wait-for-Sink at the {ot['id']} move: Sink bound before generation resumes; recent KV / VAE rebuilt (M1); last-frame hold {hold:.2f} s",
+                               ot["sources"], {"kind": "derived", "rule": "t(c) = hold + first-output latency of the paired run + (c - move) x its post-bind cadence",
+                                               "t_by_call": tl, "cadence_s": cad, "hold_s": hold, "move_t": [0.0]},
+                               counterfactual=ot["counterfactual"],
+                               extra={"paired_with": ot["id"], "stall_s": hold,
+                                      "skipped_input_calls_harness": [],
+                                      "skipped_input_calls_live_realtime": skipped_live,
+                                      "note": "the harness delays (generates every input call in order after the hold); a real-time player that drops the backlog would skip the listed input chunks (hold / 0.25 s of video)"}))
+        # COLD-1 / COLD-L: cold restart at the same move call (W2 cold realized timeline; COLD-L copied, shifted)
+        cold = _first_valid(f"expW_W2_{inp}_s0/policy=cold_*")
+        s = json.load(open(cold / "summary.json"))
+        mc = int(s["moves"][0]["call"]); tlc = _timeline(cold); cadc = _cadence(tlc, mc + K)
+        for ot in (conds[0], conds[1]):
+            m, end = ot["resets"][0], ot["end"]
+            if m == mc:
+                tl, kind = {c: t for c, t in tlc.items() if c <= end}, "realized"
+                last = max(tl); tl.update({c: tl[last] + (c - last) * cadc for c in range(last + 1, end + 1)})
+            else:
+                tl, kind = {c - mc + m: t for c, t in tlc.items() if c - mc + m <= end}, "copied"
+                last = max(tl); tl.update({c: tl[last] + (c - last) * cadc for c in range(last + 1, end + 1)})
+            conds.append(_cond(f"COLD-{ot['id'][-1]}", inp, "cold", [], [], end,
+                               f"cold restart at the {ot['id']} move ({'W2 cold realized timeline' if kind == 'realized' else 'timeline copied from the W2 cold run, shifted to this move call'})",
+                               [_rel(cold)], {"kind": kind, "t_by_call": tl, "cadence_s": cadc, "hold_s": tlc.get(mc + K - 1), "move_t": [0.0],
+                                              "extended_beyond_run_at_cadence": True},
+                               cold_call=m, counterfactual=kind == "copied" or ot["counterfactual"],
+                               extra={"paired_with": ot["id"], "no_output_calls": [m], "emit_call": m + K - 1}))
+        end_all = max(c["end"] for c in conds)
+        cad_ref = conds[0]["timeline"]["cadence_s"]
+        out["inputs"][inp] = {"N": end_all + 1, "ref": {"frames_from": min(c["frames_from"] for c in conds), "frames_to": end_all,
+                                                        "timeline": {"kind": "derived", "rule": "uninterrupted: one chunk per OT-1 post-bind cadence", "cadence_s": cad_ref}},
+                              "conditions": conds}
+    return out
+
+
+def check(out: dict) -> list[str]:
+    """Every extracted schedule against its source run's recorded moves and binds (as test_rd.py does for RD Phase 0)."""
+    bad = []
+    for inp, u in out["inputs"].items():
+        for c in u["conditions"]:
+            s = json.load(open(ROOT / c["sources"][0] / "summary.json"))
+            moves = [int(m["call"]) for m in s["moves"]]
+            if c["kind"] == "ot":
+                if c["resets"] != moves or c["binds"] != [int(s["final"]["bind_call"])]:
+                    bad.append(f"{inp} {c['id']}: {c['resets']} / {c['binds']} vs run moves {moves} bind {s['final']['bind_call']}")
+            elif c["kind"] == "wfs":
+                if c["resets"] != c["binds"] or c["resets"][0] != moves[0]:
+                    bad.append(f"{inp} {c['id']}: WFS reset {c['resets']} bind {c['binds']} vs move {moves}")
+            elif c["kind"] == "cold" and c["cold_call"] not in (34, 80):
+                bad.append(f"{inp} {c['id']}: cold call {c['cold_call']}")
+            if c["frames_from"] < 0 or c["end"] >= u["N"]:
+                bad.append(f"{inp} {c['id']}: span outside the baseline")
+    return bad
+
+
+def main():
+    out = build()
+    bad = check(out)
+    p = ROOT / "results/evaluation/osdi/expVC/vc_schedules.json"
+    p.write_text(json.dumps(out, indent=1))
+    for inp, u in out["inputs"].items():
+        print(f"{inp}: N {u['N']}")
+        for c in u["conditions"]:
+            tl = c["timeline"]
+            print(f"  {c['id']:7s} {c['kind']:4s} resets {c['resets']} binds {c['binds']} cold {c['cold_call']} end {c['end']} frames {c['frames_from']}..{c['frames_to']} "
+                  f"timeline {tl['kind']} cadence {tl['cadence_s']:.3f} s{' hold %.2f s' % tl['hold_s'] if tl.get('hold_s') else ''}{' COUNTERFACTUAL' if c['counterfactual'] else ''}")
+    print("schedule check:", "OK" if not bad else bad)
+    sys.exit(1 if bad else 0)
+
+
+if __name__ == "__main__":
+    main()
