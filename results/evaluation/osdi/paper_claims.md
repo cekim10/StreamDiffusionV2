@@ -89,7 +89,9 @@ conditions; without the Sink the stream never returns.** - *Main (narrowed 2026-
 - Evidence: R-H1 SUPPORTED in 8 / 10 cells, R-H2 in 9 / 10 (`expR_c0/`, `expR_c3/`): M1 + M2 B_source 1.008-1.039
   Sinks vs M1 only 1.068-3.000; discarded 0.010-0.061 vs up to 2.000; ExpD G3 rho 2 (1.03 vs 2.01 source, 0.049 vs
   1.014 discarded) and rho 4 SUPPORTED (`expD_B/`); G8 revisit: bind-ready 8.38-8.72 vs 15.41 s (`expD_G/`).
-- Holds: rho 1-8 at 1 Gbps on dog; one Sink snapshot per restoration (stable-version assumption, M2-4).
+- Holds: rho 1-8 at 1 Gbps on dog; one Sink snapshot per restoration (stable-version assumption, M2-4). **WX
+  (2026-10-21): R-H1 / R-H2 / R-H3(a) also supported at rho 1, 2, 4 on butterfly-feeding-slow-motion, audi-snow-trail
+  and train (4 / 4 tested inputs, seed 0; reduction 93.0-99.6 %, discarded <= 0.058 Sink).**
 - Counterexamples / NE: R rho 0.5 c = 0 NOT EVALUABLE (version event in 9 / 9 runs); R-H1 rho 8 c = 3 NOT EVALUABLE.
 - Does NOT establish: lower aggregate network traffic (every owner still receives one full Sink); behaviour on other
   workloads (R is dog only).
@@ -162,9 +164,11 @@ alternative provider exists.** - *Main, with its stated limitation*
   43.1 vs 57.2 s (M1 only); holder bottleneck 20.7 s vs 52.1 s (at moves) and 78.5 s (M1 + M2) with 2 re-plans; 0
   re-plans and no harm under ingress / source bottlenecks and without change; TTFO and GPU service time unchanged.
   M3-v2 is 5.2 s slower than M1 only in the holder-bottleneck case (M1 only avoids the holder at 2.0 Sinks of source
-  traffic). Dog only, rho 2.
-- Does NOT establish: performance under realistic, continuously varying traces (ExpT paused); behaviour on other inputs
-  (WX pending); four concurrent M3-v2 GPU sessions (M3E S1 used network-level M3-v1 competitors).
+  traffic). rho 2. **WX (2026-10-21): H1-H4, H6, H7 supported on all four tested inputs** (dog, butterfly, audi-snow-trail,
+  train; seed 0), with 0 re-plans wherever re-planning cannot help and 2 (one probe) under the holder bottleneck.
+- Does NOT establish: performance under realistic, continuously varying traces (ExpT paused); inputs, seeds or models
+  beyond the four tested inputs, seed 0 and StreamDiffusionV2 1.3B; four concurrent M3-v2 GPU sessions (M3E S1 / WX X4
+  used network-level M3-v1 competitors).
 
 **M3-3. The frozen M3-v1 rule mis-models shared ingress and oscillates.** - *Limitation (motivates v2; report)*
 - Evidence: N-H1 NOT SUPPORTED cell 7 (1 false-positive re-plan per rep, +0.22 Sink), N-H3 NOT SUPPORTED cells 8 (+3.5 s)
