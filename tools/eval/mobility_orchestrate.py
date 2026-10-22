@@ -61,14 +61,22 @@ from restore_planner import maxmin as maxmin_caps  # noqa: E402
 
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
-FRESH = ("split_va", "restart_fresh")   # Version-aware Continuity Wavefront v0 (expM2/vacw_v0_design.md): fresh snapshots by bound owners, hash reuse
+FRESH = ("split_va", "restart_fresh")
+XB = ("precopy_full", "precopy_sink", "recompute_full", "recompute_win")   # osdi/expXB: re-implemented external baselines
+FRAME_BYTES = 3 * 480 * 832   # one uint8 camera frame (the recompute baselines transfer raw input history)
+CHUNK_FRAMES, FIRST_FRAMES = 4, 5   # Version-aware Continuity Wavefront v0 (expM2/vacw_v0_design.md): fresh snapshots by bound owners, hash reuse
 POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct",
                 "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)", "reuse_dyn2": "OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware)",
                 "full": "Full migration (stop, transfer all state, resume)", "cold": "Cold restart (fresh caches from the prompt)",
                 "split_va": "Version-aware Continuity Wavefront v0 (fresh snapshots; holders forward hash-valid fragments; capturing owner sends the rest)",
-                "restart_fresh": "Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole)"}
+                "restart_fresh": "Restart with fresh snapshots (M1 only; the capturing owner sends S_k whole)",
+                "split_wait": "Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound)",
+                "precopy_full": "Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover)",
+                "precopy_sink": "Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover)",
+                "recompute_full": "ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up)",
+                "recompute_win": "ServerlessLLM-style approximate recomputation of the last W chunks"}
 AWARE = ("reuse_aware_in", "reuse_dyn", "reuse_dyn2")
-EXEC_MODE = {"full": "full", "cold": "cold"}   # every other policy: "fast" (M1)
+EXEC_MODE = {"full": "full", "cold": "cold", **{p: "xb" for p in XB}}   # every other policy: "fast" (M1)
 REJOIN_DB = 35.0
 
 
@@ -172,6 +180,12 @@ def run_tag(a, policy, bw_mbps, tm, rho, rep, path, prepos) -> str:
     tags = ("" if not path else "_path=" + "".join(path)) + ("" if not prepos else f"_pp={prepos['policy']}_L={prepos['L']:g}_b={prepos['b']:g}") \
         + ("" if not a.cap_events else "_ev=" + a.cap_events.replace(":", "").replace(";", "+").replace("=", "").replace(">", "ge")) \
         + ("_colddest" if a.cold_dest else "") + (f"_hybrid={a.hybrid_net}" if a.hybrid_net else "")
+    if policy in ("precopy_full", "precopy_sink"):
+        tags += f"_thr={a.xb_threshold_mib:g}_rl={a.xb_round_limit}"
+    elif policy == "recompute_full":
+        tags += f"_lag={a.xb_lag}_rl={a.xb_round_limit}"
+    elif policy == "recompute_win":
+        tags += f"_W={a.xb_window}"
     return f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}"
 
 
@@ -183,7 +197,10 @@ def done_validly(a, tag: str) -> str | None:
     for d in dirs:
         try:
             s = json.load(open(d / "summary.json"))
-            if a.validity == "wrn":
+            if s.get("policy") in XB:
+                from xb_validity import run_validity_xb
+                ok = run_validity_xb(s, d, dry=a.dry_run)[0]
+            elif a.validity == "wrn":
                 from wrn_validity import run_validity_wrn
                 ok = run_validity_wrn(s, d, dry=a.dry_run)[0]
             else:
@@ -461,7 +478,7 @@ class Run:
                             decision.append(f"{x}->{succ} pipelined ({len(todo)} held now, more as they arrive)")
                     elif existing["active"]:
                         self.add_to_flow(existing, todo, complete)
-        elif pol in ("split", "split_va"):
+        elif pol in ("split", "split_va", "split_wait"):
             if reason == "start" and not self.pp and owner == "B":   # Phase 1 path, unchanged
                 self.start_flow("A", "B", sorted(n_all), True, "source -> first owner")
                 decision.append("A->B all fragments")
@@ -788,7 +805,7 @@ class Run:
             mv = self.full_handoff(frm, to, i, t_req)
         else:
             r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode=self.mode, recent_slots=self.recent_slots,
-                                    fresh=self.fresh, frag_bytes=self.a.frag_bytes, snapshot_k=len(self.snapshots), timeout=180)
+                                    fresh=self.fresh, frag_bytes=self.a.frag_bytes, snapshot_k=len(self.snapshots), wait_sink=self.policy == "split_wait", timeout=180)
             mv = {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": self.node(frm).to_orch(r["t_stop"]), "t_fg_sent": self.node(frm).to_orch(r["t_fg_sent"]),
                   "call": r["call"], "fg_bytes": r["fg_bytes"], "mode": self.mode, "was_bound": r.get("was_bound"), "fresh": bool(r.get("fresh_manifest"))}
             self.running = None
@@ -886,6 +903,8 @@ class Run:
                 "state_from": holder, "redirect": True, "xfer": xid}
 
     def execute(self):
+        if self.mode == "xb":
+            return self.execute_xb()
         o, a = self.o, self.a
         policy = self.policy
         self.log(f"=== run {self.run_id}: {POLICY_LABEL[policy]}, bw {self.bw or 'native'} Mbps, T_m {self.tm if self.tm < 1e8 else 'inf'} s, rho {self.rho}, path {'->'.join(self.edges)} ===")
@@ -1014,6 +1033,189 @@ class Run:
         summary = self.finish(prep, ends, final_move_t)
         if cold:
             self.o.stop_node(cold, self.cold_info["pid"])   # a fresh destination process for every cold-destination run
+        return summary
+
+    # ---------------- XB external baselines (osdi/expXB/preregistration.md)
+    def _xb_rate(self, src, dst):
+        return min(self.caps[("out", src)], self.caps[("in", dst)]) if self.caps else 0.0
+
+    def _xb_src_call(self, src):
+        """Next call the generating owner `src` will run (from its latest METRIC)."""
+        rows = [m for m in self.metrics if m["owner"] == src]
+        return (rows[-1]["call"] + 1) if rows else self.a.migration_chunk
+
+    def _xb_start(self, target):
+        src = self.running
+        if src == target or src is None:
+            return
+        self.nxfer += 1
+        task = {"id": f"x{self.nxfer}", "kind": self.policy, "src": src, "dst": target, "t_start": time.time(), "state": "copy", "rounds": 0, "t_end": None, "outcome": None}
+        nd = self.o.node_spec[target]
+        rate = self._xb_rate(src, target)
+        if self.policy.startswith("precopy"):
+            self.node(target).call("XB_PREPARE", task=task["id"], provision=False)
+            self.node(src).call("PRECOPY_START", task=task["id"], to=target, to_host=nd["host"], to_port=nd["data"], variant=self.policy.split("_")[1],
+                                frag_bytes=self.a.frag_bytes, threshold_bytes=int(self.a.xb_threshold_mib * MB), round_limit=self.a.xb_round_limit,
+                                min_shrink=self.a.xb_min_shrink, rate_bps=rate)
+        else:
+            variant = self.policy.split("_")[1]
+            c = self._xb_src_call(src)
+            need = (FIRST_FRAMES + CHUNK_FRAMES * c) * FRAME_BYTES if variant == "full" else (FIRST_FRAMES + CHUNK_FRAMES * max(0, self.a.xb_window - 1)) * FRAME_BYTES
+            task.update({"target": c, "input_bytes": need, "rate": rate})
+            self.node(target).call("RECOMPUTE_START", task=task["id"], variant=variant, W=self.a.xb_window, target=c, need_bytes=need if variant == "full" else 0)
+            self.node(src).cast("XB_SEND_INPUTS", task=task["id"], to_host=nd["host"], to_port=nd["data"], nbytes=need, rate_bps=rate)
+        self.xb_task = task; self.xb_tasks.append(task)
+        self.ev.log("xb_task_start", task["t_start"], **{k: v for k, v in task.items() if k not in ("t_start",)})
+
+    def _xb_cancel(self):
+        t = self.xb_task
+        if t is None or t["state"] != "copy":
+            return False
+        if t["kind"].startswith("precopy"):
+            r = self.node(t["src"]).call("PRECOPY_CANCEL", task=t["id"], timeout=900)
+            if r.get("switched"):
+                t["state"] = "switching"; return False   # the atomic switchover had already begun: let it complete
+            self.node(t["dst"]).call("XB_PREPARE", task="none", provision=False)
+        else:
+            self.node(t["dst"]).call("RECOMPUTE_CANCEL", task=t["id"])
+        t["state"] = "cancelled"; t["outcome"] = "cancelled"; t["t_end"] = time.time()
+        self.ev.log("xb_task_cancel", task=t["id"], src=t["src"], dst=t["dst"])
+        self.xb_task = None
+        return True
+
+    def _xb_step(self):
+        """Advance the current task from node events: rounds, finish decisions (recompute), switchovers."""
+        t = self.xb_task
+        if t is None:
+            return
+        evs = [e for e in self.node_events[self.xb_seen:]]
+        self.xb_seen = len(self.node_events)
+        for e in evs:
+            if e.get("task") not in (None, t["id"]) and e["event"].startswith("xb_"):
+                continue
+            if e["event"] == "xb_precopy_round" and e.get("task") == t["id"]:
+                t["rounds"] += 1
+            elif e["event"] == "xb_precopy_switch" and e.get("task") == t["id"]:
+                t["state"] = "switching"; t["switch"] = {k: e.get(k) for k in ("call", "final_bytes", "reason", "rounds")}
+            elif e["event"] == "xb_switch_verified" and e.get("task") == t["id"]:
+                t["verified"] = e.get("ok"); t["components_ok"] = e.get("components_ok")
+            elif e["event"] == "xb_recompute_round" and e.get("task") == t["id"] and t["state"] == "copy":
+                t["rounds"] += 1
+                c = self._xb_src_call(t["src"])
+                lag = c - e["dest_call"]
+                if lag <= self.a.xb_lag or t["rounds"] >= self.a.xb_round_limit:
+                    self._xb_recompute_finish(t, reason="lag" if lag <= self.a.xb_lag else "round_limit")
+                else:
+                    extra = (c - t["target"]) * CHUNK_FRAMES * FRAME_BYTES
+                    nd = self.o.node_spec[t["dst"]]
+                    self.node(t["src"]).cast("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], nbytes=extra, rate_bps=t["rate"])
+                    t["input_bytes"] += extra; t["target"] = c
+                    self.node(t["dst"]).call("RECOMPUTE_TARGET", target=c)
+            elif e["event"] == "xb_inputs_received" and e.get("task") == t["id"] and t["kind"] == "recompute_win" and t["state"] == "copy":
+                self._xb_recompute_finish(t, reason="inputs")
+            elif e["event"] == "resume" and e["node"] == t["dst"] and t["state"] in ("copy", "switching", "finishing"):
+                t["state"] = "done"; t["outcome"] = "switched"; t["t_end"] = e["t"]
+                self.running = t["dst"]; self.xb_switches.append({"task": t["id"], "dst": t["dst"], "t": e["t"], "call": e.get("call"), "mode": e.get("mode")})
+                self.ev.log("xb_task_done", task=t["id"], dst=t["dst"], call=e.get("call"))
+                self.xb_task = None
+                if self.edges[self.user_idx] != self.running:
+                    self._xb_start(self.edges[self.user_idx])
+                return
+
+    def _xb_recompute_finish(self, t, reason):
+        r = self.node(t["src"]).call("EXEC_STOP", timeout=120)   # the source stops at its chunk boundary
+        c = int(r["call"])
+        t["state"] = "finishing"; t["stop_call"] = c; t["finish_reason"] = reason
+        if t["kind"] == "recompute_full" and c > t["target"]:
+            extra = (c - t["target"]) * CHUNK_FRAMES * FRAME_BYTES
+            nd = self.o.node_spec[t["dst"]]
+            self.node(t["src"]).call("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], nbytes=extra, rate_bps=t["rate"], timeout=300)
+            t["input_bytes"] += extra
+        self.node(t["dst"]).call("RECOMPUTE_FINISH", call=c, src=t["src"])
+        self.ev.log("xb_recompute_finish", task=t["id"], call=c, reason=reason)
+
+    def execute_xb(self):
+        """Pre-copy / recompute baselines: the source keeps generating and serving after the trigger; the user moves on the
+        same schedule as every other policy; the method's transfer targets the user's current edge (restarted on a move,
+        never reused); an owner change happens only at a completed switchover."""
+        o, a = self.o, self.a
+        self.gpu0_before = o.gpu0_state(self.nodes_used)
+        for lb in self.nodes_used:
+            self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=self.run_id, t0=None)
+        prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
+        self.manifest = prep["manifest"]
+        for lb in self.nodes_used[1:]:
+            self.node(lb).call("XB_PREPARE", task="none", provision=True, timeout=600)   # warm destinations (untimed)
+        self.drain(0.5)
+        self.xb_task, self.xb_tasks, self.xb_switches, self.xb_seen = None, [], [], 0
+        self.t0 = time.time(); self.ev.set_ref(self.t0)
+        self.ev.log("migration_start", self.t0, policy=self.policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, path=self.edges,
+                    xb={"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window})
+        self.node("A").call("EXEC_START")
+        self.running = "A"; self.user_idx = 1
+        self.moves.append({"i": 1, "from": "A", "to": self.edges[1], "t_req": self.t0, "t_stop": None, "t_fg_sent": None, "call": a.migration_chunk, "fg_bytes": 0, "mode": "xb"})
+        self._xb_start(self.edges[1])
+        n_moves = len(self.edges) - 2
+        next_move = 1
+        deadline = self.t0 + a.max_run_s
+        final_resume_call = None
+        while True:
+            self.drain(0.05)
+            self._xb_step()
+            now = time.time()
+            if next_move <= n_moves and now >= self.t0 + next_move * self.tm:
+                self.user_idx = next_move + 1
+                to = self.edges[self.user_idx]
+                self.moves.append({"i": self.user_idx, "from": self.edges[next_move], "to": to, "t_req": now, "t_stop": None, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "xb"})
+                self.ev.log("move", now, to=to, serving=self.running)
+                if self.xb_task is not None and self.xb_task["state"] == "copy":
+                    self._xb_cancel()
+                if self.xb_task is None and self.running != to:
+                    self._xb_start(to)
+                next_move += 1
+            fin = self.edges[-1]
+            if next_move > n_moves and self.running == fin:
+                if final_resume_call is None:
+                    final_resume_call = next((e.get("call") for e in reversed(self.node_events) if e["node"] == fin and e["event"] == "resume"), None)
+                if final_resume_call is not None and any(m["owner"] == fin and m["call"] >= final_resume_call + a.xb_horizon - 1 for m in self.metrics[-8:]):
+                    self.stop_reason = "horizon"; break
+            if now >= deadline:
+                self.stop_reason = "deadline"; break
+            if any(e["event"] == "window_exhausted" for e in self.node_events):
+                self.stop_reason = "window_exhausted"; break
+        self.t_loop_end = time.time()
+        if self.xb_task is not None and self.xb_task["state"] == "copy":
+            self._xb_cancel()
+        if self.running:
+            self.node(self.running).call("EXEC_STOP")
+        self.drain(1.0)
+        ends = {lb: self.node(lb).call("RUN_END", timeout=300) for lb in self.nodes_used}
+        self.drain(0.5)
+        for lb, e in ends.items():
+            if e.get("network_csv"):
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                (self.dir / f"node_{lb}" / "network.csv").write_text(e["network_csv"])
+        hosts = {lb: self.node(lb).hello.get("host") for lb in self.nodes_used}
+        sw_ok = [e.get("ok") for e in self.node_events if e["event"] == "xb_switch_verified"]
+        validation = {"four_hosts_distinct": len(set(hosts.values())) == len(self.nodes_used),
+                      "nodes_same_commit": len({self.node(lb).hello.get("commit") for lb in self.nodes_used} | {git_commit().split()[0]}) == 1,
+                      "gpu0_before_run": self.gpu0_before,
+                      "gpu0_idle_before_run": None if self.gpu0_before is None else all("error" not in v and v["others_mib"] < 1024 and v["util_pct"] <= 5 for v in self.gpu0_before.values()),
+                      "switchovers_verified": (all(x is True for x in sw_ok) if sw_ok else None), "n_switchovers": len(self.xb_switches),
+                      "final_edge_served": self.running == self.edges[-1], "stop_reason": self.stop_reason}
+        summary = {"run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
+                   "path": self.edges, "hosts": hosts, "t0_wall": self.t0, "migration_chunk": a.migration_chunk,
+                   "xb_params": {"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window, "horizon": a.xb_horizon},
+                   "moves": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in m.items()} for m in self.moves],
+                   "tasks": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in t.items()} for t in self.xb_tasks],
+                   "switchovers": [{**sw, "t": self.rel_t(sw["t"])} for sw in self.xb_switches],
+                   "validation": validation, "node_end": {lb: {k: v for k, v in e.items() if k not in ("network_csv", "baseline_record")} for lb, e in ends.items()},
+                   "source_prep": {k: v for k, v in prep.items() if k != "manifest"}}
+        (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
+        (self.dir / "config.json").write_text(json.dumps({"experiment": a.experiment, "policy": self.policy, "args": vars(a), "nodes": self.o.node_spec}, indent=1, default=str))
+        (self.dir / "host_info.json").write_text(json.dumps({lb: {"hello": {k: v for k, v in self.node(lb).hello.items() if k != "kind"}, "clock_sync": self.node(lb).sync} for lb in self.nodes_used}, indent=1, default=str))
+        self.log(f"{POLICY_LABEL[self.policy]}: {len(self.xb_switches)} switchovers, verified {validation['switchovers_verified']}, stop {self.stop_reason}")
+        self.metric_csv.close(); self.trace.close()
         return summary
 
     # ---------------- accounting
@@ -1543,6 +1745,12 @@ def main():
     ap.add_argument("--dyn_warmup", type=float, default=2.0); ap.add_argument("--dyn_eps", type=float, default=2.0)
     ap.add_argument("--dyn_rel", type=float, default=0.10); ap.add_argument("--dyn_ctrl", type=float, default=0.3)
     ap.add_argument("--recent_slots", type=str, default="", help="Experiment A: comma list of recent ring slots sent with the fast path per run (0 = frozen M1 fast path)")
+    ap.add_argument("--xb_threshold_mib", type=float, default=64.0, help="XB pre-copy: switchover when a round's dirty set <= this")
+    ap.add_argument("--xb_round_limit", type=int, default=6, help="XB pre-copy / recompute-full: round limit")
+    ap.add_argument("--xb_min_shrink", type=float, default=0.10, help="XB pre-copy: non-convergence when a round shrinks by less than this")
+    ap.add_argument("--xb_lag", type=int, default=1, help="XB recompute-full: switchover when the destination is within this many calls")
+    ap.add_argument("--xb_window", type=int, default=3, help="XB recompute-win: replay window W")
+    ap.add_argument("--xb_horizon", type=int, default=100, help="XB: calls generated at the final edge after its switchover before the run ends")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
     ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")
     ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")

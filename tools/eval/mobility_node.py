@@ -583,7 +583,8 @@ class Node:
                     "owner": False, "stop_owner": False, "gen_thread": None, "call": None, "bound_call": None, "rejoin_call": None, "first_out_t": None,
                     "sink_unpacked": False, "bind_requested": False, "pending_handoff": None,
                     "full_pack": None, "full_xfer": None, "dropped_flows": set(), "pending_cold": None, "n_owned": 0, "epoch": 0,
-                    "last_fp": None, "bind_at": None, "promotions": [], "snapshots": [], "versions": set(), "await_manifest": False, "unpacked_version": None}
+                    "last_fp": None, "bind_at": None, "promotions": [], "snapshots": [], "versions": set(), "await_manifest": False, "unpacked_version": None,
+                    "xb": None, "xb_snap_req": None, "xb_store": None, "xb_rc": None, "wait_sink": False}
         self.flows = {}
         self.rt.reset_peak()   # G9: peak memory_allocated / reserved over this run
         return {}
@@ -726,7 +727,8 @@ class Node:
             hdr, bufs = self.rt.pack(snap, comp, recent_n=n_rs) if comp == "recent_n" else self.rt.pack(snap, comp)
             send_msg(conn, "FG", {"from": self.label, "run_id": r["id"], "session_id": r["session_id"], **hdr}, bufs, None)
             nbytes += hdr["nbytes"]
-        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode, "recent_slots": n_rs, "fresh_pending": fresh}, b"", None)
+        send_msg(conn, "GO", {"from": self.label, "run_id": r["id"], "call": r["call"], "t_go": time.time(), "mode": mode, "recent_slots": n_rs, "fresh_pending": fresh,
+                              "wait_sink": bool(h.get("wait_sink"))}, b"", None)
         t_sent = time.time()
         conn.close()
         out = {}
@@ -888,6 +890,12 @@ class Node:
                 fl["cancel"] = True; fl["cv"].notify_all()
         if r["full_xfer"] is not None and not r["full_xfer"]["done"]:
             self.cmd_full_cancel({})
+        if r.get("xb") is not None and not r["xb"]["done"]:
+            r["xb"]["cancel"] = True
+        if r.get("xb_rc") is not None:
+            r["xb_rc"]["cancel"] = True
+            with r["xb_rc"]["cv"]:
+                r["xb_rc"]["cv"].notify_all()
         r["full_pack"] = None
         r["sampler"].finish(); r["metrics"].close(); r["frag_log"].close()
         net = (r["dir"] / "network.csv").read_text() if (r["dir"] / "network.csv").exists() else ""
@@ -943,6 +951,285 @@ class Node:
             pass
         self.event("flow_end", flow=fl["id"], dst=fl["dst"], cancelled=fl["cancel"], n_sent=len(fl["sent"]), bytes=fl["bytes"])
 
+    # ------------------------------------------------------------------ XB external baselines (osdi/expXB/preregistration.md)
+    # Pre-copy (Llumnix-style): the source keeps generating and serving; a copier sends the state in rounds (fragments whose
+    # content hash changed since last sent) and switches over atomically at a chunk boundary. Recompute
+    # (ServerlessLLM-style): the destination re-runs the session from inputs while the source serves. None of this touches
+    # OTTER's M1 / M2 / M3 paths.
+    def _xb_pack(self, snap: dict, comp: str):
+        header, bufs = self.rt.pack(snap, comp)
+        buf = bytearray(header["nbytes"]); mv = memoryview(buf)
+        for t, b in zip(header["tensors"], bufs):
+            mv[t["offset"]:t["offset"] + t["nbytes"]] = memoryview(b).cast("B")
+        return header, buf
+
+    def _xb_snapshot(self) -> tuple[int, dict]:
+        """Consistent state at the next chunk boundary of the generating owner (or now, if it is not generating)."""
+        r = self.run
+        if r["gen_thread"] is None or not r["gen_thread"].is_alive():
+            return r["call"], self.rt.serialize_live()
+        ev = threading.Event(); r["xb_snap_req"] = ev
+        while not ev.wait(0.05):
+            if r["gen_thread"] is None or not r["gen_thread"].is_alive():
+                r["xb_snap_req"] = None
+                return r["call"], self.rt.serialize_live()
+        c, snap = r.pop("xb_snap")
+        return c, snap
+
+    def _xb_send_dirty(self, task: dict, conn, snap: dict, comps, whole=()) -> tuple[int, dict, dict]:
+        """Send the fragments of `comps` whose hash differs from what the destination holds (all of `whole`).
+        Returns (bytes sent, headers, component digests)."""
+        fb = task["frag_bytes"]; sent = 0; headers, digests = {}, {}
+        for comp in comps:
+            header, buf = self._xb_pack(snap, comp)
+            headers[comp] = {k: v for k, v in header.items() if k != "sha256"}
+            digests[comp] = component_digest(payload_slices(header, buf))
+            mv = memoryview(buf)
+            frags = frag_table(len(buf), fb)
+            hashes = [fu.result() for fu in [_pool().submit(sha256_hex, mv[f["off"]:f["off"] + f["len"]]) for f in frags]]
+            for f, hsh in zip(frags, hashes):
+                if task["cancel"]:
+                    return sent, headers, digests
+                if comp not in whole and task["held"].get((comp, f["id"])) == hsh:
+                    continue
+                send_msg(conn, "PFRAG", {"task": task["id"], "comp": comp, "fragment_id": f["id"], "byte_offset": f["off"], "length": f["len"], "sha256": hsh,
+                                         "comp_nbytes": len(buf)}, mv[f["off"]:f["off"] + f["len"]], task["throttle"])
+                task["held"][(comp, f["id"])] = hsh; sent += f["len"]
+            del mv, buf
+        return sent, headers, digests
+
+    def cmd_precopy_start(self, h):
+        """Source (generating owner): start a pre-copy task toward `to`."""
+        r = self.run
+        assert r["owner"], "pre-copy needs the generating owner"
+        task = {"id": h["task"], "to": h["to"], "host": h["to_host"], "port": int(h["to_port"]), "variant": h["variant"], "frag_bytes": int(h["frag_bytes"]),
+                "threshold": int(h["threshold_bytes"]), "round_limit": int(h["round_limit"]), "min_shrink": float(h["min_shrink"]),
+                "throttle": Throttle(float(h["rate_bps"])) if float(h["rate_bps"]) > 0 else None, "cancel": False, "switching": False, "held": {}, "rounds": [], "done": False}
+        r["xb"] = task
+        task["thread"] = threading.Thread(target=self._precopy, args=(task,), daemon=True); task["thread"].start()
+        return {}
+
+    def _precopy(self, task: dict):
+        self._thread_init()
+        r = self.run
+        comps = FULL_COMPS if task["variant"] == "full" else ("sink",)
+        try:
+            conn = tcp_connect(task["host"], task["port"], self.a.mss, timeout=60)
+        except Exception as exc:  # noqa: BLE001
+            self.event("xb_precopy_failed", task=task["id"], error=repr(exc)); return
+        prev = None
+        while not task["cancel"]:
+            t0 = time.time()
+            c, snap = self._xb_snapshot()
+            t1 = time.time()
+            sent, _, _ = self._xb_send_dirty(task, conn, snap, comps)
+            del snap
+            rnd = {"round": len(task["rounds"]) + 1, "boundary_call": c, "dirty_bytes": sent, "snapshot_s": t1 - t0, "send_s": time.time() - t1}
+            task["rounds"].append(rnd)
+            self.event("xb_precopy_round", task=task["id"], **rnd)
+            if task["cancel"]:
+                break
+            reason = ("threshold" if sent <= task["threshold"] else "round_limit" if rnd["round"] >= task["round_limit"]
+                      else "no_shrink" if (prev is not None and prev > 0 and sent > (1 - task["min_shrink"]) * prev) else None)
+            prev = sent
+            if reason:
+                task["switch_reason"] = reason; break
+        if task["cancel"]:
+            conn.close(); self.event("xb_precopy_cancelled", task=task["id"], rounds=len(task["rounds"])); return
+        # atomic switchover at a chunk boundary: stop after the current call, serialize, send the final dirty set
+        task["switching"] = True
+        t_req = time.time()
+        if r["gen_thread"] is not None and r["gen_thread"].is_alive():
+            r["stop_owner"] = True; r["gen_thread"].join()
+        r["owner"] = False
+        t_stop = time.time()
+        c = r["call"]
+        snap = self.rt.serialize_live()
+        whole = () if task["variant"] == "full" else ("inflight", "meta")
+        final_comps = comps if task["variant"] == "full" else ("sink", "inflight", "meta")
+        sent, headers, digests = self._xb_send_dirty(task, conn, snap, final_comps, whole=whole)
+        del snap
+        send_msg(conn, "PSWITCH", {"task": task["id"], "from": self.label, "call": c, "variant": task["variant"], "headers": headers, "digests": digests, "t_go": time.time()}, b"", None)
+        conn.close()
+        task["done"] = True
+        self.event("xb_precopy_switch", task=task["id"], call=c, final_bytes=sent, reason=task.get("switch_reason"), wait_boundary_s=t_stop - t_req,
+                   rounds=len(task["rounds"]), t_sent=time.time())
+
+    def cmd_precopy_cancel(self, h):
+        task = (self.run or {}).get("xb")
+        if task is None or task["id"] != h["task"]:
+            return {"missing": True}
+        if task["switching"]:
+            task["thread"].join(timeout=600)
+            return {"switched": True}
+        task["cancel"] = True
+        task["thread"].join(timeout=120)
+        return {"switched": False, "rounds": len(task["rounds"])}
+
+    def cmd_xb_prepare(self, h):
+        """Destination of a pre-copy task: fresh buffers (warm, untimed) and an empty receive store."""
+        r = self.run
+        r["xb_store"] = {"task": h["task"], "comps": {}}
+        if h.get("provision", True):
+            self.rt.provision()
+        return {}
+
+    def _xb_recv_frag(self, conn, hdr: dict, pl: int):
+        r = self.run
+        st = r["xb_store"]
+        data = recv_exact(conn, pl)
+        if st is None or st["task"] != hdr["task"]:
+            self.event("xb_fragment_discarded", task=hdr["task"]); return
+        ok = sha256_hex(memoryview(data)) == hdr["sha256"]
+        c = st["comps"].setdefault(hdr["comp"], {"buf": bytearray(int(hdr["comp_nbytes"])), "hash": {}})
+        if ok:
+            memoryview(c["buf"])[hdr["byte_offset"]:hdr["byte_offset"] + hdr["length"]] = memoryview(data)
+            c["hash"][hdr["fragment_id"]] = hdr["sha256"]
+        else:
+            self.event("xb_fragment_hash_failed", task=hdr["task"], comp=hdr["comp"], fragment_id=hdr["fragment_id"])
+
+    def _xb_switch(self, hdr: dict):
+        """Destination: verify every component against the source's digest at the boundary, then resume at that call."""
+        self._thread_init()
+        r = self.run
+        st = r["xb_store"]
+        t0 = time.time()
+        ok = {}
+        for comp, dg in hdr["digests"].items():
+            c = (st or {}).get("comps", {}).get(comp)
+            ok[comp] = c is not None and component_digest(payload_slices(hdr["headers"][comp], c["buf"])) == dg
+        all_ok = bool(ok) and all(ok.values())
+        t1 = time.time()
+        self.event("xb_switch_verified", t1, task=hdr["task"], ok=all_ok, components_ok=ok, verify_s=t1 - t0, call=hdr["call"], variant=hdr["variant"])
+        if not all_ok:
+            return   # never resume on an unverified state (the run is then incomplete and invalid)
+        if hdr["variant"] == "full":
+            for comp in FULL_COMPS:
+                self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
+            self.rt.restore_full()
+            shifted = None
+        else:
+            for comp in ("inflight", "meta"):
+                self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
+            self.rt.restore_fast()
+            self.rt.unpack(dict(hdr["headers"]["sink"]), st["comps"]["sink"]["buf"])
+            shifted = self.rt.bind()
+        r["xb_store"] = None
+        self._xb_become_owner(int(hdr["call"]), hdr["from"], hdr["t_go"], "precopy_" + hdr["variant"], restore_s=time.time() - t1, slots_rerotated=shifted)
+
+    def _xb_become_owner(self, call: int, src: str, t_go: float, mode: str, **extra):
+        r = self.run
+        r["call"] = call; r["owner"] = True; r["stop_owner"] = False; r["first_out_t"] = None
+        r["bound_call"] = call; r["bind_at"] = call; r["rejoin_call"] = None; r["pending_cold"] = None; r["n_owned"] += 1
+        r["last_fp"] = None; r["wait_sink"] = False; r["await_manifest"] = False
+        self.event("sink_bind", call=call, slots_rerotated=extra.get("slots_rerotated"), at_resume=True, xb=mode)
+        self.event("resume", call=call, src=src, t_go_src=t_go, mode=mode, ownership=r["n_owned"], gpu_mem_alloc_mb=self.rt.gpu_mem_mb(), **extra)
+        r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
+
+    def cmd_xb_send_inputs(self, h):
+        """Source of a recompute task: send `nbytes` of input history (raw uint8 camera frames) to the destination."""
+        r = self.run
+        t0 = time.time()
+        conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
+        thr = Throttle(float(h["rate_bps"])) if float(h.get("rate_bps") or 0) > 0 else None
+        send_msg(conn, "PINPUT", {"task": h["task"], "from": self.label}, bytearray(int(h["nbytes"])), thr)
+        conn.close()
+        self.event("xb_inputs_sent", task=h["task"], bytes=int(h["nbytes"]), send_s=time.time() - t0)
+        return {"send_s": time.time() - t0}
+
+    def cmd_recompute_start(self, h):
+        """Destination of a recompute task. full: replay the session from call 0 up to `target` (rounds driven by the
+        orchestrator); win: nothing until RECOMPUTE_FINISH."""
+        r = self.run
+        rc = {"task": h["task"], "variant": h["variant"], "W": int(h.get("W") or 0), "target": int(h.get("target") or 0), "dest_call": 0, "finish": None,
+              "cancel": False, "input_bytes": 0, "need_bytes": int(h.get("need_bytes") or 0), "cv": threading.Condition(), "session": None, "replayed": 0}
+        r["xb_rc"] = rc
+        if rc["variant"] == "full":
+            rc["thread"] = threading.Thread(target=self._recompute_full, args=(rc,), daemon=True); rc["thread"].start()
+        return {}
+
+    def _replay_step(self, rc: dict, c: int):
+        if self.a.dry_run:
+            time.sleep(self.a.dry_service_s)
+        else:
+            self.rt.runner.step(rc["session"], c); self.rt.torch.cuda.synchronize(self.rt.device)
+        rc["replayed"] += 1
+
+    def _recompute_full(self, rc: dict):
+        self._thread_init()
+        with rc["cv"]:
+            while rc["input_bytes"] < rc["need_bytes"] and not rc["cancel"]:
+                rc["cv"].wait(0.05)
+        if not self.a.dry_run:
+            self.rt.session = None; rc["session"] = self.rt.runner.start()   # same seeds -> the source's trajectory
+        t_round = time.time()
+        while not rc["cancel"]:
+            while rc["dest_call"] < rc["target"] and not rc["cancel"]:
+                self._replay_step(rc, rc["dest_call"]); rc["dest_call"] += 1
+            if rc["finish"] is not None and rc["dest_call"] >= rc["finish"]:
+                break
+            self.event("xb_recompute_round", task=rc["task"], dest_call=rc["dest_call"], round_s=time.time() - t_round)
+            with rc["cv"]:
+                while rc["target"] <= rc["dest_call"] and rc["finish"] is None and not rc["cancel"]:
+                    rc["cv"].wait(0.05)
+                if rc["finish"] is not None:
+                    rc["target"] = rc["finish"]
+            t_round = time.time()
+        if rc["cancel"]:
+            self.event("xb_recompute_cancelled", task=rc["task"], dest_call=rc["dest_call"]); return
+        self._recompute_resume(rc)
+
+    def _recompute_resume(self, rc: dict):
+        if not self.a.dry_run:
+            self.rt.session = rc["session"]
+            for block in self.rt.pl.generator.model.blocks:
+                block.self_attn.adapt_sink_thr = self.rt.cfg_thr
+        elif rc["variant"] == "full":
+            self.rt.full = True; self.rt.bound = True; self.rt.cold = False   # fake runtime: an exact replay
+        else:
+            self.rt.full = False; self.rt.bound = True; self.rt.cold = True
+        self._xb_become_owner(int(rc["finish"]), rc.get("src", "?"), time.time(), "recompute_" + rc["variant"], replayed=rc["replayed"])
+
+    def cmd_recompute_target(self, h):
+        rc = self.run["xb_rc"]
+        with rc["cv"]:
+            rc["target"] = max(rc["target"], int(h["target"])); rc["cv"].notify_all()
+        return {}
+
+    def cmd_recompute_finish(self, h):
+        """The source stopped after call c - 1: finish the replay up to c and resume there."""
+        rc = self.run["xb_rc"]
+        rc["src"] = h.get("src")
+        if rc["variant"] == "full":
+            with rc["cv"]:
+                rc["finish"] = int(h["call"]); rc["cv"].notify_all()
+            return {}
+        rc["finish"] = int(h["call"])
+        threading.Thread(target=self._recompute_win, args=(rc,), daemon=True).start()
+        return {}
+
+    def _recompute_win(self, rc: dict):
+        self._thread_init()
+        t0 = time.time()
+        c, W = rc["finish"], rc["W"]
+        if self.a.dry_run:
+            for _ in range(W):
+                time.sleep(self.a.dry_service_s)
+            rc["replayed"] = W
+        else:
+            self.rt.session = None
+            rc["session"], _ms, _seed, rc["replayed"] = self.rt.runner.replay_restart(c, W, sink0=False)
+        self.event("xb_recompute_window", task=rc["task"], W=W, replay_s=time.time() - t0)
+        self._recompute_resume(rc)
+
+    def cmd_recompute_cancel(self, h):
+        rc = (self.run or {}).get("xb_rc")
+        if rc is not None and rc["task"] == h["task"]:
+            rc["cancel"] = True
+            with rc["cv"]:
+                rc["cv"].notify_all()
+        return {}
+
     # ------------------------------------------------------------------ data plane: receiver
     def _data_accept_loop(self):
         while True:
@@ -978,6 +1265,19 @@ class Node:
                     if hdr.get("mode") == "full":
                         threading.Thread(target=self._verify_full, args=(hdr, full["digests"]), daemon=True).start()
                     self._become_owner(hdr)
+                elif kind == "PFRAG":
+                    self._xb_recv_frag(conn, hdr, pl)
+                elif kind == "PSWITCH":
+                    if pl:
+                        recv_exact(conn, pl)
+                    self._xb_switch(hdr)
+                elif kind == "PINPUT":
+                    recv_exact(conn, pl)
+                    rc = r["xb_rc"]
+                    if rc is not None and rc["task"] == hdr["task"]:
+                        with rc["cv"]:
+                            rc["input_bytes"] += pl; rc["cv"].notify_all()
+                    self.event("xb_inputs_received", task=hdr["task"], bytes=pl)
                 elif kind in ("FLOW_HELLO", "FLOW_END"):
                     if pl:
                         recv_exact(conn, pl)
@@ -1117,6 +1417,7 @@ class Node:
         r["bound_call"] = None; r["rejoin_call"] = None; r["pending_cold"] = None; r["n_owned"] += 1
         r["last_fp"] = None; r["bind_at"] = None
         r["await_manifest"] = bool(go.get("fresh_pending"))   # VACW: the leaving owner is capturing S_k; bind only after MANIFEST_UPDATE (I1 / I5)
+        r["wait_sink"] = bool(go.get("wait_sink"))            # XB wait-for-Sink ablation
         extra = {}
         if mode == "full":
             self.rt.restore_full()
@@ -1151,11 +1452,18 @@ class Node:
         r = self.run
         while not r["stop_owner"]:
             c = r["call"]
+            req = r["xb_snap_req"]
+            if req is not None:
+                # XB pre-copy round: a consistent snapshot at this chunk boundary (state after call c - 1)
+                r["xb_snap"] = (c, self.rt.serialize_live()); r["xb_snap_req"] = None; req.set()
             if r["bound_call"] is None and r["sink_verified"] and r["pending_cold"] is None and not r["await_manifest"]:
                 self._unpack_sink()
                 shifted = self.rt.bind()
                 r["bound_call"] = c; r["bind_at"] = c
                 self.event("sink_bind", call=c, slots_rerotated=shifted, at_resume=False, **self._bound_version())
+            if r["wait_sink"] and r["bound_call"] is None:
+                time.sleep(0.005)   # XB wait-for-Sink ablation: no Sink-less generation
+                continue
             pc = r["pending_cold"]
             if pc is not None and c in (pc["skip"], pc["emit"]):
                 produced, ps, ss, dt, pos = self.rt.step(c, override=pc["frames"] if c == pc["emit"] else None, skip=c == pc["skip"] and c != pc["emit"])
