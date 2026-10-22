@@ -1,0 +1,287 @@
+{
+ "run_id": "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=6_rep=1_20261022-114151",
+ "policy": "recompute_full",
+ "policy_label": "ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up)",
+ "bw_mbps": 1000.0,
+ "tm_s": 1000000000.0,
+ "rho": null,
+ "rep": 1,
+ "path": [
+  "A",
+  "B"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02"
+ },
+ "t0_wall": 1792694532.2887127,
+ "migration_chunk": 30,
+ "xb_params": {
+  "threshold_mib": 64.0,
+  "round_limit": 6,
+  "min_shrink": 0.1,
+  "lag": 1,
+  "W": 3,
+  "horizon": 100,
+  "codec": "ffv1",
+  "verify_state": true
+ },
+ "rtt_measured_lan": {
+  "A-B": {
+   "median_ms": 0.28474628925323486,
+   "p95_ms": 1.639239490032196,
+   "min_ms": 0.27279555797576904,
+   "n": 20
+  }
+ },
+ "codecs": {
+  "A": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  },
+  "B": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  }
+ },
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0,
+   "t_stop": null,
+   "t_fg_sent": null,
+   "call": 30,
+   "fg_bytes": 0,
+   "mode": "xb"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "x1",
+   "kind": "recompute_full",
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.005141496658325195,
+   "state": "done",
+   "rounds": 1,
+   "t_end": 28.50693368911743,
+   "outcome": "switched",
+   "target": 30,
+   "rate": 1000000000.0,
+   "codec": "ffv1",
+   "frame_ranges": [
+    [
+     0,
+     125
+    ]
+   ],
+   "sent_hi": 125,
+   "stop_call": 30,
+   "finish_reason": "lag"
+  }
+ ],
+ "switchovers": [
+  {
+   "task": "x1",
+   "dst": "B",
+   "t": 28.50693368911743,
+   "call": 30,
+   "mode": "recompute_full"
+  }
+ ],
+ "inputs": {
+  "codec": "ffv1",
+  "lossless": true,
+  "tasks": {
+   "x1": {
+    "dst": "B",
+    "outcome": "switched",
+    "frame_ranges": [
+     [
+      0,
+      125
+     ]
+    ],
+    "bytes_sent": 32457726,
+    "raw_bytes": 149760000,
+    "frames": 125,
+    "enc_cpu_s": 1.8488728404045105,
+    "send_wall_s": 0.7685952186584473,
+    "bytes_decoded": 32457726,
+    "decode_cpu_s": 1.212172501720488,
+    "bytes_discarded": 0,
+    "segments_exact": 4,
+    "segments": 4,
+    "min_psnr": null
+   }
+  },
+  "switchovers": [
+   {
+    "task": "x1",
+    "dst": "B",
+    "inputs_exact": true,
+    "input_error": null,
+    "input_wait_s": 0.91650390625,
+    "replayed": 30
+   }
+  ],
+  "bytes_sent": 32457726,
+  "raw_bytes": 149760000,
+  "bytes_abandoned_targets": 0,
+  "enc_cpu_s": 1.8488728404045105,
+  "decode_cpu_s": 1.212172501720488
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "gpu0_before_run": {
+   "A": {
+    "util_pct": 0.0,
+    "mem_used_mib": 17766.0,
+    "others_mib": 0,
+    "others": []
+   },
+   "B": {
+    "util_pct": 0.0,
+    "mem_used_mib": 17873.0,
+    "others_mib": 0,
+    "others": []
+   }
+  },
+  "gpu0_idle_before_run": true,
+  "switchovers_verified": null,
+  "n_switchovers": 1,
+  "final_edge_served": true,
+  "stop_reason": "horizon",
+  "codecs_ok": true,
+  "recompute_state_verified": true,
+  "input_check": true,
+  "codec_lossless": true,
+  "inputs_exact_at_switchovers": true
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1792694623.2899847,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A16",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": null,
+   "rejoin_call": null,
+   "gpu_mem_alloc_mb": 20135.31298828125,
+   "peak_allocated_mb": 26625.43701171875,
+   "peak_reserved_mb": 26742.0,
+   "promotion_calls": [],
+   "snapshots": [
+    {
+     "k": 0,
+     "digest": "7285e558d4ef2e74cf7d43cba1c03572a2b975a20b45887ea762f0d8023fa3ec",
+     "sink_version": "7285e558d4ef2e74",
+     "t": 1792694530.2891183,
+     "call": 30
+    }
+   ],
+   "versions_seen": [
+    "7285e558d4ef2e74"
+   ],
+   "t_recv_start": 1792694623.2903736,
+   "t_recv": 1792694623.2903757
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1792694624.1458209,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B11",
+   "ok": true,
+   "have": 0,
+   "n_frags": 0,
+   "sink_verified": null,
+   "bound_call": 30,
+   "rejoin_call": 30,
+   "gpu_mem_alloc_mb": 26479.18701171875,
+   "peak_allocated_mb": 32969.31103515625,
+   "peak_reserved_mb": 33024.0,
+   "promotion_calls": [],
+   "snapshots": [],
+   "versions_seen": [],
+   "t_recv_start": 1792694624.1468344,
+   "t_recv": 1792694624.1468368
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1792694530.2896907,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A9",
+  "ok": true,
+  "t_prepared": 1792694530.2891183,
+  "t_recv_start": 1792694530.2911122,
+  "t_recv": 1792694530.2911134
+ },
+ "delivery": {
+  "ttfo_local": [
+   {
+    "edge": "B",
+    "t_change": 0.0,
+    "ttfo_local_s": 29.132019996643066,
+    "first_call": 30
+   }
+  ],
+  "ttfo_local_final_s": 29.132019996643066,
+  "delivery_gap_s": 29.132019996643066,
+  "delivery_gap_at_s": 0.0,
+  "delivered_chunks": 101,
+  "t_last_delivery_s": 89.49767327308655,
+  "remote_chunks": 0,
+  "remote_content_s": 0.0,
+  "remote_wall_s": 0,
+  "remote_stretches": [],
+  "remote_delivery_bytes_ESTIMATED": {
+   "crf23": 0,
+   "crf28": 0,
+   "remote_chunks_not_encoded": 0,
+   "note": "H.264 encoded size of remotely served output; not transmitted on the testbed"
+  },
+  "delivery_encode_cpu_s": 0,
+  "rtt_measured_lan": {
+   "A-B": {
+    "median_ms": 0.28474628925323486,
+    "p95_ms": 1.639239490032196,
+    "min_ms": 0.27279555797576904,
+    "n": 20
+   }
+  },
+  "output_equivalence": [
+   {
+    "node": "B",
+    "resume_call": 30,
+    "mode": "recompute_full",
+    "calls": 101,
+    "checked": 101,
+    "matching": 101,
+    "first_call_match": true,
+    "first_mismatch_call": null
+   }
+  ],
+  "trajectory_final": {
+   "edge": "B",
+   "calls": 101,
+   "first_ge35_idx": 0,
+   "sustained10_idx": 0,
+   "terminal_median_psnr": 99.0,
+   "median_psnr": 99.0
+  }
+ }
+}
