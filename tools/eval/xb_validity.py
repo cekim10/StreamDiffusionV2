@@ -48,6 +48,8 @@ def run_validity_xb(s: dict, run_dir: Path | str | None = None, dry: bool = Fals
             bad.append("a node's uint8 input history does not reproduce its runtime input")
         if v.get("codec_lossless") and v.get("inputs_exact_at_switchovers") is not True:
             bad.append("lossless input codec but a replay's decoded inputs were not bit-exact")
+    if v.get("source_served_until_switch") is not True:
+        bad.append("the source did not keep generating until the switchover (protocol: it serves after the trigger)")
     if v.get("codecs_ok") is not True:
         bad.append("a node lacks FFV1 (bit-exact round trip) or libx264")
     if v.get("final_edge_served") is not True:

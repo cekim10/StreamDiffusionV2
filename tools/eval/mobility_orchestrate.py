@@ -1224,7 +1224,7 @@ class Run:
         self.t0 = time.time(); self.ev.set_ref(self.t0)
         self.ev.log("migration_start", self.t0, policy=self.policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, path=self.edges,
                     xb={"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window})
-        self.node("A").call("EXEC_START")
+        self.node("A").call("EXEC_START", source_bound=True)
         self.running = "A"; self.user_idx = 1
         self.moves.append({"i": 1, "from": "A", "to": self.edges[1], "t_req": self.t0, "t_stop": None, "t_fg_sent": None, "call": a.migration_chunk, "fg_bytes": 0, "mode": "xb"})
         self._xb_start(self.edges[1])
@@ -1278,6 +1278,11 @@ class Run:
                       "gpu0_idle_before_run": None if self.gpu0_before is None else all("error" not in v and v["others_mib"] < 1024 and v["util_pct"] <= 5 for v in self.gpu0_before.values()),
                       "switchovers_verified": (all(x is True for x in sw_ok) if sw_ok else None), "n_switchovers": len(self.xb_switches),
                       "final_edge_served": self.running == self.edges[-1], "stop_reason": self.stop_reason}
+        # the source keeps generating after the trigger until a switchover stops it (pre-copy / recompute protocol)
+        first_sw = min((sw["call"] for sw in self.xb_switches if sw.get("call") is not None), default=None)
+        src_calls = [m["call"] for m in self.metrics if m["owner"] == "A"]
+        validation["source_served_after_trigger"] = len(src_calls)
+        validation["source_served_until_switch"] = (first_sw is None) or (bool(src_calls) and max(src_calls) >= int(first_sw) - 1)
         codecs = {lb: self.node(lb).hello.get("codecs") or {} for lb in self.nodes_used}
         validation["codecs_ok"] = all(v.get("ffv1_roundtrip") is True and v.get("libx264") is True for v in codecs.values())
         sv = [e for e in self.node_events if e["event"] == "xb_recompute_state_verified"]

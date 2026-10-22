@@ -491,7 +491,7 @@ class FakeRuntime:
         return {"comp": comp, "tensors": [{"name": comp, "offset": 0, "nbytes": len(b), "shape": [len(b)], "dtype": "bf16"}], "nbytes": len(b), "d2h_s": 0.0}, [b]
 
     def provision(self):
-        self.bound = False; self.have_fast = False; self.full = False; self.cold = False
+        self.bound = False; self.have_fast = False; self.full = False; self.cold = False; self.provisioned = True
 
     def restore_full(self):
         self.full = True; self.bound = True; self.cold = False
@@ -505,6 +505,9 @@ class FakeRuntime:
         return None
 
     def unpack(self, header, payload):
+        if not getattr(self, "provisioned", False):
+            # mirrors GpuRuntime.unpack, which writes into the provisioned receive snapshot (self.snap) and fails without it
+            raise RuntimeError("unpack on a runtime without provisioned receive buffers")
         if header["comp"] in ("inflight", "meta"):
             self.have_fast = True
         if header["comp"] == "sink":
@@ -566,7 +569,7 @@ class FakeRuntime:
         pass
 
     def release(self):
-        pass
+        self.provisioned = False   # as GpuRuntime.release drops the receive snapshot
 
 
 # ----------------------------------------------------------------------------- node
@@ -950,6 +953,10 @@ class Node:
         r = self.run
         assert r["owner"], "not the execution owner"
         r.pop("live_snap", None)
+        if h.get("source_bound"):
+            # XB: the source keeps generating its own uninterrupted session after the trigger; its live Sink is already
+            # bound (nothing to unpack or re-bind). Frozen paths never pass this flag.
+            r["bound_call"] = r["call"]; r["bind_at"] = r["call"]; r["sink_unpacked"] = True
         r["stop_owner"] = False; r["first_out_t"] = None
         r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
         self.event("exec_start", call=r["call"])
@@ -1172,7 +1179,9 @@ class Node:
         if st is None or st["task"] != hdr["task"]:
             self.event("xb_fragment_discarded", task=hdr["task"]); return
         ok = sha256_hex(memoryview(data)) == hdr["sha256"]
-        c = st["comps"].setdefault(hdr["comp"], {"buf": bytearray(int(hdr["comp_nbytes"])), "hash": {}})
+        c = st["comps"].get(hdr["comp"])
+        if c is None:   # allocate the component buffer once (dict.setdefault would build a full-size buffer for every fragment)
+            c = st["comps"][hdr["comp"]] = {"buf": bytearray(int(hdr["comp_nbytes"])), "hash": {}}
         if ok:
             memoryview(c["buf"])[hdr["byte_offset"]:hdr["byte_offset"] + hdr["length"]] = memoryview(data)
             c["hash"][hdr["fragment_id"]] = hdr["sha256"]

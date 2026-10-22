@@ -100,6 +100,11 @@ def main():
             want = {"inflight", "meta", "recent", "sink", "vae"} if pol == "precopy_full" else {"sink", "inflight", "meta"}
             check(bool(ver) and ver[-1]["detail"]["ok"] and comps == want, f"{pol}: switchover verified for {sorted(comps)}")
             rounds = [e for e in ev if e["event"] == "A:xb_precopy_round"]
+            r1 = rounds[0]["detail"] if rounds else {}
+            rate = (r1.get("dirty_bytes", 0) * 8 / r1["send_s"]) if r1.get("send_s") else 0
+            check(rate >= 0.6 * 100e6, f"{pol}: round 1 moves {r1.get('dirty_bytes', 0) >> 20} MiB at {rate / 1e6:.0f} Mbps (cap 100; receiver keeps up)")
+            check(s["validation"].get("source_served_until_switch") is True and s["validation"]["source_served_after_trigger"] > 0,
+                  f"{pol}: the source generated until the switchover ({s['validation']['source_served_after_trigger']} chunks)")
             sw = [e for e in ev if e["event"] == "A:xb_precopy_switch"]
             check(len(rounds) >= 1 and bool(sw), f"{pol}: {len(rounds)} rounds, dirty {[e['detail']['dirty_bytes'] >> 20 for e in rounds]} MiB, switch reason {sw[-1]['detail']['reason'] if sw else None}")
             if pol == "precopy_full":
