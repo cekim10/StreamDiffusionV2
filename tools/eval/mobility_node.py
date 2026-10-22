@@ -360,6 +360,45 @@ class GpuRuntime:
         self.last_frames = fr   # Experiment RD: decoded output frames of this call (read-only; no effect on generation)
         return fr is not None, ps, ss, dt, self.sa.slot_positions(self.pl)["sink_slot_pos"]
 
+    # ---- XB recompute: input history (uint8 camera frames) and replay inputs
+    def input_history(self):
+        """The uint8 frames the runtime normalizes (x / 127.5 - 1 -> bf16). Checked once against the runtime's own input
+        tensor, so a bit-exact uint8 transfer gives a bit-exact replay input (`input_check`)."""
+        if getattr(self, "_hist", None) is None:
+            import xb_codec as xc
+            from streamv2v.inference_common import load_mp4_as_tensor
+
+            torch = self.torch
+            v = load_mp4_as_tensor(self.args.video_path, resize_hw=(self.args.height, self.args.width), normalize=False)   # [C, T, H, W], uint8 values
+            u8 = v.round().clamp(0, 255).to(torch.uint8)
+            vid = self.runner.video[0]
+            n = min(u8.shape[1], vid.shape[1])
+            self.input_check = bool(torch.equal((u8[:, :n].float() / 127.5 - 1.0).to(torch.bfloat16), vid[:, :n]))
+            self._hist = xc.InputHistory(u8.permute(1, 2, 3, 0).contiguous().numpy())
+            self._written = []
+        return self._hist
+
+    def write_inputs(self, lo: int, frames):
+        """Replay from the transferred frames: overwrite frames [lo, lo + n) of the runtime input with the decoded ones."""
+        torch = self.torch
+        vid = self.runner.video
+        hi = min(lo + len(frames), vid.shape[2])
+        if hi <= lo:
+            return
+        t = (torch.from_numpy(frames[: hi - lo]).permute(3, 0, 1, 2).float() / 127.5 - 1.0).to(torch.bfloat16)
+        vid[0, :, lo:hi].copy_(t)
+        self._written.append((lo, hi))
+
+    def restore_inputs(self):
+        """Undo write_inputs (lossy sensitivity runs) so the next run starts from the original input."""
+        if not getattr(self, "_written", None):
+            return
+        torch = self.torch
+        for lo, hi in self._written:
+            f = self._hist.frames(lo, hi)
+            self.runner.video[0, :, lo:hi].copy_((torch.from_numpy(f).permute(3, 0, 1, 2).float() / 127.5 - 1.0).to(torch.bfloat16))
+        self._written = []
+
     def release(self):
         self.snap = None; self.session = None
         self.pm.reset_stream_state(reset_vae_flags=True)
@@ -490,6 +529,19 @@ class FakeRuntime:
             ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
         return True, float(ps), 0.9 if self.bound else 0.6, self.args.dry_service_s, [0, 1, 6]
 
+    def input_history(self):
+        if getattr(self, "_hist", None) is None:
+            import xb_codec as xc
+
+            self._hist = xc.InputHistory(xc.synthetic_clip(self.args.height, self.args.width)); self.input_check = True
+        return self._hist
+
+    def write_inputs(self, lo, frames):
+        pass
+
+    def restore_inputs(self):
+        pass
+
     def release(self):
         pass
 
@@ -569,6 +621,8 @@ class Node:
 
     # ------------------------------------------------------------------ commands
     def cmd_run_begin(self, h):
+        if hasattr(self.rt, "restore_inputs"):
+            self.rt.restore_inputs()   # XB lossy-input runs overwrite replay inputs; every run starts from the original input
         rd = REPO_ROOT / h["run_rel"] / f"node_{self.label}"
         rd.mkdir(parents=True, exist_ok=True)
         ev = EventLog(rd / "events.csv", self.me, h["t0"] if h.get("t0") else None)
@@ -896,6 +950,7 @@ class Node:
             r["xb_rc"]["cancel"] = True
             with r["xb_rc"]["cv"]:
                 r["xb_rc"]["cv"].notify_all()
+        self.rt.restore_inputs()
         r["full_pack"] = None
         r["sampler"].finish(); r["metrics"].close(); r["frag_log"].close()
         net = (r["dir"] / "network.csv").read_text() if (r["dir"] / "network.csv").exists() else ""
@@ -1072,6 +1127,11 @@ class Node:
         r["xb_store"] = {"task": h["task"], "comps": {}}
         if h.get("provision", True):
             self.rt.provision()
+        if h.get("inputs"):
+            # recompute baselines: load the uint8 input history once (untimed) and check it reproduces the runtime input
+            hist = self.rt.input_history()
+            self.event("xb_input_check", ok=self.rt.input_check, clip_frames=hist.T)
+            return {"input_check": self.rt.input_check}
         return {}
 
     def _xb_recv_frag(self, conn, hdr: dict, pl: int):
@@ -1126,29 +1186,103 @@ class Node:
         self.event("resume", call=call, src=src, t_go_src=t_go, mode=mode, ownership=r["n_owned"], gpu_mem_alloc_mb=self.rt.gpu_mem_mb(), **extra)
         r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
 
+    def _codec_pool(self):
+        if getattr(self, "_cpool", None) is None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self._cpool = ThreadPoolExecutor(max_workers=4)   # PyAV releases the GIL while encoding / decoding
+        return self._cpool
+
+    def _xb_frames_geom(self):
+        return (self.rt.runner.first, self.rt.runner.chunk) if not self.a.dry_run else (5, 4)
+
     def cmd_xb_send_inputs(self, h):
-        """Source of a recompute task: send `nbytes` of input history (raw uint8 camera frames) to the destination."""
-        r = self.run
+        """Source of a recompute task: encode the input history frames [f_lo, f_hi) with `codec` in segments and send the
+        encoded bytes. Segments are encoded in a thread pool while earlier ones are on the wire (pipelined); every byte
+        sent is the codec's actual output. An empty range sends one empty `last` segment."""
+        import xb_codec as xc
+
+        hist = self.rt.input_history()
+        lo, hi, codec = int(h["f_lo"]), int(h["f_hi"]), h["codec"]
+        segs = xc.segments(lo, hi) or [(lo, lo)]
         t0 = time.time()
+
+        def enc(a, b):
+            t = time.perf_counter()
+            if b <= a:
+                return b"", 0.0, 0
+            f = hist.frames(a, b)
+            return xc.encode(f, codec), time.perf_counter() - t, f.nbytes
+
+        futs = [self._codec_pool().submit(enc, a, b) for a, b in segs]
         conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
         thr = Throttle(float(h["rate_bps"])) if float(h.get("rate_bps") or 0) > 0 else None
-        send_msg(conn, "PINPUT", {"task": h["task"], "from": self.label}, bytearray(int(h["nbytes"])), thr)
+        sent = raw = 0
+        enc_s = 0.0
+        for i, ((a, b), fu) in enumerate(zip(segs, futs)):
+            data, es, rb = fu.result()
+            send_msg(conn, "PINPUT", {"task": h["task"], "from": self.label, "f_lo": a, "f_hi": b, "codec": codec, "raw_bytes": rb, "enc_s": es,
+                                      "last": i == len(segs) - 1, "part": h.get("part")}, data, thr)
+            sent += len(data); raw += rb; enc_s += es
         conn.close()
-        self.event("xb_inputs_sent", task=h["task"], bytes=int(h["nbytes"]), send_s=time.time() - t0)
-        return {"send_s": time.time() - t0}
+        self.event("xb_inputs_sent", task=h["task"], part=h.get("part"), codec=codec, f_lo=lo, f_hi=hi, frames=max(0, hi - lo), segments=len(segs),
+                   bytes=sent, raw_bytes=raw, enc_cpu_s=enc_s, send_s=time.time() - t0)
+        return {"send_s": time.time() - t0, "bytes": sent, "raw_bytes": raw}
+
+    def _xb_decode_inputs(self, rc: dict, hdr: dict, payload: bytes):
+        """Destination: decode one segment, check it bit for bit against this node's own copy of the frames, and write the
+        decoded frames into the replay input (the replay consumes the transferred frames, lossless or lossy)."""
+        import xb_codec as xc
+
+        a, b, codec = int(hdr["f_lo"]), int(hdr["f_hi"]), hdr["codec"]
+        exact, ps, dec_s = True, None, 0.0
+        if b > a:
+            t = time.perf_counter()
+            dec = xc.decode(payload, codec)
+            dec_s = time.perf_counter() - t
+            ref = self.rt.input_history().frames(a, b)
+            if dec.shape != ref.shape:
+                exact = False; rc["input_error"] = f"segment [{a}, {b}) decoded to {dec.shape}, expected {ref.shape}"
+            else:
+                exact = bool(np.array_equal(dec, ref))
+                if not exact:
+                    ps = xc.psnr(dec, ref)
+                if not rc["cancel"]:
+                    self.rt.write_inputs(a, dec)
+        with rc["cv"]:
+            if b > a and "input_error" not in rc:
+                rc["have"].append((a, b))
+            rc["exact"] = rc["exact"] and exact
+            rc["input_bytes"] += len(payload); rc["cv"].notify_all()
+        self.event("xb_inputs_received", task=hdr["task"], part=hdr.get("part"), codec=codec, f_lo=a, f_hi=b, bytes=len(payload), raw_bytes=hdr.get("raw_bytes"),
+                   enc_s=hdr.get("enc_s"), decode_s=dec_s, exact=exact, psnr=ps, last=bool(hdr.get("last")))
+
+    def _wait_frames(self, rc: dict, lo: int, hi: int) -> bool:
+        """Block until the decoded input history covers frames [lo, hi) (False if the task was cancelled)."""
+        import xb_codec as xc
+
+        t0 = time.time()
+        with rc["cv"]:
+            while not xc.covered(rc["have"], lo, hi) and not rc["cancel"]:
+                rc["cv"].wait(0.02)
+        rc["input_wait_s"] += time.time() - t0
+        return not rc["cancel"]
 
     def cmd_recompute_start(self, h):
         """Destination of a recompute task. full: replay the session from call 0 up to `target` (rounds driven by the
         orchestrator); win: nothing until RECOMPUTE_FINISH."""
         r = self.run
         rc = {"task": h["task"], "variant": h["variant"], "W": int(h.get("W") or 0), "target": int(h.get("target") or 0), "dest_call": 0, "finish": None,
-              "cancel": False, "input_bytes": 0, "need_bytes": int(h.get("need_bytes") or 0), "cv": threading.Condition(), "session": None, "replayed": 0}
+              "cancel": False, "input_bytes": 0, "have": [], "exact": True, "input_wait_s": 0.0, "cv": threading.Condition(), "session": None, "replayed": 0}
         r["xb_rc"] = rc
         if rc["variant"] == "full":
             rc["thread"] = threading.Thread(target=self._recompute_full, args=(rc,), daemon=True); rc["thread"].start()
         return {}
 
     def _replay_step(self, rc: dict, c: int):
+        first, chunk = self._xb_frames_geom()
+        if not self._wait_frames(rc, 0, first + chunk * (c + 1)):   # replay call c consumes frames [first + chunk c, + chunk)
+            return
         if self.a.dry_run:
             time.sleep(self.a.dry_service_s)
         else:
@@ -1157,9 +1291,9 @@ class Node:
 
     def _recompute_full(self, rc: dict):
         self._thread_init()
-        with rc["cv"]:
-            while rc["input_bytes"] < rc["need_bytes"] and not rc["cancel"]:
-                rc["cv"].wait(0.05)
+        first, _chunk = self._xb_frames_geom()
+        if not self._wait_frames(rc, 0, first):   # the session's first batch (frames 0 .. first - 1)
+            self.event("xb_recompute_cancelled", task=rc["task"], dest_call=0); return
         if not self.a.dry_run:
             self.rt.session = None; rc["session"] = self.rt.runner.start()   # same seeds -> the source's trajectory
         t_round = time.time()
@@ -1188,7 +1322,8 @@ class Node:
             self.rt.full = True; self.rt.bound = True; self.rt.cold = False   # fake runtime: an exact replay
         else:
             self.rt.full = False; self.rt.bound = True; self.rt.cold = True
-        self._xb_become_owner(int(rc["finish"]), rc.get("src", "?"), time.time(), "recompute_" + rc["variant"], replayed=rc["replayed"])
+        self._xb_become_owner(int(rc["finish"]), rc.get("src", "?"), time.time(), "recompute_" + rc["variant"], replayed=rc["replayed"],
+                              inputs_exact=rc["exact"], input_error=rc.get("input_error"), input_wait_s=rc["input_wait_s"], input_bytes=rc["input_bytes"])
 
     def cmd_recompute_target(self, h):
         rc = self.run["xb_rc"]
@@ -1212,6 +1347,11 @@ class Node:
         self._thread_init()
         t0 = time.time()
         c, W = rc["finish"], rc["W"]
+        first, chunk = self._xb_frames_geom()
+        # replay_restart(c, W, sink0=False) seeds from [frame before chunk c - W, chunk c - W] and replays chunks c - W + 1 .. c - 1
+        if not self._wait_frames(rc, first + chunk * (c - W) - 1, first + chunk * c):
+            self.event("xb_recompute_cancelled", task=rc["task"], dest_call=0); return
+        t_inputs = time.time()
         if self.a.dry_run:
             for _ in range(W):
                 time.sleep(self.a.dry_service_s)
@@ -1219,7 +1359,7 @@ class Node:
         else:
             self.rt.session = None
             rc["session"], _ms, _seed, rc["replayed"] = self.rt.runner.replay_restart(c, W, sink0=False)
-        self.event("xb_recompute_window", task=rc["task"], W=W, replay_s=time.time() - t0)
+        self.event("xb_recompute_window", task=rc["task"], W=W, input_wait_s=t_inputs - t0, replay_s=time.time() - t_inputs)
         self._recompute_resume(rc)
 
     def cmd_recompute_cancel(self, h):
@@ -1272,12 +1412,13 @@ class Node:
                         recv_exact(conn, pl)
                     self._xb_switch(hdr)
                 elif kind == "PINPUT":
-                    recv_exact(conn, pl)
+                    payload = bytes(recv_exact(conn, pl)) if pl else b""
                     rc = r["xb_rc"]
-                    if rc is not None and rc["task"] == hdr["task"]:
-                        with rc["cv"]:
-                            rc["input_bytes"] += pl; rc["cv"].notify_all()
-                    self.event("xb_inputs_received", task=hdr["task"], bytes=pl)
+                    if rc is not None and rc["task"] == hdr["task"] and not rc["cancel"]:
+                        self._codec_pool().submit(self._xb_decode_inputs, rc, hdr, payload)   # decode off the receive path
+                    else:
+                        # no reuse across targets: inputs of a cancelled / other task are dropped
+                        self.event("xb_inputs_discarded", task=hdr["task"], bytes=pl, f_lo=hdr.get("f_lo"), f_hi=hdr.get("f_hi"))
                 elif kind in ("FLOW_HELLO", "FLOW_END"):
                     if pl:
                         recv_exact(conn, pl)

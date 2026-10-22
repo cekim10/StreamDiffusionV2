@@ -63,7 +63,8 @@ EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
 FRESH = ("split_va", "restart_fresh")
 XB = ("precopy_full", "precopy_sink", "recompute_full", "recompute_win")   # osdi/expXB: re-implemented external baselines
-FRAME_BYTES = 3 * 480 * 832   # one uint8 camera frame (the recompute baselines transfer raw input history)
+FRAME_BYTES = 3 * 480 * 832   # one uint8 camera frame (raw upper bound; the recompute baselines send codec output, --xb_codec)
+XB_LOSSLESS = ("raw", "zlib1", "zlib6", "png", "ffv1", "x264rgb_qp0")   # tools/eval/xb_codec.py
 CHUNK_FRAMES, FIRST_FRAMES = 4, 5   # Version-aware Continuity Wavefront v0 (expM2/vacw_v0_design.md): fresh snapshots by bound owners, hash reuse
 POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined Relay", "split": "Reuse, fixed routing (holders forward; source sends the rest)", "direct": "Oracle Direct",
                 "reuse_aware_in": "OTTER at moves (bottleneck-aware assignment, shared planner)", "reuse_dyn": "OTTER event-driven (shared planner, E-pilot v2 thresholds)", "reuse_dyn2": "OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware)",
@@ -183,9 +184,9 @@ def run_tag(a, policy, bw_mbps, tm, rho, rep, path, prepos) -> str:
     if policy in ("precopy_full", "precopy_sink"):
         tags += f"_thr={a.xb_threshold_mib:g}_rl={a.xb_round_limit}"
     elif policy == "recompute_full":
-        tags += f"_lag={a.xb_lag}_rl={a.xb_round_limit}"
+        tags += f"_lag={a.xb_lag}_rl={a.xb_round_limit}" + ("" if a.xb_codec == "ffv1" else f"_codec={a.xb_codec}")
     elif policy == "recompute_win":
-        tags += f"_W={a.xb_window}"
+        tags += f"_W={a.xb_window}" + ("" if a.xb_codec == "ffv1" else f"_codec={a.xb_codec}")
     return f"policy={policy}_bw={bw_tag}_rho={rho_tag}_tm={tm if tm < 1e8 else 'inf'}{tags}_rep={rep}"
 
 
@@ -1060,10 +1061,13 @@ class Run:
         else:
             variant = self.policy.split("_")[1]
             c = self._xb_src_call(src)
-            need = (FIRST_FRAMES + CHUNK_FRAMES * c) * FRAME_BYTES if variant == "full" else (FIRST_FRAMES + CHUNK_FRAMES * max(0, self.a.xb_window - 1)) * FRAME_BYTES
-            task.update({"target": c, "input_bytes": need, "rate": rate})
-            self.node(target).call("RECOMPUTE_START", task=task["id"], variant=variant, W=self.a.xb_window, target=c, need_bytes=need if variant == "full" else 0)
-            self.node(src).cast("XB_SEND_INPUTS", task=task["id"], to_host=nd["host"], to_port=nd["data"], nbytes=need, rate_bps=rate)
+            # input history the replay consumes: full = frames [0, first + chunk c) (calls 0 .. c - 1); win = the window of
+            # replay_restart(c, W): [first + chunk (c - W) - 1, first + chunk c). A new target always gets the whole range again.
+            lo = 0 if variant == "full" else FIRST_FRAMES + CHUNK_FRAMES * (c - self.a.xb_window) - 1
+            hi = FIRST_FRAMES + CHUNK_FRAMES * c
+            task.update({"target": c, "rate": rate, "codec": self.a.xb_codec, "frame_ranges": [[lo, hi]], "sent_hi": hi})
+            self.node(target).call("RECOMPUTE_START", task=task["id"], variant=variant, W=self.a.xb_window, target=c)
+            self.node(src).cast("XB_SEND_INPUTS", task=task["id"], to_host=nd["host"], to_port=nd["data"], f_lo=lo, f_hi=hi, codec=self.a.xb_codec, rate_bps=rate, part=1)
         self.xb_task = task; self.xb_tasks.append(task)
         self.ev.log("xb_task_start", task["t_start"], **{k: v for k, v in task.items() if k not in ("t_start",)})
 
@@ -1106,12 +1110,14 @@ class Run:
                 if lag <= self.a.xb_lag or t["rounds"] >= self.a.xb_round_limit:
                     self._xb_recompute_finish(t, reason="lag" if lag <= self.a.xb_lag else "round_limit")
                 else:
-                    extra = (c - t["target"]) * CHUNK_FRAMES * FRAME_BYTES
+                    # input history generated while the source kept serving
+                    lo, hi = FIRST_FRAMES + CHUNK_FRAMES * t["target"], FIRST_FRAMES + CHUNK_FRAMES * c
                     nd = self.o.node_spec[t["dst"]]
-                    self.node(t["src"]).cast("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], nbytes=extra, rate_bps=t["rate"])
-                    t["input_bytes"] += extra; t["target"] = c
+                    self.node(t["src"]).cast("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], f_lo=lo, f_hi=hi, codec=t["codec"], rate_bps=t["rate"],
+                                             part=len(t["frame_ranges"]) + 1)
+                    t["frame_ranges"].append([lo, hi]); t["sent_hi"] = hi; t["target"] = c
                     self.node(t["dst"]).call("RECOMPUTE_TARGET", target=c)
-            elif e["event"] == "xb_inputs_received" and e.get("task") == t["id"] and t["kind"] == "recompute_win" and t["state"] == "copy":
+            elif e["event"] == "xb_inputs_received" and e.get("task") == t["id"] and e.get("last") and e.get("part") == 1 and t["kind"] == "recompute_win" and t["state"] == "copy":
                 self._xb_recompute_finish(t, reason="inputs")
             elif e["event"] == "resume" and e["node"] == t["dst"] and t["state"] in ("copy", "switching", "finishing"):
                 t["state"] = "done"; t["outcome"] = "switched"; t["t_end"] = e["t"]
@@ -1126,13 +1132,46 @@ class Run:
         r = self.node(t["src"]).call("EXEC_STOP", timeout=120)   # the source stops at its chunk boundary
         c = int(r["call"])
         t["state"] = "finishing"; t["stop_call"] = c; t["finish_reason"] = reason
-        if t["kind"] == "recompute_full" and c > t["target"]:
-            extra = (c - t["target"]) * CHUNK_FRAMES * FRAME_BYTES
+        hi = FIRST_FRAMES + CHUNK_FRAMES * c
+        if t["kind"] == "recompute_full":
+            lo = t["sent_hi"]
+        else:   # the window moved with the source: send what the window at c needs beyond what this task already sent
+            need_lo = FIRST_FRAMES + CHUNK_FRAMES * (c - self.a.xb_window) - 1
+            lo = t["sent_hi"] if need_lo <= t["sent_hi"] else need_lo
+        if hi > lo:
             nd = self.o.node_spec[t["dst"]]
-            self.node(t["src"]).call("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], nbytes=extra, rate_bps=t["rate"], timeout=300)
-            t["input_bytes"] += extra
+            self.node(t["src"]).call("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], f_lo=lo, f_hi=hi, codec=t["codec"], rate_bps=t["rate"],
+                                     part=len(t["frame_ranges"]) + 1, timeout=300)
+            t["frame_ranges"].append([lo, hi]); t["sent_hi"] = hi
         self.node(t["dst"]).call("RECOMPUTE_FINISH", call=c, src=t["src"])
         self.ev.log("xb_recompute_finish", task=t["id"], call=c, reason=reason)
+
+    def xb_input_accounting(self):
+        """Recompute baselines: actual encoded bytes per task (sent, received, discarded at abandoned targets), the raw
+        upper bound, encode / decode CPU time, exactness of the decoded frames, and per switchover the replay's input state."""
+        if not self.policy.startswith("recompute"):
+            return None
+        per = {}
+        for t in self.xb_tasks:
+            sent = [e for e in self.node_events if e["event"] == "xb_inputs_sent" and e.get("task") == t["id"]]
+            recv = [e for e in self.node_events if e["event"] == "xb_inputs_received" and e.get("task") == t["id"]]
+            disc = [e for e in self.node_events if e["event"] == "xb_inputs_discarded" and e.get("task") == t["id"]]
+            per[t["id"]] = {"dst": t["dst"], "outcome": t.get("outcome") or t.get("state"), "frame_ranges": t.get("frame_ranges"),
+                            "bytes_sent": sum(int(e.get("bytes") or 0) for e in sent), "raw_bytes": sum(int(e.get("raw_bytes") or 0) for e in sent),
+                            "frames": sum(int(e.get("frames") or 0) for e in sent), "enc_cpu_s": sum(float(e.get("enc_cpu_s") or 0) for e in sent),
+                            "send_wall_s": sum(float(e.get("send_s") or 0) for e in sent), "bytes_decoded": sum(int(e.get("bytes") or 0) for e in recv),
+                            "decode_cpu_s": sum(float(e.get("decode_s") or 0) for e in recv), "bytes_discarded": sum(int(e.get("bytes") or 0) for e in disc),
+                            "segments_exact": sum(1 for e in recv if e.get("exact") in (True, "True")), "segments": sum(1 for e in recv if int(e.get("f_hi") or 0) > int(e.get("f_lo") or 0)),
+                            "min_psnr": min((float(e["psnr"]) for e in recv if e.get("psnr") not in (None, "", "None")), default=None)}
+        sws = []
+        for sw in self.xb_switches:
+            ev = next((e for e in reversed(self.node_events) if e["event"] == "resume" and e["node"] == sw["dst"] and str(e.get("mode", "")).startswith("recompute")), {})
+            sws.append({"task": sw["task"], "dst": sw["dst"], "inputs_exact": ev.get("inputs_exact") in (True, "True"), "input_error": ev.get("input_error"),
+                        "input_wait_s": ev.get("input_wait_s"), "replayed": ev.get("replayed")})
+        tot = lambda k: sum(v[k] for v in per.values())  # noqa: E731
+        return {"codec": self.a.xb_codec, "lossless": self.a.xb_codec in XB_LOSSLESS, "tasks": per, "switchovers": sws,
+                "bytes_sent": tot("bytes_sent"), "raw_bytes": tot("raw_bytes"), "bytes_abandoned_targets": sum(v["bytes_sent"] for v in per.values() if v["outcome"] == "cancelled"),
+                "enc_cpu_s": tot("enc_cpu_s"), "decode_cpu_s": tot("decode_cpu_s")}
 
     def execute_xb(self):
         """Pre-copy / recompute baselines: the source keeps generating and serving after the trigger; the user moves on the
@@ -1144,8 +1183,13 @@ class Run:
             self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=self.run_id, t0=None)
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
         self.manifest = prep["manifest"]
-        for lb in self.nodes_used[1:]:
-            self.node(lb).call("XB_PREPARE", task="none", provision=True, timeout=600)   # warm destinations (untimed)
+        rec = self.policy.startswith("recompute")
+        self.input_check = {}
+        for lb in self.nodes_used:
+            # warm destinations (untimed); recompute: every node loads the uint8 input history and checks it against its runtime input
+            r = self.node(lb).call("XB_PREPARE", task="none", provision=lb != "A", inputs=rec, timeout=600)
+            if rec:
+                self.input_check[lb] = r.get("input_check")
         self.drain(0.5)
         self.xb_task, self.xb_tasks, self.xb_switches, self.xb_seen = None, [], [], 0
         self.t0 = time.time(); self.ev.set_ref(self.t0)
@@ -1203,12 +1247,17 @@ class Run:
                       "gpu0_idle_before_run": None if self.gpu0_before is None else all("error" not in v and v["others_mib"] < 1024 and v["util_pct"] <= 5 for v in self.gpu0_before.values()),
                       "switchovers_verified": (all(x is True for x in sw_ok) if sw_ok else None), "n_switchovers": len(self.xb_switches),
                       "final_edge_served": self.running == self.edges[-1], "stop_reason": self.stop_reason}
+        inputs = self.xb_input_accounting()
+        if inputs is not None:
+            validation["input_check"] = all(v is True for v in self.input_check.values())
+            validation["codec_lossless"] = a.xb_codec in XB_LOSSLESS
+            validation["inputs_exact_at_switchovers"] = (all(sw.get("inputs_exact") is True for sw in inputs["switchovers"]) if inputs["switchovers"] else None)
         summary = {"run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
                    "path": self.edges, "hosts": hosts, "t0_wall": self.t0, "migration_chunk": a.migration_chunk,
                    "xb_params": {"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window, "horizon": a.xb_horizon},
                    "moves": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in m.items()} for m in self.moves],
                    "tasks": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in t.items()} for t in self.xb_tasks],
-                   "switchovers": [{**sw, "t": self.rel_t(sw["t"])} for sw in self.xb_switches],
+                   "switchovers": [{**sw, "t": self.rel_t(sw["t"])} for sw in self.xb_switches], "inputs": inputs,
                    "validation": validation, "node_end": {lb: {k: v for k, v in e.items() if k not in ("network_csv", "baseline_record")} for lb, e in ends.items()},
                    "source_prep": {k: v for k, v in prep.items() if k != "manifest"}}
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
@@ -1750,6 +1799,7 @@ def main():
     ap.add_argument("--xb_min_shrink", type=float, default=0.10, help="XB pre-copy: non-convergence when a round shrinks by less than this")
     ap.add_argument("--xb_lag", type=int, default=1, help="XB recompute-full: switchover when the destination is within this many calls")
     ap.add_argument("--xb_window", type=int, default=3, help="XB recompute-win: replay window W")
+    ap.add_argument("--xb_codec", type=str, default="ffv1", help="XB recompute: input-history codec (tools/eval/xb_codec.py; ffv1 = primary lossless, h264_crf23 / h264_crf28 = lossy sensitivity, raw = upper bound)")
     ap.add_argument("--xb_horizon", type=int, default=100, help="XB: calls generated at the final edge after its switchover before the run ends")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
     ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")

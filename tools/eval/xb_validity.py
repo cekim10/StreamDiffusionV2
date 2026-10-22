@@ -1,8 +1,9 @@
 """Run validity for the XB re-implemented baselines (pre-copy / recompute; osdi/expXB/preregistration.md section 8).
 
 A run is valid iff: every node on one commit; GPU 0 idle before the run (GPU runs); pre-copy: every switchover's state
-verified against the source's digests at the boundary (recompute: at least one switchover; its exactness is judged on
-the outputs by the aggregator); the final edge ended up serving; the run was not cut by max_run_s; and
+verified against the source's digests at the boundary (recompute: at least one switchover, every node's uint8 input
+history reproduces its runtime input, and with a lossless codec every replay's decoded inputs are bit-exact; lossy codecs
+are sensitivity runs whose trajectory is judged on the outputs by the aggregator); the final edge ended up serving; the run was not cut by max_run_s; and
 every node's NIC receive rate stayed within 1.15 x the emulated cap in every 10 s window (shaped runs).
 """
 
@@ -39,9 +40,14 @@ def run_validity_xb(s: dict, run_dir: Path | str | None = None, dry: bool = Fals
         # pre-copy moves state: every switchover's components must match the source's digests at the boundary
         if v.get("switchovers_verified") is not True:
             bad.append("a switchover was not verified (or none happened)")
-    elif not v.get("n_switchovers"):
-        # recompute moves inputs, not state: its correctness is judged on the outputs (aggregator), not here
-        bad.append("no switchover happened")
+    else:
+        # recompute moves inputs, not state: its trajectory is judged on the outputs (aggregator); here only the inputs
+        if not v.get("n_switchovers"):
+            bad.append("no switchover happened")
+        if v.get("input_check") is not True:
+            bad.append("a node's uint8 input history does not reproduce its runtime input")
+        if v.get("codec_lossless") and v.get("inputs_exact_at_switchovers") is not True:
+            bad.append("lossless input codec but a replay's decoded inputs were not bit-exact")
     if v.get("final_edge_served") is not True:
         bad.append("the final edge never served")
     if str(v.get("stop_reason", "")).startswith("deadline"):

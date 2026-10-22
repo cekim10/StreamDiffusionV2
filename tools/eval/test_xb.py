@@ -117,6 +117,18 @@ def main():
                 check(f is not None and float(f["psnr"]) < 30, f"recompute_win: approximate (psnr {f and f['psnr']})")
             inp = [e for e in ev if e["event"] == "B:xb_inputs_received"]
             check(sum(e["detail"]["bytes"] for e in inp) > 0, f"{pol}: input history transferred ({sum(e['detail']['bytes'] for e in inp) >> 20} MiB)")
+            I = s["inputs"]
+            check(I["codec"] == "ffv1" and 0 < I["bytes_sent"] < I["raw_bytes"], f"{pol}: FFV1 bytes {I['bytes_sent'] >> 20} MiB < raw {I['raw_bytes'] >> 20} MiB")
+            check(all(x["inputs_exact"] for x in I["switchovers"]) and s["validation"]["input_check"], f"{pol}: decoded inputs bit-exact at the switchover; input check on every node")
+            sw = s["switchovers"][-1]; call = int(sw["call"])
+            rng = next(iter(I["tasks"].values()))["frame_ranges"]
+            if pol == "recompute_full":
+                check(rng[0][0] == 0 and rng[-1][1] == 5 + 4 * call and all(rng[i][1] == rng[i + 1][0] for i in range(len(rng) - 1)),
+                      f"recompute_full: contiguous frames 0 .. {5 + 4 * call} for resume at call {call} ({len(rng)} parts)")
+            else:
+                need_lo = 5 + 4 * (call - 3) - 1
+                check(min(a for a, b in rng) <= need_lo and max(b for a, b in rng) == 5 + 4 * call, f"recompute_win: window frames [{need_lo}, {5 + 4 * call}) covered by {rng}")
+            check(I["enc_cpu_s"] > 0 and I["decode_cpu_s"] > 0, f"{pol}: encode {I['enc_cpu_s']:.2f} s, decode {I['decode_cpu_s']:.2f} s CPU recorded")
     d = R.get("split_wait")
     if d is not None:
         ev = events(d); m = metrics(d)
@@ -124,6 +136,16 @@ def main():
         bcall = bind[0]["detail"]["call"] if bind else None
         before = [r for r in m if r["owner"] == "B" and bcall is not None and int(r["call"]) < bcall]
         check(bool(bind) and not before, f"split_wait: no Sink-less generation at B (bind at call {bcall}, {len(before)} chunks before it)")
+    print("- lossy input sensitivity (H.264 CRF 23), single move")
+    R3 = run("_xbtest_lossy", "recompute_full,recompute_win", 1, "1e9", ["--xb_codec", "h264_crf23"])
+    for pol, d in R3.items():
+        s = json.load(open(d / "summary.json"))
+        ok, why = run_validity_xb(s, d, dry=True)
+        I = s["inputs"]
+        check(ok and not I["lossless"] and "codec=h264_crf23" in d.name, f"{pol} CRF 23: valid as a sensitivity run {why}")
+        check(not any(x["inputs_exact"] for x in I["switchovers"]) and all(t["min_psnr"] is not None for t in I["tasks"].values()),
+              f"{pol} CRF 23: inputs not bit-exact (min PSNR {[t['min_psnr'] and round(t['min_psnr'], 1) for t in I['tasks'].values()]})")
+        check(I["bytes_sent"] * 20 < I["raw_bytes"], f"{pol} CRF 23: {I['bytes_sent'] >> 10} KiB vs raw {I['raw_bytes'] >> 20} MiB")
     print("- repeated mobility A -> B -> C -> D, rho 2 (T_m 2.7 s; tasks cancelled and retargeted)")
     R2 = run("_xbtest_rho2", "precopy_sink,recompute_full,precopy_full", 3, "2.7")
     for pol, d in R2.items():
@@ -133,6 +155,11 @@ def main():
         check(ok and s["validation"]["final_edge_served"], f"{pol}: valid {why}; task outcomes {outcomes}; final owner D")
         check("cancelled" in outcomes, f"{pol}: at least one task cancelled by a move")
         check(all(sw["dst"] in ("B", "C", "D") for sw in s["switchovers"]) and s["switchovers"][-1]["dst"] == "D", f"{pol}: switchovers {[(sw['dst'], sw['call']) for sw in s['switchovers']]}")
+        if pol == "recompute_full":
+            I = s["inputs"]
+            starts = [t["frame_ranges"][0][0] for t in I["tasks"].values()]
+            check(all(x == 0 for x in starts), f"recompute_full rho 2: every target receives the history from frame 0 (no reuse across targets): {starts}")
+            check(I["bytes_abandoned_targets"] > 0, f"recompute_full rho 2: bytes to abandoned targets counted ({I['bytes_abandoned_targets'] >> 20} MiB of {I['bytes_sent'] >> 20} MiB)")
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
     sys.exit(1 if FAILS else 0)
 

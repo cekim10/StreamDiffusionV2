@@ -1,6 +1,9 @@
 # Experiment XB - external migration baselines (re-implemented): preregistration REVISED DRAFT (2026-10-20)
 
-Status: **REVISED DRAFT 3 (2026-10-21), approved for implementation preparation; not frozen.** Corrections of
+Status: **REVISED DRAFT 4 (2026-10-22), not frozen.** Draft 4 adds section 3.2 (recompute input transfer: lossless
+FFV1 as the primary codec, chosen by the CPU-only validation in `codec_validation.md`; lossy H.264 sensitivity; raw
+upper bound; accounting rules) and decision D5. **No GPU calibration until the codec validation is reviewed.**
+Draft 3 (2026-10-21) was approved for implementation preparation. Corrections of
 2026-10-21 applied (alternative min-gap calibration setting, jitter runs outside the 35, P-full exactness at an atomic
 chunk boundary, P-sink Sink-snapshot correctness vs trajectory equivalence, XH1b descriptive). The final document is
 frozen after the calibration results are recorded and reviewed, before the shakedown and the main sweep. Roadmap step 3
@@ -23,7 +26,7 @@ cluster). VM post-copy and edge proactive synchronization are related work only;
 |---|---|---|---|
 | **exact, full state** | Full migration (existing) | stop, copy all 6.02 GiB, resume | bit-exact |
 | | **P-full** (Llumnix-style pre-copy) | source keeps generating and serving; all components copied in rounds (changed fragments only after round 1); short stop-and-copy at a chunk boundary; destination resumes | bit-exact **only if the switchover validation of section 3.1 passes**; until then P-full is not classified exact |
-| | **R-full** (ServerlessLLM-style recompute) | destination re-runs the session from call 0 from the input frames (same per-call seeds); source keeps serving until it catches up | bit-exact by construction |
+| | **R-full** (ServerlessLLM-style recompute) | destination re-runs the session from call 0 from the transferred input frames (losslessly compressed, section 3.2; same per-call seeds); source keeps serving until it catches up | bit-exact if the decoded inputs are bit-exact (checked per segment) and the replay reproduces the reference (checked on the outputs) |
 | **hybrid (uses OTTER's M1)** | **P-sink** (M1-based hybrid baseline) | the Sink is pre-copied in rounds while the source serves; at switchover the rest goes by OTTER's M1 fast path and the destination rebuilds recent KV / VAE caches as in M1 | **Sink snapshot exact** (digest at the switchover boundary); **not trajectory-equivalent**: recent KV and VAE caches are rebuilt, so the output is expected to deviate transiently (RD's "immediate Sink bind after an M1 reset", d = 0) |
 | | **Wait-for-Sink** (internal ablation) | M1 fast path, but no generation until the Sink is bound | Sink exact, ephemeral rebuilt |
 | **approximate** | **R-win** (approximate recomputation) | the destination re-runs only the last W input chunks from a fresh session | not exact (Sink not reproduced) |
@@ -88,7 +91,70 @@ the mismatch. For P-sink the claim is limited to Sink snapshot correctness; its 
   threshold, else after a round limit (then the source stops and the destination finishes catching up while nothing is
   delivered). Lag threshold and round limit fixed by the calibration.
 - **R-win window W:** fixed by the calibration from W in {1, 3, 6} (the existing replay variants).
+- **Recompute input codec:** not a calibrated parameter; fixed by section 3.2.
 - **Wait-for-Sink, Full migration, OTTER:** no parameters (frozen implementations).
+
+### 3.2 Recompute input transfer (R-full, R-win; decided 2026-10-22, CPU validation `codec_validation.md`)
+
+**Transfer unit.** The runtime's input is the clip resized to 480 x 832 as uint8 RGB, normalized as x / 127.5 - 1 and
+cast to bf16. The recompute baselines transfer the **uint8 frames** (1,198,080 B each). Before a recompute run every
+node checks that its uint8 history reproduces its runtime input tensor bit for bit (`input_check`). A bit-exact uint8
+transfer therefore gives a bit-exact replay input.
+
+**Primary codec: FFV1, lossless** (RGB as `bgr0`, level 3, intra-only, 4 slices with CRC). It was selected by the
+CPU-only validation (dog and butterfly-feeding-slow-motion; R-full at triggers 30 and 120, a later R-full round, and
+the R-win W = 3 window). FFV1 was bit-exact in every case and had the best compression ratio and the fastest encode
+among the lossless candidates:
+
+| codec | class | ratio vs raw (dog / butterfly) | bit-exact | encode / decode per frame (Apple M-series, indicative) |
+|---|---|---|---|---|
+| raw | upper bound | 1.0 / 1.0 | yes | - |
+| zlib level 1 / 6 | lossless | 1.42-1.47 / 1.31-1.32 | yes | ~13.5-21 / ~2 ms |
+| PNG per frame | lossless | 2.04-2.09 / 2.58 | yes | ~17-19 / ~4.5 ms |
+| **FFV1** | **lossless (primary)** | **2.99-3.05 / 4.12-4.13** | **yes** | **~3-4.5 / ~3.5-4.5 ms** |
+| x264rgb qp 0 | lossless | 2.64-2.77 / 2.43-2.45 | yes | ~6.5-7 / ~6.5-7.5 ms |
+| H.264 CRF 23 (yuv420p) | lossy | 108-140 / 123-149 | no (PSNR 34.7-36.4 dB) | ~1.7-2 / ~0.6 ms |
+| H.264 CRF 28 (yuv420p) | lossy | 203-290 / 220-279 | no (PSNR 31.8-34.2 dB) | ~1.5-1.7 / ~0.5 ms |
+
+For example, R-full at trigger 30 (calls 0-30, 125 frames) is 150 MB raw, 49.6 MB FFV1 for dog and 36.3 MB FFV1 for
+butterfly; at 1 Gbps that is about 0.4 s and 0.3 s of transfer against about 17 s of replay. Testbed CPU costs are
+measured online in every run; the table above is not used as a result.
+
+**Protocol (implemented).**
+- The source encodes the requested frame range in 32-frame segments in a 4-thread pool. Segments are sent as they are
+  encoded, through the same emulated caps as every other transfer.
+- The destination decodes each segment off the receive path. It compares the decoded frames with its own copy of the
+  same frames (`np.array_equal`). It writes the **decoded** frames into the runtime input, so the replay always consumes
+  the transferred data.
+- Replay call c waits only until frames [0, 5 + 4(c + 1)) are decoded (R-full). R-win waits for its window
+  [5 + 4(c - W) - 1, 5 + 4c). Replay is therefore pipelined with transfer and decode.
+- R-full is classified exact in a run only if every decoded segment of the replay that switches over is bit-exact
+  **and** the replayed outputs match the reference (section 8).
+
+**Lossy sensitivity (H.264 CRF 23 and CRF 28).** The same protocol with lossy segments. The destination replays from
+the lossy decoded frames, and the input PSNR is recorded per segment. These runs are labelled "R-full / R-win, lossy
+inputs (CRF x)". They are **never classified as exact recomputation** unless bit-exact replay is independently verified
+(not expected). Runs: decision D5.
+
+**Raw upper bound.** Every recompute run also records the raw size of the frames it transferred (frames x 1,198,080 B).
+Raw is the network-byte upper bound and needs no extra runs. A raw-transfer run is possible with the codec flag but is
+not planned.
+
+**Accounting rules.**
+1. **Actual bytes.** Input bytes are the codec's output bytes actually sent: every segment, every part, every target.
+2. **History generated while the source serves.** R-full sends frames [0, 5 + 4c) at the start (c = the source's next
+   call). Each round then sends the frames of the calls the source generated meanwhile. The final part, after the
+   source stops at call c', sends the remaining frames up to 5 + 4c'. R-win sends its window at the start and the
+   frames the window gained by the stop call at the finish.
+3. **No reuse across abandoned targets.** A new target (after a move) receives its whole range again: frames from 0
+   (R-full) or its whole window (R-win). Bytes sent to abandoned targets are counted and reported separately.
+   Segments arriving for a cancelled task are discarded at the destination (counted as discarded).
+4. **Encode and decode costs.** The source records encode CPU time per segment; this encoding runs on the source's
+   CPU while it keeps generating, so any effect on its chunk service time appears in its per-chunk times. The
+   destination records decode CPU time per segment and the time its replay waited for decoded inputs.
+5. **Reported per run:** encoded bytes sent (total, per task, to abandoned targets), raw bytes, compression ratio,
+   encode CPU seconds, decode CPU seconds, replay input-wait seconds, segment exactness and, for lossy runs, the
+   minimum input PSNR.
 
 ## 4. Calibration plan (before the main sweep; baseline-favorable; not evidence)
 
@@ -150,7 +216,8 @@ XB1 only.
 
 Local resumption, delivery gap, remote-serving cost (chunks, seconds, remote delivery bytes, LAN RTT) as section 2;
 trajectory (PSNR vs the uninterrupted run: single crossing, sustained 10 calls, terminal median of calls b + 90 .. b + 99
-or the last 10 delivered calls), bytes (source egress, total network, transferred inputs, pre-copy rounds), destination
+or the last 10 delivered calls), bytes (source egress, total network, transferred inputs as actual encoded bytes with
+the raw upper bound and encode / decode CPU time per section 3.2, pre-copy rounds), destination
 GPU-seconds before serving, extra source GPU-seconds while serving remotely, convergence (rounds, dirty bytes per round,
 switchover reason).
 
@@ -173,6 +240,9 @@ in every scenario.
 
 W / R / N run rules (all fragments verified, digest, NIC checks, GPU 0 idle, one commit); exactness checks per class
 (R-full replayed frame digests vs the reference; P-full and P-sink final state digest vs the source at switchover);
+recompute runs: every node's `input_check` passes, and with the lossless codec every decoded input segment of the
+switching replay is bit-exact (a failure makes the run invalid and is reported); lossy-input runs are valid as
+sensitivity runs and never count as exact;
 remote-serving accounting checked against the delivered-chunk log (each chunk delivered once).
 
 ## 9. Runs, runtime, occupancy
@@ -184,18 +254,20 @@ remote-serving accounting checked against the delivered-chunk log (each chunk de
 | main sweep: XB1 7 x 2 workloads x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 5 x 3 = 15 | **81** | A-D | ~5-6 h |
 | alternative min-gap settings in XB1 (only where they differ, rule 4) | 0-24 | A, B | 0-1.5 h |
 | jitter-triggered re-calibration (rule 5, only if triggered) | 0-54 | A, B | 0-3 h |
-| **total GPU runs** | **143-221** | | **~8-14 h** |
+| lossy-input sensitivity (section 3.2, D5 proposal: XB1, R-full and R-win at their selected settings, CRF 23 and 28, dog and butterfly, 1 rep) | 8 | A, B | ~0.5 h |
+| **total GPU runs** | **151-229** | | **~8.5-14.5 h** |
 
 Shakedown and calibration are not evidence. Exclusive use of GPU 0 on the listed hosts; no commit or pull on the
 testbed while a phase runs.
 
-## 10. Implementation (after review; not started)
+## 10. Implementation (status 2026-10-22: items 1-3 implemented and loopback-tested; item 4 pending)
 
 1. Pre-copy: source keeps generating after the trigger while a copier sends rounds; per-round content hashes (VACW
    snapshot capture and hash comparison reused); switchover protocol; P-full packs every component; P-sink hands the
    rest to M1.
 2. Recompute: destination replay from inputs (the state-study `replay_full` / `replay_W` paths moved into the node),
-   input-frame transfer, rounds, switchover.
+   encoded input-frame transfer with per-segment bit-exactness checks (section 3.2; `tools/eval/xb_codec.py`), rounds,
+   switchover.
 3. Wait-for-Sink: node flag deferring generation until bind.
 4. Delivery accounting: per delivered chunk, the serving host and the user's current edge; delivery gap; remote-served
    chunk encoding (H.264) for remote delivery bytes; per-run RTT between hosts.
@@ -210,3 +282,5 @@ testbed while a phase runs.
 - **D3 (open until calibration)** - switchover / round parameters fixed by the section-4 calibration and recorded here
   before the main sweep.
 - **D4 (closed)** - no further workloads in XB3 / XB4.
+- **D5 (open)** - lossy-input sensitivity runs. Proposal: 8 runs (section 9), descriptive only, never evidence for
+  XH1-XH5. Alternative: report the lossy cases from the CPU validation only (bytes and input PSNR), with no GPU runs.
