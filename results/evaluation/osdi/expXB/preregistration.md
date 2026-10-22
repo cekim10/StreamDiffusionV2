@@ -1,8 +1,9 @@
 # Experiment XB - external migration baselines (re-implemented): preregistration REVISED DRAFT (2026-10-20)
 
-Status: **REVISED DRAFT, not frozen. Nothing implemented or run.** Roadmap step 3 (`../evaluation_roadmap.md`).
-Revision of 950e12f with decisions D1, D2, D4 closed, a calibration plan for the D3 parameters (section 4), and XH1
-split by baseline class. **No implementation or run until this revision and the calibration plan are reviewed.** The
+Status: **REVISED DRAFT 2 (2026-10-21), not frozen. Nothing implemented or run.** Roadmap step 3
+(`../evaluation_roadmap.md`), after M3E and WX (their frozen results and verdicts are unchanged). Revision of 950e12f
+with decisions D1, D2, D4 closed, a calibration plan for the D3 parameters (section 4, exact run counts and selection
+rules), XH1 split by baseline class, and the four outcome notions of section 2.1 kept apart. **No implementation or run until this revision and the calibration plan are reviewed.** The
 switchover / round parameters are fixed by the calibration of section 4 before the main sweep. No frozen result is
 modified; no M1 / M2 / M3-v2 change.
 
@@ -52,6 +53,18 @@ With repeated moves the user may leave the intended destination before a copy or
 restarts toward the user's new edge from the serving host (no reuse of the abandoned copy, as in the original methods)
 and remote serving continues.
 
+### 2.1 Four outcome notions, never merged
+
+| notion | question | measured by | who is expected to win |
+|---|---|---|---|
+| **fast local resumption** | how soon does the user's current edge produce output? | TTFO-local | OTTER (M1 fast path) |
+| **uninterrupted remote delivery** | does the user keep receiving frames, from any host, while state moves? | delivery gap; remote-serving time / chunks; remote delivery bytes and RTT | pre-copy and recompute (the source keeps serving), at a remote-serving cost |
+| **restoration correctness** | is the state the destination ends with exactly the intended one? | exact methods: whole-state digest / bit-exact frames; Sink-based methods (OTTER, P-sink, Wait-for-Sink): Sink digest at bind; R-win: not exact by design | all except R-win are correct for what they restore |
+| **reference-trajectory recovery** | does the output return to the uninterrupted stream? | PSNR vs reference: single crossing, sustained 10 calls, terminal median | exact methods (no Sink-less generation); OTTER only after its bind (input-dependent, WX / RD) |
+
+No hypothesis turns one notion into evidence for another (e.g. no delivery-gap result is read as trajectory recovery,
+and no correctness result as visual continuity).
+
 ## 3. Method parameters
 
 - **P-full / P-sink rounds:** round 1 sends the component set; round r >= 2 sends fragments whose content hash changed
@@ -65,24 +78,42 @@ and remote serving continues.
 
 ## 4. Calibration plan (before the main sweep; baseline-favorable; not evidence)
 
-Goal: give each baseline its best parameters for the tested setting, so that the main comparison is not won by a poorly
-tuned baseline.
+Goal: give each baseline its best parameters in the tested setting, so that no comparison is won against a poorly
+tuned baseline. Calibration runs are kept and reported (full grid in the appendix) but are never evidence for XH1-XH5.
 
-- **Setting:** XB1 single move, dog, 1 Gbps, trigger chunk 30; 1 run per parameter setting (the runtime is deterministic;
-  timing jitter is checked by repeating the selected setting twice).
-- **Grids:**
-  - P-full and P-sink: dirty-set threshold {16, 64, 256} MiB x round limit {3, 6, 10}; non-convergence rule fixed at
-    "stop when a round's dirty bytes shrink by < 10 %" (9 settings each, 18 runs).
-  - R-full: lag threshold {1, 2} chunks x round limit {3, 6, 10} (6 runs).
-  - R-win: W in {1, 3, 6} (3 runs).
-  - Remote delivery cost: H.264 CRF {23, 28} on the remotely served chunks of the P-sink calibration runs (offline, no
-    extra runs).
-- **Selection rule (fixed now, favoring the baseline):** for each method, the setting with the smallest TTFO-local among
-  valid runs whose final state passes the exactness check of its class (P-full, R-full bit-exact; P-sink Sink digest);
-  ties broken by the smaller delivery gap, then by fewer remote-served chunks. For R-win, the W with the highest
-  terminal PSNR (section 6), ties to the smaller TTFO-local. The selected values are written into this document and
-  frozen with it **before** any main-sweep run.
-- **Cost:** ~30 runs, ~1.5 h of GPU 0 on two hosts (single move uses A and B only).
+**Setting:** XB1 configuration (single move A -> B, trigger chunk 30, 1 Gbps, dog, seed 0), hosts A and B only.
+
+**Grids and exact run counts:**
+
+| method | parameters | settings | runs |
+|---|---|---|---|
+| P-full | dirty-set switchover threshold {16, 64, 256} MiB x round limit {3, 6, 10}; non-convergence rule fixed: stop when a round's dirty bytes shrink by < 10 % | 9 | 9 |
+| P-sink | same grid | 9 | 9 |
+| R-full | catch-up lag threshold {1, 2} chunks x round limit {3, 6, 10} | 6 | 6 |
+| R-win | replay window W in {1, 3, 6} chunks | 3 | 3 |
+| repeats of each method's selected setting (timing jitter check) | - | 4 x 2 | 8 |
+| **total** | | | **35** |
+
+One run per setting suffices because generation is deterministic (WX / M3E reps agree within 0.1 dB and ~0.5 s); the
+two repeats of each selected setting check timing jitter. Remote delivery bytes are computed offline from the P-sink
+calibration runs at H.264 CRF 23 and 28 (no extra runs); CRF 23 is reported in the main sweep, CRF 28 as sensitivity.
+
+**Selection rules (fixed now; lexicographic, baseline-favorable on the metric XH1 compares):**
+1. Eligibility: the run is valid (W / R / N rules) and passes its class's correctness check (P-full and R-full
+   bit-exact after switchover; P-sink Sink digest at bind).
+2. P-full, P-sink, R-full: smallest TTFO-local; settings within 5 % of the smallest are tied, and the tie goes to the
+   smallest delivery gap, then to the fewest remote-served chunks, then to the smaller threshold / round limit.
+3. R-win: among W whose terminal PSNR is within 1.0 dB of the best W, the smallest TTFO-local (so the approximate
+   baseline is not handicapped by a needlessly large window, nor credited with a window that only looks fast because it
+   degrades the stream).
+4. Timing-jitter check: if a selected setting's two repeats differ from its first run by more than 10 % in TTFO-local,
+   the calibration of that method is repeated with 3 runs per setting and the median decides (stated, not silent).
+5. The selected values, the whole grid (TTFO-local, delivery gap, remote-serving time, rounds, dirty bytes per round,
+   switchover reason) and the alternative "minimum delivery gap" setting of each pre-copy variant are written into this
+   document and frozen with it before any main-sweep run. If the minimum-delivery-gap setting differs from the selected
+   one, its main-sweep numbers are not run; its calibration numbers are reported next to the main results.
+
+**Cost:** 35 runs on GPU 0 of A and B, ~1.5-2 h.
 
 ## 5. Scenarios (main sweep)
 
@@ -127,9 +158,15 @@ remote-serving accounting checked against the delivered-chunk log (each chunk de
 
 ## 9. Runs, runtime, occupancy
 
-Calibration ~30 runs (~1.5 h, two hosts). Main sweep: XB1 7 x 2 x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 15 ->
-**81 runs**, ~5-6 h of exclusive use of GPU 0 on the four hosts, plus a shakedown (one run per method and scenario,
-~1 h).
+| phase | runs | hosts | time |
+|---|---|---|---|
+| calibration (section 4) | 35 | A, B | ~1.5-2 h |
+| shakedown (one run per method and scenario: XB1 7 x 2, XB2 3, XB3 5, XB4 5) | 27 | A-D | ~1.5 h |
+| main sweep: XB1 7 x 2 workloads x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 5 x 3 = 15 | **81** | A-D | ~5-6 h |
+| **total GPU runs** | **143** | | **~8-9.5 h** |
+
+Shakedown and calibration are not evidence. Exclusive use of GPU 0 on the listed hosts; no commit or pull on the
+testbed while a phase runs.
 
 ## 10. Implementation (after review; not started)
 
