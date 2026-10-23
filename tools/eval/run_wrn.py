@@ -17,6 +17,7 @@
     python tools/eval/run_wrn.py xb_gate              # XB real-GPU exactness gate: P-full, R-full (--xb_verify_state) x dog, butterfly; then check_xb_gate.py
     python tools/eval/run_wrn.py xb_cal               # XB calibration grid (27 runs, A and B only); then aggregate_xb_cal.py
     python tools/eval/run_wrn.py xb_cal_rep           # 2 repeats of each selected setting (8 runs); then aggregate_xb_cal.py (jitter rule)
+    python tools/eval/run_wrn.py xb_cal_ext           # D-cal-1: round limits 1 and 2 for R-full and P-sink (4 runs); then aggregate_xb_cal.py and xb_cal_rep
     python tools/eval/run_wrn.py xb_cal_jitter        # only if aggregate_xb_cal.py flags a method: 2 more runs per setting of that method
     python tools/eval/run_wrn.py xb_lossy             # D5 lossy-input sensitivity (8 runs) - only after the XB freeze
     add --dry for the loopback protocol test (fake nodes on 127.0.0.1, scaled bandwidth; never reported)
@@ -418,10 +419,49 @@ def do_xb_cal(c):
         c.orch("expXB_cal", xb_args(c, pol) + ["--xb_grid", grid], xb_node_extra("dog"), f"XB calibration {pol} ({grid.count(';') + 1} settings)")
 
 
+XB_GRID_EXT = {"recompute_full": "lag=1:rl=1;lag=1:rl=2", "precopy_sink": "thr=16:rl=1;thr=16:rl=2"}   # calibration_review.md D-cal-1
+
+
+def _xb_rep_tag(pol: str, setting: str) -> str:
+    kv = dict(x.split("=") for x in setting.split(":"))
+    if pol.startswith("precopy"):
+        return f"_thr={float(kv['thr']):g}_rl={kv['rl']}_rep="
+    if pol == "recompute_full":
+        return f"_lag={kv['lag']}_rl={kv['rl']}_rep="
+    return f"_W={kv['W']}_rep="
+
+
+def _xb_has_valid(c: Ctx, pol: str, setting: str, reps) -> bool:
+    from xb_validity import run_validity_xb
+    root = ROOT / "results/evaluation" / (("_dryrun_" if c.dry else "") + "expXB_cal")
+    tag = _xb_rep_tag(pol, setting)
+    for r in reps:
+        ok = False
+        for d in root.glob(f"policy={pol}_*{tag}{r}_*"):
+            try:
+                ok = ok or run_validity_xb(json.load(open(d / "summary.json")), d, dry=c.dry)[0]
+            except (OSError, ValueError, KeyError):
+                pass
+        if not ok:
+            return False
+    return True
+
+
 def do_xb_cal_rep(c):
+    """Repeats 2 and 3 of each selected setting; a method whose selected setting already has them starts no nodes."""
     for pol, x in xb_selection(c).items():
-        if x.get("selected"):
-            c.orch("expXB_cal", xb_args(c, pol, reps="2", rep_start="2") + ["--xb_grid", x["selected"]], xb_node_extra("dog"), f"XB calibration repeats {pol} {x['selected']}")
+        if not x.get("selected"):
+            continue
+        if _xb_has_valid(c, pol, x["selected"], (2, 3)):
+            print(f"[wrn] skip XB calibration repeats {pol} {x['selected']}: repeats 2 and 3 exist", flush=True); continue
+        c.orch("expXB_cal", xb_args(c, pol, reps="2", rep_start="2") + ["--xb_grid", x["selected"]], xb_node_extra("dog"), f"XB calibration repeats {pol} {x['selected']}")
+
+
+def do_xb_cal_ext(c):
+    """calibration_review.md D-cal-1 (pre-freeze): round limits 1 and 2 for R-full and P-sink, whose optimum lay at the
+    grid's lower edge (round limit 3). Same setting, rules and selection; rep 1."""
+    for pol, grid in XB_GRID_EXT.items():
+        c.orch("expXB_cal", xb_args(c, pol) + ["--xb_grid", grid], xb_node_extra("dog"), f"XB calibration extension {pol} ({grid})")
 
 
 def do_xb_cal_jitter(c):
@@ -540,7 +580,7 @@ def do_list(c):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx",
-                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_jitter", "xb_lossy"])
+                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_ext", "xb_cal_jitter", "xb_lossy"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -556,7 +596,7 @@ def main():
                 f(c)
         else:
             {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx,
-             "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy}[a.what](c)
+             "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_ext": do_xb_cal_ext, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:

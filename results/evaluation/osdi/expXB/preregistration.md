@@ -252,6 +252,26 @@ tolerance. In the dry grid, P-full settings with identical behavior were separat
 Proposal: apply the same 5 % tie band to the delivery gap and to remote-served chunks before falling back to the
 smaller threshold and round limit. Rule 3 (R-win) is unchanged.
 
+### 4.1 Calibration outcome and pre-freeze decisions (2026-10-22; `calibration_review.md`)
+
+The 35 runs are valid and pass their class checks; no selected setting's jitter exceeds 2.2 %, so rule 5 does not
+trigger. The reviewer's decisions, recorded before the freeze:
+- **D-cal-1 (grid extension).** R-full's and P-sink's best TTFO-local lay at the grid's lower edge (round limit 3). The
+  grid is extended with round limits 1 and 2 for both (`run_wrn.py xb_cal_ext`: R-full lag=1, P-sink thr=16; the lag
+  and the threshold have no effect at these limits). Rules 1-5 are applied unchanged to the extended grid, and a newly
+  selected setting gets its two repeats. This extension is disclosed as made because the optimum was at the edge.
+- **D-cal-2 (tie-break).** The rules stay as written. The tolerance proposal of draft 5 is withdrawn, because adopting
+  it after seeing the results would change a rule after the fact. The P-full selection is immaterial: all nine
+  settings behave identically (3 rounds, dirty [6164, 5224, 5208] MiB).
+- **D-cal-3 (rule-4 alternatives).** The R-full and R-win alternatives (minimum-gap settings) are run in XB1. The P-sink
+  alternative is dropped because it behaves identically to the selected setting apart from one empty round, and the
+  drop is disclosed. The alternatives are re-derived after D-cal-1.
+- **D-cal-4 (exactness).** P-full and R-full are classified **exact**. The gate (4 runs) verified all five state
+  components at the switchover. Every gate and calibration run of both methods produced output bit-identical to the
+  reference after the switchover (101 / 101 calls).
+
+The final selected settings and the whole grid are written here at the freeze.
+
 ## 5. Scenarios (main sweep)
 
 | id | mobility | network | workloads | methods |
@@ -304,11 +324,12 @@ remote-serving accounting checked against the delivered-chunk log (each chunk de
 | calibration (section 4) | 35 | A, B | ~3-4 h |
 | shakedown (one run per method and scenario: XB1 7 x 2, XB2 3, XB3 5, XB4 5) | 27 | A-D | ~1.5 h |
 | main sweep: XB1 7 x 2 workloads x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 5 x 3 = 15 | **81** | A-D | ~5-6 h |
-| alternative min-gap settings in XB1 (only where they differ, rule 4) | 0-24 | A, B | 0-1.5 h |
-| jitter-triggered re-calibration (rule 5, only if triggered) | 0-54 | A, B | 0-3 h |
+| alternative min-gap settings in XB1 (rule 4 after D-cal-3: R-full and R-win, 3 reps x 2 workloads; re-derived after D-cal-1) | 12 | A, B | ~1 h |
+| calibration extension (D-cal-1: round limits 1 and 2 for R-full and P-sink, plus repeats of a new selection) | 4-8 | A, B | ~1 h |
+| jitter-triggered re-calibration (rule 5) | 0 (not triggered) | - | - |
 | real-GPU exactness gate (section 3.3, before calibration) | 4 | A, B | ~0.5-1 h |
 | lossy-input sensitivity (section 3.2, D5 approved: XB1, R-full and R-win at their selected settings, CRF 23 and 28, dog and butterfly, 1 rep; after the freeze) | 8 | A, B | ~0.5 h |
-| **total GPU runs** | **155-233** | | **~9-15.5 h** |
+| **total GPU runs** | **171-175** (plus 12 voided runs, `void_runs.md`) | | **~11-12 h** |
 
 Shakedown and calibration are not evidence. Exclusive use of GPU 0 on the listed hosts; no commit or pull on the
 testbed while a phase runs.
