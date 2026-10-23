@@ -27,6 +27,23 @@ PRE = 16          # saved calls before the first operation
 HORIZON = 100     # calls b .. b + 99 after the final bind
 K = 2             # Stream-Batch depth of the model (denoising steps); output at call c is input chunk c - (K - 1)
 EV = ROOT / "results/evaluation"
+VD_INPUTS = ("dog", "butterfly-feeding-slow-motion")   # osdi/expVD/preregistration.md (first two inputs)
+
+
+def vd_conditions(ot: dict) -> list[dict]:
+    """Experiment VD: the 2 x 2 x 2 factorial of what survives the M1 reset at the OT schedule `ot`, without the
+    (zero, reset, reset) cell (= `ot` itself), plus (zero, encoder + decoder kept, reset). The emulator keeps the state;
+    nothing is transferred (counterfactual state, realized schedule)."""
+    out = []
+    x = ot["id"].split("-")[1]
+    cells = [(m, d, r) for m in (False, True) for d in (False, True) for r in (False, True) if (m, d, r) != (False, False, False)]
+    for m, d, r in cells:
+        keep = (["vae_dec"] if d else []) + (["recent"] if r else [])
+        out.append({**ot, "id": f"VD{x}-{'mask' if m else 'zero'}-{'dec' if d else 'nodec'}-{'rec' if r else 'norec'}", "kind": "vd", "mask": m, "keep": keep,
+                    "vd_of": ot["id"], "label": f"VD diagnosis at the {ot['id']} schedule: sink slots {'masked' if m else 'zero (attended)'}, keep {keep or 'nothing'} (counterfactual state)"})
+    out.append({**ot, "id": f"VD{x}-zero-encdec-norec", "kind": "vd", "mask": False, "keep": ["vae_dec", "vae_enc"], "vd_of": ot["id"],
+                "label": f"VD diagnosis at the {ot['id']} schedule: keep VAE encoder + decoder caches (counterfactual state)"})
+    return out
 
 
 def _valid_runs(pattern: str) -> list[Path]:
@@ -146,6 +163,8 @@ def build() -> dict:
                                               "extended_beyond_run_at_cadence": True},
                                cold_call=m, counterfactual=kind == "copied" or ot["counterfactual"],
                                extra={"paired_with": ot["id"], "no_output_calls": [m], "emit_call": m + K - 1}))
+        if inp in VD_INPUTS:
+            conds += vd_conditions(conds[0]) + vd_conditions(conds[1])   # after the seven VC conditions (VD-D3: VC first)
         end_all = max(c["end"] for c in conds)
         cad_ref = conds[0]["timeline"]["cadence_s"]
         out["inputs"][inp] = {"N": end_all + 1, "ref": {"frames_from": min(c["frames_from"] for c in conds), "frames_to": end_all,
@@ -161,7 +180,7 @@ def check(out: dict) -> list[str]:
         for c in u["conditions"]:
             s = json.load(open(ROOT / c["sources"][0] / "summary.json"))
             moves = [int(m["call"]) for m in s["moves"]]
-            if c["kind"] == "ot":
+            if c["kind"] in ("ot", "vd"):
                 if c["resets"] != moves or c["binds"] != [int(s["final"]["bind_call"])]:
                     bad.append(f"{inp} {c['id']}: {c['resets']} / {c['binds']} vs run moves {moves} bind {s['final']['bind_call']}")
             elif c["kind"] == "wfs":

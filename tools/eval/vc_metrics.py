@@ -232,9 +232,11 @@ def windows(cond: dict, k: int) -> dict:
     else:
         b = cond["binds"][-1]
     sinkless = set()
-    if cond["kind"] == "ot":
+    if cond["kind"] in ("ot", "vd"):
         sinkless = set(range(first, b))
-    return {"pre": set(range(first - PRE, first)), "sinkless": sinkless, "post_bind_20": set(range(b, b + 20)), "last_10": set(range(cond["end"] - 9, cond["end"] + 1)),
+    resume = cond["cold_call"] + k - 1 if cond["kind"] == "cold" else first
+    return {"pre": set(range(first - PRE, first)), "sinkless": sinkless, "first_4": set(range(resume, resume + 4)), "post_bind_20": set(range(b, b + 20)),
+            "last_10": set(range(cond["end"] - 9, cond["end"] + 1)),
             "events": ([("reset", c) for c in cond["resets"] if c not in cond["binds"]] + [("bind" if c not in cond["resets"] else "reset+bind", c) for c in cond["binds"]] +
                        ([("cold_emit", cond["cold_call"] + k - 1)] if cond.get("cold_call") is not None else [])), "b": b}
 
@@ -309,7 +311,7 @@ def condition_metrics(cond: dict, k: int, O: dict, R: dict, I: dict, gray_fn, em
             per_call[c]["v5b"] = M["v5b"].get(c)
             per_call[c]["v5b_ref"] = ref_series["metrics"]["v5b"].get(c)
     win = {}
-    for name in ("pre", "sinkless", "post_bind_20", "last_10"):
+    for name in ("pre", "sinkless", "first_4", "post_bind_20", "last_10"):
         cs = [c for c in calls if c in W[name]]
         if not cs:
             win[name] = None; continue

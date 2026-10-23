@@ -6,7 +6,7 @@ are copied back. Nothing is pulled or committed on the testbed by this script.
     python tools/eval/run_vc.py preflight --frames_dir /local/path      # D: local filesystem, free space, GPU, packages
     python tools/eval/run_vc.py models                                  # D: download DINO / DINOv2 / CLIP once (before XB starts)
     python tools/eval/run_vc.py vc0 --frames_dir /local/path            # D: metric self-test, dog OT-L / COLD-1 / WFS-1 -> G1, G2, G3
-    python tools/eval/run_vc.py vc1 --frames_dir /local/path            # only after the VC freeze (refuses otherwise)
+    python tools/eval/run_vc.py vc1 --frames_dir /local/path            # only after the VC and VD freezes: VD precheck, then VC-1 + VD per input
     add --dry for a local run on the fake runtime (no agent)
 """
 
@@ -163,10 +163,62 @@ def vc0(a) -> bool:
     return ok
 
 
-def vc1(a):
-    if not (ROOT / "results/evaluation/osdi/expVC_freeze.md").exists():
-        sys.exit("[vc] VC is not frozen (results/evaluation/osdi/expVC_freeze.md missing): VC-1 does not run")
-    sys.exit("[vc] VC-1 is implemented after the freeze review (not part of VC-0)")
+def vc1(a) -> bool:
+    """VC-1 + VD in one unit per input (frozen expVC / expVD): VD precheck (dog), then per input the emulation of every
+    condition (VC's seven first, then VD's sixteen for dog and butterfly), G3 (+ G1 for dog: the frozen M1 replay must
+    still equal the real RD-X run with the VD flag in the code), metrics. Small files are copied back; frames stay."""
+    if not a.dry and not ((ROOT / "results/evaluation/osdi/expVC_freeze.md").exists() and (ROOT / "results/evaluation/osdi/expVD_freeze.md").exists()):
+        sys.exit("[vc] VC / VD are not frozen (expVC_freeze.md / expVD_freeze.md missing): VC-1 does not run")
+    only = [x for x in (a.inputs or "").split(",") if x] or list(INPUTS)
+    if a.dry:
+        py, out = sys.executable, "results/evaluation/_dryrun_expVC"
+        ok = True
+        for inp in only:
+            for cmd in ([py, "tools/eval/vc_emulate.py", "--input", inp, "--dry_run", "--frames_dir", a.frames_dir, "--out_root", out],
+                        [py, "tools/eval/vc_check.py", "--unit", f"{out}/{inp}_s0", "--g3", "--write", "--name", f"vc1_checks_{inp}"],
+                        [py, "tools/eval/vc_metrics.py", "--unit", f"{out}/{inp}_s0", "--embedders", "pixel", "--device", "cpu"]):
+                ok &= subprocess.run(cmd, cwd=ROOT).returncode == 0
+        return ok
+    ag = agent(a)
+    if not preflight(a):
+        return False
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    nic0 = nic_bytes(ag)
+    ok = True
+    if "dog" in only:
+        rc = remote_run(ag, [PY, "tools/eval/vd_precheck.py", "--input", "dog", "--gpu_id", "0"], f"{LOG}/vc1_{stamp}_vd_precheck.log", timeout=3600)
+        print(f"[vc] VD precheck on {a.host}: rc {rc}", flush=True)
+        try:
+            (ROOT / "results/evaluation/osdi/expVD/vd_precheck.json").write_text(ag.read("results/evaluation/osdi/expVD/vd_precheck.json"))
+        except RuntimeError:
+            pass
+    for inp in only:
+        unit = f"results/evaluation/expVC/{inp}_s0"
+        checks = ["--g1", "--g3"] if inp == "dog" else ["--g3"]
+        for what, cmd in (("emulation", [PY, "tools/eval/vc_emulate.py", "--input", inp, "--gpu_id", "0", "--frames_dir", a.frames_dir, "--out_root", "results/evaluation/expVC"]),
+                          ("checks", [PY, "tools/eval/vc_check.py", "--unit", unit, "--write", "--name", f"vc1_checks_{inp}"] + checks),
+                          ("metrics", [PY, "tools/eval/vc_metrics.py", "--unit", unit, "--embedders", "dino,dinov2,clip", "--device", "cuda:0"])):
+            rc = remote_run(ag, cmd, f"{LOG}/vc1_{stamp}_{inp}_{what}.log")
+            print(f"[vc] {inp} {what} on {a.host}: rc {rc}", flush=True)
+            if rc != 0:
+                ok = False
+                if what != "metrics":
+                    break
+        copy_back(ag, f"{unit}/*")
+        try:
+            (ROOT / unit / "metrics.json").write_text(ag.read(f"{unit}/metrics.json"))
+        except RuntimeError:
+            pass
+        for suf in (".md", ".json"):
+            try:
+                (ROOT / f"results/evaluation/osdi/expVC/vc1_checks_{inp}{suf}").write_text(ag.read(f"results/evaluation/osdi/expVC/vc1_checks_{inp}{suf}"))
+            except RuntimeError:
+                pass
+    nic1 = nic_bytes(ag)
+    nic = {k: {"rx": nic1[k]["rx"] - nic0[k]["rx"], "tx": nic1[k]["tx"] - nic0[k]["tx"]} for k in nic1 if k in nic0}
+    (ROOT / "results/evaluation/osdi/expVC/vc1_isolation.json").write_text(json.dumps({"host": a.host, "nic_bytes_during_vc1": nic, "frames_dir": a.frames_dir}, indent=1))
+    print("[vc] VC-1", "done" if ok else "had failures (see the logs and vc1_checks_*)", "- next on elves-01: aggregate_vc.py, aggregate_vd.py")
+    return ok
 
 
 def main():
@@ -176,6 +228,7 @@ def main():
     ap.add_argument("--frames_dir", default=None)
     ap.add_argument("--agent_hosts", default=None)
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--inputs", default="", help="vc1: comma list of inputs (default all four)")
     a = ap.parse_args()
     if a.what in ("preflight", "vc0", "vc1") and not a.frames_dir:
         sys.exit("--frames_dir (a directory on the VC host's local disk, outside the repository) is required")

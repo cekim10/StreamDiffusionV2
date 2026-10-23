@@ -1,6 +1,7 @@
-# Experiment VD - what state governs the visual discontinuity of an M1 reset: preregistration DRAFT (2026-10-22)
+# Experiment VD - what state governs the visual discontinuity of an M1 reset: preregistration (FROZEN 2026-10-23)
 
-Status: **DRAFT for review. Not frozen; nothing implemented or run.** A diagnosis experiment on the RD / VC emulator,
+Status: **FROZEN 2026-10-23** (freeze record `../expVD_freeze.md`), with the proposed thresholds of section 5 accepted
+(VD-D1) and the implementation in section 8. Nothing run at the freeze. Earlier status: DRAFT (2026-10-22). A diagnosis experiment on the RD / VC emulator,
 one GPU, no network. It does not change M1, M2 or M3-v2: every condition is an emulator-side variant of what survives
 a reset, plus one model flag that defaults to the frozen behavior. It runs in the same emulation unit as VC-1 (same
 inputs, REF baselines and schedules), with its own hypotheses, result document and verdicts; VC-1's frozen-M1 results
@@ -92,8 +93,28 @@ Every VD emulation passes the G3 stream check; the (zero, reset, reset) control 
 equals the explicit-mask SDPA on the precheck calls; with the flag off, the G1 replay (dog RD-X) stays call-by-call
 identical (checked once after the flag is added, before VC-1).
 
-## 7. Open decisions
+## 7. Decisions
 
-- **VD-D1** thresholds of H1-H3 (proposed above).
-- **VD-D2** whether to add train and audi-snow-trail (decided after the first two inputs).
-- **VD-D3** ordering inside the unit: VC-1 conditions first, then VD (so VC-1's results exist even if VD is cut).
+- **VD-D1 (closed 2026-10-23)** - the thresholds of section 5 as proposed: H1 both differences < 0; H2 V1 ratio <= 0.5;
+  H3 V1 ratio < 1 and first-4 E difference < 0; H4 within 2 dB. Every input and schedule must agree.
+- **VD-D2 (open)** - whether to add train and audi-snow-trail, decided after the first two inputs.
+- **VD-D3 (closed)** - inside the unit, the VC-1 conditions run first, then VD.
+
+## 8. Implementation (frozen with this document; `tools/eval`)
+
+- **Conditions** (`vc_schedules.py`): `VD<1|L>-<zero|mask>-<dec|nodec>-<rec|norec>` and `VD<1|L>-zero-encdec-norec`, 16
+  per input. They reuse OT-1's and OT-L's realized reset and bind calls and timelines. The (zero, nodec, norec) cell is
+  OT-1 / OT-L.
+- **Mask** (`models/wan/causal_model.py`): the attention attribute `mask_sink_slots`, default False, which changes
+  nothing when off. When on, the KV-cache attention reads the cache after the first `sink_size x frame_seqlen`
+  positions with `cache_seqlens - sink_tokens`, and only if every row's length exceeds them. If the sink region is not
+  all zero while masked, a violation is counted; any violation invalidates the condition. `vc_emulate.py` turns the
+  mask on after the reset and off before the bind.
+- **Kept state** (`vc_emulate.keep_state`): the source's packed recent KV and / or VAE caches are unpacked into the
+  destination and restored together with the fast path, in one `restore_state` call. That function zeroes every
+  unselected component on each call; in the frozen M1 reset the VAE caches are zero. A decoder-only keep puts the
+  encoder cache and its bookkeeping (`_enc_conv_idx`, `first_encode`) back to the M1 reset state.
+- **Windows** (`vc_metrics.py`): VC's, plus `first_4` (the reset call and the 3 after it).
+- **Precheck** (`vd_precheck.py`): section 2. The masked kernel is checked against SDPA with an explicit boolean mask.
+- **Aggregation** (`aggregate_vd.py`): main effects and section-5 verdicts.
+- **Flag-off check:** the VC-1 dog unit runs G1 (frozen-M1 replay vs the real RD-X run) with this code in place.

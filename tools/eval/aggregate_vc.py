@@ -85,6 +85,8 @@ def analyze_unit(unit: Path) -> dict:
     embs = m["embedders"]
     out = {"ref_spike_P99": m["ref_spike_P99"], "ref_playback": m.get("REF_playback"), "conditions": {}}
     for cid, cm in m["conditions"].items():
+        if cid.startswith("VD"):
+            continue   # Experiment VD conditions are aggregated by aggregate_vd.py, never here
         pc = cm["per_call"]
         allc = sorted(int(c) for c in pc)
         r = {"windows": {}, "events": cm["events"], "playback": cm.get("playback"), "unpaired_calls": cm.get("unpaired_calls")}

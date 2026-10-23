@@ -35,6 +35,10 @@ except (ImportError, ModuleNotFoundError):
 # wan 1.3B model has a weird channel / head configurations and require max-autotune to work with flexattention
 # see https://github.com/pytorch/pytorch/issues/133254
 # change to default for other models
+# Experiment VD (results/evaluation/osdi/expVD): an optional probe called before the KV-cache attention with
+# (module, roped_query, k_cache, v_cache, seq_lens, sink_tokens). None in every other experiment (no effect).
+ATTN_PROBE = None
+
 flex_attention = torch.compile(
     flex_attention, dynamic=False, mode="max-autotune")
 
@@ -402,6 +406,16 @@ class CausalWanSelfAttention(nn.Module):
             max_seq_len = int(seq_lens.max().item())
             k_cache = kv_cache["k"][:, :max_seq_len]
             v_cache = kv_cache["v"][:, :max_seq_len]
+            if ATTN_PROBE is not None:
+                ATTN_PROBE(self, roped_query, k_cache, v_cache, seq_lens, sink_tokens)
+            if getattr(self, "mask_sink_slots", False) and sink_tokens > 0 and int(seq_lens.min().item()) > sink_tokens:
+                # Experiment VD only (default off): while the Sink is unbound, exclude the zero-filled sink slots from the
+                # attention by reading the cache after them (the kernel reads a contiguous prefix of length cache_seqlens).
+                if kv_cache["k"][:, :sink_tokens].abs().amax().item() != 0:
+                    self.mask_violations = getattr(self, "mask_violations", 0) + 1   # the sink region was not empty
+                k_cache = kv_cache["k"][:, sink_tokens:max_seq_len]
+                v_cache = kv_cache["v"][:, sink_tokens:max_seq_len]
+                seq_lens = seq_lens - sink_tokens
 
             if FLASH_ATTN_AVAILABLE:
                 try:

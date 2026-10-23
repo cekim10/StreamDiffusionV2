@@ -51,6 +51,50 @@ def dry_frames(c: int, phase_shift: int, h: int, w: int) -> np.ndarray:
                      for f in range(4)]).astype(np.uint8)
 
 
+def set_sink_mask(rt, on: bool, dry: bool) -> int:
+    """Experiment VD: mask (or stop masking) the zero-filled sink slots in every attention block; returns the number of
+    mask violations counted since the last call (the sink region was not empty while masked)."""
+    if dry:
+        return 0
+    v = 0
+    for block in rt.pl.generator.model.blocks:
+        sa_ = block.self_attn
+        v += getattr(sa_, "mask_violations", 0)
+        sa_.mask_violations = 0
+        sa_.mask_sink_slots = bool(on)
+    return v
+
+
+def keep_state(rt, kept: list, keep: list, dry: bool) -> dict:
+    """Experiment VD: give the destination session the source's state of the kept components (recent KV, VAE decoder
+    and / or encoder caches) together with the M1 fast path. Nothing is transferred; the emulator copies it.
+    state_ablation.restore_state zeroes every KV slot, every unselected VAE cache and the in-flight rows on each call,
+    so the fast path (meta, in-flight) and the kept components are restored in ONE call. In the M1 reset itself the VAE
+    caches are zero; a decoder-only keep therefore puts the encoder cache and its bookkeeping back to that state."""
+    if dry or not kept:
+        return {"kept": keep}
+    for h, pl in kept:
+        rt.unpack(dict(h), pl)
+    comps = {"meta", "inflight"} | ({"recent"} if "recent" in keep else set()) | ({"vae"} if any(x.startswith("vae") for x in keep) else set())
+    vm = rt.pl.vae.model
+    enc_reset = None
+    if "vae_dec" in keep and "vae_enc" not in keep:
+        enc_reset = {"tensors": [t.clone() for t in rt.sa.vae_cache_tensors(rt.pl, "enc")],
+                     "attrs": {a: (list(getattr(vm, a)) if isinstance(getattr(vm, a, None), list) else getattr(vm, a, None)) for a in ("_enc_conv_idx", "first_encode")}}
+    moved = rt.sa.restore_state(rt.pl, rt.pm, rt.session, rt.snap, comps)
+    if enc_reset is not None:
+        cur = rt.sa.vae_cache_tensors(rt.pl, "enc")
+        assert len(cur) == len(enc_reset["tensors"]), "encoder cache layout changed"
+        for t, b in zip(cur, enc_reset["tensors"]):
+            t.copy_(b)
+        for a, v in enc_reset["attrs"].items():
+            setattr(vm, a, v)
+    for block in rt.pl.generator.model.blocks:
+        block.self_attn.adapt_sink_thr = -1   # as restore_fast: refresh frozen until the true Sink binds
+    rt.torch.cuda.synchronize(rt.device)
+    return {"kept": keep, "comps_restored": sorted(comps), "moved_bytes": {k_: int(v) for k_, v in (moved or {}).items()}}
+
+
 def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameStore, k: int, hw) -> tuple[list[dict], dict]:
     resets, binds = set(cond["resets"]), set(cond["binds"])
     cc = cond.get("cold_call")
@@ -61,6 +105,8 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
     prefix_ok = True
     pending_cold = None
     shift = 0
+    keep = list(cond.get("keep") or [])
+    vd_log = {"mask": bool(cond.get("mask")), "keep": keep, "mask_violations": 0, "kept": []}
     if dry:
         rt.provision(); rt.bound = True
     else:
@@ -72,6 +118,7 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             t0 = time.perf_counter()
             snap = rt.serialize_live()
             fast = [rt.pack(snap, comp) for comp in ("inflight", "meta")]
+            kept = [rt.pack(snap, comp) for comp in (["recent"] if "recent" in keep else []) + (["vae"] if any(x.startswith("vae") for x in keep) else [])]
             if withheld is None:
                 h, bufs = rt.pack(snap, "sink")
                 pl = payload_of(h, bufs)
@@ -80,17 +127,25 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             else:
                 log.append({"call": c, "op": "reset_inside_episode", "sink": "kept", "sha": withheld[2][:16]})
             fast_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in fast]
-            del snap, fast
+            kept_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in kept]
+            del snap, fast, kept
             rt.release(); rt.provision()
             for h, pl in fast_pl:
                 rt.unpack(dict(h), pl)
             rt.restore_fast()
+            if keep:
+                vd_log["kept"].append({"call": c, **keep_state(rt, kept_pl, keep, dry)})
+            del kept_pl
+            if cond.get("mask"):
+                vd_log["mask_violations"] += set_sink_mask(rt, True, dry)
             event.append("reset"); log[-1]["reset_s"] = time.perf_counter() - t0; shift += 40
         if c in binds:
             assert withheld is not None, f"bind at {c} without a withheld Sink"
             h, pl, s_, at = withheld
             assert sha(pl) == s_, "withheld Sink bytes changed"
             t0 = time.perf_counter()
+            if cond.get("mask"):
+                vd_log["mask_violations"] += set_sink_mask(rt, False, dry)   # the true Sink is bound: attention over all slots again
             rt.unpack(dict(h), pl)
             shifted = rt.bind()
             bound_sha.append({"call": c, "sha": s_, "packed_at": at})
@@ -135,7 +190,11 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
     valid = (realized["resets"] == cond["resets"] and realized["binds"] == cond["binds"] and realized["cold"] == ([cc] if cc is not None else [])
              and [c for c in realized["no_output"] if c >= t1] == exp_no_out and (dry or prefix_ok)
              and all((bs["packed_at"] in cond["resets"]) for bs in bound_sha))
-    summary = {"condition": {k_: v for k_, v in cond.items() if k_ != "timeline"}, "t_first_op": t1, "events": log, "bound_sink": bound_sha, "realized": realized,
+    if cond.get("mask"):
+        vd_log["mask_violations"] += set_sink_mask(rt, False, dry)
+    if cond.get("kind") == "vd" and vd_log["mask_violations"]:
+        valid = False   # the masked slots were not empty: the condition did not test what it claims
+    summary = {"condition": {k_: v for k_, v in cond.items() if k_ != "timeline"}, "t_first_op": t1, "events": log, "vd": vd_log if cond.get("kind") == "vd" else None, "bound_sink": bound_sha, "realized": realized,
                "prefix_identical_to_reference": None if dry else prefix_ok, "valid": valid, "elapsed_s": time.time() - t_run}
     rt.release()
     return rows, summary

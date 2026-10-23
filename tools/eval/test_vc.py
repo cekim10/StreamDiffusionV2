@@ -49,9 +49,13 @@ def main():
         for inp in ("dog", "audi-snow-trail"):
             r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--dry_run", "--frames_dir", str(tmp / "frames"), "--out_root", str(tmp / "expVCt")],
                                 cwd=ROOT, capture_output=True, text=True)
-            check(r_.returncode == 0 and r_.stdout.count("valid True") == 7, f"{inp}: 7 conditions emulated, all valid")
+            nc = len(out["inputs"][inp]["conditions"])
+            check(r_.returncode == 0 and r_.stdout.count("valid True") == nc, f"{inp}: {nc} conditions emulated (7 VC{' + 16 VD' if nc > 7 else ''}), all valid")
             ok, why, info = vc.g3(tmp / "expVCt" / f"{inp}_s0", out)
-            check(ok, f"{inp}: G3 passes on REF + 7 streams {why[:2]}")
+            check(ok, f"{inp}: G3 passes on REF + {nc} streams {why[:2]}")
+            if nc > 7:
+                vd = [json.loads((tmp / "expVCt" / f"{inp}_s0" / c["id"] / "summary.json").read_text()) for c in out["inputs"][inp]["conditions"] if c["kind"] == "vd"]
+                check(len(vd) == 16 and all(s_["vd"] and s_["vd"]["mask_violations"] == 0 for s_ in vd), f"{inp}: 16 VD conditions recorded with mask / keep settings, no mask violations")
             if inp == "dog":
                 wf = info["WFS-1"]
                 check(wf["first_output_input_chunk"] == wf["resume_call"] - 1, f"WFS-1: first output after the resume belongs to input chunk {wf['first_output_input_chunk']} (call - (k - 1))")
@@ -107,7 +111,10 @@ def main():
         r_ = subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(unit), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode == 0 and (unit / "metrics.json").exists(), "metrics on the dry unit")
         r_ = subprocess.run([PY, "tools/eval/aggregate_vc.py", "--root", str(tmp / "expVCt"), "--dry"], cwd=ROOT, capture_output=True, text=True)
-        check(r_.returncode == 0 and "VC-H1" in r_.stdout and "VC-H2" in r_.stdout, "aggregation (block bootstrap, effect sizes, verdicts)")
+        check(r_.returncode == 0 and "VC-H1" in r_.stdout and "VC-H2" in r_.stdout and "VD" not in r_.stdout.split("## Playback")[0].split("## Descriptive")[-1],
+              "VC aggregation (block bootstrap, effect sizes, verdicts; VD conditions excluded)")
+        r_ = subprocess.run([PY, "tools/eval/aggregate_vd.py", "--root", str(tmp / "expVCt"), "--dry"], cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode == 0 and "VD-H2" in r_.stdout and "dog | OT-1" in r_.stdout, f"VD aggregation (main effects, verdicts) {r_.stderr[-300:]}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))

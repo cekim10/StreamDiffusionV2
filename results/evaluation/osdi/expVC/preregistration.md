@@ -1,6 +1,10 @@
-# Experiment VC - visual continuity of OTTER's resumed output: preregistration REVISED DRAFT 3 (2026-10-22)
+# Experiment VC - visual continuity of OTTER's resumed output: preregistration (FROZEN 2026-10-23)
 
-Status: **REVISED DRAFT 3. Draft 2 was approved for implementation preparation with final changes (2026-10-22), which
+Status: **FROZEN 2026-10-23** (freeze record `../expVC_freeze.md`), after VC-0 passed (G1, G2, G3 and the real-model
+self-test; `vc0_checks.md`). Frozen with the reviewer's decisions D-VC-1 (rate-matched playback, section 4.2) and
+D-VC-2 (V1 text corrected to RD's definition), and the implementation deviations D-VC-3..9 of
+`implementation_plan.md` section 9. VC-1 runs in one emulation unit with Experiment VD (`../expVD/preregistration.md`);
+VC's conditions run first, and VD's never enter VC's results. Earlier status: **REVISED DRAFT 3. Draft 2 was approved for implementation preparation with final changes (2026-10-22), which
 are applied here. Not frozen; nothing implemented or run; no participant recruited.** VC is frozen and launched only
 after this draft and the implementation plan (`implementation_plan.md`) are checked. No frozen experiment, result or
 mechanism (M1 / M2 / M3-v2) is changed.
@@ -92,7 +96,7 @@ bind; the last 10 calls.
 
 | id | measures | definition | role |
 |---|---|---|---|
-| V1 | boundary discontinuity | frame-difference spike at a reset, bind or resume: mean absolute difference between the last frame before and the first frame after, divided by the median consecutive-frame difference of the same stream over the 16 preceding calls (RD definition) | VC-H2 |
+| V1 | boundary discontinuity | frame-difference spike at a reset, bind or resume: mean absolute difference between the last frame before and the first frame after, divided by the median difference of the **8 preceding frame transitions** of the same stream (RD's definition as coded in `rd_metrics.no_reference`; D-VC-2). At a cold restart the transition spans the call without output and is flagged `across_gap` (D-VC-3) | VC-H2 |
 | V2 | temporal consistency | input-motion-conditioned warp-error ratio E_O / E_R (RD definition; Farneback flow of the input at 1/4 resolution) | VC-H1, VC-H3 |
 | V3 | motion following | motion magnitude ratio output / REF (RD definition) | VC-H1 |
 | V4 | **global color drift** | CIEDE2000 between the window's mean CIELAB color and REF's at the same calls, and between the window and the 16 pre-move calls of the same stream; REF's own drift is reported for scale | **descriptive; no threshold** |
@@ -102,11 +106,18 @@ bind; the last 10 calls.
 
 ### 4.2 Playback continuity: the last-frame-hold playback model
 
-**Model (fixed now, and named in every figure and table that uses it):** the client shows one frame every 1/16 s,
-starting after a playout buffer of one chunk (4 frames). Frames are shown in order and never skipped. If the next frame
-has not been delivered by its display time, the previous frame stays on screen (a stall) until it arrives. Delivery
-times come from the realized runs (section 3.3). This is a model of a simple player, not a measurement of a real
-client.
+**Model (fixed now, and named in every figure and table that uses it):** the client shows frames at a rate matched
+to the measured delivery cadence, 4 frames per post-bind chunk interval of the realized run (REF: the OT-1 run's;
+about 0.60 s per chunk, so about 6.7 fps), starting after a playout buffer of one chunk (4 frames). Frames are shown in
+order and never skipped. If the next frame has not been delivered by its display time, the previous frame stays on
+screen until it arrives. A **stall** is counted when the picture freezes for at least one display-frame interval;
+shorter lateness from cadence jitter is reported as total lateness (D-VC-4). Delivery times come from the realized runs
+(section 3.3). This is a model of a simple player, not a measurement of a real client.
+
+D-VC-1 (decided 2026-10-23): the draft's 16 fps display rate is replaced by the rate-matched rate. Generation runs below
+16 fps (one 4-frame chunk per ~0.60 s), so at 16 fps every stream, REF included, stalls continuously and the model
+cannot separate conditions. The 16 fps variant is still computed and kept in the json, and it is never the primary
+result.
 
 | id | measures |
 |---|---|

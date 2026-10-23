@@ -100,6 +100,7 @@ def main():
     ap.add_argument("--g1", action="store_true"); ap.add_argument("--g2", action="store_true"); ap.add_argument("--g3", action="store_true")
     ap.add_argument("--schedules", default=str(SCHED))
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--name", default="vc0_checks", help="output name under results/evaluation/osdi/expVC (VC-1: vc1_checks_<input>)")
     a = ap.parse_args()
     if not (a.g1 or a.g2 or a.g3):
         a.g1 = a.g2 = a.g3 = True
@@ -124,7 +125,7 @@ def main():
     print("\n".join(L))
     if a.write:
         dry = "_dryrun_" in str(unit)
-        out = ROOT / "results/evaluation/osdi/expVC" / ("_dryrun_vc0_checks" if dry else "vc0_checks")
+        out = ROOT / "results/evaluation/osdi/expVC" / (("_dryrun_" if dry else "") + a.name)
         out.with_suffix(".md").write_text("\n".join(L) + "\n"); out.with_suffix(".json").write_text(json.dumps(res, indent=1, default=str))
     sys.exit(0 if allok else 1)
 
