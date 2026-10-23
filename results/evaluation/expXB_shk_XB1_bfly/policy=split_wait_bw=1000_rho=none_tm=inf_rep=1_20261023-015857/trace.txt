@@ -1,0 +1,10 @@
+[orch] === run policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261023-015857: Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  96.02s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound) @ 1000.0 Mbps rho None: after final move: first output 14.98 s, Sink received 14.17 s, bound 14.35 s, continuity-ready 14.98 s, rejoin 19.75 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 36.4 dB | ingress peak 1007 Mbps
