@@ -1,0 +1,79 @@
+{
+ "condition": {
+  "id": "OT-L",
+  "input": "dog",
+  "kind": "ot",
+  "label": "OTTER single move 320 Mbps (RD-X realized; policy split)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_dog/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548"
+  ],
+  "counterfactual": false
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "0290f6bf81d23676",
+   "reset_s": 2.9908813014626503
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "0290f6bf81d23676",
+   "packed_at": 80,
+   "slots_rerotated": 75,
+   "bind_s": 0.09662175923585892
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "0290f6bf81d23676409a785f0c29927f4ddf901d17ca5e34621e5c151985d73c",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 164.86673641204834,
+ "input": "dog",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC0_dog_s0_20261022-231517/OT-L",
+ "commit": "4037070a03b3f282d68908cd3617da32d5d0163d",
+ "host": "elves-01",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.83118724822998,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC0_dog_s0_20261022-231517",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

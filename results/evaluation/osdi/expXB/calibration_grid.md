@@ -21,15 +21,19 @@ Jitter of the selected setting's repeats: 0.3 %
 | thr=256:rl=10 **(selected)** | 2 | True | True | 214.14 | 50.84 | 247 | 163.3 | 11869 / 5530 | 3 | [6164, 5224, 5208] | no_shrink | - / - | 101/101 | 99.0 | 0 | 0 |
 | thr=256:rl=10 **(selected)** | 3 | True | True | 213.99 | 50.90 | 246 | 163.1 | 11826 / 5510 | 3 | [6164, 5224, 5208] | no_shrink | - / - | 101/101 | 99.0 | 0 | 0 |
 
-## P-sink: selected thr=16:rl=3; alternative (min delivery gap) thr=256:rl=6 (differs: run in XB1, rule 4)
+## P-sink: selected thr=16:rl=1; alternative (min delivery gap) thr=256:rl=6 (differs: run in XB1, rule 4)
 
 Jitter of the selected setting's repeats: 2.2 %
 
 | setting | rep | valid | class check | TTFO-local (s) | delivery gap (s) | remote chunks | remote wall (s) | est. delivery CRF 23 / 28 (KB) | rounds | dirty MiB per round | switch / finish reason | inputs FFV1 / raw (MiB) | output equivalence | terminal PSNR | first >= 35 dB idx | sustained 10 idx |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| thr=16:rl=3 **(selected)** | 1 | True | True | 28.87 | 2.19 | 38 | 26.7 | 1836 / 854 | 3 | [1645, 689, 24] | round_limit | - / - | 0/101 | 48.8 | 8 | 8 |
-| thr=16:rl=3 **(selected)** | 2 | True | True | 29.51 | 2.21 | 39 | 27.3 | 1880 / 874 | 3 | [1645, 689, 24] | round_limit | - / - | 0/101 | 49.1 | 9 | 9 |
-| thr=16:rl=3 **(selected)** | 3 | True | True | 28.51 | 2.18 | 37 | 26.3 | 1791 / 835 | 3 | [1645, 689, 24] | round_limit | - / - | 0/101 | 48.5 | 9 | 9 |
+| thr=16:rl=1 **(selected)** | 1 | True | True | 25.66 | 8.35 | 26 | 17.3 | 1235 / 573 | 1 | [1645] | round_limit | - / - | 0/101 | 49.4 | 8 | 8 |
+| thr=16:rl=1 **(selected)** | 2 | True | True | 25.62 | 8.36 | 26 | 17.3 | 1235 / 573 | 1 | [1645] | round_limit | - / - | 0/101 | 49.4 | 8 | 8 |
+| thr=16:rl=1 **(selected)** | 3 | True | True | 25.10 | 8.15 | 26 | 17.0 | 1235 / 573 | 1 | [1645] | round_limit | - / - | 0/101 | 49.4 | 8 | 8 |
+| thr=16:rl=2 | 1 | True | True | 27.13 | 2.39 | 37 | 24.7 | 1791 / 835 | 2 | [1645, 689] | round_limit | - / - | 0/101 | 48.5 | 9 | 9 |
+| thr=16:rl=3 | 1 | True | True | 28.87 | 2.19 | 38 | 26.7 | 1836 / 854 | 3 | [1645, 689, 24] | round_limit | - / - | 0/101 | 48.8 | 8 | 8 |
+| thr=16:rl=3 | 2 | True | True | 29.51 | 2.21 | 39 | 27.3 | 1880 / 874 | 3 | [1645, 689, 24] | round_limit | - / - | 0/101 | 49.1 | 9 | 9 |
+| thr=16:rl=3 | 3 | True | True | 28.51 | 2.18 | 37 | 26.3 | 1791 / 835 | 3 | [1645, 689, 24] | round_limit | - / - | 0/101 | 48.5 | 9 | 9 |
 | thr=16:rl=6 | 1 | True | True | 30.50 | 2.23 | 39 | 28.3 | 1880 / 874 | 4 | [1645, 689, 24, 0] | threshold | - / - | 0/101 | 49.1 | 9 | 9 |
 | thr=16:rl=10 | 1 | True | True | 31.28 | 2.40 | 39 | 28.9 | 1880 / 874 | 4 | [1645, 689, 24, 0] | threshold | - / - | 0/101 | 49.1 | 9 | 9 |
 | thr=64:rl=3 | 1 | True | True | 29.12 | 2.20 | 38 | 26.9 | 1836 / 854 | 3 | [1645, 689, 24] | threshold | - / - | 0/101 | 48.8 | 8 | 8 |
@@ -39,15 +43,19 @@ Jitter of the selected setting's repeats: 2.2 %
 | thr=256:rl=6 | 1 | True | True | 28.66 | 2.19 | 38 | 26.5 | 1836 / 854 | 3 | [1645, 689, 24] | threshold | - / - | 0/101 | 48.8 | 8 | 8 |
 | thr=256:rl=10 | 1 | True | True | 29.17 | 2.25 | 39 | 26.9 | 1880 / 874 | 3 | [1645, 689, 24] | threshold | - / - | 0/101 | 49.1 | 9 | 9 |
 
-## R-full: selected lag=1:rl=3; alternative (min delivery gap) lag=2:rl=10 (differs: run in XB1, rule 4)
+## R-full: selected lag=1:rl=1; alternative (min delivery gap) lag=2:rl=10 (differs: run in XB1, rule 4)
 
-Jitter of the selected setting's repeats: 2.0 %
+Jitter of the selected setting's repeats: 1.0 %
 
 | setting | rep | valid | class check | TTFO-local (s) | delivery gap (s) | remote chunks | remote wall (s) | est. delivery CRF 23 / 28 (KB) | rounds | dirty MiB per round | switch / finish reason | inputs FFV1 / raw (MiB) | output equivalence | terminal PSNR | first >= 35 dB idx | sustained 10 idx |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| lag=1:rl=3 **(selected)** | 1 | True | True | 69.37 | 17.29 | 85 | 52.1 | 4083 / 1894 | 3 | - | round_limit | 152 / 531 | 101/101 | 99.0 | 0 | 0 |
-| lag=1:rl=3 **(selected)** | 2 | True | True | 70.75 | 17.75 | 87 | 53.0 | 4178 / 1940 | 3 | - | round_limit | 155 / 540 | 101/101 | 99.0 | 0 | 0 |
-| lag=1:rl=3 **(selected)** | 3 | True | True | 69.20 | 17.23 | 85 | 52.0 | 4083 / 1894 | 3 | - | round_limit | 152 / 531 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=1 **(selected)** | 1 | True | True | 36.84 | 18.46 | 30 | 18.4 | 1427 / 666 | 1 | - | round_limit | 80 / 280 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=1 **(selected)** | 2 | True | True | 36.49 | 18.20 | 30 | 18.3 | 1427 / 666 | 1 | - | round_limit | 80 / 280 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=1 **(selected)** | 3 | True | True | 36.81 | 18.43 | 30 | 18.4 | 1427 / 666 | 1 | - | round_limit | 80 / 280 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=2 | 1 | True | True | 53.31 | 17.82 | 58 | 35.5 | 2806 / 1302 | 2 | - | round_limit | 117 / 408 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=3 | 1 | True | True | 69.37 | 17.29 | 85 | 52.1 | 4083 / 1894 | 3 | - | round_limit | 152 / 531 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=3 | 2 | True | True | 70.75 | 17.75 | 87 | 53.0 | 4178 / 1940 | 3 | - | round_limit | 155 / 540 | 101/101 | 99.0 | 0 | 0 |
+| lag=1:rl=3 | 3 | True | True | 69.20 | 17.23 | 85 | 52.0 | 4083 / 1894 | 3 | - | round_limit | 152 / 531 | 101/101 | 99.0 | 0 | 0 |
 | lag=1:rl=6 | 1 | True | True | 121.85 | 17.33 | 172 | 104.5 | 8296 / 3864 | 6 | - | round_limit | 266 / 929 | 101/101 | 99.0 | 0 | 0 |
 | lag=1:rl=10 | 1 | True | True | 177.54 | 15.74 | 265 | 161.8 | 12721 / 5933 | 10 | - | round_limit | 388 / 1354 | 101/101 | 99.0 | 0 | 0 |
 | lag=2:rl=3 | 1 | True | True | 71.05 | 17.87 | 87 | 53.2 | 4178 / 1940 | 3 | - | round_limit | 155 / 540 | 101/101 | 99.0 | 0 | 0 |
@@ -74,6 +82,6 @@ R-win latency-quality trade-off (all W; rule 3 keeps W within 1.0 dB of the best
 | 3 | 3.15 | 2.50 | 1 | 21.9 | - | - |
 | 6 | 4.81 | 4.16 | 1 | 23.3 | - | - |
 
-Measured LAN RTT A-B (TCP echo, median per run): 0.17-0.33 ms; WAN / radio latency is not emulated or measured.
+Measured LAN RTT A-B (TCP echo, median per run): 0.17-0.34 ms; WAN / radio latency is not emulated or measured.
 
-Runs: 35 (35 valid, 35 eligible).
+Runs: 43 (43 valid, 43 eligible).

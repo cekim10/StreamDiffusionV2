@@ -1,0 +1,143 @@
+{
+ "condition": {
+  "id": "WFS-1",
+  "input": "dog",
+  "kind": "wfs",
+  "label": "Wait-for-Sink at the OT-1 move: Sink bound before generation resumes; recent KV / VAE rebuilt (M1); last-frame hold 14.43 s",
+  "resets": [
+   34
+  ],
+  "binds": [
+   34
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 157,
+  "frames_from": 18,
+  "frames_to": 157,
+  "sources": [
+   "results/evaluation/expW_W2_dog_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-000810"
+  ],
+  "counterfactual": false,
+  "paired_with": "OT-1",
+  "stall_s": 14.42802119255066,
+  "skipped_input_calls_harness": [],
+  "skipped_input_calls_live_realtime": [
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49,
+   50,
+   51,
+   52,
+   53,
+   54,
+   55,
+   56,
+   57,
+   58,
+   59,
+   60,
+   61,
+   62,
+   63,
+   64,
+   65,
+   66,
+   67,
+   68,
+   69,
+   70,
+   71,
+   72,
+   73,
+   74,
+   75,
+   76,
+   77,
+   78,
+   79,
+   80,
+   81,
+   82,
+   83,
+   84,
+   85,
+   86,
+   87,
+   88,
+   89,
+   90,
+   91
+  ],
+  "note": "the harness delays (generates every input call in order after the hold); a real-time player that drops the backlog would skip the listed input chunks (hold / 0.25 s of video)"
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "3063d1aed455ca70",
+   "reset_s": 2.971258729696274
+  },
+  {
+   "call": 34,
+   "op": "bind",
+   "sha": "3063d1aed455ca70",
+   "packed_at": 34,
+   "slots_rerotated": 0,
+   "bind_s": 0.09992571175098419
+  }
+ ],
+ "bound_sink": [
+  {
+   "call": 34,
+   "sha": "3063d1aed455ca70dd2cb6ee7adc7fd693500fe497333213d23b6f56e8517a68",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   34
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 104.90998578071594,
+ "input": "dog",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC0_dog_s0_20261022-231517/WFS-1",
+ "commit": "4037070a03b3f282d68908cd3617da32d5d0163d",
+ "host": "elves-01",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.83118724822998,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC0_dog_s0_20261022-231517",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}
