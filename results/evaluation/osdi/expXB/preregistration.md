@@ -1,6 +1,7 @@
 # Experiment XB - external migration baselines (re-implemented): preregistration REVISED DRAFT (2026-10-20)
 
-Status: **REVISED DRAFT 5 (2026-10-22), not frozen.** Draft 5 (decisions of 2026-10-22): D5 approved (8 lossy-input
+Status: **FROZEN 2026-10-23** (freeze record `../expXB_freeze.md`), after the calibration (section 4.1). Earlier status:
+**REVISED DRAFT 5 (2026-10-22).** Draft 5 (decisions of 2026-10-22): D5 approved (8 lossy-input
 runs); remote delivery accounting implemented, with measured and estimated bytes kept apart (section 2.2); codec
 availability checked on every node (section 3.2); real-GPU exactness gates before calibration (section 3.3); R-win's
 calibration rule kept and its whole W trade-off reported (section 4). **The 35-run calibration runs only after the gate
@@ -270,7 +271,22 @@ trigger. The reviewer's decisions, recorded before the freeze:
   components at the switchover. Every gate and calibration run of both methods produced output bit-identical to the
   reference after the switchover (101 / 101 calls).
 
-The final selected settings and the whole grid are written here at the freeze.
+**Final settings (frozen 2026-10-23; 43 calibration runs, `calibration_grid.md`, `calibration_selection.json`):**
+
+| method | selected (rules 1-5) | TTFO-local (3 runs) | delivery gap | rule-4 alternative (minimum gap), run in XB1 |
+|---|---|---|---|---|
+| P-full | thr=256:rl=10 (all nine settings behave identically: 3 rounds, no convergence) | 213.5-214.1 s | 50.8-50.9 s | none (same setting) |
+| P-sink | **thr=16:rl=1** (extension) | 25.1-25.7 s | 8.2-8.4 s | thr=256:rl=6 (TTFO-local 28.7 s, gap 2.2 s) |
+| R-full | **lag=1:rl=1** (extension) | 36.5-36.8 s | 18.2-18.5 s | lag=2:rl=10 (TTFO-local 174.5 s, gap 15.7 s) |
+| R-win | W=6 (only W within 1.0 dB of the best terminal PSNR) | 4.8 s | 4.1 s | W=1 (TTFO-local 2.65 s, gap 2.0 s, terminal 21.1 dB) |
+
+- The extension moved R-full's selection from round limit 3 (69 s) to 1 (37 s), and P-sink's from 3 (28.9 s) to 1
+  (25.7 s, with a larger gap). One round while the source serves is the structural minimum of both methods.
+- A "stop the source and recompute" variant would have no serving at all. It is outside R-full's definition (the
+  source keeps serving) and is not run; this is stated as a limitation.
+- **D-cal-3 re-derived after D-cal-1:** P-sink's alternative now differs in behavior (one round vs four; gap 8.4 s vs
+  2.2 s), so it is run. The rule-4 alternatives are therefore P-sink, R-full and R-win: 3 x 2 workloads x 3 reps = 18
+  runs.
 
 ## 5. Scenarios (main sweep)
 
@@ -321,15 +337,15 @@ remote-serving accounting checked against the delivered-chunk log (each chunk de
 
 | phase | runs | hosts | time |
 |---|---|---|---|
-| calibration (section 4) | 35 | A, B | ~3-4 h |
+| calibration (section 4; done) | 35 | A, B | done |
 | shakedown (one run per method and scenario: XB1 7 x 2, XB2 3, XB3 5, XB4 5) | 27 | A-D | ~1.5 h |
 | main sweep: XB1 7 x 2 workloads x 3 = 42; XB2 3 x 3 = 9; XB3 5 x 3 = 15; XB4 5 x 3 = 15 | **81** | A-D | ~5-6 h |
-| alternative min-gap settings in XB1 (rule 4 after D-cal-3: R-full and R-win, 3 reps x 2 workloads; re-derived after D-cal-1) | 12 | A, B | ~1 h |
-| calibration extension (D-cal-1: round limits 1 and 2 for R-full and P-sink, plus repeats of a new selection) | 4-8 | A, B | ~1 h |
+| alternative min-gap settings in XB1 (rule 4, re-derived after D-cal-1: P-sink, R-full, R-win; 3 reps x 2 workloads) | 18 | A, B | ~1.5 h |
+| calibration extension (D-cal-1, done: 4 runs + 2 x 2 repeats) | 8 | A, B | done |
 | jitter-triggered re-calibration (rule 5) | 0 (not triggered) | - | - |
 | real-GPU exactness gate (section 3.3, before calibration) | 4 | A, B | ~0.5-1 h |
 | lossy-input sensitivity (section 3.2, D5 approved: XB1, R-full and R-win at their selected settings, CRF 23 and 28, dog and butterfly, 1 rep; after the freeze) | 8 | A, B | ~0.5 h |
-| **total GPU runs** | **171-175** (plus 12 voided runs, `void_runs.md`) | | **~11-12 h** |
+| **total GPU runs** | **181** (43 calibration incl. extension, 4 gate, 27 shakedown, 81 main, 18 alternatives, 8 lossy; plus 12 voided runs, `void_runs.md`) | | **~13 h** |
 
 Shakedown and calibration are not evidence. Exclusive use of GPU 0 on the listed hosts; no commit or pull on the
 testbed while a phase runs.

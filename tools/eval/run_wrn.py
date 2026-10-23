@@ -19,6 +19,8 @@
     python tools/eval/run_wrn.py xb_cal_rep           # 2 repeats of each selected setting (8 runs); then aggregate_xb_cal.py (jitter rule)
     python tools/eval/run_wrn.py xb_cal_ext           # D-cal-1: round limits 1 and 2 for R-full and P-sink (4 runs); then aggregate_xb_cal.py and xb_cal_rep
     python tools/eval/run_wrn.py xb_cal_jitter        # only if aggregate_xb_cal.py flags a method: 2 more runs per setting of that method
+    python tools/eval/run_wrn.py xb_shk               # after the freeze: shakedown, one run per method and scenario (27); then check_xb_shakedown.py
+    python tools/eval/run_wrn.py xb_main              # after the shakedown review: 81 runs + ALT (--cells XB1,XB2,XB3,XB4,ALT)
     python tools/eval/run_wrn.py xb_lossy             # D5 lossy-input sensitivity (8 runs) - only after the XB freeze
     add --dry for the loopback protocol test (fake nodes on 127.0.0.1, scaled bandwidth; never reported)
 
@@ -470,6 +472,60 @@ def do_xb_cal_jitter(c):
             c.orch("expXB_cal", xb_args(c, pol, reps="2", rep_start="2") + ["--xb_grid", XB_GRID[pol]], xb_node_extra("dog"), f"XB jitter re-calibration {pol}")
 
 
+XB_METHODS_ALL = "reuse_dyn2,full,split_wait,precopy_full,precopy_sink,recompute_full,recompute_win"   # XB1: all seven
+XB_METHODS_MOB = "reuse_dyn2,full,split_wait,precopy_sink,recompute_full"                            # XB2 subset below; XB3 / XB4
+XB_SCEN = {   # osdi/expXB/preregistration.md section 5 (frozen settings from calibration_selection.json)
+    "XB1": {"workloads": ("dog", "bfly"), "policies": XB_METHODS_ALL, "hops": "1", "M": "30", "move": ["--tm", "1e9"], "horizon": "130"},
+    "XB2": {"workloads": ("dog",), "policies": "reuse_dyn2,precopy_sink,recompute_full", "hops": "1", "M": "120", "move": ["--tm", "1e9"], "horizon": "130"},
+    "XB3": {"workloads": ("dog",), "policies": XB_METHODS_MOB, "hops": "3", "M": "30", "move": ["--rhos", "1"], "horizon": "180"},
+    "XB4": {"workloads": ("dog",), "policies": XB_METHODS_MOB, "hops": "3", "M": "30", "move": ["--rhos", "2"], "horizon": "180"},
+}
+
+
+def xb_frozen_settings(c: Ctx) -> str:
+    return ";".join(f"{pol}@{x['selected']}" for pol, x in xb_selection(c).items() if x.get("selected"))
+
+
+def xb_main_args(c: Ctx, sc: str, reps: str, policies: str | None = None) -> list[str]:
+    S = XB_SCEN[sc]
+    hz = "20" if c.dry else "100"
+    a = ["--policies", policies or S["policies"], "--hops", S["hops"], "--reps", reps, "--migration_chunk", S["M"], "--post_chunks", "1500",
+         "--max_run_s", "900" if c.dry else "2400", "--xb_horizon", hz, "--horizon_calls", "40" if c.dry else S["horizon"]] + S["move"]
+    if "--rhos" in S["move"]:
+        a += ["--ts", c.ts]
+    if not c.dry:
+        a += ["--dyn_probe", "4"]
+    return a
+
+
+def _xb_frozen_guard(c: Ctx):
+    if not c.dry and not (ROOT / "results/evaluation/osdi/expXB_freeze.md").exists():
+        sys.exit("[wrn] XB is not frozen (results/evaluation/osdi/expXB_freeze.md missing): no shakedown or main sweep")
+
+
+def do_xb_main(c, shakedown=False):
+    """XB shakedown (one run per method and scenario, 27 runs; not evidence) or main sweep (81 runs) and, as cell ALT,
+    the rule-4 alternative settings in XB1 (3 methods x 2 workloads x 3 reps). --cells XB1,XB2,XB3,XB4,ALT filters;
+    XB3 / XB4 need GPU 0 on all four hosts."""
+    _xb_frozen_guard(c)
+    only = {x for x in (c.a.cells or "").split(",") if x}
+    frozen = xb_frozen_settings(c)
+    reps = "1" if shakedown else "3"
+    for sc in ("XB1", "XB2", "XB3", "XB4"):
+        if only and sc not in only:
+            continue
+        for ws in XB_SCEN[sc]["workloads"]:
+            w = XB_WL[ws]
+            c.orch(f"expXB_{'shk_' if shakedown else ''}{sc}_{ws}", xb_main_args(c, sc, reps) + ["--xb_policy_settings", frozen], xb_node_extra(w),
+                   f"XB {'shakedown ' if shakedown else ''}{sc} {ws}")
+    if not shakedown and (not only or "ALT" in only):
+        for pol, x in xb_selection(c).items():
+            if x.get("alternative_differs") and x.get("alternative_min_gap"):
+                for ws in XB_SCEN["XB1"]["workloads"]:
+                    c.orch(f"expXB_ALT_{ws}", xb_main_args(c, "XB1", reps, pol) + ["--xb_grid", x["alternative_min_gap"]], xb_node_extra(XB_WL[ws]),
+                           f"XB rule-4 alternative {pol} {x['alternative_min_gap']} {ws}")
+
+
 def do_xb_lossy(c):
     """D5 (approved 2026-10-22): XB1, dog and butterfly, R-full and R-win at their selected settings, H.264 CRF 23 and 28,
     1 rep each = 8 runs; descriptive sensitivity, never exact recomputation. Only after the XB freeze."""
@@ -580,7 +636,7 @@ def do_list(c):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx",
-                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_ext", "xb_cal_jitter", "xb_lossy"])
+                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_ext", "xb_cal_jitter", "xb_lossy", "xb_shk", "xb_main"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -596,7 +652,8 @@ def main():
                 f(c)
         else:
             {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx,
-             "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_ext": do_xb_cal_ext, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy}[a.what](c)
+             "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_ext": do_xb_cal_ext, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy,
+             "xb_shk": lambda c: do_xb_main(c, True), "xb_main": do_xb_main}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:

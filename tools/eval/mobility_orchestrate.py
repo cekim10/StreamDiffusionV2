@@ -1850,6 +1850,7 @@ def main():
     ap.add_argument("--xb_lag", type=int, default=1, help="XB recompute-full: switchover when the destination is within this many calls")
     ap.add_argument("--xb_window", type=int, default=3, help="XB recompute-win: replay window W")
     ap.add_argument("--xb_verify_state", action="store_true", help="XB exactness gate: R-full compares the replayed state with the source's state digests at the stop boundary (timing of such runs is not used)")
+    ap.add_argument("--xb_policy_settings", type=str, default="", help="XB main sweep: per-method frozen settings, ';'-separated 'policy@k=v:k=v' (e.g. 'precopy_full@thr=256:rl=10;recompute_win@W=6')")
     ap.add_argument("--xb_grid", type=str, default="", help="XB calibration: settings run one after the other in this invocation, ';'-separated, each 'thr=16:rl=3' / 'lag=1:rl=6' / 'W=3' / 'codec=h264_crf23'")
     ap.add_argument("--xb_codec", type=str, default="ffv1", help="XB recompute: input-history codec (tools/eval/xb_codec.py; ffv1 = primary lossless, h264_crf23 / h264_crf28 = lossy sensitivity, raw = upper bound)")
     ap.add_argument("--xb_horizon", type=int, default=100, help="XB: calls generated at the final edge after its switchover before the run ends")
@@ -1918,6 +1919,11 @@ def main():
                         if ppol:
                             assert path and len(path) == 2, "--prepos needs --path A,<dest>"
                             pp = {"policy": ppol, "probs": [float(x) for x in a.probs.split(",")], "L": a.lookahead, "b": a.budget, "dest": path[1], "tau": 7.5}
+                        if pol in XB and a.xb_policy_settings:
+                            # frozen XB settings (calibration selection): one fixed setting per method in this invocation
+                            ps = dict(item.split("@", 1) for item in a.xb_policy_settings.split(";") if item.strip())
+                            if pol in ps:
+                                apply_xb_setting(a, xb_settings(ps[pol])[0])
                         for st in (xb_settings(a.xb_grid) if (pol in XB and a.xb_grid) else [None]):
                             if st is not None:
                                 apply_xb_setting(a, st)
