@@ -519,11 +519,12 @@ def do_xb_main(c, shakedown=False):
             c.orch(f"expXB_{'shk_' if shakedown else ''}{sc}_{ws}", xb_main_args(c, sc, reps) + ["--xb_policy_settings", frozen], xb_node_extra(w),
                    f"XB {'shakedown ' if shakedown else ''}{sc} {ws}")
     if not shakedown and (not only or "ALT" in only):
-        for pol, x in xb_selection(c).items():
-            if x.get("alternative_differs") and x.get("alternative_min_gap"):
-                for ws in XB_SCEN["XB1"]["workloads"]:
-                    c.orch(f"expXB_ALT_{ws}", xb_main_args(c, "XB1", reps, pol) + ["--xb_grid", x["alternative_min_gap"]], xb_node_extra(XB_WL[ws]),
-                           f"XB rule-4 alternative {pol} {x['alternative_min_gap']} {ws}")
+        # rule-4 alternatives: one invocation per workload (one node start), each method with its own alternative setting
+        alt = {pol: x["alternative_min_gap"] for pol, x in xb_selection(c).items() if x.get("alternative_differs") and x.get("alternative_min_gap")}
+        if alt:
+            for ws in XB_SCEN["XB1"]["workloads"]:
+                c.orch(f"expXB_ALT_{ws}", xb_main_args(c, "XB1", reps, ",".join(alt)) + ["--xb_policy_settings", ";".join(f"{p}@{v}" for p, v in alt.items())],
+                       xb_node_extra(XB_WL[ws]), f"XB rule-4 alternatives {ws}: {alt}")
 
 
 def do_xb_lossy(c):
