@@ -34,6 +34,26 @@ Medians over valid reps. TTFO-local, delivery gap, remote serving, RTT and trans
 | P-sink | 3/3 | 25.35 | 8.16 | 26 | 17.2 | 1.3 / 0.6 | 2.44 | ['0/101', '0/101', '0/101'] | 8 | 3 | 49.1 | - | round_limit |
 | R-full | 3/3 | 134.33 | 65.46 | 112 | 68.9 | 5.4 / 2.5 | 0.32 | ['101/101', '101/101', '101/101'] | 0 | 3 | 99.0 | - | - |
 
+## XB3_dog
+
+| method | valid | TTFO-local (s) | delivery gap (s) | remote chunks | remote wall (s) | est. delivery CRF 23 / 28 (MB) | transmitted (GB) | output equivalence | first >= 35 dB idx | sustained runs | terminal PSNR | Sink-less median PSNR | switch reasons |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| OTTER | 3/3 | 0.83 | 0.75 | 2 | 0.5 | 0 / 0 | 5.16 | ['0/0', '0/0', '0/0'] | 32 | 3 | 41.3 | 16.8 | - |
+| Full | 3/3 | 53.42 | 81.56 | 0 | 0 | 0 / 0 | 8.19 | ['0/0', '0/0', '0/0'] | 0 | 3 | 99.0 | - | - |
+| Wait-for-Sink | 3/3 | 14.91 | 43.05 | 0 | 0 | 0 / 0 | 5.18 | ['0/0', '0/0', '0/0'] | 8 | 3 | 47.2 | - | - |
+| P-sink | 3/3 | 25.24 | 8.27 | 68 | 44.8 | 3.3 / 1.5 | 5.21 | ['0/101', '0/101', '0/101'] | 9 | 3 | 49.4 | - | round_limit |
+| R-full | 3/3 | 88.16 | 43.47 | 118 | 71.7 | 5.7 / 2.7 | 0.32 | ['101/101', '101/101', '101/101'] | 0 | 3 | 99.0 | - | - |
+
+## XB4_dog
+
+| method | valid | TTFO-local (s) | delivery gap (s) | remote chunks | remote wall (s) | est. delivery CRF 23 / 28 (MB) | transmitted (GB) | output equivalence | first >= 35 dB idx | sustained runs | terminal PSNR | Sink-less median PSNR | switch reasons |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| OTTER | 3/3 | 0.85 | 0.74 | 2 | 0.4 | 0 / 0 | 3.48 | ['0/0', '0/0', '0/0'] | 33 | 3 | 43.5 | 16.7 | - |
+| Full | 3/3 | 53.57 | 67.67 | 0 | 0 | 0 / 0 | 6.47 | ['0/0', '0/0', '0/0'] | 0 | 3 | 99.0 | - | - |
+| Wait-for-Sink | 3/3 | 14.94 | 29.03 | 0 | 0 | 0 / 0 | 3.47 | ['0/0', '0/0', '0/0'] | 8 | 3 | 47.2 | - | - |
+| P-sink | 3/3 | 19.51 | 2.60 | 45 | 30.2 | 2.2 / 1.0 | 2.79 | ['0/101', '0/101', '0/101'] | 8 | 3 | 46.4 | - | round_limit |
+| R-full | 3/3 | 62.61 | 31.19 | 74 | 44.7 | 3.6 / 1.7 | 0.25 | ['101/101', '101/101', '101/101'] | 0 | 3 | 99.0 | - | - |
+
 ## ALT_dog
 
 | method | valid | TTFO-local (s) | delivery gap (s) | remote chunks | remote wall (s) | est. delivery CRF 23 / 28 (MB) | transmitted (GB) | output equivalence | first >= 35 dB idx | sustained runs | terminal PSNR | Sink-less median PSNR | switch reasons |
@@ -61,9 +81,9 @@ Medians over valid reps. TTFO-local, delivery gap, remote serving, RTT and trans
   - XB1_bfly vs R-full: 0.67 s vs 36.78 s, ratio 0.0183 -> True
 - **XH2** (P-full never converges at 1 Gbps): **SUPPORTED** (6 runs; reasons ['no_shrink'])
 - **XH3** (R-full destination GPU-seconds at trigger 120 >= 3 x at 30): **SUPPORTED** (35.0 s -> 132.8 s, x3.79)
-- **XH4** (remote-serving seconds of P-sink and R-full >= 5 x OTTER's TTFO-local, rho 1 and 2): **NOT EVALUABLE**
-  - XB3_dog P-sink:  -> NOT EVALUABLE
-  - XB3_dog R-full:  -> NOT EVALUABLE
-  - XB4_dog P-sink:  -> NOT EVALUABLE
-  - XB4_dog R-full:  -> NOT EVALUABLE
+- **XH4** (remote-serving seconds of P-sink and R-full >= 5 x OTTER's TTFO-local, rho 1 and 2): **SUPPORTED**
+  - XB3_dog P-sink: 44.8 s vs 5 x 0.83 s (x53.8) -> True
+  - XB3_dog R-full: 71.7 s vs 5 x 0.83 s (x86.1) -> True
+  - XB4_dog P-sink: 30.2 s vs 5 x 0.85 s (x35.7) -> True
+  - XB4_dog R-full: 44.7 s vs 5 x 0.85 s (x52.7) -> True
 - **XH1b** (hybrid and approximate methods) and **XH5** (OTTER's trajectory cost): descriptive, in the scenario tables above (Sink-less median PSNR, first call >= 35 dB, terminal PSNR).
