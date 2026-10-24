@@ -468,11 +468,22 @@ class GpuRuntime:
         saved = [(layer["k"][:, :n].detach().clone(), layer["v"][:, :n].detach().clone(), layer["pos"][:, :self.sink].detach().clone()) for layer in self.sa.kv_layers(self.pl)]
         return saved, dt
 
-    def write_sink_slots(self, saved: list):
-        n = self.sink * self.fsl
+    def write_sink_slots(self, saved: list) -> int:
+        """TS: write the K / V of the sink slots the prepare actually filled (prepare writes 2 of 3; the third is filled
+        by the first generated chunk, so it stays zero until the exact bind). Positions are NOT written: the live
+        positions come from the source's meta (0, 1, 2), and the bind's re-rotation relies on them. Returns the number
+        of slots written per layer."""
+        from models.wan.causal_model import KV_POS_EMPTY
+
+        n_written = 0
         for layer, (k, v, pos) in zip(self.sa.kv_layers(self.pl), saved):
-            layer["k"][:, :n] = k; layer["v"][:, :n] = v; layer["pos"][:, :self.sink] = pos
+            filled = [s_ for s_ in range(self.sink) if int(pos[0, s_].item()) != KV_POS_EMPTY]
+            for s_ in filled:
+                layer["k"][:, s_ * self.fsl:(s_ + 1) * self.fsl] = k[:, s_ * self.fsl:(s_ + 1) * self.fsl]
+                layer["v"][:, s_ * self.fsl:(s_ + 1) * self.fsl] = v[:, s_ * self.fsl:(s_ + 1) * self.fsl]
+            n_written = len(filled)
         self._sync()
+        return n_written
 
     def zero_sink_slots(self):
         n = self.sink * self.fsl
@@ -655,7 +666,7 @@ class FakeRuntime:
         time.sleep(0.002); self.cold = False; self.bound = False; return [("k", "v", "pos")], 0.002
 
     def write_sink_slots(self, saved):
-        self.temp_sink = True
+        self.temp_sink = True; return 2
 
     def zero_sink_slots(self):
         self.temp_sink = False

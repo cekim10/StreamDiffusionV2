@@ -122,7 +122,7 @@ def vd2_reset(rt, c: int, cond: dict, fast_pl: list, dry: bool, log: dict, src_l
             rt.unpack(dict(h), pl)
         rt.restore_fast()   # frozen M1 fast path: meta + in-flight; KV and VAE caches zero
     if temp is not None:
-        rt.write_sink_slots(temp)
+        log["ts_slots_written"] = rt.write_sink_slots(temp)   # 2 of 3 (prepare's latents); the third stays zero until the bind
     if dr:
         if not dry:
             log["latent_shapes"] = [list(z.shape) for z in src_latents]
@@ -270,6 +270,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--dry_run", action="store_true")
     ap.add_argument("--no_ref_frames", action="store_true", help="do not store REF frames (checks that need none)")
+    ap.add_argument("--skip_done", action="store_true", help="skip a condition whose summary.json in out_root is valid (re-runs after a failure)")
     a = ap.parse_args()
     sched = json.loads(Path(a.schedules).read_text())["inputs"][a.input]
     only = set(a.only.split(",")) if a.only else None
@@ -307,6 +308,13 @@ def main():
         (d / "summary.json").write_text(json.dumps({"condition": {"id": "REF", "kind": "ref", "frames_from": ref["frames_from"], "frames_to": ref["frames_to"], "resets": [], "binds": [], "cold_call": None},
                                                     "valid": True, "frames": str(frames_root / "REF"), **host_meta}, indent=1))
     for cond in conds:
+        prev = unit / cond["id"] / "summary.json"
+        if a.skip_done and prev.exists():
+            try:
+                if json.loads(prev.read_text()).get("valid") and Path(json.loads(prev.read_text())["frames"]).exists():
+                    print(f"[VC] skip {cond['id']}: valid run exists", flush=True); continue
+            except (ValueError, KeyError, OSError):
+                pass
         store = vf.FrameStore(frames_root, cond["id"])
         rows, summ = run_condition(rt, cond, base_record, a.dry_run, store, k, hw)
         store.close({"input": a.input, "condition": cond["id"], **host_meta})

@@ -102,8 +102,11 @@ Sink's); with every flag off, the G1 replay stays call-by-call identical.
 - DR-k: at the reset, keep the source's last k latent frames (from the serialized in-flight / hidden state), then
   `pm._timed_stream_decode` on them in the fresh session before the first call.
 - RP-1: `Runner.replay_restart(c, 1, sink0=False)` semantics on the destination, then restore the fast-path meta.
-- TS-in / TS-out: `pm.start_stream_session(prompt, images)` on a scratch session, copy its sink slots (K, V, pos) into
-  the live session's sink region, keep refresh frozen; at the bind the exact Sink overwrites them as today.
+- TS-in / TS-out: `pm.start_stream_session(prompt, images)` on a scratch session, copy the K / V of the sink slots its
+  prepare filled into the live session's sink region (prepare fills 2 of the 3 slots; the third stays zero until the
+  exact bind), keep the live positions from the source's meta and refresh frozen; at the bind the exact Sink
+  overwrites them as today. (Implementation note 2026-10-24: writing the scratch session's positions broke the bind's
+  re-rotation on the empty third slot; positions are therefore never written.)
 - Fidelity: at the DR reset, the source's VAE decoder cache tensors are kept (emulator side, never transferred) and
   compared layer by layer with the reconstructed ones before the first call.
 
