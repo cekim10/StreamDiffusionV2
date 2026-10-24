@@ -87,3 +87,16 @@ Medians over valid reps. TTFO-local, delivery gap, remote serving, RTT and trans
   - XB4_dog P-sink: 30.2 s vs 5 x 0.85 s (x35.7) -> True
   - XB4_dog R-full: 44.7 s vs 5 x 0.85 s (x52.7) -> True
 - **XH1b** (hybrid and approximate methods) and **XH5** (OTTER's trajectory cost): descriptive, in the scenario tables above (Sink-less median PSNR, first call >= 35 dB, terminal PSNR).
+
+## D5 lossy-input sensitivity (descriptive; lossy inputs are never exact recomputation)
+
+| workload | method | codec | valid | TTFO-local (s) | delivery gap (s) | inputs sent (MB) / raw (MB) | min input PSNR (dB) | output equivalence | terminal PSNR |
+|---|---|---|---|---|---|---|---|---|---|
+| dog | R-full | h264_crf23 | True | 36.44 | 18.06 | 2.4 / 294 | 34.5 | 0/101 | 37.5 |
+| dog | R-full | h264_crf28 | True | 36.54 | 18.13 | 1.2 / 294 | 31.7 | 0/101 | 32.8 |
+| dog | R-win | h264_crf23 | True | 4.73 | 4.08 | 0.3 / 35 | 34.1 | 0/101 | 23.0 |
+| dog | R-win | h264_crf28 | True | 4.72 | 4.04 | 0.2 / 35 | 31.3 | 0/101 | 23.1 |
+| bfly | R-full | h264_crf23 | True | 36.71 | 18.20 | 2.0 / 294 | 36.4 | 0/101 | 27.7 |
+| bfly | R-full | h264_crf28 | True | 36.51 | 18.09 | 1.0 / 294 | 34.2 | 0/101 | 27.5 |
+| bfly | R-win | h264_crf23 | True | 4.74 | 4.09 | 0.3 / 35 | 36.2 | 0/101 | 21.7 |
+| bfly | R-win | h264_crf28 | True | 4.68 | 4.03 | 0.1 / 35 | 34.0 | 0/101 | 21.9 |

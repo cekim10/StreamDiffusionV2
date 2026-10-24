@@ -119,19 +119,27 @@ def main():
         inp, sc = key.split("|"); e = C["main_effects"]
         L.append(f"| {inp} | {sc} | {f(e['S_sinkless_v4'], 2)} | {f(e['S_sinkless_E'])} | {f(e['D_v1_ratio'])} | {f(e['R_v1_ratio'])} | {f(e['R_first4_E'])} | "
                  + ", ".join(f"{k} {f(v, 2)}" for k, v in C["v1_DxR_mean_over_S"].items()) + " |")
-    verdict = lambda xs: ("NOT EVALUABLE" if not xs else ("SUPPORTED" if all(xs) else "NOT SUPPORTED"))  # noqa: E731
+    n_inputs = sum(1 for inp in INPUTS if (root / f"{inp}_s0" / "metrics.json").exists())
+
+    def verdict(xs, need=2 * len(INPUTS)):
+        # frozen rule: every input and schedule must agree; a missing input leaves the verdict pending (never decided early)
+        if not xs:
+            return "NOT EVALUABLE" if n_inputs == len(INPUTS) else "PENDING"
+        if not all(xs):
+            return "NOT SUPPORTED"
+        return "SUPPORTED" if len(xs) >= need else f"PENDING (consistent so far: {len(xs)} of {need} input x schedule combinations)"
     L += ["", "## Verdicts (preregistered rules; every input and schedule must agree)", "",
           f"- VD-H1 (masking lowers Sink-less color drift and warp error): **{verdict(H['VD-H1'])}** {H['VD-H1']}",
           f"- VD-H2 (keeping the decoder cache lowers the reset spike by >= 2x): **{verdict(H['VD-H2'])}** {H['VD-H2']}",
           f"- VD-H3 (keeping recent KV lowers the reset spike and first-4 warp error): **{verdict(H['VD-H3'])}** {H['VD-H3']}",
-          f"- VD-H4 (butterfly: masked + decoder + recent still within {H4_DB} dB of frozen M1's terminal PSNR): **{verdict(H['VD-H4'])}** {H['VD-H4']}",
+          f"- VD-H4 (butterfly: masked + decoder + recent still within {H4_DB} dB of frozen M1's terminal PSNR): **{verdict(H['VD-H4'], need=2)}** {H['VD-H4']}",
           "- VD-H5 (D x R interaction on V1): descriptive, see the table.", "",
           "## Cells", "", "| input | schedule | cell (S D R) | valid | mask violations | V1 reset | Sink-less V4 | Sink-less E | first-4 E | terminal PSNR | first >= 35 dB |",
           "|---|---|---|---|---|---|---|---|---|---|---|"]
     for inp, x, k, v in rows:
         name = k if isinstance(k, str) else f"{'mask' if k[0] else 'zero'} {'dec' if k[1] else '-'} {'rec' if k[2] else '-'}"
         L.append(f"| {inp} | OT-{x} | {name} | {v['valid']} | {v['mask_violations']} | {f(v['v1_reset'], 2)} | {f(v['sinkless_v4'], 2)} | {f(v['sinkless_E'])} | {f(v['first4_E'])} | {f(v['terminal_psnr'], 1)} | {v['cross_call']} |")
-    res["verdicts"] = {k: verdict(v) for k, v in H.items()}
+    res["verdicts"] = {k: verdict(v, need=2 if k == "VD-H4" else 2 * len(INPUTS)) for k, v in H.items()}
     out = ROOT / "results/evaluation/osdi/expVD" / ("_dryrun_vd_results" if a.dry else "vd_results")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix(".md").write_text("\n".join(L) + "\n"); out.with_suffix(".json").write_text(json.dumps(res, indent=1, default=str))

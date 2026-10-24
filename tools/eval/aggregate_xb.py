@@ -173,12 +173,29 @@ def main():
     for r in H["XH4"]["rows"]:
         L.append(f"  - {r['scenario']} {LABEL[r['method']]}: " + (f"{f(r.get('remote_wall_s'), 1)} s vs 5 x {f(r.get('otter_ttfo_s'))} s (x{f(r.get('ratio'), 1)})" if 'ratio' in r else "") + f" -> {r['verdict']}")
     L += ["- **XH1b** (hybrid and approximate methods) and **XH5** (OTTER's trajectory cost): descriptive, in the scenario tables above (Sink-less median PSNR, first call >= 35 dB, terminal PSNR)."]
+    # D5 lossy-input sensitivity (descriptive; never exact recomputation, never evidence for XH1-XH5)
+    lossy = []
+    for ws in ("dog", "bfly"):
+        root = ROOT / "results/evaluation" / f"expXB_lossy_{ws}"
+        for d in sorted(root.glob("policy=*")) if root.exists() else []:
+            if not (d / "summary.json").exists():
+                continue
+            r = run_record(d); s_ = json.load(open(d / "summary.json")); I = s_.get("inputs") or {}
+            lossy.append({**r, "workload": ws, "codec": (s_.get("xb_params") or {}).get("codec"), "input_bytes": I.get("bytes_sent"), "input_raw": I.get("raw_bytes"),
+                          "min_input_psnr": min((t.get("min_psnr") for t in (I.get("tasks") or {}).values() if t.get("min_psnr") is not None), default=None)})
+    if lossy:
+        L += ["", "## D5 lossy-input sensitivity (descriptive; lossy inputs are never exact recomputation)", "",
+              "| workload | method | codec | valid | TTFO-local (s) | delivery gap (s) | inputs sent (MB) / raw (MB) | min input PSNR (dB) | output equivalence | terminal PSNR |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+        for r in lossy:
+            L.append(f"| {r['workload']} | {LABEL[r['policy']]} | {r['codec']} | {r['valid']} | {f(r['ttfo_local_s'])} | {f(r['gap_s'])} | {f(r['input_bytes'] and r['input_bytes'] / 1e6, 1)} / {f(r['input_raw'] and r['input_raw'] / 1e6, 0)} | "
+                     f"{f(r['min_input_psnr'], 1)} | {r['out_eq']} | {f(r['terminal_psnr'], 1)} |")
     inval = [(sc, r["run"], r["why"]) for sc, rs in runs.items() for r in rs if not r["valid"]]
     if inval:
         L += ["", "## Invalid runs", ""] + [f"- {sc} {run}: {why}" for sc, run, why in inval]
     out = ROOT / "results/evaluation/osdi/expXB" / (f"_{a.prefix}xb_results" if a.prefix else "xb_results")
     out.with_suffix(".md").write_text("\n".join(L) + "\n")
-    out.with_suffix(".json").write_text(json.dumps({"scenarios": R, "hypotheses": H, "runs": runs}, indent=1, default=str))
+    out.with_suffix(".json").write_text(json.dumps({"scenarios": R, "hypotheses": H, "runs": runs, "lossy": lossy}, indent=1, default=str))
     print("\n".join(L))
 
 

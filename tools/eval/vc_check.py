@@ -114,14 +114,14 @@ def main():
     if a.g3:
         ok, why, info = g3(unit, sched); res["G3"] = {"pass": ok, "failures": why[:30], "streams": info}
     allok = all(v["pass"] for v in res.values())
-    L = [f"# VC-0 checks ({unit})", ""]
+    L = [f"# {'VC-0' if a.name.startswith('vc0') else 'VC-1'} checks ({unit})", ""]
     for g, v in res.items():
         L.append(f"- **{g}: {'PASS' if v['pass'] else 'FAIL'}** " + json.dumps({k: x for k, x in v.items() if k not in ('failures', 'streams', 'pass')}, default=str))
         for w in v["failures"]:
             L.append(f"  - {w}")
         for sname, si in (v.get("streams") or {}).items():
             L.append(f"  - {sname}: {'ok' if si['ok'] else 'FAIL'} " + json.dumps({k: x for k, x in si.items() if k != 'ok'}, default=str))
-    L += ["", "VC-0: " + ("ALL PASS" if allok else "FAIL - VC stops here")]
+    L += ["", ("VC-0: " if a.name.startswith("vc0") else "VC-1 checks: ") + ("ALL PASS" if allok else "FAIL - VC stops here")]
     print("\n".join(L))
     if a.write:
         dry = "_dryrun_" in str(unit)
