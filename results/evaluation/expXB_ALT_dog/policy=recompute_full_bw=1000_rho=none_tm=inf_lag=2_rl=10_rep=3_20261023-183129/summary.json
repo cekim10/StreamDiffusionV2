@@ -1,0 +1,376 @@
+{
+ "run_id": "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=2_rl=10_rep=3_20261023-183129",
+ "policy": "recompute_full",
+ "policy_label": "ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up)",
+ "bw_mbps": 1000.0,
+ "tm_s": 1000000000.0,
+ "rho": null,
+ "rep": 3,
+ "path": [
+  "A",
+  "B"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02"
+ },
+ "t0_wall": 1792805509.8826177,
+ "migration_chunk": 30,
+ "xb_params": {
+  "threshold_mib": 256.0,
+  "round_limit": 10,
+  "min_shrink": 0.1,
+  "lag": 2,
+  "W": 1,
+  "horizon": 100,
+  "codec": "ffv1",
+  "verify_state": false
+ },
+ "rtt_measured_lan": {
+  "A-B": {
+   "median_ms": 0.24822354316711426,
+   "p95_ms": 1.6661062836647034,
+   "min_ms": 0.2087801694869995,
+   "n": 20
+  }
+ },
+ "codecs": {
+  "A": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  },
+  "B": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  }
+ },
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0,
+   "t_stop": null,
+   "t_fg_sent": null,
+   "call": 30,
+   "fg_bytes": 0,
+   "mode": "xb"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "x1",
+   "kind": "recompute_full",
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.005326986312866211,
+   "state": "done",
+   "rounds": 10,
+   "t_end": 173.81098580360413,
+   "outcome": "switched",
+   "target": 267,
+   "rate": 1000000000.0,
+   "codec": "ffv1",
+   "frame_ranges": [
+    [
+     0,
+     125
+    ],
+    [
+     125,
+     241
+    ],
+    [
+     241,
+     353
+    ],
+    [
+     353,
+     465
+    ],
+    [
+     465,
+     573
+    ],
+    [
+     573,
+     677
+    ],
+    [
+     677,
+     781
+    ],
+    [
+     781,
+     881
+    ],
+    [
+     881,
+     977
+    ],
+    [
+     977,
+     1073
+    ],
+    [
+     1073,
+     1169
+    ]
+   ],
+   "sent_hi": 1169,
+   "stop_call": 291,
+   "finish_reason": "round_limit"
+  }
+ ],
+ "switchovers": [
+  {
+   "task": "x1",
+   "dst": "B",
+   "t": 173.81098580360413,
+   "call": 291,
+   "mode": "recompute_full"
+  }
+ ],
+ "inputs": {
+  "codec": "ffv1",
+  "lossless": true,
+  "tasks": {
+   "x1": {
+    "dst": "B",
+    "outcome": "switched",
+    "frame_ranges": [
+     [
+      0,
+      125
+     ],
+     [
+      125,
+      241
+     ],
+     [
+      241,
+      353
+     ],
+     [
+      353,
+      465
+     ],
+     [
+      465,
+      573
+     ],
+     [
+      573,
+      677
+     ],
+     [
+      677,
+      781
+     ],
+     [
+      781,
+      881
+     ],
+     [
+      881,
+      977
+     ],
+     [
+      977,
+      1073
+     ],
+     [
+      1073,
+      1169
+     ]
+    ],
+    "bytes_sent": 400889192,
+    "raw_bytes": 1400555520,
+    "frames": 1169,
+    "enc_cpu_s": 20.106288768351078,
+    "send_wall_s": 9.214552640914917,
+    "bytes_decoded": 400889192,
+    "decode_cpu_s": 10.33249310683459,
+    "bytes_discarded": 0,
+    "segments_exact": 41,
+    "segments": 41,
+    "min_psnr": null
+   }
+  },
+  "switchovers": [
+   {
+    "task": "x1",
+    "dst": "B",
+    "inputs_exact": true,
+    "input_error": null,
+    "input_wait_s": 9.793865203857422,
+    "replayed": 291
+   }
+  ],
+  "bytes_sent": 400889192,
+  "raw_bytes": 1400555520,
+  "bytes_abandoned_targets": 0,
+  "enc_cpu_s": 20.106288768351078,
+  "decode_cpu_s": 10.33249310683459
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "gpu0_before_run": {
+   "A": {
+    "util_pct": 0.0,
+    "mem_used_mib": 18026.0,
+    "others_mib": 0,
+    "others": []
+   },
+   "B": {
+    "util_pct": 0.0,
+    "mem_used_mib": 18053.0,
+    "others_mib": 0,
+    "others": []
+   }
+  },
+  "gpu0_idle_before_run": true,
+  "switchovers_verified": null,
+  "n_switchovers": 1,
+  "final_edge_served": true,
+  "stop_reason": "horizon",
+  "source_served_after_trigger": 261,
+  "source_served_until_switch": true,
+  "codecs_ok": true,
+  "input_check": true,
+  "codec_lossless": true,
+  "inputs_exact_at_switchovers": true
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1792805746.2643964,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A93",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 30,
+   "rejoin_call": 30,
+   "gpu_mem_alloc_mb": 20135.31298828125,
+   "peak_allocated_mb": 26506.60888671875,
+   "peak_reserved_mb": 26622.0,
+   "promotion_calls": [],
+   "snapshots": [
+    {
+     "k": 0,
+     "digest": "ae58e37e00bb71e26462833c6b1e4a5c47f6d9b557f356fe1032ceedfd4cd94a",
+     "sink_version": "ae58e37e00bb71e2",
+     "t": 1792805508.5185125,
+     "call": 30
+    }
+   ],
+   "versions_seen": [
+    "ae58e37e00bb71e2"
+   ],
+   "t_recv_start": 1792805746.2652156,
+   "t_recv": 1792805746.265218
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1792805749.9052463,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B72",
+   "ok": true,
+   "have": 0,
+   "n_frags": 0,
+   "sink_verified": null,
+   "bound_call": 291,
+   "rejoin_call": 291,
+   "gpu_mem_alloc_mb": 26479.18701171875,
+   "peak_allocated_mb": 28690.61328125,
+   "peak_reserved_mb": 30044.0,
+   "promotion_calls": [],
+   "snapshots": [],
+   "versions_seen": [],
+   "t_recv_start": 1792805749.906346,
+   "t_recv": 1792805749.906348
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1792805508.5193768,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A77",
+  "ok": true,
+  "t_prepared": 1792805508.5185125,
+  "t_recv_start": 1792805508.5215335,
+  "t_recv": 1792805508.5215344
+ },
+ "delivery": {
+  "ttfo_local": [
+   {
+    "edge": "B",
+    "t_change": 0.0,
+    "ttfo_local_s": 174.4365794658661,
+    "first_call": 291
+   }
+  ],
+  "ttfo_local_final_s": 174.4365794658661,
+  "delivery_gap_s": 14.876832008361816,
+  "delivery_gap_at_s": 159.55974745750427,
+  "delivered_chunks": 362,
+  "t_last_delivery_s": 234.89485096931458,
+  "remote_chunks": 261,
+  "remote_content_s": 65.25,
+  "remote_wall_s": 159.55974745750427,
+  "remote_stretches": [
+   {
+    "serving": "A",
+    "edge": "B",
+    "t_start": 0.0,
+    "t_last": 159.55974745750427,
+    "chunks": 261
+   }
+  ],
+  "remote_delivery_bytes_ESTIMATED": {
+   "crf23": 12549856,
+   "crf28": 5856237,
+   "remote_chunks_not_encoded": 0,
+   "note": "H.264 encoded size of remotely served output; not transmitted on the testbed"
+  },
+  "delivery_encode_cpu_s": 12.403792172670364,
+  "rtt_measured_lan": {
+   "A-B": {
+    "median_ms": 0.24822354316711426,
+    "p95_ms": 1.6661062836647034,
+    "min_ms": 0.2087801694869995,
+    "n": 20
+   }
+  },
+  "output_equivalence": [
+   {
+    "node": "B",
+    "resume_call": 291,
+    "mode": "recompute_full",
+    "calls": 101,
+    "checked": 101,
+    "matching": 101,
+    "first_call_match": true,
+    "first_mismatch_call": null
+   }
+  ],
+  "trajectory_final": {
+   "edge": "B",
+   "calls": 101,
+   "first_ge35_idx": 0,
+   "sustained10_idx": 0,
+   "terminal_median_psnr": 99.0,
+   "median_psnr": 99.0
+  }
+ }
+}

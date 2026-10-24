@@ -1,0 +1,254 @@
+{
+ "run_id": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=3_20261023-165936",
+ "policy": "precopy_full",
+ "policy_label": "Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover)",
+ "bw_mbps": 1000.0,
+ "tm_s": 1000000000.0,
+ "rho": null,
+ "rep": 3,
+ "path": [
+  "A",
+  "B"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02"
+ },
+ "t0_wall": 1792799996.904379,
+ "migration_chunk": 30,
+ "xb_params": {
+  "threshold_mib": 256.0,
+  "round_limit": 10,
+  "min_shrink": 0.1,
+  "lag": 1,
+  "W": 6,
+  "horizon": 100,
+  "codec": "ffv1",
+  "verify_state": false
+ },
+ "rtt_measured_lan": {
+  "A-B": {
+   "median_ms": 0.270843505859375,
+   "p95_ms": 1.22891366481781,
+   "min_ms": 0.2650320529937744,
+   "n": 20
+  }
+ },
+ "codecs": {
+  "A": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  },
+  "B": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  }
+ },
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0,
+   "t_stop": null,
+   "t_fg_sent": null,
+   "call": 30,
+   "fg_bytes": 0,
+   "mode": "xb"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "x1",
+   "kind": "precopy_full",
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.005954742431640625,
+   "state": "done",
+   "rounds": 4,
+   "t_end": 243.1657681465149,
+   "outcome": "switched",
+   "switch": {
+    "call": 332,
+    "final_bytes": 4542256336,
+    "reason": "no_shrink",
+    "rounds": 4
+   },
+   "verified": true,
+   "components_ok": {
+    "inflight": true,
+    "meta": true,
+    "recent": true,
+    "sink": true,
+    "vae": true
+   }
+  }
+ ],
+ "switchovers": [
+  {
+   "task": "x1",
+   "dst": "B",
+   "t": 243.1657681465149,
+   "call": 332,
+   "mode": "precopy_full"
+  }
+ ],
+ "inputs": null,
+ "validation": {
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "gpu0_before_run": {
+   "A": {
+    "util_pct": 0.0,
+    "mem_used_mib": 17844.0,
+    "others_mib": 0,
+    "others": []
+   },
+   "B": {
+    "util_pct": 0.0,
+    "mem_used_mib": 17993.0,
+    "others_mib": 0,
+    "others": []
+   }
+  },
+  "gpu0_idle_before_run": true,
+  "switchovers_verified": true,
+  "n_switchovers": 1,
+  "final_edge_served": true,
+  "stop_reason": "horizon",
+  "source_served_after_trigger": 302,
+  "source_served_until_switch": true,
+  "codecs_ok": true
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1792800302.5943682,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A113",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 30,
+   "rejoin_call": 30,
+   "gpu_mem_alloc_mb": 20135.31298828125,
+   "peak_allocated_mb": 28724.8896484375,
+   "peak_reserved_mb": 29862.0,
+   "promotion_calls": [],
+   "snapshots": [
+    {
+     "k": 0,
+     "digest": "7285e558d4ef2e74cf7d43cba1c03572a2b975a20b45887ea762f0d8023fa3ec",
+     "sink_version": "7285e558d4ef2e74",
+     "t": 1792799995.532475,
+     "call": 30
+    }
+   ],
+   "versions_seen": [
+    "7285e558d4ef2e74"
+   ],
+   "t_recv_start": 1792800302.5951066,
+   "t_recv": 1792800302.5951085
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1792800303.0318997,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B85",
+   "ok": true,
+   "have": 0,
+   "n_frags": 0,
+   "sink_verified": null,
+   "bound_call": 332,
+   "rejoin_call": 332,
+   "gpu_mem_alloc_mb": 26389.20166015625,
+   "peak_allocated_mb": 29351.26220703125,
+   "peak_reserved_mb": 30662.0,
+   "promotion_calls": [],
+   "snapshots": [],
+   "versions_seen": [],
+   "t_recv_start": 1792800303.0328155,
+   "t_recv": 1792800303.0328176
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1792799995.5330846,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A108",
+  "ok": true,
+  "t_prepared": 1792799995.532475,
+  "t_recv_start": 1792799995.53472,
+  "t_recv": 1792799995.5347204
+ },
+ "delivery": {
+  "ttfo_local": [
+   {
+    "edge": "B",
+    "t_change": 0.0,
+    "ttfo_local_s": 244.15419006347656,
+    "first_call": 332
+   }
+  ],
+  "ttfo_local_final_s": 244.15419006347656,
+  "delivery_gap_s": 43.28990364074707,
+  "delivery_gap_at_s": 200.8642864227295,
+  "delivered_chunks": 403,
+  "t_last_delivery_s": 304.14500284194946,
+  "remote_chunks": 302,
+  "remote_content_s": 75.5,
+  "remote_wall_s": 200.8642864227295,
+  "remote_stretches": [
+   {
+    "serving": "A",
+    "edge": "B",
+    "t_start": 0.0,
+    "t_last": 200.8642864227295,
+    "chunks": 302
+   }
+  ],
+  "remote_delivery_bytes_ESTIMATED": {
+   "crf23": 12516125,
+   "crf28": 7501781,
+   "remote_chunks_not_encoded": 0,
+   "note": "H.264 encoded size of remotely served output; not transmitted on the testbed"
+  },
+  "delivery_encode_cpu_s": 15.58573742210865,
+  "rtt_measured_lan": {
+   "A-B": {
+    "median_ms": 0.270843505859375,
+    "p95_ms": 1.22891366481781,
+    "min_ms": 0.2650320529937744,
+    "n": 20
+   }
+  },
+  "output_equivalence": [
+   {
+    "node": "B",
+    "resume_call": 332,
+    "mode": "precopy_full",
+    "calls": 101,
+    "checked": 101,
+    "matching": 101,
+    "first_call_match": true,
+    "first_mismatch_call": null
+   }
+  ],
+  "trajectory_final": {
+   "edge": "B",
+   "calls": 101,
+   "first_ge35_idx": 0,
+   "sustained10_idx": 0,
+   "terminal_median_psnr": 99.0,
+   "median_psnr": 99.0
+  }
+ }
+}
