@@ -19,7 +19,15 @@
 | XB2_dog | precopy_sink | True | horizon | 25.11 | 8.18 | 26 | 8 | 49.1 | - |
 | XB2_dog | recompute_full | True | horizon | 134.26 | 65.51 | 112 | 0 | 99.0 | - |
 | XB2_dog | reuse_dyn2 | True | horizon | 0.68 | 0.69 | 0 | 31 | 49.5 | - |
+| XB3_dog | full | True | horizon | 53.49 | 81.60 | 0 | 0 | 99.0 | - |
+| XB3_dog | precopy_sink | True | horizon | 26.44 | 8.42 | 70 | 9 | 49.3 | - |
+| XB3_dog | recompute_full | True | horizon | 88.55 | 43.97 | 119 | 0 | 99.0 | - |
+| XB3_dog | reuse_dyn2 | True | horizon | 0.91 | 0.95 | 2 | 31 | 41.3 | - |
+| XB3_dog | split_wait | True | horizon | 14.91 | 43.04 | 0 | 8 | 47.2 | - |
+| XB4_dog | full | True | horizon | 53.36 | 67.46 | 0 | 0 | 99.0 | - |
+| XB4_dog | precopy_sink | True | horizon | 19.82 | 2.64 | 45 | 8 | 46.4 | - |
+| XB4_dog | recompute_full | True | horizon | 62.67 | 31.19 | 74 | 0 | 99.0 | - |
+| XB4_dog | reuse_dyn2 | True | horizon | 1.19 | 0.81 | 2 | 33 | 43.5 | - |
+| XB4_dog | split_wait | True | horizon | 14.93 | 28.98 | 0 | 8 | 47.2 | - |
 
-SHAKEDOWN FAIL
-- XB3_dog: 0 methods with a run, expected 5
-- XB4_dog: 0 methods with a run, expected 5
+SHAKEDOWN PASS
