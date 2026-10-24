@@ -1,0 +1,98 @@
+{
+ "condition": {
+  "id": "OT-R",
+  "input": "audi-snow-trail",
+  "kind": "ot",
+  "label": "M1 + M2 (policy split) repeated mobility A->B->C->D, rho 2; not M3-v2",
+  "resets": [
+   30,
+   42,
+   54
+  ],
+  "binds": [
+   78
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 177,
+  "frames_from": 14,
+  "frames_to": 177,
+  "sources": [
+   "results/evaluation/expWX_audi_X3/policy=split_bw=1000_rho=2_tm=7.025_rep=1_20261021-150958"
+  ],
+  "counterfactual": false
+ },
+ "t_first_op": 30,
+ "events": [
+  {
+   "call": 30,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "5769a7f4614230e1",
+   "reset_s": 3.0306837260723114
+  },
+  {
+   "call": 42,
+   "op": "reset_inside_episode",
+   "sink": "kept",
+   "sha": "5769a7f4614230e1",
+   "reset_s": 1.098896324634552
+  },
+  {
+   "call": 54,
+   "op": "reset_inside_episode",
+   "sink": "kept",
+   "sha": "5769a7f4614230e1",
+   "reset_s": 1.0930687487125397
+  },
+  {
+   "call": 78,
+   "op": "bind",
+   "sha": "5769a7f4614230e1",
+   "packed_at": 30,
+   "slots_rerotated": 92,
+   "bind_s": 0.13206451386213303
+  }
+ ],
+ "vd": null,
+ "bound_sink": [
+  {
+   "call": 78,
+   "sha": "5769a7f4614230e1d4427d007b96e0a66990d6a45699d03b609291da19d8b3f5",
+   "packed_at": 30
+  }
+ ],
+ "realized": {
+  "resets": [
+   30,
+   42,
+   54
+  ],
+  "binds": [
+   78
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 119.91390585899353,
+ "input": "audi-snow-trail",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261024-150801/OT-R",
+ "commit": "28c1af058a118cbb34abe280497d2c291140b04d",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.3648340702057,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail__multiple.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261024-150801",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

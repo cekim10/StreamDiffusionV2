@@ -1,0 +1,98 @@
+{
+ "condition": {
+  "id": "OT-R",
+  "input": "butterfly-feeding-slow-motion",
+  "kind": "ot",
+  "label": "M1 + M2 (policy split) repeated mobility A->B->C->D, rho 2; not M3-v2",
+  "resets": [
+   30,
+   42,
+   54
+  ],
+  "binds": [
+   78
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 177,
+  "frames_from": 14,
+  "frames_to": 177,
+  "sources": [
+   "results/evaluation/expWX_bfly_X3/policy=split_bw=1000_rho=2_tm=7.025_rep=1_20261021-105318"
+  ],
+  "counterfactual": false
+ },
+ "t_first_op": 30,
+ "events": [
+  {
+   "call": 30,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "2a74c991f0e7e87e",
+   "reset_s": 2.977115847170353
+  },
+  {
+   "call": 42,
+   "op": "reset_inside_episode",
+   "sink": "kept",
+   "sha": "2a74c991f0e7e87e",
+   "reset_s": 1.0694250538945198
+  },
+  {
+   "call": 54,
+   "op": "reset_inside_episode",
+   "sink": "kept",
+   "sha": "2a74c991f0e7e87e",
+   "reset_s": 1.0826670080423355
+  },
+  {
+   "call": 78,
+   "op": "bind",
+   "sha": "2a74c991f0e7e87e",
+   "packed_at": 30,
+   "slots_rerotated": 94,
+   "bind_s": 0.09850761294364929
+  }
+ ],
+ "vd": null,
+ "bound_sink": [
+  {
+   "call": 78,
+   "sha": "2a74c991f0e7e87e314449b9cadfcca73b3f87866f73fcce4bdab3a654782d2a",
+   "packed_at": 30
+  }
+ ],
+ "realized": {
+  "resets": [
+   30,
+   42,
+   54
+  ],
+  "binds": [
+   78
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 118.56910109519958,
+ "input": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261024-133909/OT-R",
+ "commit": "28c1af058a118cbb34abe280497d2c291140b04d",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.17718958854675,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261024-133909",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

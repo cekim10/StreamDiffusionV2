@@ -1,0 +1,80 @@
+{
+ "condition": {
+  "id": "OT-1",
+  "input": "butterfly-feeding-slow-motion",
+  "kind": "ot",
+  "label": "OTTER single move 1 Gbps (W2 realized; policy reuse_dyn, one move from one source: no M3 behavior evaluated)",
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 157,
+  "frames_from": 18,
+  "frames_to": 157,
+  "sources": [
+   "results/evaluation/expW_W2_butterfly-feeding-slow-motion_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-034633"
+  ],
+  "counterfactual": false
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "3c8a600a3367f6f3",
+   "reset_s": 2.9779640063643456
+  },
+  {
+   "call": 58,
+   "op": "bind",
+   "sha": "3c8a600a3367f6f3",
+   "packed_at": 34,
+   "slots_rerotated": 95,
+   "bind_s": 0.09836697578430176
+  }
+ ],
+ "vd": null,
+ "bound_sink": [
+  {
+   "call": 58,
+   "sha": "3c8a600a3367f6f3d42b5ab855aa706ef482e760f26758014ade016a8856b960",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 103.87034940719604,
+ "input": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261024-133909/OT-1",
+ "commit": "28c1af058a118cbb34abe280497d2c291140b04d",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.17718958854675,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261024-133909",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

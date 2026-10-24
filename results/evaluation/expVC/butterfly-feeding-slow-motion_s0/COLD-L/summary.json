@@ -1,0 +1,65 @@
+{
+ "condition": {
+  "id": "COLD-L",
+  "input": "butterfly-feeding-slow-motion",
+  "kind": "cold",
+  "label": "cold restart at the OT-L move (timeline copied from the W2 cold run, shifted to this move call)",
+  "resets": [],
+  "binds": [],
+  "cold_call": 80,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expW_W2_butterfly-feeding-slow-motion_s0/policy=cold_bw=1000_rho=none_tm=inf_rep=1_20261019-034801"
+  ],
+  "counterfactual": true,
+  "paired_with": "OT-L",
+  "no_output_calls": [
+   80
+  ],
+  "emit_call": 81
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "cold_restart",
+   "cold_restart_ms": 913.4309515357018,
+   "s": 1.9221026673913002
+  }
+ ],
+ "vd": null,
+ "bound_sink": [],
+ "realized": {
+  "resets": [],
+  "binds": [],
+  "cold": [
+   80
+  ],
+  "no_output": [
+   0,
+   80
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 160.2320535182953,
+ "input": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261024-133909/COLD-L",
+ "commit": "28c1af058a118cbb34abe280497d2c291140b04d",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.17718958854675,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261024-133909",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}
