@@ -1,6 +1,6 @@
 # Experiment VD-2 - continuity-critical state reconstruction at the destination: preregistration REVISED DRAFT 2 (2026-10-24)
 
-Status: **REVISED DRAFT 2 for review before the freeze. Not frozen; nothing implemented or run.** Revision per the
+Status: **FROZEN 2026-10-24** (freeze record `../expVD2_freeze.md`; approved by the user after revised draft 2). Implementation `tools/eval` commit 5c638cf (emulator only, dry-tested); nothing run at the freeze. Earlier status: **REVISED DRAFT 2.** Revision per the
 2026-10-24 review: H3 keeps the >= 50 % criterion and gains a descriptive restoration criterion (section 5); H5 covers
 post-bind-20 content and color; H6 keeps its limits and adds a preferred 0.3 s target, with combination costs
 evaluated on their own; DR-1 and DR-2 both run with per-layer cache fidelity, DR-4 predefined as an exploratory
