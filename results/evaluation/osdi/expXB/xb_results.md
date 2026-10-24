@@ -70,6 +70,12 @@ Medians over valid reps. TTFO-local, delivery gap, remote serving, RTT and trans
 | R-full | 3/3 | 168.37 | 14.37 | 250 | 153.9 | 10.4 / 6.2 | 0.29 | ['101/101', '101/101', '101/101'] | 0 | 3 | 99.0 | - | - |
 | R-win | 3/3 | 2.57 | 1.92 | 1 | 0.7 | 0.1 / 0.0 | 0.00 | ['0/100', '0/100', '0/100'] | - | 0 | 21.9 | - | - |
 
+## N_dog
+
+| method | valid | TTFO-local (s) | delivery gap (s) | remote chunks | remote wall (s) | est. delivery CRF 23 / 28 (MB) | transmitted (GB) | output equivalence | first >= 35 dB idx | sustained runs | terminal PSNR | Sink-less median PSNR | switch reasons |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P-full | 3/3 | 66.55 | 12.50 | 60 | 54.1 | 2.9 / 1.3 | 26.21 | ['101/101', '101/101', '101/101'] | 0 | 3 | 99.0 | - | no_shrink |
+
 ## Hypotheses (frozen rules)
 
 - **XH1a** (TTFO-local OTTER <= 0.25 x each exact method, XB1 both workloads): **SUPPORTED**

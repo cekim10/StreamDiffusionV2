@@ -1,4 +1,4 @@
-# Experiment XB - report (main sweep complete; the D5 lossy-input runs pending)
+# Experiment XB - report (complete: main sweep, D5 lossy inputs, XB-N native-bandwidth sensitivity)
 
 Frozen plan: `preregistration.md` (FROZEN 2026-10-23, `../expXB_freeze.md`). Aggregation: `tools/eval/aggregate_xb.py`
 -> `xb_results.md` / `.json` (all numbers below come from it). 99 runs, **99 valid**: XB1 dog and butterfly (7 methods x 3
@@ -69,9 +69,35 @@ here is a best case for the methods that serve remotely.
   93/94, ...; Task B). When that falls inside the last round (XB1: calls 30-58; XB3: 78-106) about 0.7 GB is dirty and
   the gap is ~8 s; when it does not (XB4: calls 54-82) the final copy is small (gap 2.6 s, TTFO-local 19.5 s).
 
-## 5. Pending
+## 5. D5 lossy-input sensitivity (descriptive; 8 runs, all valid; never exact recomputation)
 
-The D5 lossy-input sensitivity runs (8, descriptive; R-full and R-win with H.264 CRF 23 / 28 inputs).
+| method | codec | inputs sent | TTFO-local | terminal PSNR (dog / butterfly) |
+|---|---|---|---|---|
+| R-full | FFV1 (frozen, lossless) | 60-80 MB | 36.7 s | 99 / 99 (bit-exact) |
+| R-full | H.264 CRF 23 | 2.0-2.4 MB | 36.4-36.7 s | 37.5 / 27.7 |
+| R-full | H.264 CRF 28 | 1.0-1.2 MB | 36.5 s | 32.8 / 27.5 |
+| R-win | CRF 23 / 28 | 0.1-0.3 MB | 4.7 s | 21.7-23.1 |
+
+Lossy inputs cut the transferred bytes by 30-60x but leave TTFO-local unchanged (input transfer is not R-full's
+bottleneck at 1 Gbps) and break exactness: R-full's output then diverges from the reference (on butterfly to 27.5 dB,
+below OTTER's 30.4 dB). Input PSNR 31.3-36.4 dB.
+
+## 5b. XB-N: P-full without the emulated cap (descriptive sensitivity, 3 runs; `../expXBN/plan.md`)
+
+| quantity | 1 Gbps (frozen XB1) | native (XB-N) |
+|---|---|---|
+| measured end-to-end throughput per round | 0.84-0.88 Gb/s | **3.1-3.6 Gb/s** (hashing, packing and TCP included; the NIC's line rate was not reached) |
+| rounds, dirty bytes | 3: 6164, 5224, 5208 MiB | 4: 6163, 5207, 4542, 4518 MiB |
+| convergence | no (no-shrink rule) | **no (no-shrink rule)**; final stop-and-copy 4,562 MiB |
+| total transmitted | 22.9 GB | 26.2 GB |
+| TTFO-local / delivery gap | 214 s / 51 s | 66.6 s / 12.5 s |
+| output after switchover | bit-exact | bit-exact (101 / 101) |
+
+Reading: with 3.3 Gb/s of end-to-end bandwidth the rounds shorten from ~55 s to ~12 s, but the dirty set does not
+shrink below ~4.5 GiB, because every generation call rewrites the recent KV ring slot and the VAE caches. The state
+mutates about 4.5 GiB per call interval (~0.56 s); converging to a small final copy would need that much copied
+within one call interval, about 64 Gb/s end to end, which this harness did not have. Stated as arithmetic on the
+measured dirty set, not as a general claim that pre-copy cannot converge.
 
 ## 6. Scope of the comparison
 

@@ -11,13 +11,15 @@
 |---|---|---|---|---|---|---|---|
 | dog | OT-1 | -0.12 | -0.026 | 0.409 | 0.782 | -0.704 | D0R0 8.01, D0R1 7.40, D1R0 4.18, D1R1 2.13 |
 | dog | OT-L | -0.19 | -0.020 | 0.268 | 0.773 | -0.217 | D0R0 9.20, D0R1 8.31, D1R0 3.33, D1R1 1.37 |
+| butterfly-feeding-slow-motion | OT-1 | 0.07 | 0.040 | 0.370 | 0.775 | -0.423 | D0R0 3.26, D0R1 2.64, D1R0 1.29, D1R1 0.89 |
+| butterfly-feeding-slow-motion | OT-L | 0.01 | 0.034 | 0.451 | 0.949 | -0.209 | D0R0 1.94, D0R1 1.79, D1R0 0.84, D1R1 0.85 |
 
 ## Verdicts (preregistered rules; every input and schedule must agree)
 
-- VD-H1 (masking lowers Sink-less color drift and warp error): **PENDING (consistent so far: 2 of 4 input x schedule combinations)** [True, True]
-- VD-H2 (keeping the decoder cache lowers the reset spike by >= 2x): **PENDING (consistent so far: 2 of 4 input x schedule combinations)** [True, True]
-- VD-H3 (keeping recent KV lowers the reset spike and first-4 warp error): **PENDING (consistent so far: 2 of 4 input x schedule combinations)** [True, True]
-- VD-H4 (butterfly: masked + decoder + recent still within 2.0 dB of frozen M1's terminal PSNR): **PENDING** []
+- VD-H1 (masking lowers Sink-less color drift and warp error): **NOT SUPPORTED** [True, True, False, False]
+- VD-H2 (keeping the decoder cache lowers the reset spike by >= 2x): **SUPPORTED** [True, True, True, True]
+- VD-H3 (keeping recent KV lowers the reset spike and first-4 warp error): **SUPPORTED** [True, True, True, True]
+- VD-H4 (butterfly: masked + decoder + recent still within 2.0 dB of frozen M1's terminal PSNR): **SUPPORTED** [True, True]
 - VD-H5 (D x R interaction on V1): descriptive, see the table.
 
 ## Cells
@@ -42,3 +44,21 @@
 | dog | OT-L | mask dec - | True | 0 | 3.30 | 2.02 | 1.704 | 1.791 | 45.0 | 161 |
 | dog | OT-L | mask dec rec | True | 0 | 1.29 | 1.99 | 1.666 | 1.457 | 45.0 | 160 |
 | dog | OT-L | encdec | True | 0 | 3.36 | 2.40 | 1.696 | 1.480 | 44.9 | 162 |
+| butterfly-feeding-slow-motion | OT-1 | zero - - | True | None | 3.30 | 0.70 | 1.336 | 2.128 | 31.3 | 66 |
+| butterfly-feeding-slow-motion | OT-1 | zero - rec | True | 0 | 2.66 | 0.72 | 1.262 | 1.650 | 31.4 | 66 |
+| butterfly-feeding-slow-motion | OT-1 | zero dec - | True | 0 | 1.31 | 1.06 | 1.268 | 1.643 | 31.3 | 66 |
+| butterfly-feeding-slow-motion | OT-1 | zero dec rec | True | 0 | 0.90 | 1.08 | 1.199 | 1.199 | 31.4 | 66 |
+| butterfly-feeding-slow-motion | OT-1 | mask - - | True | 0 | 3.22 | 0.76 | 1.372 | 2.116 | 30.9 | 66 |
+| butterfly-feeding-slow-motion | OT-1 | mask - rec | True | 0 | 2.62 | 0.81 | 1.306 | 1.715 | 31.0 | 67 |
+| butterfly-feeding-slow-motion | OT-1 | mask dec - | True | 0 | 1.28 | 1.11 | 1.305 | 1.637 | 30.9 | 66 |
+| butterfly-feeding-slow-motion | OT-1 | mask dec rec | True | 0 | 0.88 | 1.15 | 1.243 | 1.267 | 31.0 | 67 |
+| butterfly-feeding-slow-motion | OT-1 | encdec | True | 0 | 1.31 | 0.74 | 1.249 | 1.558 | 31.3 | 65 |
+| butterfly-feeding-slow-motion | OT-L | zero - - | True | None | 1.97 | 1.27 | 1.244 | 1.960 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | zero - rec | True | 0 | 1.81 | 1.32 | 1.235 | 1.758 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | zero dec - | True | 0 | 0.85 | 1.34 | 1.223 | 1.437 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | zero dec rec | True | 0 | 0.86 | 1.39 | 1.214 | 1.220 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | mask - - | True | 0 | 1.92 | 1.27 | 1.278 | 1.936 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | mask - rec | True | 0 | 1.77 | 1.35 | 1.269 | 1.745 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | mask dec - | True | 0 | 0.82 | 1.34 | 1.258 | 1.428 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | mask dec rec | True | 0 | 0.84 | 1.41 | 1.248 | 1.205 | 28.6 | None |
+| butterfly-feeding-slow-motion | OT-L | encdec | True | 0 | 0.85 | 1.28 | 1.223 | 1.371 | 28.6 | None |
