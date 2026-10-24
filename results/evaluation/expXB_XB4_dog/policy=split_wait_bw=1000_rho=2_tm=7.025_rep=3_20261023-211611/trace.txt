@@ -1,0 +1,18 @@
+[orch] === run policy=split_wait_bw=1000_rho=2_tm=7.025_rep=3_20261023-211611: Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.22s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.13s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active B->C (200 left, 500 Mbps), A->C (212 left, 500 Mbps)
+        next   B->C 200 fragments (800 MiB) already delivered to B, reused; A->C 212 fragments (848 MiB) not yet anywhere else
+[orch] t=  14.23s move C->D (final move)
+        held   A: 100.0%, B:  49.3%, C:  49.5%, D:   0.0%
+        active C->D (204 left, 333 Mbps), B->D (98 left, 333 Mbps), A->D (110 left, 333 Mbps)
+        next   C->D 204 fragments (816 MiB) already delivered to C, reused; B->D 98 fragments (392 MiB) already delivered to B, reused; A->D 110 fragments (440 MiB) not yet anywhere else
+[orch] t= 142.46s run end
+        held   A: 100.0%, B:  49.3%, C:  50.7%, D: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound) @ 1000.0 Mbps rho 2.0: after final move: first output 14.96 s, Sink received 14.09 s, bound 14.32 s, continuity-ready 14.96 s, rejoin 19.78 s | traffic 2.00x, waste 0.02x, reused 1624 MiB | PSNR after bind 46.3 dB | ingress peak 1018 Mbps
