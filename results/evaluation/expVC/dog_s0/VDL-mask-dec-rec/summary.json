@@ -1,0 +1,115 @@
+{
+ "condition": {
+  "id": "VDL-mask-dec-rec",
+  "input": "dog",
+  "kind": "vd",
+  "label": "VD diagnosis at the OT-L schedule: sink slots masked, keep ['vae_dec', 'recent'] (counterfactual state)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_dog/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548"
+  ],
+  "counterfactual": false,
+  "mask": true,
+  "keep": [
+   "vae_dec",
+   "recent"
+  ],
+  "vd_of": "OT-L"
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "0290f6bf81d23676",
+   "reset_s": 6.006114602088928
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "0290f6bf81d23676",
+   "packed_at": 80,
+   "slots_rerotated": 75,
+   "bind_s": 0.09728950262069702
+  }
+ ],
+ "vd": {
+  "mask": true,
+  "keep": [
+   "vae_dec",
+   "recent"
+  ],
+  "mask_violations": 0,
+  "kept": [
+   {
+    "call": 80,
+    "kept": [
+     "vae_dec",
+     "recent"
+    ],
+    "comps_restored": [
+     "inflight",
+     "meta",
+     "recent",
+     "vae"
+    ],
+    "moved_bytes": {
+     "sink": 0,
+     "recent": 1725235200,
+     "meta": 2399520,
+     "vae": 3009976320,
+     "inflight": 199680
+    }
+   }
+  ]
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "0290f6bf81d23676409a785f0c29927f4ddf901d17ca5e34621e5c151985d73c",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 164.22422695159912,
+ "input": "dog",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_dog_s0_20261023-221553/VDL-mask-dec-rec",
+ "commit": "6b676088ae9fcb764ac661bb82fffb1f7b773845",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.22700190544128,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_dog_s0_20261023-221553",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

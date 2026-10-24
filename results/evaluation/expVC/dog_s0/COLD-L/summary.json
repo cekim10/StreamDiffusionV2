@@ -1,0 +1,65 @@
+{
+ "condition": {
+  "id": "COLD-L",
+  "input": "dog",
+  "kind": "cold",
+  "label": "cold restart at the OT-L move (timeline copied from the W2 cold run, shifted to this move call)",
+  "resets": [],
+  "binds": [],
+  "cold_call": 80,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expW_W2_dog_s0/policy=cold_bw=1000_rho=none_tm=inf_rep=1_20261019-000939"
+  ],
+  "counterfactual": true,
+  "paired_with": "OT-L",
+  "no_output_calls": [
+   80
+  ],
+  "emit_call": 81
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "cold_restart",
+   "cold_restart_ms": 886.8440538644791,
+   "s": 1.8627097457647324
+  }
+ ],
+ "vd": null,
+ "bound_sink": [],
+ "realized": {
+  "resets": [],
+  "binds": [],
+  "cold": [
+   80
+  ],
+  "no_output": [
+   0,
+   80
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 159.68270754814148,
+ "input": "dog",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_dog_s0_20261023-221553/COLD-L",
+ "commit": "6b676088ae9fcb764ac661bb82fffb1f7b773845",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.22700190544128,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_dog_s0_20261023-221553",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}
