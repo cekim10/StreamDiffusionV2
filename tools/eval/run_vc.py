@@ -6,6 +6,7 @@ are copied back. Nothing is pulled or committed on the testbed by this script.
     python tools/eval/run_vc.py preflight --frames_dir /local/path      # D: local filesystem, free space, GPU, packages
     python tools/eval/run_vc.py models                                  # D: download DINO / DINOv2 / CLIP once (before XB starts)
     python tools/eval/run_vc.py vc0 --frames_dir /local/path            # D: metric self-test, dog OT-L / COLD-1 / WFS-1 -> G1, G2, G3
+    python tools/eval/run_vc.py fetch --inputs dog                      # copy back VC-1 results only (no run)
     python tools/eval/run_vc.py vc1 --frames_dir /local/path            # only after the VC and VD freezes: VD precheck, then VC-1 + VD per input
     add --dry for a local run on the fake runtime (no agent)
 """
@@ -117,6 +118,8 @@ def remote_run(ag, cmd, log, timeout=4 * 3600) -> int:
 
 def copy_back(ag, pattern: str, names=("calls.csv", "summary.json")):
     for d in ag.glob(pattern):
+        if Path(d).suffix:   # a file next to the condition directories (metrics.json, ...): not a condition
+            continue
         loc = ROOT / d; loc.mkdir(parents=True, exist_ok=True)
         for f in names:
             try:
@@ -163,6 +166,37 @@ def vc0(a) -> bool:
     return ok
 
 
+def fetch_unit(ag, inp: str):
+    """Copy a VC-1 unit's small results from the VC host (frames stay there)."""
+    unit = f"results/evaluation/expVC/{inp}_s0"
+    bogus = ROOT / unit / "metrics.json"
+    if bogus.is_dir() and not any(bogus.iterdir()):
+        bogus.rmdir()   # left by the copy bug of 600d5b6 (an empty directory named like the file)
+    copy_back(ag, f"{unit}/*")
+    try:
+        (ROOT / unit / "metrics.json").write_text(ag.read(f"{unit}/metrics.json"))
+    except RuntimeError as exc:
+        print(f"[vc] {unit}/metrics.json not copied: {exc}", flush=True)
+    for suf in (".md", ".json"):
+        try:
+            (ROOT / f"results/evaluation/osdi/expVC/vc1_checks_{inp}{suf}").write_text(ag.read(f"results/evaluation/osdi/expVC/vc1_checks_{inp}{suf}"))
+        except RuntimeError as exc:
+            print(f"[vc] vc1_checks_{inp}{suf} not copied: {exc}", flush=True)
+
+
+def fetch(a) -> bool:
+    """Copy back VC-1 results (and the VD precheck) without re-running anything."""
+    ag = agent(a)
+    try:
+        (ROOT / "results/evaluation/osdi/expVD/vd_precheck.json").write_text(ag.read("results/evaluation/osdi/expVD/vd_precheck.json"))
+    except RuntimeError as exc:
+        print(f"[vc] vd_precheck.json not copied: {exc}", flush=True)
+    for inp in [x for x in (a.inputs or "").split(",") if x] or list(INPUTS):
+        fetch_unit(ag, inp)
+        print(f"[vc] fetched {inp}", flush=True)
+    return True
+
+
 def vc1(a) -> bool:
     """VC-1 + VD in one unit per input (frozen expVC / expVD): VD precheck (dog), then per input the emulation of every
     condition (VC's seven first, then VD's sixteen for dog and butterfly), G3 (+ G1 for dog: the frozen M1 replay must
@@ -204,16 +238,7 @@ def vc1(a) -> bool:
                 ok = False
                 if what != "metrics":
                     break
-        copy_back(ag, f"{unit}/*")
-        try:
-            (ROOT / unit / "metrics.json").write_text(ag.read(f"{unit}/metrics.json"))
-        except RuntimeError:
-            pass
-        for suf in (".md", ".json"):
-            try:
-                (ROOT / f"results/evaluation/osdi/expVC/vc1_checks_{inp}{suf}").write_text(ag.read(f"results/evaluation/osdi/expVC/vc1_checks_{inp}{suf}"))
-            except RuntimeError:
-                pass
+        fetch_unit(ag, inp)
     nic1 = nic_bytes(ag)
     nic = {k: {"rx": nic1[k]["rx"] - nic0[k]["rx"], "tx": nic1[k]["tx"] - nic0[k]["tx"]} for k in nic1 if k in nic0}
     (ROOT / "results/evaluation/osdi/expVC/vc1_isolation.json").write_text(json.dumps({"host": a.host, "nic_bytes_during_vc1": nic, "frames_dir": a.frames_dir}, indent=1))
@@ -223,7 +248,7 @@ def vc1(a) -> bool:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1"])
+    ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch"])
     ap.add_argument("--host", default="D")
     ap.add_argument("--frames_dir", default=None)
     ap.add_argument("--agent_hosts", default=None)
@@ -232,7 +257,7 @@ def main():
     a = ap.parse_args()
     if a.what in ("preflight", "vc0", "vc1") and not a.frames_dir:
         sys.exit("--frames_dir (a directory on the VC host's local disk, outside the repository) is required")
-    ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1}[a.what](a)
+    ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1, "fetch": fetch}[a.what](a)
     sys.exit(0 if ok else 1)
 
 
