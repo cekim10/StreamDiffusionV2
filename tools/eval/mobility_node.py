@@ -179,9 +179,15 @@ class GpuRuntime:
         self.session = None
         self.snap = None
         self.decodes = []   # (t_decode_wall, n_frames) of each VAE decode call since the last step() (D0 instrumentation)
+        import collections
+
+        self.last_latents = collections.deque(maxlen=4)   # Experiment VD-2: the latent frames of the last decode calls (capture_latents)
+        self.capture_latents = False
         orig = self.pm._timed_stream_decode
 
         def timed_decode(denoised_pred, _orig=orig):
+            if self.capture_latents:
+                self.last_latents.append(denoised_pred.detach().clone())
             video = _orig(denoised_pred)
             torch.cuda.synchronize(self.device)
             self.decodes.append((time.time(), int(video.shape[1])))
@@ -412,6 +418,80 @@ class GpuRuntime:
         vid[0, :, lo:hi].copy_(t)
         self._written.append((lo, hi))
 
+    # ---- Experiment VD-2 (emulator-only reconstruction operations; none is used by a frozen path)
+    def _sync(self):
+        self.torch.cuda.synchronize(self.device)
+
+    def vae_dec_cache_copy(self):
+        return [t.detach().clone() for t in self.sa.vae_cache_tensors(self.pl, "dec")]
+
+    def vae_dec_fidelity(self, ref: list) -> dict:
+        """Per cached decoder tensor: max |diff| and relative Frobenius error of the live cache vs `ref`."""
+        cur = self.sa.vae_cache_tensors(self.pl, "dec")
+        if len(cur) != len(ref):
+            return {"error": f"layout changed: {len(cur)} vs {len(ref)} tensors"}
+        rows = []
+        for i, (a, b) in enumerate(zip(cur, ref)):
+            if a.shape != b.shape:
+                rows.append({"layer": i, "shape_mismatch": [list(a.shape), list(b.shape)]}); continue
+            d = (a.float() - b.float())
+            rows.append({"layer": i, "max_abs": float(d.abs().max().item()), "rel_fro": float(d.norm().item() / (b.float().norm().item() + 1e-12)), "numel": int(a.numel())})
+        rel = [r["rel_fro"] for r in rows if "rel_fro" in r]
+        return {"per_layer": rows, "median_rel_fro": float(sorted(rel)[len(rel) // 2]) if rel else None, "worst_rel_fro": max(rel) if rel else None,
+                "worst_layer": max(rows, key=lambda r: r.get("rel_fro", -1))["layer"] if rel else None}
+
+    def decode_latents(self, lats: list) -> float:
+        """DR-k: decode the given latent frames in order through the live VAE decoder cache (output discarded); seconds."""
+        self._sync(); t0 = time.perf_counter()
+        with self.torch.no_grad():
+            for z in lats:
+                self._decode_orig(z)
+        self._sync()
+        return time.perf_counter() - t0
+
+    def frames_to_images(self, frames):
+        """uint8 [n, H, W, 3] -> the pipeline's image tensor [1, 3, n, H, W] in [-1, 1] (as load_mp4_as_tensor)."""
+        t = self.torch.from_numpy(np.ascontiguousarray(frames)).to(self.device).permute(3, 0, 1, 2).float() / 127.5 - 1.0
+        return t.unsqueeze(0).to(self.torch.bfloat16)
+
+    def temp_sink_prepare(self, images, c: int) -> tuple[list, float]:
+        """TS: run the model's own prepare on `images` (a new session, as the cold-restart path) and return the sink
+        slots (K, V, pos per layer) it writes; the live session becomes this new session. Seconds measured."""
+        torch = self.torch
+        self._sync(); t0 = time.perf_counter()
+        torch.manual_seed(self.args.seed * 100003 + c + 1)
+        self.runner.reset_attention_eviction_state()
+        self.pl.denoising_step_list = self.runner._canonical_steps.clone()
+        self.session, _ = self.pm.start_stream_session(self.runner.prompt, images, self.args.noise_scale)
+        self._sync(); dt = time.perf_counter() - t0
+        n = self.sink * self.fsl
+        saved = [(layer["k"][:, :n].detach().clone(), layer["v"][:, :n].detach().clone(), layer["pos"][:, :self.sink].detach().clone()) for layer in self.sa.kv_layers(self.pl)]
+        return saved, dt
+
+    def write_sink_slots(self, saved: list):
+        n = self.sink * self.fsl
+        for layer, (k, v, pos) in zip(self.sa.kv_layers(self.pl), saved):
+            layer["k"][:, :n] = k; layer["v"][:, :n] = v; layer["pos"][:, :self.sink] = pos
+        self._sync()
+
+    def zero_sink_slots(self):
+        n = self.sink * self.fsl
+        for layer in self.sa.kv_layers(self.pl):
+            layer["k"][:, :n].zero_(); layer["v"][:, :n].zero_()
+        self._sync()
+
+    def replay_one_chunk(self, c: int) -> tuple[float, int]:
+        """RP-1: a session prepared on the chunk before the last one, then the last chunk generated (replayed); the live
+        session becomes it (recent KV, VAE caches and in-flight rows regenerated). Seconds and replayed calls."""
+        self._sync(); t0 = time.perf_counter()
+        self.session, _ms, _seed, replayed = self.runner.replay_restart(c, 2, sink0=False)
+        self._sync()
+        return time.perf_counter() - t0, int(replayed)
+
+    def freeze_refresh(self):
+        for block in self.pl.generator.model.blocks:
+            block.self_attn.adapt_sink_thr = -1
+
     def restore_inputs(self):
         """Undo write_inputs (lossy sensitivity runs) so the next run starts from the original input."""
         if not getattr(self, "_written", None):
@@ -554,6 +634,37 @@ class FakeRuntime:
         else:
             ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
         return True, float(ps), 0.9 if self.bound else 0.6, self.args.dry_service_s, [0, 1, 6]
+
+    # Experiment VD-2 doubles (sleep-based; no state)
+    last_latents = []
+    capture_latents = False
+
+    def vae_dec_cache_copy(self):
+        return [0]
+
+    def vae_dec_fidelity(self, ref):
+        return {"per_layer": [{"layer": 0, "max_abs": 0.0, "rel_fro": 0.01, "numel": 1}], "median_rel_fro": 0.01, "worst_rel_fro": 0.01, "worst_layer": 0}
+
+    def decode_latents(self, lats):
+        time.sleep(0.001 * max(1, len(lats))); return 0.001 * max(1, len(lats))
+
+    def frames_to_images(self, frames):
+        return frames
+
+    def temp_sink_prepare(self, images, c):
+        time.sleep(0.002); self.cold = False; self.bound = False; return [("k", "v", "pos")], 0.002
+
+    def write_sink_slots(self, saved):
+        self.temp_sink = True
+
+    def zero_sink_slots(self):
+        self.temp_sink = False
+
+    def replay_one_chunk(self, c):
+        time.sleep(0.003); return 0.003, 1
+
+    def freeze_refresh(self):
+        pass
 
     def input_history(self):
         if getattr(self, "_hist", None) is None:

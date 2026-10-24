@@ -49,8 +49,8 @@ def main():
         for inp in ("dog", "audi-snow-trail"):
             r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--dry_run", "--frames_dir", str(tmp / "frames"), "--out_root", str(tmp / "expVCt")],
                                 cwd=ROOT, capture_output=True, text=True)
-            nc = len(out["inputs"][inp]["conditions"])
-            check(r_.returncode == 0 and r_.stdout.count("valid True") == nc, f"{inp}: {nc} conditions emulated (7 VC{' + 16 VD' if nc > 7 else ''}), all valid")
+            nc = sum(1 for c in out["inputs"][inp]["conditions"] if c["kind"] != "vd2")   # VD-2 conditions run only on request
+            check(r_.returncode == 0 and r_.stdout.count("valid True") == nc, f"{inp}: {nc} conditions emulated (7 VC{' + 16 VD' if nc > 7 else ''}; VD-2 skipped by default), all valid")
             ok, why, info = vc.g3(tmp / "expVCt" / f"{inp}_s0", out)
             check(ok, f"{inp}: G3 passes on REF + {nc} streams {why[:2]}")
             if nc > 7:
@@ -105,11 +105,24 @@ def main():
         p16 = vp.play({c: 0.6 * c for c in range(20)}, list(range(20)), fps=16)
         check(p16["n_stalls"] > 10, f"at 16 fps a 0.6 s / chunk stream stalls continuously ({p16['n_stalls']} stalls): deviation D-VC-1")
 
-        print("- 6 metric self-test (pixel stand-in embedder) and dry aggregation")
+        print("- 5b VD-2 conditions (dry): emulation on the existing unit, merged metrics, aggregation")
+        ids = [c["id"] for c in out["inputs"]["dog"]["conditions"] if c["kind"] == "vd2"]
+        r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", "dog", "--dry_run", "--frames_dir", str(tmp / "frames"), "--out_root", str(tmp / "expVCt"), "--only", ",".join(ids), "--no_ref_frames"],
+                            cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode == 0 and r_.stdout.count("valid True") == 16, "dog: 16 VD-2 conditions emulated, all valid (DR1, DR2, RP1, TSin, TSout, combos, DR4) x 2 schedules")
+        s2 = json.loads((tmp / "expVCt" / "dog_s0" / "VD21-RP1+TSout" / "summary.json").read_text())["vd2"]
+        check(s2["rp"] and s2["ts"] == "out" and {"ts_prepare_s", "rp_replay_s", "total_serial_s"} <= set(s2["cost_s"]), f"RP1+TSout records its reconstruction steps and costs {s2['cost_s']}")
+        ok, why, info = vc.g3(tmp / "expVCt" / "dog_s0", out)
+        check(ok, f"G3 passes with the VD-2 streams added ({len(info)} streams) {why[:2]}")
         r_ = subprocess.run([PY, "tools/eval/vc_metrics.py", "--selftest", "--embedders", "pixel", "--device", "cpu", "--out", str(tmp / "st.json")], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode == 0, f"self-test passes: cut V1, color-shift V4, content V5a {r_.stdout[-200:] if r_.returncode else ''}")
         r_ = subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(unit), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode == 0 and (unit / "metrics.json").exists(), "metrics on the dry unit")
+        r_ = subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(unit), "--embedders", "pixel", "--device", "cpu", "--only", ",".join(ids), "--merge"], cwd=ROOT, capture_output=True, text=True)
+        mj = json.loads((unit / "metrics.json").read_text())["conditions"] if r_.returncode == 0 else {}
+        check(r_.returncode == 0 and "OT-1" in mj and "VD21-TSout" in mj, "VD-2 metrics merged into the unit's metrics.json (VC conditions kept)")
+        r_ = subprocess.run([PY, "tools/eval/aggregate_vd2.py", "--root", str(tmp / "expVCt"), "--dry"], cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode == 0 and "VD2-H3" in r_.stdout and ("PENDING" in r_.stdout or "NOT SUPPORTED" in r_.stdout), f"VD-2 aggregation runs on one input (verdicts pending or failed on synthetic data) {r_.stderr[-300:]}")
         r_ = subprocess.run([PY, "tools/eval/aggregate_vc.py", "--root", str(tmp / "expVCt"), "--dry"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode == 0 and "VC-H1" in r_.stdout and "VC-H2" in r_.stdout and "VD" not in r_.stdout.split("## Playback")[0].split("## Descriptive")[-1],
               "VC aggregation (block bootstrap, effect sizes, verdicts; VD conditions excluded)")

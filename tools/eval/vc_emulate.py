@@ -95,6 +95,45 @@ def keep_state(rt, kept: list, keep: list, dry: bool) -> dict:
     return {"kept": keep, "comps_restored": sorted(comps), "moved_bytes": {k_: int(v) for k_, v in (moved or {}).items()}}
 
 
+def vd2_reset(rt, c: int, cond: dict, fast_pl: list, dry: bool, log: dict, src_last_image, src_dec_cache, src_latents, recent_frames):
+    """Experiment VD-2: the M1 reset at call c with destination-side reconstruction (preregistration section 7).
+    Order: [TS prepare -> save its sink slots] -> [RP-1 replay | fast path restore] -> [write the saved slots] -> [DR-k
+    decode]. Costs are serial GPU seconds, measured per step; a combination's cost is the sum of what actually ran."""
+    dr, rp, ts = int(cond.get("dr") or 0), bool(cond.get("rp")), cond.get("ts")
+    cost = log["cost_s"]
+    temp = None
+    if ts:
+        if dry:
+            images = None
+        elif ts == "in":
+            images = rt.torch.cat([src_last_image, rt.runner.frames_for_call(c)], dim=2)   # the cold-restart seed: [last input frame, current chunk]
+        else:
+            fr = np.concatenate(recent_frames)[-5:] if recent_frames else None   # the source's last 5 output frames (1 + chunk)
+            if fr is None or len(fr) < 5:
+                raise RuntimeError("TS-out needs the source's last 5 output frames")
+            images = rt.frames_to_images(fr)
+        temp, cost["ts_prepare_s"] = rt.temp_sink_prepare(images, c)
+    if rp:
+        cost["rp_replay_s"], log["replayed"] = rt.replay_one_chunk(c)   # regenerates recent KV, VAE caches and in-flight rows
+        if temp is None:
+            rt.zero_sink_slots()   # RP-1 alone: no temporary Sink (the replay's own prepare wrote one)
+    else:
+        for h, pl in fast_pl:
+            rt.unpack(dict(h), pl)
+        rt.restore_fast()   # frozen M1 fast path: meta + in-flight; KV and VAE caches zero
+    if temp is not None:
+        rt.write_sink_slots(temp)
+    if dr:
+        if not dry:
+            log["latent_shapes"] = [list(z.shape) for z in src_latents]
+            if len(src_latents) < dr:
+                log["dr_short"] = f"only {len(src_latents)} latent frames captured"
+        cost["dr_decode_s"] = rt.decode_latents(src_latents)
+        log["fidelity"] = rt.vae_dec_fidelity(src_dec_cache)
+    rt.freeze_refresh()
+    cost["total_serial_s"] = float(sum(cost.values()))
+
+
 def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameStore, k: int, hw) -> tuple[list[dict], dict]:
     resets, binds = set(cond["resets"]), set(cond["binds"])
     cc = cond.get("cold_call")
@@ -107,6 +146,12 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
     shift = 0
     keep = list(cond.get("keep") or [])
     vd_log = {"mask": bool(cond.get("mask")), "keep": keep, "mask_violations": 0, "kept": []}
+    vd2 = cond.get("kind") == "vd2"
+    dr, rp, ts = int(cond.get("dr") or 0), bool(cond.get("rp")), cond.get("ts")
+    vd2_log = {"dr": dr, "rp": rp, "ts": ts, "cost_s": {}, "fidelity": None, "latent_shapes": None, "replayed": None} if vd2 else None
+    recent_frames = []   # the source's last output frames (TS-out), kept as uint8
+    if vd2 and not dry:
+        rt.capture_latents = True
     if dry:
         rt.provision(); rt.bound = True
     else:
@@ -128,11 +173,19 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
                 log.append({"call": c, "op": "reset_inside_episode", "sink": "kept", "sha": withheld[2][:16]})
             fast_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in fast]
             kept_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in kept]
+            if vd2:
+                src_last_image = None if dry else snap["session"]["last_image"].detach().clone()
+                src_dec_cache = rt.vae_dec_cache_copy() if dr else None
+                src_latents = (list(rt.last_latents)[-dr:] if dr else []) if not dry else []
             del snap, fast, kept
             rt.release(); rt.provision()
-            for h, pl in fast_pl:
-                rt.unpack(dict(h), pl)
-            rt.restore_fast()
+            if vd2:
+                vd2_reset(rt, c, cond, fast_pl, dry, vd2_log, src_last_image, src_dec_cache, src_latents, recent_frames)
+                shift += 25 + 10 * dr + (30 if rp else 0) + (50 if ts else 0)
+            else:
+                for h, pl in fast_pl:
+                    rt.unpack(dict(h), pl)
+                rt.restore_fast()
             if keep:
                 vd_log["kept"].append({"call": c, **keep_state(rt, kept_pl, keep, dry)})
             del kept_pl
@@ -175,6 +228,8 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             fr = dry_frames(out_in, shift, *hw)
         if not produced:
             fr = None
+        if vd2 and fr is not None:
+            recent_frames.append(np.asarray(fr)); del recent_frames[:-2]
         dg = vf.frame_digest(fr)
         if c < t1 and not dry and dg != base_record[c]["frame_digest"]:
             prefix_ok = False
@@ -194,7 +249,10 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
         vd_log["mask_violations"] += set_sink_mask(rt, False, dry)
     if cond.get("kind") == "vd" and vd_log["mask_violations"]:
         valid = False   # the masked slots were not empty: the condition did not test what it claims
-    summary = {"condition": {k_: v for k_, v in cond.items() if k_ != "timeline"}, "t_first_op": t1, "events": log, "vd": vd_log if cond.get("kind") == "vd" else None, "bound_sink": bound_sha, "realized": realized,
+    if vd2 and not dry:
+        rt.capture_latents = False; rt.last_latents.clear()
+    summary = {"condition": {k_: v for k_, v in cond.items() if k_ != "timeline"}, "t_first_op": t1, "events": log, "vd": vd_log if cond.get("kind") == "vd" else None,
+               "vd2": vd2_log, "bound_sink": bound_sha, "realized": realized,
                "prefix_identical_to_reference": None if dry else prefix_ok, "valid": valid, "elapsed_s": time.time() - t_run}
     rt.release()
     return rows, summary
@@ -214,7 +272,8 @@ def main():
     ap.add_argument("--no_ref_frames", action="store_true", help="do not store REF frames (checks that need none)")
     a = ap.parse_args()
     sched = json.loads(Path(a.schedules).read_text())["inputs"][a.input]
-    conds = [c for c in sched["conditions"] if not a.only or c["id"] in a.only.split(",")]
+    only = set(a.only.split(",")) if a.only else None
+    conds = [c for c in sched["conditions"] if ((c["id"] in only) if only else (c.get("kind") != "vd2"))]   # VD-2 conditions only on request
     from expw_w1 import workload_paths
     import mobility_node as mn
 

@@ -6,6 +6,7 @@ are copied back. Nothing is pulled or committed on the testbed by this script.
     python tools/eval/run_vc.py preflight --frames_dir /local/path      # D: local filesystem, free space, GPU, packages
     python tools/eval/run_vc.py models                                  # D: download DINO / DINOv2 / CLIP once (before XB starts)
     python tools/eval/run_vc.py vc0 --frames_dir /local/path            # D: metric self-test, dog OT-L / COLD-1 / WFS-1 -> G1, G2, G3
+    python tools/eval/run_vc.py vd2 --frames_dir /local/path            # after the VD-2 freeze: reconstruction conditions on the VC units
     python tools/eval/run_vc.py fetch --inputs dog                      # copy back VC-1 results only (no run)
     python tools/eval/run_vc.py vc1 --frames_dir /local/path            # only after the VC and VD freezes: VD precheck, then VC-1 + VD per input
     add --dry for a local run on the fake runtime (no agent)
@@ -246,18 +247,69 @@ def vc1(a) -> bool:
     return ok
 
 
+def vd2_ids(inp: str, with_dr4: bool) -> list[str]:
+    sched = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())["inputs"][inp]
+    return [c["id"] for c in sched["conditions"] if c["kind"] == "vd2" and (with_dr4 or not c.get("exploratory"))]
+
+
+def vd2(a) -> bool:
+    """Experiment VD-2 (frozen expVD2): the reconstruction conditions on the existing VC units (REF frames reused), then
+    G3 and metrics merged into the unit's metrics.json. DR-4 only with --with_dr4 (section-4 trigger)."""
+    if not a.dry and not (ROOT / "results/evaluation/osdi/expVD2_freeze.md").exists():
+        sys.exit("[vc] VD-2 is not frozen (results/evaluation/osdi/expVD2_freeze.md missing): no run")
+    inputs = [x for x in (a.inputs or "").split(",") if x] or ["dog", "butterfly-feeding-slow-motion"]
+    if a.dry:
+        out, py, ok = "results/evaluation/_dryrun_expVC", sys.executable, True
+        for inp in inputs:
+            ids = ",".join(vd2_ids(inp, a.with_dr4))
+            for cmd in ([py, "tools/eval/vc_emulate.py", "--input", inp, "--dry_run", "--frames_dir", a.frames_dir, "--out_root", out, "--only", ids, "--no_ref_frames"],
+                        [py, "tools/eval/vc_check.py", "--unit", f"{out}/{inp}_s0", "--g3", "--write", "--name", f"vd2_checks_{inp}"],
+                        [py, "tools/eval/vc_metrics.py", "--unit", f"{out}/{inp}_s0", "--embedders", "pixel", "--device", "cpu", "--only", ids, "--merge"]):
+                ok &= subprocess.run(cmd, cwd=ROOT).returncode == 0
+        return ok
+    ag = agent(a)
+    if not preflight(a):
+        return False
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    nic0 = nic_bytes(ag); ok = True
+    for inp in inputs:
+        unit = f"results/evaluation/expVC/{inp}_s0"
+        ids = ",".join(vd2_ids(inp, a.with_dr4))
+        for what, cmd in (("emulation", [PY, "tools/eval/vc_emulate.py", "--input", inp, "--gpu_id", "0", "--frames_dir", a.frames_dir, "--out_root", "results/evaluation/expVC", "--only", ids, "--no_ref_frames"]),
+                          ("checks", [PY, "tools/eval/vc_check.py", "--unit", unit, "--g3", "--write", "--name", f"vd2_checks_{inp}"]),
+                          ("metrics", [PY, "tools/eval/vc_metrics.py", "--unit", unit, "--embedders", "dino,dinov2,clip", "--device", "cuda:0", "--only", ids, "--merge"])):
+            rc = remote_run(ag, cmd, f"{LOG}/vd2_{stamp}_{inp}_{what}.log")
+            print(f"[vc] VD-2 {inp} {what} on {a.host}: rc {rc}", flush=True)
+            if rc != 0:
+                ok = False
+                if what != "metrics":
+                    break
+        fetch_unit(ag, inp)
+        for suf in (".md", ".json"):
+            try:
+                (ROOT / f"results/evaluation/osdi/expVC/vd2_checks_{inp}{suf}").write_text(ag.read(f"results/evaluation/osdi/expVC/vd2_checks_{inp}{suf}"))
+            except RuntimeError:
+                pass
+    nic1 = nic_bytes(ag)
+    nic = {k: {"rx": nic1[k]["rx"] - nic0[k]["rx"], "tx": nic1[k]["tx"] - nic0[k]["tx"]} for k in nic1 if k in nic0}
+    (ROOT / "results/evaluation/osdi/expVD2/vd2_isolation.json").write_text(json.dumps({"host": a.host, "nic_bytes_during_vd2": nic, "frames_dir": a.frames_dir}, indent=1))
+    print("[vc] VD-2", "done" if ok else "had failures", "- next on elves-01: aggregate_vd2.py")
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch"])
+    ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2"])
+    ap.add_argument("--with_dr4", action="store_true", help="vd2: also run the exploratory DR-4 cells (section-4 trigger)")
     ap.add_argument("--host", default="D")
     ap.add_argument("--frames_dir", default=None)
     ap.add_argument("--agent_hosts", default=None)
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--inputs", default="", help="vc1: comma list of inputs (default all four)")
     a = ap.parse_args()
-    if a.what in ("preflight", "vc0", "vc1") and not a.frames_dir:
+    if a.what in ("preflight", "vc0", "vc1", "vd2") and not a.frames_dir:
         sys.exit("--frames_dir (a directory on the VC host's local disk, outside the repository) is required")
-    ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1, "fetch": fetch}[a.what](a)
+    ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1, "fetch": fetch, "vd2": vd2}[a.what](a)
     sys.exit(0 if ok else 1)
 
 

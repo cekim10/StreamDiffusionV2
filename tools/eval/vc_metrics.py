@@ -232,7 +232,7 @@ def windows(cond: dict, k: int) -> dict:
     else:
         b = cond["binds"][-1]
     sinkless = set()
-    if cond["kind"] in ("ot", "vd"):
+    if cond["kind"] in ("ot", "vd", "vd2"):
         sinkless = set(range(first, b))
     resume = cond["cold_call"] + k - 1 if cond["kind"] == "cold" else first
     return {"pre": set(range(first - PRE, first)), "sinkless": sinkless, "first_4": set(range(resume, resume + 4)), "post_bind_20": set(range(b, b + 20)),
@@ -492,6 +492,7 @@ def main():
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--clip", default=str(ROOT / "examples/original.mp4"))
     ap.add_argument("--out", default=None)
+    ap.add_argument("--merge", action="store_true", help="update the unit's existing metrics.json with the computed conditions (VD-2)")
     a = ap.parse_args()
     if a.selftest:
         res = selftest(a.clip, a.embedders, a.device)
@@ -503,6 +504,9 @@ def main():
     unit = Path(a.unit)
     res = run_unit(unit, [x for x in a.only.split(",") if x], a.embedders, a.device)
     res["provenance"] = provenance() if "pixel" not in a.embedders else {}
+    if a.merge and (unit / "metrics.json").exists():
+        old = json.loads((unit / "metrics.json").read_text())
+        old["conditions"].update(res["conditions"]); old["provenance"] = res["provenance"]; res = old
     (unit / "metrics.json").write_text(json.dumps(res, default=float))
     print(f"[VCm] wrote {unit / 'metrics.json'}")
 

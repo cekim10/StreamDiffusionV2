@@ -30,6 +30,22 @@ EV = ROOT / "results/evaluation"
 VD_INPUTS = ("dog", "butterfly-feeding-slow-motion")   # osdi/expVD/preregistration.md (first two inputs)
 
 
+VD2_CELLS = [("DR1", 1, False, None), ("DR2", 2, False, None), ("RP1", 0, True, None), ("TSin", 0, False, "in"), ("TSout", 0, False, "out"),
+             ("DR2+TSout", 2, False, "out"), ("RP1+TSout", 0, True, "out"), ("DR4", 4, False, None)]   # DR4: exploratory, outside verdicts
+
+
+def vd2_conditions(ot: dict) -> list[dict]:
+    """Experiment VD-2 (osdi/expVD2/preregistration.md): destination-side reconstruction at the OT schedule `ot`:
+    DR-k decoder cache from the source's last k latent frames, RP-1 one-chunk replay, TS-in / TS-out temporary Sink
+    from the input / from the source's last output frames, and combinations. Emulator only."""
+    x = ot["id"].split("-")[1]
+    out = []
+    for name, dr, rp, ts in VD2_CELLS:
+        out.append({**ot, "id": f"VD2{x}-{name}", "kind": "vd2", "dr": dr, "rp": rp, "ts": ts, "vd2_of": ot["id"], "exploratory": name == "DR4",
+                    "label": f"VD-2 {name} at the {ot['id']} schedule (counterfactual reconstruction at the destination)"})
+    return out
+
+
 def vd_conditions(ot: dict) -> list[dict]:
     """Experiment VD: the 2 x 2 x 2 factorial of what survives the M1 reset at the OT schedule `ot`, without the
     (zero, reset, reset) cell (= `ot` itself), plus (zero, encoder + decoder kept, reset). The emulator keeps the state;
@@ -165,6 +181,7 @@ def build() -> dict:
                                extra={"paired_with": ot["id"], "no_output_calls": [m], "emit_call": m + K - 1}))
         if inp in VD_INPUTS:
             conds += vd_conditions(conds[0]) + vd_conditions(conds[1])   # after the seven VC conditions (VD-D3: VC first)
+            conds += vd2_conditions(conds[0]) + vd2_conditions(conds[1])   # VD-2 (skipped by vc_emulate unless requested)
         end_all = max(c["end"] for c in conds)
         cad_ref = conds[0]["timeline"]["cadence_s"]
         out["inputs"][inp] = {"N": end_all + 1, "ref": {"frames_from": min(c["frames_from"] for c in conds), "frames_to": end_all,
@@ -180,7 +197,7 @@ def check(out: dict) -> list[str]:
         for c in u["conditions"]:
             s = json.load(open(ROOT / c["sources"][0] / "summary.json"))
             moves = [int(m["call"]) for m in s["moves"]]
-            if c["kind"] in ("ot", "vd"):
+            if c["kind"] in ("ot", "vd", "vd2"):
                 if c["resets"] != moves or c["binds"] != [int(s["final"]["bind_call"])]:
                     bad.append(f"{inp} {c['id']}: {c['resets']} / {c['binds']} vs run moves {moves} bind {s['final']['bind_call']}")
             elif c["kind"] == "wfs":
