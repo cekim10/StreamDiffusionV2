@@ -26,7 +26,7 @@ from xb_validity import run_validity_xb  # noqa: E402
 XB = ("precopy_full", "precopy_sink", "recompute_full", "recompute_win")
 LABEL = {"reuse_dyn2": "OTTER", "full": "Full", "split_wait": "Wait-for-Sink", "precopy_full": "P-full", "precopy_sink": "P-sink",
          "recompute_full": "R-full", "recompute_win": "R-win"}
-SCEN = ("XB1_dog", "XB1_bfly", "XB2_dog", "XB3_dog", "XB4_dog", "ALT_dog", "ALT_bfly")
+SCEN = ("XB1_dog", "XB1_bfly", "XB2_dog", "XB3_dog", "XB4_dog", "ALT_dog", "ALT_bfly", "N_dog")   # N_dog: expXBN_dog (XB-N, descriptive)
 EXACT = ("full", "precopy_full", "recompute_full")
 
 
@@ -107,7 +107,7 @@ def main():
     a = ap.parse_args()
     R, runs = {}, {}
     for sc in SCEN:
-        root = ROOT / "results/evaluation" / f"expXB_{a.prefix}{sc}"
+        root = ROOT / "results/evaluation" / (f"expXBN_dog" if sc == "N_dog" else f"expXB_{a.prefix}{sc}")
         if not root.exists():
             continue
         recs = [run_record(d) for d in sorted(root.glob("policy=*")) if (d / "summary.json").exists()]

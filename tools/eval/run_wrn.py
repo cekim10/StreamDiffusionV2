@@ -21,6 +21,7 @@
     python tools/eval/run_wrn.py xb_cal_jitter        # only if aggregate_xb_cal.py flags a method: 2 more runs per setting of that method
     python tools/eval/run_wrn.py xb_shk               # after the freeze: shakedown, one run per method and scenario (27); then check_xb_shakedown.py
     python tools/eval/run_wrn.py xb_main              # after the shakedown review: 81 runs + ALT (--cells XB1,XB2,XB3,XB4,ALT)
+    python tools/eval/run_wrn.py xb_native            # XB-N: P-full with the emulated caps removed (descriptive, 3 runs)
     python tools/eval/run_wrn.py xb_lossy             # D5 lossy-input sensitivity (8 runs) - only after the XB freeze
     add --dry for the loopback protocol test (fake nodes on 127.0.0.1, scaled bandwidth; never reported)
 
@@ -527,6 +528,20 @@ def do_xb_main(c, shakedown=False):
                        xb_node_extra(XB_WL[ws]), f"XB rule-4 alternatives {ws}: {alt}")
 
 
+def do_xb_native(c):
+    """XB-N (osdi/expXBN/plan.md; descriptive sensitivity, approved 2026-10-23): P-full at its frozen setting with the
+    emulated caps removed, XB1 dog, 3 reps. Not part of the frozen XB evaluation."""
+    _xb_frozen_guard(c)
+    sel = xb_selection(c)["precopy_full"]["selected"]
+    bw = c.bw
+    c.bw = "0"   # native: no application-level shaping; the throughput actually achieved is measured per round
+    try:
+        c.orch("expXBN_dog", xb_main_args(c, "XB1", "3", "precopy_full") + ["--xb_policy_settings", f"precopy_full@{sel}"], xb_node_extra("dog"),
+               f"XB-N P-full native bandwidth {sel}")
+    finally:
+        c.bw = bw
+
+
 def do_xb_lossy(c):
     """D5 (approved 2026-10-22): XB1, dog and butterfly, R-full and R-win at their selected settings, H.264 CRF 23 and 28,
     1 rep each = 8 runs; descriptive sensitivity, never exact recomputation. Only after the XB freeze."""
@@ -637,7 +652,7 @@ def do_list(c):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx",
-                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_ext", "xb_cal_jitter", "xb_lossy", "xb_shk", "xb_main"])
+                                       "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_ext", "xb_cal_jitter", "xb_lossy", "xb_shk", "xb_main", "xb_native"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
     ap.add_argument("--agent_hosts", default=None)
@@ -654,7 +669,7 @@ def main():
         else:
             {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx,
              "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_ext": do_xb_cal_ext, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy,
-             "xb_shk": lambda c: do_xb_main(c, True), "xb_main": do_xb_main}[a.what](c)
+             "xb_shk": lambda c: do_xb_main(c, True), "xb_main": do_xb_main, "xb_native": do_xb_native}[a.what](c)
     finally:
         c.stop_dry()
     if c.failures:
