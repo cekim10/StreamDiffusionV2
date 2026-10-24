@@ -952,7 +952,9 @@ class Run:
         if self.pp:
             # placement window: the source keeps generating while it places fragments at the candidates; the move to the
             # true destination happens L seconds after the trigger
-            self.node("A").call("EXEC_START")
+            # EXEC_START fix (2026-10-23, exec_start_impact_report.md): the source generates as a bound owner; without the
+            # flag its generation thread died at its first call in every frozen placement-window / cold-destination run
+            self.node("A").call("EXEC_START", source_bound=True)
             self.prepos_start()
             t_move = self.t0 + self.pp["L"]
             while time.time() < t_move:
@@ -960,7 +962,7 @@ class Run:
         if cold:
             # OTTER cold destination: the destination process does not exist at the trigger; the source keeps generating
             # while the destination starts, loads the weights, initializes CUDA and provisions its buffers (all timed)
-            self.node("A").call("EXEC_START")
+            self.node("A").call("EXEC_START", source_bound=True)   # EXEC_START fix, as above
             ci = self.cold_info
             ci["t_launch"] = time.time()
             ci["pid"] = self.o.start_node(cold, cold_start=True, tag=self.run_id)
@@ -1450,8 +1452,12 @@ class Run:
         fwd_before_complete = {n: (n not in complete_t or t < complete_t[n]) for n, t in first_fwd.items()}
         st_evs = [e for e in self.node_events if e["event"] == "full_state_verified"]
         fin_full = next((e for e in reversed(st_evs) if e["node"] == fin), None)
+        t_mv0 = self.moves[0]["t_req"] if self.moves else None
         validation = {
             "four_hosts_distinct": len(set(hosts.values())) == len(self.nodes_used),
+            # EXEC_START paths (placement window, cold destination): did the source deliver chunks between the trigger and the
+            # first move (recorded for every run; a reproduction report compares it; frozen validity rules do not use it)
+            "source_chunks_before_move": sum(1 for m in self.metrics if m["owner"] == "A" and m["t_out_rel"] is not None and t_mv0 is not None and 0 <= m["t_out_rel"] <= t_mv0 - self.t0),
             "owner_sequence": owners_seq, "ownership_changed": owners_seq == self.edges,
             "single_owner": single_owner,
             # restart: only the source ever sends and nothing delivered to an abandoned owner is reused
@@ -1579,7 +1585,8 @@ class Run:
                          "runtime_ready_s": fr(ci.get("t_runtime_ready")), "listening_s": fr(ci.get("t_listen")), "connected_s": fr(ci.get("t_hello")),
                          "provisioned_s": fr(ci.get("t_ready")), "handoff_request_s": fr(final_move_t), "ttfo_s": fr(ttfo), "sink_verified_s": fr(t_verified),
                          "sink_bind_s": fr(t_bind), "first_bound_output_s": fr(t_first_bound_out), "rejoin_s": fr(t_rejoin), "reference": ci.get("reference"),
-                         "source_kept_generating": True}
+                         "source_kept_generating": sum(1 for m in self.metrics if m["owner"] == "A" and m["t_out_rel"] is not None and m["t_out_rel"] >= 0) > 0,   # measured (was a constant before 2026-10-24)
+                         "source_chunks_before_move": sum(1 for m in self.metrics if m["owner"] == "A" and m["t_out_rel"] is not None and 0 <= m["t_out_rel"] <= (fr(final_move_t) or 0))}
         # ---- W / R / N records (followup_common.md): owner-side Sink versions, N trigger, R exposure, termination / censoring
         t_end_run = getattr(self, "t_loop_end", None) or time.time()
         promos = [{"node": e["node"], "call": e.get("call"), "t_rel": self.rel_t(e["t"]), "bound": e.get("bound"), "ownership": e.get("ownership"), "n_changed": e.get("n_changed")}

@@ -101,11 +101,14 @@ def main():
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--only", default="", help="comma list of scenarios (A, B, C, D, E, F, G, Agen, G9)")
     ap.add_argument("--extra", action="store_true", help="scenario A reps 4-5 for the configurations in osdi/expD/expD_extra_reps.json")
+    ap.add_argument("--repro", action="store_true", help="EXEC_START reproduction (approved 2026-10-24): scenarios C and D with the corrected code, same configurations, results under expDR_C / expDR_D (the frozen expD_C / expD_D stay unchanged)")
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--wait_s", type=int, default=1800)
     ap.add_argument("--py", default=os.environ.get("PY") or (str(ROOT / ".venv/bin/python") if (ROOT / ".venv/bin/python").exists() else sys.executable))
     a = ap.parse_args()
     steps = plan(a.dry)
+    if a.repro:
+        a.only = a.only or "C,D"
     if a.only:
         want = set(a.only.split(","))
         steps = [s for s in steps if s[0] in want or (s[0].startswith("Agen") and "Agen" in want)]
@@ -123,7 +126,8 @@ def main():
         print(f"  {s[0]:>14}  {s[2]:3d} runs  {s[1]}")
     if a.list:
         return
-    prefix = "_dryrun_expD" if a.dry else "expD"   # the orchestrator adds _dryrun_ to the experiment in dry mode
+    exp_prefix = "expDR" if a.repro else "expD"
+    prefix = ("_dryrun_" if a.dry else "") + exp_prefix   # the orchestrator adds _dryrun_ to the experiment in dry mode
     log = ROOT / "results/evaluation" / (prefix + "_sweep_logs"); log.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     dry = Dry(a.py, log / "dry_nodes") if a.dry else None
@@ -138,7 +142,7 @@ def main():
         if args is None:   # G9 runs on this host (elves-01), GPU 0
             cmd = [a.py, "tools/eval/steady_state.py", "--reps", "1" if a.dry else "3", "--chunks", "20" if a.dry else "200"] + (["--dry_run", "--dry_service_s", "0.05"] if a.dry else [])
         else:
-            cmd = [a.py, "tools/eval/mobility_orchestrate.py", "--experiment", f"expD_{scen}", "--skip_done", "--post_chunks", "400" if a.dry else "300"] + args
+            cmd = [a.py, "tools/eval/mobility_orchestrate.py", "--experiment", f"{exp_prefix}_{scen}", "--skip_done", "--post_chunks", "400" if a.dry else "300"] + args
             if "--reps" not in args:
                 cmd += ["--reps", "1" if a.dry else "3"]
             if a.dry:
