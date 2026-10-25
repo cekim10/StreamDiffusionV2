@@ -63,6 +63,7 @@ def main():
     if dry:
         rt.provision(); rt.bound = True
     else:
+        rt.base = {}   # no baseline run: step() then reports no PSNR (not needed here; the digest is the correctness check)
         rt.session = rt.runner.start(); rt.capture_latents = True
     for c in range(m):
         rt.step(c)

@@ -327,11 +327,23 @@ def vd3(a) -> bool:
           eight units, G3, merged metrics, then the blinded clips and the inspection form. Verdicts wait for the
           recorded inspection.
     key:  only when vd3_inspection.md is committed with STATUS: RECORDED: copies the sealed key."""
-    if not a.dry and a.phase == "base" and not (ROOT / "results/evaluation/osdi/expVD3_phaseT_approval.md").exists():
+    if not a.dry and a.phase in ("base", "overlap") and not (ROOT / "results/evaluation/osdi/expVD3_phaseT_approval.md").exists():
         sys.exit("[vc] Phase T is not approved (results/evaluation/osdi/expVD3_phaseT_approval.md missing): no run")
     if not a.dry and a.phase in ("cand", "key") and not (ROOT / "results/evaluation/osdi/expVD3_freeze.md").exists():
         sys.exit("[vc] VD-3 is not frozen (results/evaluation/osdi/expVD3_freeze.md missing): no candidate run")
     inputs = [x for x in (a.inputs or "").split(",") if x] or list(INPUTS)
+    if a.phase == "overlap":   # Phase T's overlap measurement alone (re-run)
+        ag = agent(a)
+        if not preflight(a):
+            return False
+        rc = remote_run(ag, [PY, "tools/eval/vd3_overlap.py", "--input", "dog", "--seed", "0", "--schedule", "OT-1", "--reps", "5", "--gpu_id", "0"],
+                        f"{LOG}/vd3_{time.strftime('%Y%m%d-%H%M%S')}_overlap.log", timeout=3600)
+        print(f"[vc] VD-3 overlap on {a.host}: rc {rc}", flush=True)
+        try:
+            (ROOT / VD3_OUT / "vd3_overlap.json").write_text(ag.read(f"{VD3_OUT}/vd3_overlap.json"))
+        except RuntimeError as exc:
+            print(f"[vc] vd3_overlap.json not copied: {exc}"); return False
+        return rc == 0
     if a.phase == "key":
         insp = ROOT / VD3_OUT / "vd3_inspection.md"
         if not (insp.exists() and "STATUS: RECORDED" in insp.read_text() and committed(f"{VD3_OUT}/vd3_inspection.md")):
@@ -435,7 +447,7 @@ def vd3(a) -> bool:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2", "vd3"])
-    ap.add_argument("--phase", choices=["base", "cand", "key"], default="base", help="vd3: base (Phase T: REF / controls / distributions / overlap), cand, key")
+    ap.add_argument("--phase", choices=["base", "overlap", "cand", "key"], default="base", help="vd3: base (Phase T: REF / controls / distributions / overlap), cand, key")
     ap.add_argument("--clips_dir", default=None, help="vd3 cand / key: clips directory on the VC host's local disk (never committed)")
     ap.add_argument("--with_dr4", action="store_true", help="vd2: also run the exploratory DR-4 cells (section-4 trigger)")
     ap.add_argument("--host", default="D")
@@ -444,7 +456,7 @@ def main():
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--inputs", default="", help="vc1: comma list of inputs (default all four)")
     a = ap.parse_args()
-    if a.what in ("preflight", "vc0", "vc1", "vd2") and not a.frames_dir or (a.what == "vd3" and a.phase != "key" and not a.frames_dir):
+    if a.what in ("preflight", "vc0", "vc1", "vd2") and not a.frames_dir or (a.what == "vd3" and a.phase not in ("key",) and not a.frames_dir):
         sys.exit("--frames_dir (a directory on the VC host's local disk, outside the repository) is required")
     if a.what == "vd3" and a.phase in ("cand", "key") and not a.clips_dir:
         sys.exit("--clips_dir (on the VC host's local disk, outside the repository) is required for vd3 cand / key")
