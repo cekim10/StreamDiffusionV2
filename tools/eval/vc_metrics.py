@@ -41,6 +41,7 @@ import vc_frames as vf  # noqa: E402
 
 PRE = 16
 SPIKE_PREV = 8   # RD definition: median of the 8 preceding transitions
+LATE_N = 8       # VD-3: early / late Sink-less windows
 
 
 # ----------------------------------------------------------------------------- embedders
@@ -232,10 +233,12 @@ def windows(cond: dict, k: int) -> dict:
     else:
         b = cond["binds"][-1]
     sinkless = set()
-    if cond["kind"] in ("ot", "vd", "vd2"):
+    if cond["kind"] in ("ot", "vd", "vd2", "vd3"):
         sinkless = set(range(first, b))
     resume = cond["cold_call"] + k - 1 if cond["kind"] == "cold" else first
+    sl = sorted(sinkless)
     return {"pre": set(range(first - PRE, first)), "sinkless": sinkless, "first_4": set(range(resume, resume + 4)), "post_bind_20": set(range(b, b + 20)),
+            "sl_early": set(sl[:LATE_N]), "sl_late": set(sl[-LATE_N:]),   # VD-3 R3: first / last 8 calls of the Sink-less window
             "last_10": set(range(cond["end"] - 9, cond["end"] + 1)),
             "events": ([("reset", c) for c in cond["resets"] if c not in cond["binds"]] + [("bind" if c not in cond["resets"] else "reset+bind", c) for c in cond["binds"]] +
                        ([("cold_emit", cond["cold_call"] + k - 1)] if cond.get("cold_call") is not None else [])), "b": b}
@@ -311,7 +314,7 @@ def condition_metrics(cond: dict, k: int, O: dict, R: dict, I: dict, gray_fn, em
             per_call[c]["v5b"] = M["v5b"].get(c)
             per_call[c]["v5b_ref"] = ref_series["metrics"]["v5b"].get(c)
     win = {}
-    for name in ("pre", "sinkless", "first_4", "post_bind_20", "last_10"):
+    for name in ("pre", "sinkless", "first_4", "post_bind_20", "last_10", "sl_early", "sl_late"):
         cs = [c for c in calls if c in W[name]]
         if not cs:
             win[name] = None; continue
@@ -402,7 +405,9 @@ def run_unit(unit: Path, only: list[str], emb_names: str, device: str) -> dict:
     ref_spikes = ref_spike_distribution(ref_trans)
     out = {"embedders": list(emb), "playback_model": "last-frame-hold playback model (vc_playback.py)", "ref_spike_P99": float(np.percentile(ref_spikes, 99)) if ref_spikes else None, "ref_spike_n": len(ref_spikes), "conditions": {}}
     conds = sorted(d.name for d in unit.iterdir() if (d / "calls.csv").exists() and (not only or d.name in only))
-    sched = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())["inputs"][unit.name.rsplit("_s", 1)[0]]
+    import vc_schedules as vs
+
+    sched = vs.unit_sched(json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text()), unit.name)
     sconds = {c["id"]: c for c in sched["conditions"]}
     ref_cad = sched["ref"]["timeline"]["cadence_s"]
     ref_raw = stream_series(R, gray_quarter, emb, prompt)   # REF embeddings once; its per-window references per pre-move span below

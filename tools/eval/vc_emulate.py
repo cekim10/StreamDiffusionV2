@@ -134,6 +134,44 @@ def vd2_reset(rt, c: int, cond: dict, fast_pl: list, dry: bool, log: dict, src_l
     cost["total_serial_s"] = float(sum(cost.values()))
 
 
+def vd3_reset(rt, c: int, cond: dict, fast_pl: list, dry: bool, log: dict, src_last_image, src_latents, stale_latents, seed: int):
+    """Experiment VD-3 (osdi/expVD3/preregistration.md section 2): the M1 reset at call c with destination-side
+    reconstruction. Order: [TS-in prepare -> save its sink slots (and, TSinKC, its decoder state)] -> fast path restore
+    (meta + in-flight; KV and VAE caches zero, as frozen M1) -> [write the saved slots] -> [TSinKC: write the saved
+    decoder state] -> [DR-2 decode of the latent source: last / stale / noise]. Serial GPU seconds per step; the
+    TSinKC copy is an emulation artifact (a node keeps the cache instead of zeroing it) and is recorded but not counted."""
+    dr, ts, kc, src = int(cond.get("dr") or 0), cond.get("ts"), bool(cond.get("keep_cache")), cond.get("dr_source") or "last"
+    cost = log["cost_s"]
+    temp = kc_state = None
+    if ts:
+        images = None if dry else rt.torch.cat([src_last_image, rt.runner.frames_for_call(c)], dim=2)   # the cold-restart seed: [last input frame, current chunk]
+        temp, cost["ts_prepare_s"] = rt.temp_sink_prepare(images, c)
+        if kc:
+            kc_state = rt.vae_dec_state_copy()
+            log["kc_prepare_digest"] = rt.dec_digest(kc_state["tensors"]) if not dry else "fake-dec-digest"
+    for h, pl in fast_pl:
+        rt.unpack(dict(h), pl)
+    rt.restore_fast()   # frozen M1 fast path: meta + in-flight; KV and VAE caches zero
+    if temp is not None:
+        log["ts_slots_written"] = rt.write_sink_slots(temp)   # 2 of 3 (prepare's latents); the third stays zero until the bind
+    if kc_state is not None:
+        log["kc_copy_s_not_counted"], log["kc_live_digest"] = rt.vae_dec_state_write(kc_state)
+        log["kc_digest_equal"] = log["kc_live_digest"] == log["kc_prepare_digest"]
+    if dr:
+        lats = {"last": src_latents, "stale": stale_latents}.get(src)
+        if src == "noise":
+            lats, log["noise"] = rt.noise_latents(src_latents, seed * 1000003 + c)
+        if not dry:
+            log["latent_shapes"] = [list(z.shape) for z in lats]
+            if len(lats) < dr:
+                log["dr_short"] = f"only {len(lats)} latent frames ({src})"
+        log["dr_source"] = src
+        cost["dr_decode_s"] = rt.decode_latents(lats)
+    rt.freeze_refresh()
+    cost["total_serial_s"] = float(sum(cost.values()))
+    return temp
+
+
 def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameStore, k: int, hw) -> tuple[list[dict], dict]:
     resets, binds = set(cond["resets"]), set(cond["binds"])
     cc = cond.get("cold_call")
@@ -149,8 +187,12 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
     vd2 = cond.get("kind") == "vd2"
     dr, rp, ts = int(cond.get("dr") or 0), bool(cond.get("rp")), cond.get("ts")
     vd2_log = {"dr": dr, "rp": rp, "ts": ts, "cost_s": {}, "fidelity": None, "latent_shapes": None, "replayed": None} if vd2 else None
+    vd3 = cond.get("kind") == "vd3"
+    vd3_log = {"dr": dr, "ts": ts, "keep_cache": bool(cond.get("keep_cache")), "dr_source": cond.get("dr_source"), "cost_s": {}} if vd3 else None
+    stale_calls = [cond["resets"][0] - 18, cond["resets"][0] - 17] if (vd3 and cond.get("dr_source") == "stale") else []   # DR-2's pair (m-2, m-1) 16 calls earlier
+    stale_latents, temp_sink = [], None
     recent_frames = []   # the source's last output frames (TS-out), kept as uint8
-    if vd2 and not dry:
+    if (vd2 or vd3) and not dry:
         rt.capture_latents = True
     if dry:
         rt.provision(); rt.bound = True
@@ -173,15 +215,20 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
                 log.append({"call": c, "op": "reset_inside_episode", "sink": "kept", "sha": withheld[2][:16]})
             fast_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in fast]
             kept_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in kept]
-            if vd2:
+            if vd2 or vd3:
                 src_last_image = None if dry else snap["session"]["last_image"].detach().clone()
-                src_dec_cache = rt.vae_dec_cache_copy() if dr else None
+                src_dec_cache = rt.vae_dec_cache_copy() if (dr or cond.get("keep_cache")) else None
                 src_latents = (list(rt.last_latents)[-dr:] if dr else []) if not dry else []
             del snap, fast, kept
             rt.release(); rt.provision()
             if vd2:
                 vd2_reset(rt, c, cond, fast_pl, dry, vd2_log, src_last_image, src_dec_cache, src_latents, recent_frames)
                 shift += 25 + 10 * dr + (30 if rp else 0) + (50 if ts else 0)
+            elif vd3:
+                temp_sink = vd3_reset(rt, c, cond, fast_pl, dry, vd3_log, src_last_image, src_latents, stale_latents, int(rt.args.seed))
+                if src_dec_cache is not None:
+                    vd3_log["fidelity"] = rt.vae_dec_fidelity(src_dec_cache)   # reconstructed (DR2 / stale / noise) vs the source's cache
+                shift += 25 + 10 * dr + (50 if ts else 0) + (5 if cond.get("keep_cache") else 0) + {"stale": 3, "noise": 7}.get(cond.get("dr_source"), 0)
             else:
                 for h, pl in fast_pl:
                     rt.unpack(dict(h), pl)
@@ -201,6 +248,8 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
                 vd_log["mask_violations"] += set_sink_mask(rt, False, dry)   # the true Sink is bound: attention over all slots again
             rt.unpack(dict(h), pl)
             shifted = rt.bind()
+            if vd3 and temp_sink is not None:
+                vd3_log["temp_slots_left_after_bind"] = rt.temp_slots_left(temp_sink)
             bound_sha.append({"call": c, "sha": s_, "packed_at": at})
             log.append({"call": c, "op": "bind", "sha": s_[:16], "packed_at": at, "slots_rerotated": shifted, "bind_s": time.perf_counter() - t0})
             withheld = None
@@ -225,11 +274,13 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             produced, ps, ss, dt, pos = rt.step(c)
         fr = getattr(rt, "last_frames", None)
         if dry and produced:
-            fr = dry_frames(out_in, shift, *hw)
+            fr = dry_frames(out_in, shift + 3 * int(rt.args.seed) * ((c * 7) % 5), *hw)
         if not produced:
             fr = None
         if vd2 and fr is not None:
             recent_frames.append(np.asarray(fr)); del recent_frames[:-2]
+        if c in stale_calls and not dry and produced:
+            stale_latents.append(rt.last_latents[-1].detach().clone())   # the decode input of call c (one decode per call)
         dg = vf.frame_digest(fr)
         if c < t1 and not dry and dg != base_record[c]["frame_digest"]:
             prefix_ok = False
@@ -249,10 +300,18 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
         vd_log["mask_violations"] += set_sink_mask(rt, False, dry)
     if cond.get("kind") == "vd" and vd_log["mask_violations"]:
         valid = False   # the masked slots were not empty: the condition did not test what it claims
-    if vd2 and not dry:
+    if vd3:
+        if stale_calls and not dry and len(stale_latents) != 2:
+            valid = False; vd3_log["invalid"] = f"stale latents captured {len(stale_latents)} of 2"
+        if vd3_log.get("ts_slots_written") not in (None, 2) or (vd3_log.get("temp_slots_left_after_bind") or 0) != 0:
+            valid = False; vd3_log["invalid"] = f"temporary Sink slots written {vd3_log.get('ts_slots_written')}, left after the bind {vd3_log.get('temp_slots_left_after_bind')}"
+        if vd3_log.get("keep_cache") and vd3_log.get("kc_digest_equal") is False:
+            valid = False; vd3_log["invalid"] = "TSinKC: the live decoder cache differs from the prepare's"
+        vd3_log["stale_calls"] = stale_calls
+    if (vd2 or vd3) and not dry:
         rt.capture_latents = False; rt.last_latents.clear()
     summary = {"condition": {k_: v for k_, v in cond.items() if k_ != "timeline"}, "t_first_op": t1, "events": log, "vd": vd_log if cond.get("kind") == "vd" else None,
-               "vd2": vd2_log, "bound_sink": bound_sha, "realized": realized,
+               "vd2": vd2_log, "vd3": vd3_log, "bound_sink": bound_sha, "realized": realized,
                "prefix_identical_to_reference": None if dry else prefix_ok, "valid": valid, "elapsed_s": time.time() - t_run}
     rt.release()
     return rows, summary
@@ -272,9 +331,12 @@ def main():
     ap.add_argument("--no_ref_frames", action="store_true", help="do not store REF frames (checks that need none)")
     ap.add_argument("--skip_done", action="store_true", help="skip a condition whose summary.json in out_root is valid (re-runs after a failure)")
     a = ap.parse_args()
-    sched = json.loads(Path(a.schedules).read_text())["inputs"][a.input]
+    allsched = json.loads(Path(a.schedules).read_text())
+    sched = allsched.get("units", {}).get(f"{a.input}_s{a.seed}") or allsched["inputs"][a.input]   # VD-3 seed-1 units
+    if a.seed != 0 and f"{a.input}_s{a.seed}" not in allsched.get("units", {}):
+        sys.exit(f"no schedule unit {a.input}_s{a.seed}")
     only = set(a.only.split(",")) if a.only else None
-    conds = [c for c in sched["conditions"] if ((c["id"] in only) if only else (c.get("kind") != "vd2"))]   # VD-2 conditions only on request
+    conds = [c for c in sched["conditions"] if ((c["id"] in only) if only else (c.get("kind") not in ("vd2", "vd3")))]   # VD-2 / VD-3 conditions only on request
     from expw_w1 import workload_paths
     import mobility_node as mn
 
@@ -301,7 +363,7 @@ def main():
         ref = sched["ref"]
         st_ = vf.FrameStore(frames_root, "REF")
         for c in range(ref["frames_from"], ref["frames_to"] + 1):
-            fr = rt.base.get(c) if not a.dry_run else dry_frames(c - (k - 1), 0, *hw)
+            fr = rt.base.get(c) if not a.dry_run else dry_frames(c - (k - 1), 3 * a.seed * ((c * 7) % 5), *hw)   # dry: seeds differ a little
             st_.add(c, fr, phase="ref", out_input_call=c - (k - 1), digest=None if a.dry_run else base_record[c]["frame_digest"])
         st_.close({"input": a.input, "condition": "REF", **host_meta})
         d = unit / "REF"; d.mkdir(parents=True, exist_ok=True)

@@ -50,12 +50,22 @@ VD3_CELLS = [("TSin", 0, "in", False, "last"), ("DR2", 2, None, False, "last"), 
              ("TSinKC", 0, "in", True, "last"), ("DR2stale", 2, None, False, "stale"), ("DR2noise", 2, None, False, "noise")]
 
 
+# Source runs whose recorded workload is not what they generated (osdi/audi_s0_w2_provenance.md). A schedule taken
+# from such a run is a copied schedule for the labelled input; VD-3 labels it so (frozen VC conditions are unchanged).
+PROVENANCE = {"expW_W2_audi-snow-trail_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-135751":
+              "the source run generated train seed 1 (an orphaned node of a failed train seed-1 invocation), not audi-snow-trail seed 0; "
+              "for audi-snow-trail its schedule is a copied schedule"}
+
+
 def vd3_conditions(ot: dict) -> list[dict]:
     """Experiment VD-3 (osdi/expVD3/preregistration.md): DR-2 + TS-in confirmation with components, TSin-KC (the
     prepare's own decoder cache kept) and the stale / noise decoder-cache controls."""
     x = ot["id"].split("-")[1]
-    return [{**ot, "id": f"VD3{x}-{name}", "kind": "vd3", "dr": dr, "ts": ts, "keep_cache": kc, "dr_source": src, "vd3_of": ot["id"],
-             "label": f"VD-3 {name} at the {ot['id']} schedule (counterfactual reconstruction at the destination)"} for name, dr, ts, kc, src in VD3_CELLS]
+    note = next((v for k, v in PROVENANCE.items() if any(src.endswith(k) for src in ot.get("sources", []))), None)
+    extra = {"counterfactual": True, "provenance_note": note} if note else {}
+    return [{**ot, **extra, "id": f"VD3{x}-{name}", "kind": "vd3", "dr": dr, "ts": ts, "keep_cache": kc, "dr_source": src, "vd3_of": ot["id"],
+             "label": f"VD-3 {name} at the {ot['id']} schedule (counterfactual reconstruction at the destination)" + (" - copied schedule: " + note if note else "")}
+            for name, dr, ts, kc, src in VD3_CELLS]
 
 
 def unit_sched(sched: dict, unit_name: str) -> dict:

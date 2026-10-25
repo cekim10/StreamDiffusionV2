@@ -503,6 +503,55 @@ class GpuRuntime:
         for block in self.pl.generator.model.blocks:
             block.self_attn.adapt_sink_thr = -1
 
+    # ---- Experiment VD-3 (emulator-only; none is used by a frozen path)
+    _DEC_ATTRS = ("_conv_idx", "first_decode")
+
+    def vae_dec_state_copy(self) -> dict:
+        """TSinKC: the live decoder cache tensors and their bookkeeping (after the TS prepare's own decode)."""
+        vm = self.pl.vae.model
+        return {"tensors": self.vae_dec_cache_copy(),
+                "attrs": {a: (list(getattr(vm, a)) if isinstance(getattr(vm, a, None), list) else getattr(vm, a, None)) for a in self._DEC_ATTRS}}
+
+    def vae_dec_state_write(self, saved: dict) -> tuple[float, str]:
+        """TSinKC: write a saved decoder state back into the live cache (the fast-path restore zeroed it). Returns the
+        copy time (an emulation artifact: a node implementation skips the zeroing) and the digest of the live cache."""
+        self._sync(); t0 = time.perf_counter()
+        cur = self.sa.vae_cache_tensors(self.pl, "dec")
+        assert len(cur) == len(saved["tensors"]), "decoder cache layout changed"
+        for t, b in zip(cur, saved["tensors"]):
+            t.copy_(b)
+        vm = self.pl.vae.model
+        for a, v in saved["attrs"].items():
+            if v is not None:
+                setattr(vm, a, list(v) if isinstance(v, list) else v)
+        self._sync()
+        return time.perf_counter() - t0, self.dec_digest(cur)
+
+    def dec_digest(self, tensors=None) -> str:
+        import hashlib
+
+        h = hashlib.sha256()
+        for t in (tensors if tensors is not None else self.sa.vae_cache_tensors(self.pl, "dec")):
+            h.update(t.detach().float().cpu().numpy().tobytes())
+        return h.hexdigest()
+
+    def noise_latents(self, like: list, seed: int) -> tuple[list, dict]:
+        """DR2noise: seeded standard-normal latent frames with the shape / dtype of the real ones (their std recorded)."""
+        g = self.torch.Generator(device=self.device); g.manual_seed(int(seed))
+        out = [self.torch.randn(z.shape, generator=g, device=self.device, dtype=self.torch.float32).to(z.dtype) for z in like]
+        return out, {"seed": int(seed), "real_std": [float(z.float().std().item()) for z in like], "real_mean": [float(z.float().mean().item()) for z in like]}
+
+    def temp_slots_left(self, saved: list) -> int:
+        """After the bind: the number of (layer, slot) pairs whose K still equals the temporary Sink (must be 0)."""
+        from models.wan.causal_model import KV_POS_EMPTY
+
+        n = 0
+        for layer, (k, v, pos) in zip(self.sa.kv_layers(self.pl), saved):
+            for s_ in range(self.sink):
+                if int(pos[0, s_].item()) != KV_POS_EMPTY and self.torch.equal(layer["k"][:, s_ * self.fsl:(s_ + 1) * self.fsl], k[:, s_ * self.fsl:(s_ + 1) * self.fsl]):
+                    n += 1
+        return n
+
     def restore_inputs(self):
         """Undo write_inputs (lossy sensitivity runs) so the next run starts from the original input."""
         if not getattr(self, "_written", None):
@@ -676,6 +725,22 @@ class FakeRuntime:
 
     def freeze_refresh(self):
         pass
+
+    # Experiment VD-3 doubles
+    def vae_dec_state_copy(self):
+        return {"tensors": [0], "attrs": {}}
+
+    def vae_dec_state_write(self, saved):
+        return 0.0001, "fake-dec-digest"
+
+    def dec_digest(self, tensors=None):
+        return "fake-dec-digest"
+
+    def noise_latents(self, like, seed):
+        return list(like), {"seed": int(seed), "real_std": [], "real_mean": []}
+
+    def temp_slots_left(self, saved):
+        return 0
 
     def input_history(self):
         if getattr(self, "_hist", None) is None:

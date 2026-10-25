@@ -49,8 +49,8 @@ def main():
         for inp in ("dog", "audi-snow-trail"):
             r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--dry_run", "--frames_dir", str(tmp / "frames"), "--out_root", str(tmp / "expVCt")],
                                 cwd=ROOT, capture_output=True, text=True)
-            nc = sum(1 for c in out["inputs"][inp]["conditions"] if c["kind"] != "vd2")   # VD-2 conditions run only on request
-            check(r_.returncode == 0 and r_.stdout.count("valid True") == nc, f"{inp}: {nc} conditions emulated (7 VC{' + 16 VD' if nc > 7 else ''}; VD-2 skipped by default), all valid")
+            nc = sum(1 for c in out["inputs"][inp]["conditions"] if c["kind"] not in ("vd2", "vd3"))   # VD-2 / VD-3 conditions run only on request
+            check(r_.returncode == 0 and r_.stdout.count("valid True") == nc, f"{inp}: {nc} conditions emulated (7 VC{' + 16 VD' if nc > 7 else ''}; VD-2 / VD-3 skipped by default), all valid")
             ok, why, info = vc.g3(tmp / "expVCt" / f"{inp}_s0", out)
             check(ok, f"{inp}: G3 passes on REF + {nc} streams {why[:2]}")
             if nc > 7:
@@ -128,10 +128,114 @@ def main():
               "VC aggregation (block bootstrap, effect sizes, verdicts; VD conditions excluded)")
         r_ = subprocess.run([PY, "tools/eval/aggregate_vd.py", "--root", str(tmp / "expVCt"), "--dry"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode == 0 and "VD-H2" in r_.stdout and "dog | OT-1" in r_.stdout, f"VD aggregation (main effects, verdicts) {r_.stderr[-300:]}")
+        vd3_tests(tmp, out, vc)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
     sys.exit(1 if FAILS else 0)
+
+
+def vd3_tests(tmp: Path, out: dict, vc):
+    """Experiment VD-3 (dry): schedules, seed-1 unit, the six conditions, tolerances, blinded clips, inspection gate,
+    aggregation, overlap, and the remote pull's identical-copy resolution."""
+    import hashlib
+    import re
+
+    print("- 6 VD-3 (dry)")
+    for inp in ("dog", "train", "butterfly-feeding-slow-motion", "audi-snow-trail"):
+        u = out["units"][f"{inp}_s1"]
+        o1, oL = (next(c for c in u["conditions"] if c["id"] == x) for x in ("OT-1", "OT-L"))
+        check(o1["resets"] == [34] and o1["binds"][0] in (58, 59) and "expW_W2_" in o1["sources"][0] and "_s1/" in o1["sources"][0] and not o1.get("counterfactual")
+              and oL["counterfactual"] and "copied" in oL["label"] and sum(1 for c in u["conditions"] if c["kind"] == "vd3") == 12,
+              f"{inp} seed 1: OT-1 realized from the W2 seed-1 run (bind {o1['binds']}), OT-L copied and labelled counterfactual, 12 VD-3 conditions")
+    check(sum(1 for c in out["inputs"]["dog"]["conditions"] if c["kind"] == "vd2") == 16, "the frozen VD-2 conditions are unchanged (16 on dog)")
+    root, frames = tmp / "expVCt", tmp / "frames"
+    r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", "dog", "--seed", "1", "--dry_run", "--frames_dir", str(frames), "--out_root", str(root)], cwd=ROOT, capture_output=True, text=True)
+    check(r_.returncode == 0 and r_.stdout.count("valid True") == 2, "dog seed 1: REF + frozen-M1 OT-1 / OT-L controls emulated by default (VD-3 conditions only on request)")
+    for sd in (0, 1):
+        ids = [c["id"] for c in out["units"]["dog_s1"]["conditions"] if c["kind"] == "vd3"] if sd else [c["id"] for c in out["inputs"]["dog"]["conditions"] if c["kind"] == "vd3"]
+        r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", "dog", "--seed", str(sd), "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"],
+                            cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode == 0 and r_.stdout.count("valid True") == 12, f"dog seed {sd}: 12 VD-3 conditions emulated, all valid")
+    u1 = root / "dog_s1"
+    ok, why, info = vc.g3(u1, out)
+    check(ok and len(info) == 15, f"G3 on the seed-1 unit (REF + 2 controls + 12 VD-3 streams) {why[:2]}")
+    lg = {c: json.loads((u1 / c / "summary.json").read_text())["vd3"] for c in ("VD31-TSinKC", "VD31-DR2stale", "VD31-DR2noise", "VD3L-DR2+TSin")}
+    check(lg["VD31-DR2stale"]["stale_calls"] == [16, 17] and lg["VD31-DR2noise"]["noise"]["seed"] == 1 * 1000003 + 34, "DR2stale reads calls m-18, m-17; DR2noise records its seed")
+    check(lg["VD31-TSinKC"]["kc_digest_equal"] and lg["VD31-TSinKC"]["ts_slots_written"] == 2 and "kc_copy_s_not_counted" in lg["VD31-TSinKC"]
+          and lg["VD31-TSinKC"]["cost_s"]["total_serial_s"] == lg["VD31-TSinKC"]["cost_s"]["ts_prepare_s"], "TSinKC: kept cache verified by digest; the emulation copy is not counted in its cost")
+    check(set(lg["VD3L-DR2+TSin"]["cost_s"]) == {"ts_prepare_s", "dr_decode_s", "total_serial_s"} and lg["VD3L-DR2+TSin"]["temp_slots_left_after_bind"] == 0,
+          "DR2+TSin: both reconstruction costs recorded; no temporary-Sink slot left after the bind")
+    for sd in (0, 1):
+        r_ = subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / f"dog_s{sd}"), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode == 0, f"metrics on dog seed {sd} (early / late Sink-less windows)")
+    mj = json.loads((u1 / "metrics.json").read_text())["conditions"]["VD3L-DR2+TSin"]["windows"]
+    check(mj["sl_early"]["calls"] == [80, 87] and mj["sl_late"]["calls"] == [146, 153], f"early / late windows are the first / last 8 Sink-less calls {mj['sl_early']['calls']} {mj['sl_late']['calls']}")
+    tol = tmp / "tol"
+    r_ = subprocess.run([PY, "tools/eval/vd3_tolerances.py", "--root", str(root), "--inputs", "dog", "--embedder", "pixel", "--device", "cpu", "--dry", "--out", str(tol)], cwd=ROOT, capture_output=True, text=True)
+    T = json.loads(tol.with_suffix(".json").read_text()) if r_.returncode == 0 else {"cells": {}}
+    t1 = T["cells"].get("dog|OT-1", {})
+    check(r_.returncode == 0 and t1 and all(t1["tolerance"][k] == min([t1["seed_to_seed"][k]] + [t1["band_widths"][s][k] for s in ("s0", "s1")]) for k in ("dino", "dE_anchor", "E", "motion"))
+          and t1["tolerance"]["dino"] > 0, f"tolerances = min(seed-to-seed, REF band widths), from REF streams only {r_.stderr[-200:]}")
+    clips, form = tmp / "clips", tmp / "form.md"
+    r_ = subprocess.run([PY, "tools/eval/vc_export_clips.py", "--root", str(root), "--clips_dir", str(clips), "--order_seed", "3", "--inputs", "dog", "--form", str(form)], cwd=ROOT, capture_output=True, text=True)
+    ftxt = form.read_text() if form.exists() else ""
+    codes = re.findall(r"^\| ([0-9A-F]{6}) \|", ftxt, flags=re.M)
+    kb = (clips / "sealed" / "vd3_blind_key.json").read_bytes() if r_.returncode == 0 else b""
+    names = [str(p.relative_to(clips)) for p in clips.rglob("*.mp4")]
+    check(r_.returncode == 0 and len(codes) == 24 and len(names) == 28 and hashlib.sha256(kb).hexdigest() in ftxt
+          and not any(w in ftxt + " ".join(names) for w in ("TSin", "DR2", "REF", "OT-1", "OT-L", "frozen")),
+          f"blinded clips: 4 cells x 6 codes + 4 grids, key SHA-256 in the form, no condition names in the form or the file names {r_.stderr[-200:]}")
+    res = tmp / "res"
+    agg = lambda insp: subprocess.run([PY, "tools/eval/aggregate_vd3.py", "--root", str(root), "--tolerances", str(tol.with_suffix(".json")), "--inspection", str(insp),  # noqa: E731
+                                       "--key", str(clips / "sealed" / "vd3_blind_key.json"), "--form", str(form), "--out", str(res)], cwd=ROOT, capture_output=True, text=True)
+    r_ = agg(tmp / "none.md")
+    check(r_.returncode == 0 and "Verdicts withheld" in r_.stdout and "GO" not in res.with_suffix(".md").read_text().split("Verdicts withheld")[1], "no recorded inspection: verdicts withheld, validity only")
+    filled = re.sub(r"^\| ([0-9A-F]{6}) \|( \|)+$", lambda m: f"| {m.group(1)} | kept | kept | no shift | no visible jump | stable | no visible jump | dry |", ftxt.replace("STATUS: NOT RECORDED", "STATUS: RECORDED"), flags=re.M)
+    (tmp / "insp.md").write_text(filled)
+    r_ = agg(tmp / "insp.md")
+    check(r_.returncode == 0 and "inspection vetoes none" in r_.stdout and "C3" in r_.stdout, "recorded inspection: keyed; 'no shift' / 'no visible jump' are not vetoes")
+    key = json.loads(kb)["key"]
+    cand = next(c for c, k in key.items() if k["name"] == "DR2+TSin" and k["cell"] == "dog_s1|OT-1")
+    (tmp / "insp2.md").write_text(re.sub(rf"^\| {cand} \| kept \| kept \| no shift \| no visible jump", f"| {cand} | kept | kept | no shift | jump", filled, flags=re.M))
+    r_ = agg(tmp / "insp2.md")
+    check(r_.returncode == 0 and "inspection vetoes ['dog_s1|OT-1']" in r_.stdout, "a 'jump' answer on a confirmation clip of DR2+TSin vetoes its GO")
+    (clips / "sealed" / "vd3_blind_key.json").write_bytes(kb.replace(b'"order_seed": 3', b'"order_seed": 4'))
+    r_ = agg(tmp / "insp.md")
+    check(r_.returncode == 0 and "differs from the form" in r_.stdout, "a replaced key (SHA-256 differs from the form) is refused")
+    r_ = subprocess.run([PY, "tools/eval/vd3_overlap.py", "--dry_run", "--reps", "2", "--out", str(tmp / "ov.json")], cwd=ROOT, capture_output=True, text=True)
+    ov = json.loads((tmp / "ov.json").read_text()) if r_.returncode == 0 else {}
+    check(set(ov.get("checks", {})) == {"a_digests_equal", "b_contention_within_10pct", "c_first_output_earlier"} and len(ov["trials"]) == 4, "overlap measurement: alternating serial / overlap trials and the three checks (dry)")
+    r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd3", "--phase", "cand", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
+    check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd3 refuses to run before the freeze")
+    # remote pull: a blocked pull clears only byte-identical result copies
+    import d0_remote as dr
+
+    g = tmp / "git"
+    run = lambda cwd, *c: subprocess.run(list(c), cwd=cwd, capture_output=True, text=True)  # noqa: E731
+    run(tmp, "git", "init", "-q", "--bare", str(g / "o.git")); run(tmp, "git", "clone", "-q", str(g / "o.git"), str(g / "a"))
+    (g / "a" / "README").write_text("r\n"); run(g / "a", "git", "add", "."); run(g / "a", "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "c0"); run(g / "a", "git", "push", "-q", "origin", "HEAD")
+    run(tmp, "git", "clone", "-q", str(g / "o.git"), str(g / "b"))
+    (g / "b" / "results").mkdir(); (g / "b" / "results" / "x.txt").write_text("same\n")
+    (g / "a" / "results").mkdir(); (g / "a" / "results" / "x.txt").write_text("same\n"); run(g / "a", "git", "add", "."); run(g / "a", "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "c1"); run(g / "a", "git", "push", "-q", "origin", "HEAD")
+
+    class FakeAg:
+        def __init__(self, cwd):
+            self.cwd = cwd
+
+        def exec(self, cmd, timeout=30):
+            r = subprocess.run(cmd, cwd=self.cwd, capture_output=True, text=True)
+            return {"rc": r.returncode, "stdout": r.stdout, "stderr": r.stderr}
+    ag = FakeAg(g / "b")
+    r1 = ag.exec(["git", "pull", "--ff-only"])
+    done, kept = dr._resolve_identical(ag, r1["stderr"] + r1["stdout"])
+    r2 = ag.exec(["git", "pull", "--ff-only"])
+    check(r1["rc"] != 0 and done == ["results/x.txt"] and not kept and r2["rc"] == 0, f"a pull blocked by an identical untracked result copy is resolved ({done}, {kept})")
+    (g / "b" / "results" / "z.txt").write_text("mine\n")
+    (g / "a" / "results" / "z.txt").write_text("theirs\n"); run(g / "a", "git", "add", "."); run(g / "a", "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "c2"); run(g / "a", "git", "push", "-q", "origin", "HEAD")
+    r1 = ag.exec(["git", "pull", "--ff-only"])
+    done, kept = dr._resolve_identical(ag, r1["stderr"] + r1["stdout"])
+    check(r1["rc"] != 0 and not done and kept == ["results/z.txt"] and (g / "b" / "results" / "z.txt").read_text() == "mine\n", "a differing local result file is left untouched and reported")
 
 
 if __name__ == "__main__":

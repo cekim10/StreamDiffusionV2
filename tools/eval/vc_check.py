@@ -35,7 +35,9 @@ def _f(v):
 
 
 def replay_equivalence(unit: Path, cid: str, sched: dict) -> tuple[bool, list[str], dict]:
-    cond = next(c for c in sched["inputs"][unit.name.rsplit("_s", 1)[0]]["conditions"] if c["id"] == cid)
+    import vc_schedules as vs
+
+    cond = next(c for c in vs.unit_sched(sched, unit.name)["conditions"] if c["id"] == cid)
     s = json.loads((unit / cid / "summary.json").read_text())
     emu = {int(r["call"]): r for r in csv.DictReader(open(unit / cid / "calls.csv", newline=""))}
     real_dir = ROOT / cond["sources"][0]
@@ -67,8 +69,9 @@ def replay_equivalence(unit: Path, cid: str, sched: dict) -> tuple[bool, list[st
 
 
 def g3(unit: Path, sched: dict) -> tuple[bool, list[str], dict]:
-    inp = unit.name.rsplit("_s", 1)[0]
-    conds = {c["id"]: c for c in sched["inputs"][inp]["conditions"]}
+    import vc_schedules as vs
+
+    conds = {c["id"]: c for c in vs.unit_sched(sched, unit.name)["conditions"]}
     bad, info = [], {}
     for d in sorted(p for p in unit.iterdir() if (p / "summary.json").exists()):
         s = json.loads((d / "summary.json").read_text())
@@ -98,6 +101,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--unit", required=True)
     ap.add_argument("--g1", action="store_true"); ap.add_argument("--g2", action="store_true"); ap.add_argument("--g3", action="store_true")
+    ap.add_argument("--g1_cond", default="OT-L", help="G1 condition (VD-3 seed-1 units: OT-1 vs the real W2 seed-1 run)")
     ap.add_argument("--schedules", default=str(SCHED))
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--name", default="vc0_checks", help="output name under results/evaluation/osdi/expVC (VC-1: vc1_checks_<input>)")
@@ -108,7 +112,7 @@ def main():
     sched = json.loads(Path(a.schedules).read_text())
     res = {}
     if a.g1:
-        ok, why, info = replay_equivalence(unit, "OT-L", sched); res["G1"] = {"pass": ok, "failures": why, **info}
+        ok, why, info = replay_equivalence(unit, a.g1_cond, sched); res["G1"] = {"pass": ok, "failures": why, "condition": a.g1_cond, **info}
     if a.g2:
         ok, why, info = replay_equivalence(unit, "COLD-1", sched); res["G2"] = {"pass": ok, "failures": why, **info}
     if a.g3:

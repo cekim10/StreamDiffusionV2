@@ -5,7 +5,10 @@ instead of ssh, which is not available between the testbed hosts. Run on elves-0
     status                 agent reachability, repo commit and GPU 0 processes on every host
     gpu_idle [--hosts A,B] exit 1 unless GPU 0 has no compute process on the listed hosts (default: all four) and all four
                            repos are on one commit (a job checks only the GPUs it uses, so XB on A / B and VC on D can share the testbed)
-    pull                   git pull --ff-only on the hosts whose repo is behind (no other git operation)
+    pull                   git pull --ff-only on the hosts whose repo is behind. If it is blocked by local copies of result files
+                           (VC / VD runs write them on the host, elves-01 commits the same files), the blocking files under
+                           results/ that are byte-identical to the incoming commit are restored / removed and the pull retried;
+                           any file that differs is left untouched and reported
     probe NAME SCRIPT      run a read-only bash probe on elves-02..04, write results/evaluation/osdi/d0/NAME/<host>.txt
     recover                copy back node_{B,C,D}/fragments.csv of restore_* runs; never overwrites a local file
     codecs                 XB preflight on all four hosts: PyAV, FFV1 bit-exact round trip, libx264 (exit 1 if any fails);
@@ -77,9 +80,32 @@ def gpu_idle(a):
     sys.exit(1 if bad else 0)
 
 
+def _resolve_identical(ag, err: str) -> tuple[list[str], list[str]]:
+    """Paths listed by a blocked pull: drop the local copy only when it equals the incoming version byte for byte."""
+    paths = [ln.strip() for ln in err.splitlines() if ln.startswith("\t")]
+    done, kept = [], []
+    up = sh(ag, ["git", "rev-parse", "@{u}"])["stdout"].strip()
+    for p_ in paths:
+        if not p_.startswith("results/"):
+            kept.append(p_); continue
+        inc = sh(ag, ["git", "rev-parse", f"{up}:{p_}"])["stdout"].strip()
+        loc = sh(ag, ["git", "hash-object", p_])["stdout"].strip()
+        if not inc or inc != loc:
+            kept.append(p_); continue
+        tracked = sh(ag, ["git", "ls-files", "--error-unmatch", p_])["rc"] == 0
+        sh(ag, ["git", "checkout", "--", p_] if tracked else ["rm", "-f", p_])
+        done.append(p_)
+    return done, kept
+
+
 def pull(a):
     for lb, ag in agents(REMOTE, a.agent_hosts).items():
         r = sh(ag, ["git", "pull", "--ff-only"], timeout=180)
+        if r["rc"] != 0 and "would be overwritten" in (r["stderr"] + r["stdout"]):
+            done, kept = _resolve_identical(ag, r["stderr"] + r["stdout"])
+            print(f"{lb}: pull blocked; identical local result copies cleared {len(done)}, differing / non-result files left {kept}")
+            if not kept:
+                r = sh(ag, ["git", "pull", "--ff-only"], timeout=180)
         c = sh(ag, ["git", "log", "--oneline", "-1"])["stdout"].strip()
         print(f"{lb} {host_of(ag)}: rc={r['rc']} {r['stdout'].strip().splitlines()[-1] if r['stdout'].strip() else ''} {r['stderr'].strip()[-300:]} -> {c}")
 
