@@ -1,7 +1,7 @@
 # Experiment VD-3 - GO / NO-GO for a continuity-preserving M1 variant (DR-2 + TS-in): preregistration REVISED DRAFT 5 (2026-10-25)
 
-Status: **REVISED DRAFT 7 (Phase T decisions of 2026-10-25 applied; for the final pre-freeze review). Not frozen. Phase
-C does not run until this review.** Changes from draft 6: thresholds fixed from the Phase T distributions
+Status: **FINAL (draft 7 with the final-review revisions of 2026-10-25). Frozen with `vd3_thresholds.json` and the
+aggregation rules of `aggregate_vd3.py` (`../expVD3_freeze.md`).** Changes from draft 6: thresholds fixed from the Phase T distributions
 (`vd3_thresholds.json`: set A primary for content and color, B and C sensitivity; fixed 10 % warp / motion limits as
 engineering acceptance criteria with a near-zero safeguard); phase-level discrimination with P2 split into P2a
 (content / appearance) and P2b (motion / temporal); a separate identity-preservation conclusion; P3 as a no-harm check
@@ -103,13 +103,14 @@ Two outcome columns are reported for every continuity metric and never merged:
 | P2a content / appearance | R2a | whole Sink-less window: D_c >= -t_DINO; C_c <= t_dE; window dE candidate vs REF <= t_dEx | fraction of the paired DINO gap closed |
 | | R3 | late window: excess drift X <= t_DINO and late D_c >= -t_DINO | - |
 | P2b motion / temporal consistency | R2b | whole Sink-less window: warp error <= 1.10 x REF's; frame difference within +/- 10 % of REF's (absolute safeguard near zero) | - |
-| P3 no-harm | R4 | last 10 calls: the P2a content / color and P2b clauses against REF (full recovery); bind V1 <= max(REF P99, frozen M1's); first 20 calls after the bind not worse than frozen M1's in the same cell by more than t_DINO (content), t_dE (color), 10 % (warp, motion). PSNR trajectory: secondary diagnostic only | - |
+| P3 no-harm | R4 | (i) bind boundary, absolute: V1(bind) <= REF P99; (ii) first 20 calls after the bind non-inferior to frozen M1 in the same cell, preregistered margins: content D_c >= M1's - t_DINO, color C_c <= M1's + t_dE, warp error <= M1's + 10 %, frame difference within +/- 10 % of M1's (absolute safeguard near zero); (iii) last 10 calls restored to the paired REF tolerance (the P2a content / color and P2b clauses). PSNR trajectory: secondary diagnostic only | - |
 | cost | R5 | serial reconstruction <= 1.5 s and bytes <= 1 MB; 0.3 s preferred target reported | - |
 
-P3 is read as "no harm relative to the frozen mechanism": the bind and its recovery are governed by the exact Sink in
-every condition, and frozen M1 itself exceeds absolute REF limits in the first 20 calls after the bind on three cells
-(post-bind warp 1.11-1.12 on dog OT-L; content 0.002 beyond t_DINO on butterfly s0 OT-L), all of which recover fully
-within the last 10 calls. (Proposed reading; confirmed at the final review.)
+P3 (final review, 2026-10-25): the bind boundary keeps the absolute REF requirement; only the recovery right after the
+bind, which the exact Sink governs in every condition, is judged by non-inferiority to frozen M1 (frozen M1 itself
+exceeds absolute REF limits there on three cells and recovers fully within the last 10 calls); terminal recovery must
+return to the REF range. Frozen M1's bind V1 is within REF P99 in all 16 cells. The blinded inspection asks
+explicitly for a new discontinuity at the exact Sink bind (form field "new discontinuity at the exact Sink bind B").
 
 **Per phase and cell** (P1, P2a, P2b): **FAIL** (the candidate violates the phase), **DISCRIMINATIVE PASS** (it passes
 and frozen M1 violates that phase in the same cell), **NON-DISCRIMINATIVE PASS** (both pass). P3 and cost: PASS / FAIL.
@@ -243,7 +244,9 @@ reps. Frozen results stay as recorded; the variant is reported beside them.
 
 - Phase T review: thresholds and rules of sections 3-4 (set A primary; B, C sensitivity; fixed engineering limits;
   phase-level discrimination with P2a / P2b; identity conclusion; P3 no-harm).
-- **Open for the final review:** the P3 reading of section 4 (relative to frozen M1); the overlap disposition (section 6:
-  not validated, serial costs); then the freeze and Phase C.
+- **Final review (2026-10-25):** P3 approved with the absolute bind boundary, non-inferiority margins for the first 20
+  post-bind calls and terminal REF restoration (section 4); overlap not validated - VD-3 uses serial reconstruction,
+  claims no overlap benefit, and keeps overlap as a separate future optimization; freeze, then Phase C. Thresholds and
+  rules are not modified after Phase C starts; every confirmation cell is reported, failures included.
 - D2b: the audi seed-0 OT-1 cell keeps its copied schedule (counterfactual stress condition, provenance documented);
   the verified reproduction's schedule (move 34, bind 58) is recorded for a sensitivity analysis.

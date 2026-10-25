@@ -123,11 +123,11 @@ def rules(v: dict, name: str, tol: dict, p99: float, ctrl: dict | None = None) -
         R3  late window: excess drift X <= t_DINO and late D_c >= -t_DINO
     P2b R2b whole Sink-less window motion / temporal consistency: warp error and frame difference within 10 % of REF
         (absolute safeguard near zero); the warp check is one-sided (more warp error fails), motion two-sided
-    P3  R4  no-harm (proposed reading of the 2026-10-25 decision): the last 10 calls satisfy the P2a content / color and
-        P2b clauses against REF (full recovery); the bind V1 and the first 20 calls after the bind are not worse than
-        frozen M1's in the same cell by more than the same limits (V1(bind) <= max(REF P99, frozen M1's); D_c >=
-        frozen M1's - t_DINO; C_c <= frozen M1's + t_dE; warp error and frame difference within 10 % of frozen M1's).
-        Without a control (ctrl None) the absolute REF form is used.
+    P3  R4  no-harm (final review, 2026-10-25): (i) bind boundary absolute: V1(bind) <= REF P99; (ii) the first 20 calls
+        after the bind non-inferior to frozen M1 in the same cell by the preregistered margins NI_MARGIN (content:
+        D_c >= frozen M1's - t_DINO; color: C_c <= frozen M1's + t_dE; warp error <= frozen M1's + 10 %; frame difference
+        within +/- 10 % of frozen M1's; absolute safeguard near zero); (iii) terminal restoration: the last 10 calls
+        satisfy the P2a content / color and P2b clauses against REF. Without a control (ctrl None), (ii) uses REF.
     cost R5 serial reconstruction <= 1.5 s and bytes <= 1 MB"""
     def le(a, b):
         return a is not None and b is not None and a <= b
@@ -152,16 +152,23 @@ def rules(v: dict, name: str, tol: dict, p99: float, ctrl: dict | None = None) -
     return R
 
 
+# Non-inferiority margins of the first 20 post-bind calls relative to frozen M1 (preregistered before any candidate run)
+NI_MARGIN = {"content": "t_DINO (set A, per cell)", "color": "t_dE (set A, per cell)", "warp": "+10 % of frozen M1's warp error",
+             "motion": "+/- 10 % of frozen M1's frame difference", "abs_floor_gray": ABS_FLOOR}
+
+
 def no_harm(v, ctrl, t, p99, content, temporal, le) -> bool:
     pb, l10 = v["P"]["post_bind_20"], v["P"]["last_10"]
+    bind_ok = le(v["v1_bind"], p99)                       # (i) absolute bind continuity
+    terminal_ok = content(l10) and temporal(l10)            # (iii) terminal restoration to REF
     if ctrl is None:
-        return le(v["v1_bind"], p99) and content(pb) and content(l10) and temporal(pb) and temporal(l10)
-    cb = ctrl["P"]["post_bind_20"]
-    bind_ok = v["v1_bind"] is not None and v["v1_bind"] <= max(x for x in (p99, ctrl.get("v1_bind")) if x is not None)
-    pb_ok = (le(cb.get("D_c") - t["dino"] if cb.get("D_c") is not None else None, pb.get("D_c")) and le(pb.get("C_c"), cb.get("C_c") + t["dE_anchor"] if cb.get("C_c") is not None else None)
+        return bool(bind_ok and terminal_ok and content(pb) and temporal(pb))
+    cb = ctrl["P"]["post_bind_20"]                          # (ii) non-inferiority to frozen M1
+    pb_ok = (le(cb.get("D_c") - t["dino"] if cb.get("D_c") is not None else None, pb.get("D_c"))
+             and le(pb.get("C_c"), cb.get("C_c") + t["dE_anchor"] if cb.get("C_c") is not None else None)
              and pb.get("eO") is not None and cb.get("eO") is not None and pb["eO"] - cb["eO"] <= REL_LIMIT * max(cb["eO"], ABS_FLOOR)
              and _rel_ok(pb.get("dO"), cb.get("dO")))
-    return bool(bind_ok and pb_ok and content(l10) and temporal(l10))
+    return bool(bind_ok and pb_ok and terminal_ok)
 
 
 def classify_phases(rr: dict, rc: dict) -> dict:

@@ -43,7 +43,7 @@ SHOWN = ("REF", "OT", "TSin", "DR2", "DR2+TSin", "TSinKC")
 CONFIRM = {("train", 0), ("audi-snow-trail", 0), ("dog", 1), ("train", 1), ("butterfly-feeding-slow-motion", 1), ("audi-snow-trail", 1)}
 REPO_INPUTS = ("dog", "train")   # repository clips; LOVEU inputs are inspected internally only
 FIELDS = ("identity (kept / changed / unsure)", "appearance (kept / changed)", "color (no shift / shift)", "boundary at M (no visible jump / jump)",
-          "Sink-less interval M..B (stable / drifts / breaks)", "exact bind at B (no visible jump / jump)", "notes")
+          "Sink-less interval M..B (stable / drifts / breaks)", "new discontinuity at the exact Sink bind B (no visible jump / jump)", "notes")
 
 
 def cond_id(name: str, x: str) -> str:

@@ -71,7 +71,9 @@ def main():
     doc = {"decision": "2026-10-25: A primary for content and color; B and C sensitivity; fixed 10 % warp / motion limits are engineering acceptance criteria",
            "phaseT_sha256": hashlib.sha256(pb).hexdigest(), "candidate_data_present": found,
            "fixed": {"warp_ratio_max": 1 + a3.REL_LIMIT, "motion_rel_max": a3.REL_LIMIT, "abs_floor_gray": a3.ABS_FLOOR, "v1": "REF P99 per unit (ref_spike_P99)",
-                     "cost_s_max": a3.COST_LIMIT_S, "bytes_max": a3.BYTES_LIMIT}, "cells": cells}
+                     "cost_s_max": a3.COST_LIMIT_S, "bytes_max": a3.BYTES_LIMIT,
+                     "p3": {"bind_v1": "<= REF P99 (absolute)", "post_bind_20_non_inferiority_vs_frozen_M1": a3.NI_MARGIN,
+                            "last_10": "restoration to the paired REF tolerance (set A content / color; fixed warp / motion)"}}, "cells": cells}
     Path(a.out).with_suffix(".json").write_text(json.dumps(doc, indent=1))
     Path(a.out).with_suffix(".md").write_text("\n".join(L) + "\n")
     print("\n".join(L))

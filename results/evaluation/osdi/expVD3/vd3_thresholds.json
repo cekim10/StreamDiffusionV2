@@ -8,7 +8,18 @@
   "abs_floor_gray": 1.0,
   "v1": "REF P99 per unit (ref_spike_P99)",
   "cost_s_max": 1.5,
-  "bytes_max": 1000000.0
+  "bytes_max": 1000000.0,
+  "p3": {
+   "bind_v1": "<= REF P99 (absolute)",
+   "post_bind_20_non_inferiority_vs_frozen_M1": {
+    "content": "t_DINO (set A, per cell)",
+    "color": "t_dE (set A, per cell)",
+    "warp": "+10 % of frozen M1's warp error",
+    "motion": "+/- 10 % of frozen M1's frame difference",
+    "abs_floor_gray": 1.0
+   },
+   "last_10": "restoration to the paired REF tolerance (set A content / color; fixed warp / motion)"
+  }
  },
  "cells": {
   "audi-snow-trail_s0|OT-1": {

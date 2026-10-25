@@ -235,6 +235,10 @@ def vd3_tests(tmp: Path, out: dict, vc):
           and not a3.rules(syn(post_bind_20__eO=3.3, post_bind_20__D_c=-0.03), "DR2+TSin", t, 3.4, ctrl_)["P3"]
           and not a3.rules(syn(post_bind_20__eO=2.9, last_10__D_c=-0.08), "DR2+TSin", t, 3.4, ctrl_)["P3"],
           "P3: a candidate equal to frozen M1 after the bind passes; 14 % more post-bind warp error than M1, or a last-10 content gap, fails")
+    big_bind = syn(post_bind_20__eO=2.9, post_bind_20__D_c=-0.03); big_bind["v1_bind"] = 3.6
+    ctrl_b = dict(ctrl_); ctrl_b["v1_bind"] = 3.8
+    check(not a3.rules(big_bind, "DR2+TSin", t, 3.4, ctrl_b)["P3"],
+          "P3 bind boundary is absolute: V1(bind) 3.6 > REF P99 3.4 fails even when frozen M1's bind V1 (3.8) is larger")
     m1 = a3.rules(syn(v1=8.0, sinkless__D_c=-0.4), "OT", t, 3.4)
     cl = a3.classify_phases(R0, m1)
     check(cl == {"P1": "DISCRIMINATIVE PASS", "P2a": "DISCRIMINATIVE PASS", "P2b": "NON-DISCRIMINATIVE PASS", "P3": "PASS", "cost": "PASS"}

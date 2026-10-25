@@ -80,3 +80,13 @@ TTFO 0.677 -> 0.682 s), the audi seed-0 row; the counts the paper cites unchange
 
 Confirm the P3 reading and the overlap disposition (serial costs); freeze
 (`expVD3_freeze.md`, with `vd3_thresholds.json` committed).
+
+## 6. Final review decisions (2026-10-25) and their implementation
+
+- P3: bind V1 <= REF P99 (absolute; frozen M1 is within it in all 16 cells); first 20 post-bind calls non-inferior to
+  frozen M1 with the preregistered margins (`vd3_thresholds.json` `fixed.p3`, `aggregate_vd3.NI_MARGIN`); last 10 calls
+  restored to the paired REF tolerance; the inspection form asks for a new discontinuity at the exact Sink bind.
+  Synthetic test added: a bind V1 above REF P99 fails P3 even when frozen M1's bind V1 is larger.
+- Thresholds re-verified: every set-A value equals its Phase T REF statistic; no VD-3 candidate data in any unit.
+- Overlap: recorded as failed (correctness passed, generation contention 1.95 x, no first-output gain); serial
+  reconstruction; no overlap benefit claimed; future optimization.
