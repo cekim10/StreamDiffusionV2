@@ -1,0 +1,26 @@
+
+=== 2026-10-23T00:03:58.479296 XB calibration repeats precopy_sink thr=16:rl=1: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_cal --skip_done --validity wrn --bw 1000 --policies precopy_sink --hops 1 --tm 1e9 --reps 2 --rep_start 2 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_grid thr=16:rl=1 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3629119)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1480961)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 558 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 4037070
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 4037070
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_cal/
+
+=== 2026-10-23T00:24:28.412093 XB calibration repeats recompute_full lag=1:rl=1: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_cal --skip_done --validity wrn --bw 1000 --policies recompute_full --hops 1 --tm 1e9 --reps 2 --rep_start 2 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_grid lag=1:rl=1 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3638666)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1486724)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset +0.00 ms, dry_run=False, commit 4037070
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset +0.03 ms, dry_run=False, commit 4037070
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_cal/

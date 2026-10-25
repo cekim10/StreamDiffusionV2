@@ -1,0 +1,26 @@
+
+=== 2026-10-22T10:08:31.581486 XB exactness gate dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_gate_dog --skip_done --validity wrn --bw 1000 --policies precopy_full,recompute_full --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_verify_state --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3243164)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1231776)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 4d0d4ed
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 557 ms/chunk, mss 1388, clock offset -0.10 ms, dry_run=False, commit 4d0d4ed
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_gate_dog/
+
+=== 2026-10-22T10:56:48.240821 XB exactness gate bfly: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_gate_bfly --skip_done --validity wrn --bw 1000 --policies precopy_full,recompute_full --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_verify_state --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3263392)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1245480)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 4d0d4ed
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 557 ms/chunk, mss 1388, clock offset -1.23 ms, dry_run=False, commit 4d0d4ed
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_gate_bfly/

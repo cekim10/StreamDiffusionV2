@@ -1,0 +1,111 @@
+
+=== 2026-10-23T01:05:16.522891 XB shakedown XB1 dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB1_dog --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,full,split_wait,precopy_full,precopy_sink,recompute_full,recompute_win --hops 1 --reps 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3658500)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1496996)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 8d180d4
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset -0.24 ms, dry_run=False, commit 8d180d4
+[orch] === run policy=reuse_dyn2_bw=1000_rho=none_tm=inf_rep=1_20261023-012102: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=  81.65s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho None: after final move: first output 0.68 s, Sink received 14.17 s, bound 14.84 s, continuity-ready 15.44 s, rejoin 19.02 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 43.9 dB | ingress peak 1007 Mbps
+[orch] === run policy=full_bw=1000_rho=none_tm=inf_rep=1_20261023-012246: Full migration (stop, transfer all state, resume), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.80s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active -
+[orch] t= 135.82s run end
+        held   A: 100.0%, B:   0.0%
+        active -
+        next   stop reason: horizon
+[orch] Full migration (stop, transfer all state, resume) @ 1000.0 Mbps rho None: after final move: first output 54.27 s, Sink received None s, bound 53.63 s, continuity-ready 54.27 s, rejoin 54.27 s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind 99.0 dB | ingress peak 0 Mbps
+[orch] === run policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261023-012526: Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  96.36s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound) @ 1000.0 Mbps rho None: after final move: first output 14.99 s, Sink received 14.17 s, bound 14.36 s, continuity-ready 14.99 s, rejoin 19.77 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 46.0 dB | ingress peak 1007 Mbps
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style approximate recomputation of the last W chunks: 1 switchovers, verified None, stop horizon
+[orch] done: 7 runs under results/evaluation/expXB_shk_XB1_dog/
+
+=== 2026-10-23T01:38:42.404801 XB shakedown XB1 bfly: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB1_bfly --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,full,split_wait,precopy_full,precopy_sink,recompute_full,recompute_win --hops 1 --reps 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3676362)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1508401)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 8d180d4
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset +0.03 ms, dry_run=False, commit 8d180d4
+[orch] === run policy=reuse_dyn2_bw=1000_rho=none_tm=inf_rep=1_20261023-015433: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=  81.66s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho None: after final move: first output 0.68 s, Sink received 14.15 s, bound 14.9 s, continuity-ready 15.5 s, rejoin None s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 31.5 dB | ingress peak 1007 Mbps
+[orch] === run policy=full_bw=1000_rho=none_tm=inf_rep=1_20261023-015617: Full migration (stop, transfer all state, resume), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.75s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active -
+[orch] t= 135.66s run end
+        held   A: 100.0%, B:   0.0%
+        active -
+        next   stop reason: horizon
+[orch] Full migration (stop, transfer all state, resume) @ 1000.0 Mbps rho None: after final move: first output 54.36 s, Sink received None s, bound 53.72 s, continuity-ready 54.36 s, rejoin 54.36 s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind 99.0 dB | ingress peak 0 Mbps
+[orch] === run policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261023-015857: Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  96.02s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound) @ 1000.0 Mbps rho None: after final move: first output 14.98 s, Sink received 14.17 s, bound 14.35 s, continuity-ready 14.98 s, rejoin 19.75 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 36.4 dB | ingress peak 1007 Mbps
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style approximate recomputation of the last W chunks: 1 switchovers, verified None, stop horizon
+[orch] done: 7 runs under results/evaluation/expXB_shk_XB1_bfly/
+
+=== 2026-10-23T02:12:17.778560 XB shakedown XB2 dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB2_dog --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,precopy_sink,recompute_full --hops 1 --reps 1 --migration_chunk 120 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3692840)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1519845)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 8d180d4
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset +0.12 ms, dry_run=False, commit 8d180d4
+[orch] === run policy=reuse_dyn2_bw=1000_rho=none_tm=inf_rep=1_20261023-022904: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m inf s, rho None, path A->B ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=  81.47s run end
+        held   A: 100.0%, B: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho None: after final move: first output 0.68 s, Sink received 14.15 s, bound 14.91 s, continuity-ready 15.51 s, rejoin 19.07 s | traffic 1.00x, waste 0.00x, reused 0 MiB | PSNR after bind 48.4 dB | ingress peak 1007 Mbps
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 3 runs under results/evaluation/expXB_shk_XB2_dog/

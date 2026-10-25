@@ -1,0 +1,144 @@
+
+=== 2026-10-23T13:55:07.237161 XB shakedown XB3 dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB3_dog --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,full,split_wait,precopy_sink,recompute_full --hops 3 --reps 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 180 --rhos 1 --ts 14.05 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3935687)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1685243)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 3150335)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 5103)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.00 ms, dry_run=False, commit c64015c
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset -0.03 ms, dry_run=False, commit c64015c
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 554 ms/chunk, mss 1388, clock offset -0.42 ms, dry_run=False, commit c64015c
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 559 ms/chunk, mss 1388, clock offset +0.19 ms, dry_run=False, commit c64015c
+[orch] === run policy=reuse_dyn2_bw=1000_rho=1_tm=14.05_rep=1_20261023-141103: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.20s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=  14.45s move B->C
+        held   A: 100.0%, B:  98.8%, C:   0.0%, D:   0.0%
+        active A->C (4 left, 500 Mbps), B->C (408 left, 500 Mbps)
+        next   A->C 4 fragments; B->C 408 fragments
+[orch] t=  28.43s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  97.8%, D:   0.0%
+        active B->D (208 left, 500 Mbps), C->D (204 left, 500 Mbps)
+        next   B->D 208 fragments; C->D 204 fragments
+[orch] t= 114.67s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 1.0: after final move: first output 0.91 s, Sink received 14.23 s, bound 15.06 s, continuity-ready 15.66 s, rejoin 20.44 s | traffic 3.00x, waste 0.51x, reused 3277 MiB | PSNR after bind 41.2 dB | ingress peak 1007 Mbps
+[orch] === run policy=full_bw=1000_rho=1_tm=14.05_rep=1_20261023-141323: Full migration (stop, transfer all state, resume), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.71s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  14.09s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  28.12s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t= 194.97s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+        next   stop reason: horizon
+[orch] Full migration (stop, transfer all state, resume) @ 1000.0 Mbps rho 1.0: after final move: first output 53.49 s, Sink received None s, bound 52.84 s, continuity-ready 53.49 s, rejoin 53.49 s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind 99.0 dB | ingress peak 0 Mbps
+[orch] === run policy=split_wait_bw=1000_rho=1_tm=14.05_rep=1_20261023-141712: Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound), bw 1000.0 Mbps, T_m 14.05 s, rho 1.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=  14.21s move B->C
+        held   A: 100.0%, B:  99.0%, C:   0.0%, D:   0.0%
+        active B->C (408 left, 500 Mbps), A->C (4 left, 500 Mbps)
+        next   B->C 408 fragments (1632 MiB) already delivered to B, reused; A->C 4 fragments (16 MiB) not yet anywhere else
+[orch] t=  28.24s move C->D (final move)
+        held   A: 100.0%, B: 100.0%, C:  99.5%, D:   0.0%
+        active C->D (410 left, 500 Mbps), B->D (2 left, 500 Mbps)
+        next   C->D 410 fragments (1640 MiB) already delivered to C, reused; B->D 2 fragments (8 MiB) already delivered to B, reused
+[orch] t= 156.02s run end
+        held   A: 100.0%, B: 100.0%, C: 100.0%, D: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound) @ 1000.0 Mbps rho 1.0: after final move: first output 14.91 s, Sink received 14.08 s, bound 14.27 s, continuity-ready 14.91 s, rejoin 19.71 s | traffic 3.00x, waste 0.01x, reused 3277 MiB | PSNR after bind 46.3 dB | ingress peak 1007 Mbps
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 5 runs under results/evaluation/expXB_shk_XB3_dog/
+
+=== 2026-10-23T14:27:03.969783 XB shakedown XB4 dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB4_dog --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,full,split_wait,precopy_sink,recompute_full --hops 3 --reps 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 180 --rhos 2 --ts 14.05 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[agents] C = elves-03.be.ucsc.edu:29900 -> elves-03 (/home/ckim151/StreamDiffusionV2)
+[agents] D = elves-04.be.ucsc.edu:29900 -> elves-04 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3950067)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1695576)
+[orch] launched node C on elves-03.be.ucsc.edu (pid 3159573)
+[orch] launched node D on elves-04.be.ucsc.edu (pid 39151)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit c64015c
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset +0.05 ms, dry_run=False, commit c64015c
+[orch] connecting to node C at elves-03.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node C = elves-03 service 557 ms/chunk, mss 1388, clock offset -0.16 ms, dry_run=False, commit c64015c
+[orch] connecting to node D at elves-04.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node D = elves-04 service 560 ms/chunk, mss 1388, clock offset +0.27 ms, dry_run=False, commit c64015c
+[orch] === run policy=reuse_dyn2_bw=1000_rho=2_tm=7.025_rep=1_20261023-144255: OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B 412 fragments
+[orch] t=   7.34s move B->C
+        held   A: 100.0%, B:  48.5%, C:   0.0%, D:   0.0%
+        active A->C (211 left, 500 Mbps), B->C (201 left, 500 Mbps)
+        next   A->C 211 fragments; B->C 201 fragments
+[orch] t=  14.67s move C->D (final move)
+        held   A: 100.0%, B:  51.0%, C:  48.1%, D:   0.0%
+        active A->D (112 left, 333 Mbps), B->D (151 left, 333 Mbps), C->D (149 left, 333 Mbps)
+        next   A->D 112 fragments; B->D 151 fragments; C->D 149 fragments
+[orch] t= 113.93s run end
+        held   A: 100.0%, B:  51.0%, C:  52.4%, D: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] OTTER event-driven M3-v2 (bottleneck-constrained, uncertainty-aware) @ 1000.0 Mbps rho 2.0: after final move: first output 1.19 s, Sink received 14.5 s, bound 15.07 s, continuity-ready 15.67 s, rejoin 21.07 s | traffic 2.04x, waste 0.18x, reused 1632 MiB | PSNR after bind 42.6 dB | ingress peak 1018 Mbps
+[orch] === run policy=full_bw=1000_rho=2_tm=7.025_rep=1_20261023-144514: Full migration (stop, transfer all state, resume), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.78s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=   7.06s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  14.11s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t= 180.67s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+        next   stop reason: horizon
+[orch] Full migration (stop, transfer all state, resume) @ 1000.0 Mbps rho 2.0: after final move: first output 53.36 s, Sink received None s, bound 52.71 s, continuity-ready 53.36 s, rejoin 53.36 s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind 99.0 dB | ingress peak 0 Mbps
+[orch] === run policy=split_wait_bw=1000_rho=2_tm=7.025_rep=1_20261023-144849: Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound), bw 1000.0 Mbps, T_m 7.025 s, rho 2.0, path A->B->C->D ===
+[orch] t=   0.19s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active A->B (412 left, 1000 Mbps)
+        next   A->B all fragments
+[orch] t=   7.17s move B->C
+        held   A: 100.0%, B:  49.0%, C:   0.0%, D:   0.0%
+        active B->C (202 left, 500 Mbps), A->C (210 left, 500 Mbps)
+        next   B->C 202 fragments (808 MiB) already delivered to B, reused; A->C 210 fragments (840 MiB) not yet anywhere else
+[orch] t=  14.20s move C->D (final move)
+        held   A: 100.0%, B:  49.8%, C:  49.0%, D:   0.0%
+        active C->D (202 left, 333 Mbps), B->D (101 left, 333 Mbps), A->D (109 left, 333 Mbps)
+        next   C->D 202 fragments (808 MiB) already delivered to C, reused; B->D 101 fragments (404 MiB) already delivered to B, reused; A->D 109 fragments (436 MiB) not yet anywhere else
+[orch] t= 141.74s run end
+        held   A: 100.0%, B:  49.8%, C:  50.2%, D: 100.0%
+        active -
+        next   stop reason: horizon
+[orch] Wait-for-Sink ablation (M1 + M2 routing; no generation until the Sink is bound) @ 1000.0 Mbps rho 2.0: after final move: first output 14.93 s, Sink received 14.07 s, bound 14.28 s, continuity-ready 14.93 s, rejoin 19.71 s | traffic 2.00x, waste 0.02x, reused 1624 MiB | PSNR after bind 46.3 dB | ingress peak 1051 Mbps
+[orch] Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover): 1 switchovers, verified True, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 5 runs under results/evaluation/expXB_shk_XB4_dog/

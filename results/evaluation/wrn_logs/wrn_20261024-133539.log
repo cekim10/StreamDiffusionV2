@@ -1,0 +1,14 @@
+
+=== 2026-10-24T13:35:39.231087 XB-N P-full native bandwidth thr=256:rl=10: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXBN_dog --skip_done --validity wrn --bw 0 --policies precopy_full --hops 1 --reps 3 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings precopy_full@thr=256:rl=10 --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 259051)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 2043433)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 28c1af0
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset +0.09 ms, dry_run=False, commit 28c1af0
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] done: 3 runs under results/evaluation/expXBN_dog/

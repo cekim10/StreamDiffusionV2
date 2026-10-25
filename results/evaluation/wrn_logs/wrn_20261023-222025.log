@@ -1,0 +1,52 @@
+
+=== 2026-10-23T22:20:25.427086 XB lossy inputs dog recompute_full: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_lossy_dog --skip_done --validity wrn --bw 1000 --policies recompute_full --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_grid 'lag=1:rl=1:codec=h264_crf23;lag=1:rl=1:codec=h264_crf28' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 4169724)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1859278)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset -0.00 ms, dry_run=False, commit 6b67608
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset -0.10 ms, dry_run=False, commit 6b67608
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_lossy_dog/
+
+=== 2026-10-23T22:41:20.059707 XB lossy inputs dog recompute_win: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_lossy_dog --skip_done --validity wrn --bw 1000 --policies recompute_win --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 400 --max_run_s 900 --xb_horizon 100 --xb_grid 'W=6:codec=h264_crf23;W=6:codec=h264_crf28' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 4178110)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1865779)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 559 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 6b67608
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.11 ms, dry_run=False, commit 6b67608
+[orch] ServerlessLLM-style approximate recomputation of the last W chunks: 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style approximate recomputation of the last W chunks: 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_lossy_dog/
+
+=== 2026-10-23T22:50:34.274863 XB lossy inputs bfly recompute_full: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_lossy_bfly --skip_done --validity wrn --bw 1000 --policies recompute_full --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_grid 'lag=1:rl=1:codec=h264_crf23;lag=1:rl=1:codec=h264_crf28' --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 4182461)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1869204)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 6b67608
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.02 ms, dry_run=False, commit 6b67608
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up): 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_lossy_bfly/
+
+=== 2026-10-23T23:11:29.373797 XB lossy inputs bfly recompute_win: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_lossy_bfly --skip_done --validity wrn --bw 1000 --policies recompute_win --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 400 --max_run_s 900 --xb_horizon 100 --xb_grid 'W=6:codec=h264_crf23;W=6:codec=h264_crf28' --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 4190951)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1875757)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 6b67608
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 554 ms/chunk, mss 1388, clock offset +0.12 ms, dry_run=False, commit 6b67608
+[orch] ServerlessLLM-style approximate recomputation of the last W chunks: 1 switchovers, verified None, stop horizon
+[orch] ServerlessLLM-style approximate recomputation of the last W chunks: 1 switchovers, verified None, stop horizon
+[orch] done: 2 runs under results/evaluation/expXB_lossy_bfly/

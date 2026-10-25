@@ -1,0 +1,50 @@
+
+=== 2026-10-23T12:44:35.264988 XB shakedown XB1 dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB1_dog --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,full,split_wait,precopy_full,precopy_sink,recompute_full,recompute_win --hops 1 --reps 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3911804)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1668932)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 8d180d4
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 556 ms/chunk, mss 1388, clock offset -0.07 ms, dry_run=False, commit 8d180d4
+[orch] skip (valid run exists): policy=reuse_dyn2_bw=1000_rho=none_tm=inf_rep=1_20261023-012102
+[orch] skip (valid run exists): policy=full_bw=1000_rho=none_tm=inf_rep=1_20261023-012246
+[orch] skip (valid run exists): policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261023-012526
+[orch] skip (valid run exists): policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261023-012724
+[orch] skip (valid run exists): policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=16_rl=1_rep=1_20261023-013222
+[orch] skip (valid run exists): policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=1_20261023-013411
+[orch] skip (valid run exists): policy=recompute_win_bw=1000_rho=none_tm=inf_W=6_rep=1_20261023-013613
+[orch] done: 0 runs under results/evaluation/expXB_shk_XB1_dog/
+
+=== 2026-10-23T13:01:32.136172 XB shakedown XB1 bfly: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB1_bfly --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,full,split_wait,precopy_full,precopy_sink,recompute_full,recompute_win --hops 1 --reps 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4 --prompt_file_path data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3918245)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1673513)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 561 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 8d180d4
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 557 ms/chunk, mss 1388, clock offset -0.11 ms, dry_run=False, commit 8d180d4
+[orch] skip (valid run exists): policy=reuse_dyn2_bw=1000_rho=none_tm=inf_rep=1_20261023-015433
+[orch] skip (valid run exists): policy=full_bw=1000_rho=none_tm=inf_rep=1_20261023-015617
+[orch] skip (valid run exists): policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261023-015857
+[orch] skip (valid run exists): policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261023-020054
+[orch] skip (valid run exists): policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=16_rl=1_rep=1_20261023-020556
+[orch] skip (valid run exists): policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=1_20261023-020747
+[orch] skip (valid run exists): policy=recompute_win_bw=1000_rho=none_tm=inf_W=6_rep=1_20261023-020948
+[orch] done: 0 runs under results/evaluation/expXB_shk_XB1_bfly/
+
+=== 2026-10-23T13:18:24.023008 XB shakedown XB2 dog: /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_shk_XB2_dog --skip_done --validity wrn --bw 1000 --policies reuse_dyn2,precopy_sink,recompute_full --hops 1 --reps 1 --migration_chunk 120 --post_chunks 1500 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --tm 1e9 --dyn_probe 4 --xb_policy_settings 'precopy_full@thr=256:rl=10;precopy_sink@thr=16:rl=1;recompute_full@lag=1:rl=1;recompute_win@W=6' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3924100)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1677629)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 559 ms/chunk, mss 1388, clock offset +0.01 ms, dry_run=False, commit 8d180d4
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.11 ms, dry_run=False, commit 8d180d4
+[orch] skip (valid run exists): policy=reuse_dyn2_bw=1000_rho=none_tm=inf_rep=1_20261023-022904
+[orch] skip (valid run exists): policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=16_rl=1_rep=1_20261023-023138
+[orch] skip (valid run exists): policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=1_20261023-023417
+[orch] done: 0 runs under results/evaluation/expXB_shk_XB2_dog/

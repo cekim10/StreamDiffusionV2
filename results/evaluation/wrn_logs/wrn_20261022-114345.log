@@ -1,0 +1,33 @@
+
+=== 2026-10-22T11:44:45.781190 XB calibration precopy_full (9 settings): /home/ckim151/StreamDiffusionV2/.venv/bin/python tools/eval/mobility_orchestrate.py --experiment expXB_cal --skip_done --validity wrn --bw 1000 --policies precopy_full --hops 1 --tm 1e9 --reps 1 --rep_start 1 --migration_chunk 30 --post_chunks 1500 --max_run_s 1800 --xb_horizon 100 --xb_grid 'thr=16:rl=3;thr=16:rl=6;thr=16:rl=10;thr=64:rl=3;thr=64:rl=6;thr=64:rl=10;thr=256:rl=3;thr=256:rl=6;thr=256:rl=10' --launch '--node_extra=--video_path examples/original.mp4 --prompt_file_path examples/prompt.txt --seed 0'
+[agents] A = elves-01.be.ucsc.edu:29900 -> elves-01 (/home/ckim151/StreamDiffusionV2)
+[agents] B = elves-02.be.ucsc.edu:29900 -> elves-02 (/home/ckim151/StreamDiffusionV2)
+[orch] launched node A on elves-01.be.ucsc.edu (pid 3283434)
+[orch] launched node B on elves-02.be.ucsc.edu (pid 1259010)
+[orch] connecting to node A at elves-01.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node A = elves-01 service 560 ms/chunk, mss 1388, clock offset -0.00 ms, dry_run=False, commit 4d0d4ed
+[orch] connecting to node B at elves-02.be.ucsc.edu:29811 (waits for model load + baseline) ...
+[orch] node B = elves-02 service 555 ms/chunk, mss 1388, clock offset +0.16 ms, dry_run=False, commit 4d0d4ed
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+[orch] Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover): 1 switchovers, verified True, stop horizon
+Traceback (most recent call last):
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/mobility_orchestrate.py", line 1933, in <module>
+    main()
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/mobility_orchestrate.py", line 1924, in main
+    results.append(r.execute())
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/mobility_orchestrate.py", line 921, in execute
+    return self.execute_xb()
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/mobility_orchestrate.py", line 1236, in execute_xb
+    self.drain(0.05)
+  File "/home/ckim151/StreamDiffusionV2/tools/eval/mobility_orchestrate.py", line 807, in drain
+    m = self.o.events.get(timeout=max(0.0, t_end - time.time()) if budget_s > 0 else 0.0)
+  File "/home/ckim151/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/queue.py", line 180, in get
+    self.not_empty.wait(remaining)
+  File "/home/ckim151/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/threading.py", line 324, in wait
+    gotit = waiter.acquire(True, timeout)
+KeyboardInterrupt
