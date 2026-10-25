@@ -168,8 +168,9 @@ the TTFO numbers here are destination-side bounds, not migration TTFO (section 9
 
 **Disposition (2026-10-25).** The first run of `vd3_overlap.py` in Phase T ended with an AttributeError before any
 trial (log on host D: `GpuRuntime.step` reads the baseline reference, which the script never built); fixed in 21532c3,
-re-run with `run_vc.py vd3 --phase overlap`. If the overlap cannot be validated by checks (a)-(c), the report gives the
-serial costs only and marks overlap as an **unvalidated optional optimization**. Emulator timings are destination-side
+re-run with `run_vc.py vd3 --phase overlap` (`vd3_overlap.json`): (a) digests equal in 10 / 10 trials; (b) generation time
+1.95 x alone (fail); (c) first output 1.058 vs 1.054 s serial (fail). Overlap is therefore **not validated**: the report
+gives the serial costs and marks overlap as an **unvalidated optional optimization**. Emulator timings are destination-side
 GPU times; they are never extrapolated to testbed TTFO (section 9 measures that end to end).
 
 ## 7. If VD-3 fails (fixed now)
@@ -242,7 +243,7 @@ reps. Frozen results stay as recorded; the variant is reported beside them.
 
 - Phase T review: thresholds and rules of sections 3-4 (set A primary; B, C sensitivity; fixed engineering limits;
   phase-level discrimination with P2a / P2b; identity conclusion; P3 no-harm).
-- **Open for the final review:** the P3 reading of section 4 (relative to frozen M1); the overlap disposition
-  (`phaseT_review.md`); then the freeze and Phase C.
+- **Open for the final review:** the P3 reading of section 4 (relative to frozen M1); the overlap disposition (section 6:
+  not validated, serial costs); then the freeze and Phase C.
 - D2b: the audi seed-0 OT-1 cell keeps its copied schedule (counterfactual stress condition, provenance documented);
   the verified reproduction's schedule (move 34, bind 58) is recorded for a sensitivity analysis.

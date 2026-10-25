@@ -53,11 +53,22 @@ inspection veto; refusal without thresholds; verdicts withheld without a recorde
 
 ## 3. Overlap disposition
 
-The missing `vd3_overlap.json`: the log on host D shows an AttributeError before any trial (`GpuRuntime.step` reads
-the baseline reference `self.base`, which the overlap script never built; the fake runtime has no such dependency, so
-the dry test missed it). Fixed in 21532c3; to be re-run with `run_vc.py vd3 --phase overlap`. If checks (a)-(c) do
-not all hold, the report gives serial costs only and marks overlap as an unvalidated optional optimization. Emulator
-timings are not extrapolated to testbed TTFO.
+Cause of the missing output (log on host D): an AttributeError before any trial (`GpuRuntime.step` reads the baseline
+reference `self.base`, which the overlap script never built; the fake runtime has no such dependency, so the dry test
+missed it). Fixed in 21532c3 and re-run (`vd3_overlap.json`, dog seed 0 OT-1, 5 repeats, commit 21532c3):
+
+| order | first output (median) | generation (DiT) GPU time (median) | DR-2 decode |
+|---|---|---|---|
+| serial | 1.054 s | 268 ms | 0.518 s |
+| overlapped (second CUDA stream) | 1.058 s | 523 ms | concurrent |
+
+- (a) output digests equal in all 10 trials: **pass** (the event ordering is correct);
+- (b) generation time under the concurrent decode 1.95 x its time alone: **fail** (limit 1.10);
+- (c) first output earlier than serial: **fail** (1.058 vs 1.054 s).
+
+**Disposition: overlap is not validated.** The report uses the serial reconstruction costs, and overlap is an
+unvalidated optional optimization (on this GPU the two kernels' work did not run faster concurrently). These are
+destination-side emulator times; they are not extrapolated to testbed TTFO.
 
 ## 4. Audi provenance (for completeness)
 
@@ -67,5 +78,5 @@ TTFO 0.677 -> 0.682 s), the audi seed-0 row; the counts the paper cites unchange
 
 ## 5. Before Phase C
 
-Confirm the P3 reading; re-run the overlap measurement (or accept the serial-cost disposition); freeze
+Confirm the P3 reading and the overlap disposition (serial costs); freeze
 (`expVD3_freeze.md`, with `vd3_thresholds.json` committed).
