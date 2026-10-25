@@ -46,6 +46,52 @@ def vd2_conditions(ot: dict) -> list[dict]:
     return out
 
 
+VD3_CELLS = [("TSin", 0, "in", False, "last"), ("DR2", 2, None, False, "last"), ("DR2+TSin", 2, "in", False, "last"),
+             ("TSinKC", 0, "in", True, "last"), ("DR2stale", 2, None, False, "stale"), ("DR2noise", 2, None, False, "noise")]
+
+
+def vd3_conditions(ot: dict) -> list[dict]:
+    """Experiment VD-3 (osdi/expVD3/preregistration.md): DR-2 + TS-in confirmation with components, TSin-KC (the
+    prepare's own decoder cache kept) and the stale / noise decoder-cache controls."""
+    x = ot["id"].split("-")[1]
+    return [{**ot, "id": f"VD3{x}-{name}", "kind": "vd3", "dr": dr, "ts": ts, "keep_cache": kc, "dr_source": src, "vd3_of": ot["id"],
+             "label": f"VD-3 {name} at the {ot['id']} schedule (counterfactual reconstruction at the destination)"} for name, dr, ts, kc, src in VD3_CELLS]
+
+
+def unit_sched(sched: dict, unit_name: str) -> dict:
+    """The schedule of a unit directory name '<input>_s<seed>' (seed 0 units are the 'inputs' entries)."""
+    if unit_name in sched.get("units", {}):
+        return sched["units"][unit_name]
+    return sched["inputs"][unit_name.rsplit("_s", 1)[0]]
+
+
+def seed1_units(out: dict) -> dict:
+    """VD-3 seed-1 units: OT-1 from the frozen W2 seed-1 reuse_dyn run of each input, OT-L copied from dog's seed-0
+    RD-X schedule (counterfactual stress condition), REF, and the VD-3 conditions."""
+    dog_rdx = _first_valid("expRDX_dog/policy=split_*_rep=1_*")
+    units = {}
+    for inp in INPUTS:
+        w2 = _first_valid(f"expW_W2_{inp}_s1/policy=reuse_dyn_*")
+        s = json.load(open(w2 / "summary.json"))
+        m1, b1 = int(s["moves"][0]["call"]), int(s["final"]["bind_call"])
+        tl1 = _timeline(w2); cad1 = _cadence(tl1, b1)
+        ot1 = _cond("OT-1", inp, "ot", [m1], [b1], b1 + HORIZON - 1, "OTTER single move 1 Gbps at seed 1 (W2 s1 realized; no M3 behavior evaluated)",
+                    [_rel(w2)], {"kind": "realized", "t_by_call": tl1, "cadence_s": cad1, "bind_rel_s": s["final"]["sink_bind_rel_s"], "move_t": [0.0]})
+        s2 = json.load(open(dog_rdx / "summary.json"))
+        mL, bL = int(s2["moves"][0]["call"]), int(s2["final"]["bind_call"])
+        tlL = _timeline(dog_rdx)
+        otL = _cond("OT-L", inp, "ot", [mL], [bL], bL + HORIZON - 1, "counterfactual replay at seed 1 under a copied schedule (dog's seed-0 RD-X run); stress condition",
+                    [_rel(dog_rdx)], {"kind": "copied", "t_by_call": tlL, "cadence_s": _cadence(tlL, bL), "bind_rel_s": s2["final"]["sink_bind_rel_s"], "move_t": [0.0]}, counterfactual=True)
+        conds = [ot1, otL] + vd3_conditions(ot1) + vd3_conditions(otL)
+        for c in conds:
+            c["seed"] = 1
+        end_all = max(c["end"] for c in conds)
+        units[f"{inp}_s1"] = {"N": end_all + 1, "seed": 1, "ref": {"frames_from": min(c["frames_from"] for c in conds), "frames_to": end_all,
+                                                                   "timeline": {"kind": "derived", "rule": "uninterrupted: one chunk per OT-1 post-bind cadence", "cadence_s": cad1}},
+                              "conditions": conds}
+    return units
+
+
 def vd_conditions(ot: dict) -> list[dict]:
     """Experiment VD: the 2 x 2 x 2 factorial of what survives the M1 reset at the OT schedule `ot`, without the
     (zero, reset, reset) cell (= `ot` itself), plus (zero, encoder + decoder kept, reset). The emulator keeps the state;
@@ -182,22 +228,24 @@ def build() -> dict:
         if inp in VD_INPUTS:
             conds += vd_conditions(conds[0]) + vd_conditions(conds[1])   # after the seven VC conditions (VD-D3: VC first)
             conds += vd2_conditions(conds[0]) + vd2_conditions(conds[1])   # VD-2 (skipped by vc_emulate unless requested)
+        conds += vd3_conditions(conds[0]) + vd3_conditions(conds[1])   # VD-3 on every input (skipped unless requested)
         end_all = max(c["end"] for c in conds)
         cad_ref = conds[0]["timeline"]["cadence_s"]
         out["inputs"][inp] = {"N": end_all + 1, "ref": {"frames_from": min(c["frames_from"] for c in conds), "frames_to": end_all,
                                                         "timeline": {"kind": "derived", "rule": "uninterrupted: one chunk per OT-1 post-bind cadence", "cadence_s": cad_ref}},
                               "conditions": conds}
+    out["units"] = seed1_units(out)
     return out
 
 
 def check(out: dict) -> list[str]:
     """Every extracted schedule against its source run's recorded moves and binds (as test_rd.py does for RD Phase 0)."""
     bad = []
-    for inp, u in out["inputs"].items():
+    for inp, u in list(out["inputs"].items()) + list(out.get("units", {}).items()):
         for c in u["conditions"]:
             s = json.load(open(ROOT / c["sources"][0] / "summary.json"))
             moves = [int(m["call"]) for m in s["moves"]]
-            if c["kind"] in ("ot", "vd", "vd2"):
+            if c["kind"] in ("ot", "vd", "vd2", "vd3"):
                 if c["resets"] != moves or c["binds"] != [int(s["final"]["bind_call"])]:
                     bad.append(f"{inp} {c['id']}: {c['resets']} / {c['binds']} vs run moves {moves} bind {s['final']['bind_call']}")
             elif c["kind"] == "wfs":
@@ -215,7 +263,7 @@ def main():
     bad = check(out)
     p = ROOT / "results/evaluation/osdi/expVC/vc_schedules.json"
     p.write_text(json.dumps(out, indent=1))
-    for inp, u in out["inputs"].items():
+    for inp, u in list(out["inputs"].items()) + list(out["units"].items()):
         print(f"{inp}: N {u['N']}")
         for c in u["conditions"]:
             tl = c["timeline"]

@@ -1,108 +1,140 @@
-# Experiment VD-3 - confirmation of local reconstruction (DR-2 + TS-in): preregistration DRAFT (2026-10-24)
+# Experiment VD-3 - GO / NO-GO for a continuity-preserving M1 variant (DR-2 + TS-in): preregistration REVISED DRAFT 3 (2026-10-24)
 
-Status: **DRAFT for review. Not frozen; nothing implemented or run.** Follow-up decided after VD-2 (2026-10-24
-review): VD-2's frozen verdicts stay NOT SUPPORTED as recorded; the combination this draft tests was chosen after
-seeing VD-2's cells, so VD-3 is an **independent confirmation** on data VD-2 did not use. Emulator only, one GPU; M1,
-M2 and M3-v2 stay frozen; no frozen result changes. RP-1, TS-out and the approximate Sink are out of scope (review
-decisions).
+Status: **REVISED DRAFT 3 for review. Not frozen. No execution until the thresholds and the GO / NO-GO rules are
+reviewed and frozen.** Emulator only, one GPU (host D after the isolation checks); M1, M2 and M3-v2 stay frozen; no
+frozen result changes. Emulator findings never become end-to-end migration claims (section 9).
 
-**Question (fixed by the review):** can reconstructing the decoder from a small latent history and generating a
-temporary Sink from the current input preserve the pre-migration video's continuity without migrating the full
-temporal state, and at what reconstruction latency?
+**Primary research question.** Can DR-2 + TS-in preserve pre-migration visual identity and temporal consistency
+throughout the migration, including the Sink-less interval and the exact Sink binding?
 
-**Design principle under test (hypothesis, named only if VD-3 supports it):** continuity-critical state can be
-reconstructed locally rather than migrated in full.
+VD-3 is a GO / NO-GO experiment for the mechanism, not an optimization study. GO requires **restoration** of
+continuity to the uninterrupted REF's own range in every critical phase on every confirmation cell; a percentage
+reduction of drift (improvement) is reported but never counts as preservation.
 
-## 1. What VD-2 showed and what VD-3 must not reuse
+## 1. Candidate and what VD-2 showed
 
-VD-2 (dog, butterfly; OT-1, OT-L; seed 0): DR-2 cut the reset jump to 0.39-0.54 x with a reconstructed cache far from
-the source's (relative error 0.5-1.6); TS-in restored 71-98 % of the Sink-less content gap at zero bytes and kept the
-exact bind; TS-out was no better and drifted in color; RP-1 forfeited reference recovery. DR-2 + TS-in was never run
-as a combination. Those eight input x schedule cells are **replication cells** here (their data was seen). The
-**confirmation set** is new: train and audi-snow-trail at seed 0 (OT-1, OT-L), and all four inputs at seed 1 (OT-1,
-from the frozen W2 seed-1 runs: move 34, bind 58-59). Verdicts are decided on the confirmation set; replication cells
-are reported next to them.
+- **DR-2**: before the destination's first call, decode the source's last 2 latent frames (0.4 MB on the fast path)
+  through the empty VAE decoder; VD-2: reset jump 0.39-0.54 x frozen M1.
+- **TS-in**: the model's own `prepare` on [last input frame, current chunk] fills 2 of the 3 Sink slots with a
+  temporary Sink built from the current input (zero bytes); VD-2: 71-98 % of the Sink-less content gap closed,
+  exact bind kept, TS-out no better and worse in color, RP-1 forfeits reference recovery.
+- The combination was never run. VD-2's eight cells (dog, butterfly; OT-1, OT-L; seed 0) were seen while choosing
+  it, so they are **replication cells**; the GO / NO-GO is decided on cells VD-2 did not use.
 
-## 2. Units and conditions
+## 2. Units, schedules, conditions
 
-| unit (input x seed) | schedules | source of the schedule | control (frozen M1) |
+| set | units | schedules | schedule source | control (frozen M1) |
+|---|---|---|---|---|
+| replication | dog, butterfly, seed 0 | OT-1 (1 Gbps, 24-call window), OT-L (320 Mbps, 74-call window) | VC-1 | VC-1 runs (exist) |
+| **confirmation** | train, audi-snow-trail, seed 0 | OT-1, OT-L (train OT-L: copied schedule, counterfactual) | VC-1 | VC-1 runs (exist) |
+| **confirmation** | dog, butterfly, train, audi, **seed 1** | OT-1 (realized: `expW_W2_<input>_s1` reuse_dyn, move 34, bind 58 / 59); **OT-L** (stress: dog's seed-0 RD-X schedule copied, reset 80, bind 154; counterfactual) | new | **new** REF baseline and frozen-M1 OT-1 / OT-L runs at seed 1; the OT-1 replay is checked call by call against the real W2 seed-1 run |
+
+Confirmation cells: 4 (seed 0) + 8 (seed 1) = **12**. If the GPU budget forces a cut, seed-1 OT-L is dropped first;
+the confirmation inputs are never cut.
+
+Conditions per cell (emulator kind `vd3`; frozen M1 is the control):
+
+| id | mechanism | role |
+|---|---|---|
+| TSin | temporary Sink from the current input; decoder cache empty as in frozen M1 | component alone (negative control for DR-2's contribution) |
+| DR2 | decoder cache from the source's last 2 latent frames | component alone |
+| **DR2+TSin** | both | **the candidate; the GO / NO-GO is decided on it** |
+| TSinKC | TS-in keeping the decoder cache its own prepare produced (zero bytes, no extra compute) | cheapest nonempty cache; decides the implementation if the noise control shows cache content does not matter |
+| DR2stale | DR-2 with the source's latent frames from 16 calls before the move (real but wrong history) | negative control: temporal information vs any warmed cache |
+| DR2noise | DR-2 with seeded Gaussian latent frames | negative control: noninformative initialization |
+
+16 cells x 6 conditions = 96 emulations, plus 8 seed-1 controls and 4 seed-1 REF baselines: about 6 h on host D.
+
+## 3. The three critical phases and their metrics (VC definitions; all REF-relative)
+
+| phase | window | metrics | REF-relative reference |
 |---|---|---|---|
-| dog, butterfly s0 | OT-1, OT-L | VC-1 (replication) | VC-1's runs (exist) |
-| train, audi s0 | OT-1, OT-L (train OT-L: copied schedule, counterfactual) | VC-1 (confirmation) | VC-1's runs (exist) |
-| dog, butterfly, train, audi **s1** | OT-1 | `expW_W2_<input>_s1` `reuse_dyn` (move 34, bind 58 / 59) (confirmation) | **new**: REF baseline and frozen-M1 OT-1 run at seed 1 |
+| **P1 migration boundary** | the reset call (first transition into it) | V1: frame difference across the boundary / median of the 8 preceding transitions | REF's P99 of V1 over its evaluated span (natural variation) |
+| **P2 Sink-less interval** | whole window (reset .. bind - 1); **early** (first 8 calls); **late** (last 8 calls before the bind: late-window drift) | DINO content similarity to the 16 pre-move calls and to REF at the same calls (DINO ViT-B/16; DINOv2 sensitivity); CLIP prompt alignment; color difference dE (CIEDE2000, window mean Lab vs REF and vs the pre-move calls); warp-error ratio E_O / E_R and motion ratio | REF's P5-P95 band of 10-call-window statistics over the same span (content, color, warp); the band is computed from REF alone |
+| **P3 exact Sink binding and recovery** | the bind call (bind discontinuity V1); post-bind 20 calls; last 10 calls | V1 at the bind; DINO difference to REF; dE to REF; E_O / E_R; PSNR trajectory (first call >= 35 dB, terminal median) | REF's P99 (bind V1); REF's band (post-bind content and color); frozen M1's rejoin call (where it rejoins) |
+| **cost** | the destination before its first call | serial reconstruction time per mechanism and per combination (measured as a whole); bytes added; TTFO increase bound (serial) and the overlap measurement (section 6) | - |
 
-Conditions per unit and schedule (emulator, `vc_emulate.py` kind `vd3`):
+Two outcome columns are reported for every continuity metric and never merged:
+- **improvement**: the fraction of the frozen-M1-to-REF gap closed (or the ratio to frozen M1 for V1);
+- **restoration**: whether the cell's statistic lies inside REF's own range (band or P99).
 
-| id | mechanism | why it is here |
+## 4. GO / NO-GO rules (fixed at the freeze; applied to DR2+TSin on every confirmation cell; thresholds under review)
+
+GO requires **all** of R1-R5 on **all 12 confirmation cells** (replication cells reported next to them, not judged),
+**and** the visual inspection of section 5 finds no identity, appearance, color or temporal break.
+
+| rule | phase | restoration requirement (GO) | improvement (reported, never sufficient) |
+|---|---|---|---|
+| R1 | P1 boundary | V1(reset) <= REF's P99 | V1 ratio to frozen M1 (<= 0.5 expected) |
+| R2 | P2 whole window | DINO similarity to the pre-move calls inside REF's P5-P95 band; dE to REF <= REF's P95 of its own window color variation; E_O / E_R <= 1.10 | fraction of the DINO gap closed (>= 0.5 expected) |
+| R3 | P2 late window | the late-window DINO similarity inside REF's band and not lower than the early window by more than REF's band width (no late-window drift) | - |
+| R4 | P3 bind and recovery | V1(bind) <= REF's P99; post-bind-20 and last-10 DINO difference to REF inside REF's band width; post-bind dE inside REF's band; where frozen M1 rejoins (>= 35 dB), the candidate rejoins within 5 calls of it; where it does not (butterfly), terminal PSNR within 1 dB of frozen M1's | - |
+| R5 | cost | serial reconstruction time <= 1.5 s and bytes <= 1 MB (DR2+TSin); the 0.3 s preferred target reported | - |
+
+Verdict levels: **GO** (R1-R5 on 12 / 12 and the inspection clean); **NO-GO** otherwise. A NO-GO is reported with the
+failing phase per cell (section 7). No partial GO.
+
+Component and control hypotheses (reported with effect sizes; they shape the implementation and the explanation, not
+the GO):
+
+| id | statement | rule |
 |---|---|---|
-| TSin | temporary Sink from the current input (VD-2's TS-in; decoder cache zero as in frozen M1) | component alone |
-| DR2 | decoder cache from the source's last 2 latent frames (0.4 MB) | component alone |
-| **DR2+TSin** | both | the candidate |
-| TSin-KC | TS-in, **keeping the decoder cache that its own prepare produced** (the prepare decodes the current input's latents; frozen M1's restore zeroes that cache). Zero bytes, no extra compute over TS-in | a reconstruction that shares TS-in's compute: if it matches DR-2 + TS-in, the 0.52 s decode is unnecessary |
-| DR2-stale | DR-2 with the source's latent frames from 16 calls before the move (a real but wrong history) | review request: is it the correct history or any warmed cache that matters? |
-| DR2-noise | DR-2 with Gaussian latent frames | the "any nonzero cache" control |
+| C1 | the combination keeps each component's benefit | V1(DR2+TSin) <= 1.1 x V1(DR2); DINO(DR2+TSin) >= DINO(TSin) - 0.01, every confirmation cell |
+| C2 | TS-in alone is not enough for P1 | V1(TSin) > REF's P99 on the majority of cells (otherwise DR-2 is unnecessary) |
+| C3 | temporal information, not initialization, explains DR-2 | V1(DR2) < V1(DR2stale) and V1(DR2) < V1(DR2noise) on every confirmation cell. If not: a warmed cache of any content removes the jump; the implementation becomes TSinKC if it satisfies R1-R5 |
+| C4 | TSinKC vs DR2+TSin | descriptive: V1, DINO, cost per cell |
 
-12 unit x schedule combinations x 6 conditions = 72 emulations, plus 4 seed-1 controls and 4 seed-1 REF baselines:
-about 4.5 h on one GPU (D). Frames stored as in VC.
+## 5. Visual evidence (required before the verdict)
 
-## 3. Metrics (VC / VD-2 definitions, unchanged)
+For the repository inputs (dog, train; both seeds; OT-1 and OT-L) the emulator's stored frames are exported as
+synchronized clips: REF, frozen M1, TS-in, DR-2 and DR-2+TS-in, side by side and individually, H.264, with the
+migration call and the exact-bind call marked by an overlay and a one-frame colored border (`vc_export_clips.py`).
+butterfly and audi-snow-trail clips are exported for internal inspection only (LOVEU frames are never redistributed
+and never appear in the paper).
 
-Per cell: V1 at the reset and at the bind; Sink-less window DINO similarity to the pre-move calls (with REF's band
-for the descriptive in-band criterion), CLIP, dE, E_O / E_R; first-4 E; post-bind-20 DINO difference to REF and dE;
-PSNR trajectory (first >= 35 dB, terminal); serial reconstruction cost (per mechanism and per combination as a whole),
-bytes added; DR cache fidelity per layer (DR2, DR2-stale, DR2-noise).
+Inspection (by the reviewer, recorded in `vd3_inspection.md` before the aggregator's verdict is read): per clip,
+object identity kept / changed, appearance kept / changed, color shift visible / not, temporal discontinuity at the
+move, inside the window, at the bind. A visible break in any confirmation clip vetoes GO even if R1-R5 pass; no
+visual impression upgrades a NO-GO. The paper never claims continuity preservation from DINO / CLIP alone.
 
-**Latency trade-off (review request):** the serial cost is an upper bound on the TTFO-local increase. VD-3 also
-measures, on one unit, whether the two reconstructions can share or overlap work: (i) TSin-KC's cost vs TS-in's,
-(ii) the DR-2 decode launched on a second CUDA stream concurrently with the first generation call (the generation's
-wall time with and without it, 5 repeats). This is an engineering measurement, reported with the verdicts; the
-emulator does not model the network.
+## 6. Reconstruction overhead and TTFO (D3)
 
-## 4. Hypotheses (confirmatory on the confirmation set: train, audi at s0 and all four inputs at s1; every unit and schedule must agree; thresholds proposed, fixed at the freeze; effect sizes first)
+Serial costs are measured per cell. On one unit (dog seed 0, OT-1, DR2+TSin; 5 repeats) the overlap of the DR-2
+decode with the first generation call is measured on a second CUDA stream (`vd3_overlap.py`): (a) the first call's
+output digest equals the serial order's; (b) the generation call's wall time under the concurrent decode is within
+10 % of its wall time alone; (c) the time to the first output is lower than in the serial order. Overlap counts as a
+latency optimization only if (a)-(c) hold; otherwise the serial cost stands. The emulator does not model the network;
+the TTFO numbers here are destination-side bounds, not migration TTFO (section 9).
 
-| id | statement | success rule |
-|---|---|---|
-| VD3-H1 | DR-2 + TS-in halves the reset jump | V1(reset) <= 0.5 x frozen M1's |
-| VD3-H2 | DR-2 + TS-in restores the Sink-less content | window DINO closes >= 50 % of the gap to REF, and dE to REF not higher than frozen M1's. Descriptive: in REF's band (preservation), reported per cell |
-| VD3-H3 | the combination keeps each component's benefit | V1(DR2+TSin) <= 1.1 x V1(DR2), and DINO(DR2+TSin) >= DINO(TSin) - 0.01 |
-| VD3-H4 | the exact bind and the post-bind stream are kept | where frozen M1 rejoins: first call >= 35 dB within 5 calls of frozen M1's; where it does not (butterfly): terminal PSNR within 1 dB; bind V1 <= 2 x; post-bind-20 DINO not below frozen M1's by more than REF's band width; post-bind-20 dE <= frozen M1's + 0.5 |
-| VD3-H5 | the cost is bounded | serial cost of DR-2 + TS-in <= 1.5 s; bytes <= 1 MB. Reported: the 0.3 s preferred target, the overlap measurement (section 3), and TSin-KC's cost |
-| VD3-H6 | the correct latent history matters (mechanism) | V1(DR2) < V1(DR2-stale) and V1(DR2) < V1(DR2-noise) on every confirmation cell. If not, the paper states that a warmed cache of any content removes the jump, and DR-2 is replaced by the cheapest such cache (TSin-KC) |
-| VD3-H7 (descriptive) | TSin-KC vs DR-2 + TS-in | reported per cell: V1, DINO, cost; no rule |
+## 7. If VD-3 fails (fixed now)
 
-Generality statement: each hypothesis is reported as "supported on k of 6 confirmation combinations (2 inputs x 2
-schedules at s0, 4 inputs at s1)", with the replication cells shown next to them; claims are limited to these inputs,
-two seeds, one model and the emulated schedules.
+- The report names, per failing cell, the phase that violates continuity (P1, P2 early / late, P3) and the metric.
+- P1 fails (boundary): decoder-side state is insufficient; the next question is additional source-derived decoder
+  state (more latent history did not help in DR-4; the stale / noise controls say whether content matters).
+- P2 late-window drift fails while early passes: the temporary Sink does not hold identity over a long window; the
+  next question is **source-derived temporal state** for the Sink (an approximate or partial Sink), reopened only
+  then.
+- P3 fails: the temporary Sink interferes with the exact bind; TS-in is dropped and only DR-2 proceeds.
+- R5 fails: overlap engineering before any further claim.
+- **No continuity-preserving M1 is claimed until a redesign passes a new GO / NO-GO.**
 
-**Mapping to the next step (fixed now):**
-- H1-H5 supported: implement the variant on the node (M1-R: fast path + 2 latent frames; destination prepare and
-  decode before the first call, overlapped if section 3 shows it works) and preregister a testbed experiment
-  measuring TTFO-local, delivery gap, bytes, GPU overhead, bind pause and the VC metrics against frozen M1 + M2 +
-  M3-v2, with frozen results kept and the variant reported beside them.
-- H6 not supported and TSin-KC within H1-H4: the variant is TS-in with its cache kept (zero bytes).
-- H2 fails on the confirmation set: the temporary Sink does not generalize; reported, and the approximate Sink
-  question reopens.
-- H5 fails: overlap engineering before any testbed experiment.
+## 8. Validity
 
-## 5. Validity
+G3 on every stream; seed-1 REF baselines and frozen-M1 controls generated by the emulator, with the OT-1 control
+checked call by call against the real W2 seed-1 run; with every flag off, the dog RD-X replay stays identical;
+TSinKC's kept cache verified equal to its prepare's (digest); DR2stale's latent calls and DR2noise's seed recorded;
+the temporary Sink verified to occupy exactly the two slots prepare fills and to be fully overwritten at the bind.
 
-G3 on every stream; the seed-1 REF baselines and controls generated by the same emulator with G1-style checks against
-the W2 seed-1 runs (frozen-M1 OT-1 replay vs the real run, call by call); with every flag off the dog RD-X replay
-stays identical; DR2-stale's and DR2-noise's latent sources are recorded; TSin-KC's kept cache is verified to be the
-prepare's (digest).
+## 9. If VD-3 passes: the end-to-end validation it proposes (separate preregistration)
 
-## 6. Implementation notes (emulator; `vc_schedules.py` seed-1 units from `expW_W2_*_s1`, `vc_emulate.py` kind `vd3`)
+Implement the variant on the node (M1-R: fast path + 2 latent frames; destination prepare and decode before the first
+call, overlapped only if section 6 validates it) and preregister a testbed experiment against frozen M1 + M2 + M3-v2:
+actual TTFO-local, delivery gap, measured bytes, destination GPU overhead, bind pause, and the VC continuity metrics
+with the same GO / NO-GO structure, on XB1-style single moves and XB4-style repeated mobility, dog and butterfly, 3
+reps. Frozen results stay as recorded; the variant is reported beside them.
 
-TSin-KC: at the reset, run TS-in's prepare, save its sink slots **and** its VAE decoder cache tensors, restore the
-fast path (which zeroes the caches), write both back. DR2-stale: capture the decode inputs of calls move-17 and
-move-16 (the latent deque keeps the last 4 calls only, so the stale pair is captured separately when the condition is
-VD3). DR2-noise: `torch.randn` with the latent shape, seeded. Overlap test: a second CUDA stream for the decode while
-the first `runner.step` runs; wall times with `cuda.synchronize`.
+## 10. Open items before the freeze
 
-## 7. Open decisions
-
-- **VD3-D1** thresholds of H1-H6 as proposed.
-- **VD3-D2** the confirmation set (train, audi s0; all four at s1) and whether OT-L at s1 is added (no RD-X run exists
-  at s1; it would be a copied schedule).
-- **VD3-D3** the overlap measurement in scope (section 3) or deferred to the testbed variant.
-- **VD3-D4** host D; about 4.5 h.
+- The numerical thresholds in sections 4 and 6 (R1-R5 and the 10 % contention bound), under review.
+- Whether seed-1 OT-L is kept in the confirmation set (budget).
+- The inspection form (section 5) and who inspects.

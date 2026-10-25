@@ -82,3 +82,19 @@ trajectory under a stale Sink; placement throughput under generation load on the
 
 No mechanism code (M1 / M2 / M3-v2, `tools/proto_handoff.py`, `tools/state_ablation.py`, `models/`) and no
 experiment configuration is changed by these commits beyond the flag at the two call sites.
+
+## 6. Outcome of the reproduction and the paper decision (approved 2026-10-24)
+
+`expD/expD_repro_reading.md`: the corrected code ran the specified scenario (source 15-16 chunks before the move,
+handoff at call 46-47, event order 12 / 12, boundary wait 0.27-0.28 s); only move-relative latencies changed, by
++0.24 to +0.36 s; placement fraction, bytes and rejoin were identical; G4 SUPPORTED and G5 NOT SUPPORTED in both sets.
+
+Decisions:
+- The paper's scenario C / D results are the **corrected 24-run reproduction** (`expDR_C`, `expDR_D`, commit
+  a0fbae6), presented as a reproduction under the corrected EXEC_START code, never as the original frozen runs.
+- The frozen runs (`expD_C`, `expD_D`, 656dde6) and this memo stay in the artifact; the correction is documented
+  (section 5) wherever C / D results appear.
+- G4 stays SUPPORTED, G5 stays NOT SUPPORTED.
+- For N and V the impact is documented separately (section 3): an estimated effect, not a measurement. The C / D
+  timing delta (+0.24-0.36 s) is not reported as an N / V measurement; N / V latencies are cited as recorded, with the
+  idle-source limitation, the <= 0.64 s worst-case bound, and the three fragile verdicts named.
