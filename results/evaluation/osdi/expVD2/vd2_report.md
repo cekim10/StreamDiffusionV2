@@ -1,4 +1,4 @@
-# Experiment VD-2 - report (2026-10-24; DR-4 exploratory cells pending)
+# Experiment VD-2 - report (2026-10-24; complete, including the DR-4 exploratory cells)
 
 Frozen plan `preregistration.md` (FROZEN 2026-10-24, `../expVD2_freeze.md`). Aggregation `tools/eval/aggregate_vd2.py`
 -> `vd2_results.md` / `.json`. 28 emulations on host D (dog, butterfly x OT-1, OT-L x 7 conditions), all valid, G3
@@ -64,6 +64,13 @@ temporary Sink, still 18-30 x faster than R-full, if nothing overlaps.
   preferred 0.3 s target as a hard limit only if overlap with the first call is implemented, and train / audi added.
   That is a proposal, not a decision.
 
-## 4. Pending
+## 4. DR-4 (exploratory, run under the section-4 trigger; outside every verdict)
 
-DR-4 (4 exploratory cells; trigger fired), and the decision on a VD-3 follow-up.
+Four more latent frames do not help: reset V1 ratio 0.53 / 0.37 / 0.39 / 0.43 (DR-2: 0.54 / 0.40 / 0.39 / 0.42) at
+twice the cost (1.04 s, 0.8 MB). The reconstructed cache gets closer to the source's (median relative error 0.20-0.27
+vs 0.49-0.74; worst layer 0.43-0.82 vs 1.05-1.63) without changing the jump. Cache fidelity and the visual effect are
+therefore decoupled over this range, which is what VD-3's DR2-stale / DR2-noise controls test directly.
+
+## 5. Pending
+
+The decision on the VD-3 follow-up (`../expVD3/preregistration.md`, draft).

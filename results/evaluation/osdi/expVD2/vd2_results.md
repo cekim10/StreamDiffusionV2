@@ -13,6 +13,7 @@ Effect sizes and costs first. Control = frozen M1 (VC-1's OT-1 / OT-L). DINO = c
 | TSout | True | 8.66 (1.07) | 1.42 (0.95) | 0.941 | 0.93 | False | 3.27 | 2.812 | -0.001 | 0.20 | 43.3 | 63 | 0.780 | 0.40 MB | - / - (layer None) |
 | DR2+TSout | True | 3.67 (0.45) | 1.42 (0.95) | 0.952 | 0.96 | True | 3.22 | 1.918 | -0.001 | 0.20 | 43.3 | 63 | 1.300 | 0.80 MB | 0.712 / 1.596 (layer 6) |
 | RP1+TSout | True | 5.34 (0.66) | 1.53 (1.02) | 0.952 | 0.96 | True | 2.38 | 1.334 | 0.001 | 0.63 | 28.4 | None | 1.831 | 6.39 MB | - / - (layer None) |
+| DR4 (exploratory) | True | 4.27 (0.53) | 1.50 (1.00) | 0.555 | 0.03 | False | 1.99 | 2.366 | -0.007 | 0.08 | 44.3 | 66 | 1.038 | 0.80 MB | 0.269 / 0.799 (layer 8) |
 
 ## dog OT-L (REF V1 P99 3.96; control: V1 reset 9.24, bind 2.28, Sink-less DINO 0.593 vs REF 0.971 band [0.956, 0.982], dE 2.15, terminal 44.9 dB, first >= 35 dB 162)
 
@@ -25,6 +26,7 @@ Effect sizes and costs first. Control = frozen M1 (VC-1's OT-1 / OT-L). DINO = c
 | TSout | True | 10.80 (1.17) | 1.87 (0.82) | 0.939 | 0.91 | False | 3.22 | 2.744 | -0.001 | 0.25 | 44.9 | 162 | 0.778 | 0.40 MB | - / - (layer None) |
 | DR2+TSout | True | 3.88 (0.42) | 1.87 (0.82) | 0.944 | 0.93 | False | 3.20 | 1.872 | -0.001 | 0.25 | 44.9 | 162 | 1.295 | 0.80 MB | 0.742 / 1.631 (layer 6) |
 | RP1+TSout | True | 5.78 (0.63) | 1.33 (0.58) | 0.947 | 0.94 | False | 2.41 | 1.704 | 0.001 | 0.73 | 27.3 | None | 1.832 | 6.39 MB | - / - (layer None) |
+| DR4 (exploratory) | True | 3.37 (0.37) | 2.28 (1.00) | 0.598 | 0.01 | False | 2.22 | 1.811 | -0.006 | 0.08 | 44.9 | 162 | 1.040 | 0.80 MB | 0.268 / 0.818 (layer 8) |
 
 ## butterfly-feeding-slow-motion OT-1 (REF V1 P99 1.40; control: V1 reset 3.30, bind 0.95, Sink-less DINO 0.715 vs REF 0.888 band [0.838, 0.898], dE 0.70, terminal 31.3 dB, first >= 35 dB 66)
 
@@ -37,6 +39,7 @@ Effect sizes and costs first. Control = frozen M1 (VC-1's OT-1 / OT-L). DINO = c
 | TSout | True | 3.00 (0.91) | 0.70 (0.74) | 0.831 | 0.67 | False | 2.06 | 1.674 | -0.006 | 0.18 | 30.7 | 65 | 0.776 | 0.40 MB | - / - (layer None) |
 | DR2+TSout | True | 1.13 (0.34) | 0.70 (0.74) | 0.841 | 0.73 | True | 1.73 | 1.266 | -0.006 | 0.18 | 30.7 | 65 | 1.298 | 0.80 MB | 0.583 / 1.226 (layer 6) |
 | RP1+TSout | True | 2.53 (0.77) | 0.66 (0.70) | 0.838 | 0.71 | True | 1.16 | 1.294 | 0.012 | 1.11 | 26.4 | None | 1.836 | 6.39 MB | - / - (layer None) |
+| DR4 (exploratory) | True | 1.30 (0.39) | 0.95 (1.00) | 0.725 | 0.06 | False | 1.05 | 1.641 | -0.012 | 0.17 | 31.3 | 66 | 1.043 | 0.80 MB | 0.200 / 0.460 (layer 10) |
 
 ## butterfly-feeding-slow-motion OT-L (REF V1 P99 1.40; control: V1 reset 1.97, bind 0.84, Sink-less DINO 0.719 vs REF 0.869 band [0.854, 0.893], dE 1.27, terminal 28.6 dB, first >= 35 dB None)
 
@@ -49,6 +52,7 @@ Effect sizes and costs first. Control = frozen M1 (VC-1's OT-1 / OT-L). DINO = c
 | TSout | True | 1.70 (0.86) | 0.66 (0.78) | 0.843 | 0.83 | False | 1.50 | 1.661 | -0.028 | 0.50 | 28.7 | None | 0.775 | 0.40 MB | - / - (layer None) |
 | DR2+TSout | True | 0.72 (0.37) | 0.66 (0.78) | 0.846 | 0.85 | False | 1.41 | 1.231 | -0.028 | 0.50 | 28.7 | None | 1.296 | 0.80 MB | 0.488 / 1.052 (layer 6) |
 | RP1+TSout | True | 1.32 (0.67) | 1.11 (1.31) | 0.831 | 0.75 | False | 0.88 | 1.299 | -0.012 | 0.22 | 23.7 | None | 1.831 | 6.39 MB | - / - (layer None) |
+| DR4 (exploratory) | True | 0.85 (0.43) | 0.84 (1.00) | 0.722 | 0.02 | False | 1.33 | 1.437 | -0.041 | 0.46 | 28.6 | None | 1.041 | 0.80 MB | 0.226 / 0.430 (layer 10) |
 
 ## Verdicts (preregistered rules; every input and schedule must agree)
 
