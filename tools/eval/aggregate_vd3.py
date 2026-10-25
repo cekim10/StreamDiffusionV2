@@ -57,6 +57,10 @@ def pmean(x):
 
 def win_calls(cm, name):
     w = cm["windows"].get(name)
+    if not w and name in ("sl_early", "sl_late") and cm.get("sinkless_calls"):
+        # VC-1's frozen-M1 metrics predate these windows: the same first / last 8 Sink-less calls from the per-call values
+        sl = cm["sinkless_calls"]
+        return [c for c in (sl[:8] if name == "sl_early" else sl[-8:]) if str(c) in cm["per_call"]]
     return [c for c in range(w["calls"][0], w["calls"][1] + 1) if str(c) in cm["per_call"]] if w else []
 
 
@@ -68,7 +72,7 @@ def phase_stats(cm: dict, name: str, emb=None) -> dict:
     cs = win_calls(cm, name)
     if not cs:
         return {}
-    pc, w = cm["per_call"], cm["windows"][name]
+    pc, w = cm["per_call"], (cm["windows"].get(name) or {})
     o, r = sv(pc, cs, f"v5a_{emb}"), sv(pc, cs, f"v5a_{emb}_ref")
     co, cr = sv(pc, cs, "v4_pre"), sv(pc, cs, "v4_pre_ref")
     return {"calls": [cs[0], cs[-1]], "dino": pmean(o), "dino_ref": pmean(r), "D_c": pmean(o - r), "C_c": pmean(co - cr),

@@ -88,3 +88,19 @@ analysis. R, N, V and A do not use the run.
 
 **Paper.** The verified results are used: once the comparison report is reviewed, the audi seed-0 unit of W is cited
 from the reproduction, with this note; the frozen run is never presented as audi.
+
+## 7. Outcome of the reproduction (2026-10-25)
+
+`expW/audi_s0_repro_report.md` (`results/evaluation/expWP_W2_audi-snow-trail_s0/..._20261025-134003`, commit 31f5ad9):
+- **verified**: valid under the frozen W / R / N rules; both nodes report the audi-snow-trail input (same content hash),
+  seed 0 and this invocation's launch tokens; node A's baseline digests equal the genuine audi seed-0 generation
+  (`expRDX_audi-snow-trail`, `expWX_audi_X1`) and not train seed 1;
+- unit metrics, frozen (train seed 1) -> reproduction (audi seed 0): TTFO 0.682 -> 0.691 s; bind call 59 -> 58; rejoin
+  at call 99 -> 84 (40 -> 26 calls after the bind); last-10 median 31.9 -> 34.2 dB; RVC events 11 -> 6 (none
+  cut-induced). The genuine but invalid run of 2026-10-19 (bind 58, crossing 84) agrees with the reproduction;
+- **W verdicts unchanged**: W-H1 SUPPORTED, W-H2 primary 39 / 40 SUPPORTED, S1 counts only (4 / 4), S2 25 / 26
+  SUPPORTED, W-H3 SUPPORTED (Cold reaches 35 dB in 0 of 39); the audi workload's mean TTFO 0.677 -> 0.682 s. The
+  frozen recomputation reproduces the recorded verdicts.
+
+Disposition: the paper cites the audi seed-0 unit of W from the verified reproduction, with this note; the frozen
+`..._135751` run stays in the artifact, labelled as a train seed-1 generation, never as audi.
