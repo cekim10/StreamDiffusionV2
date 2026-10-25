@@ -7,8 +7,8 @@ are copied back. Nothing is pulled or committed on the testbed by this script.
     python tools/eval/run_vc.py models                                  # D: download DINO / DINOv2 / CLIP once (before XB starts)
     python tools/eval/run_vc.py vc0 --frames_dir /local/path            # D: metric self-test, dog OT-L / COLD-1 / WFS-1 -> G1, G2, G3
     python tools/eval/run_vc.py vd2 --frames_dir /local/path            # after the VD-2 freeze: reconstruction conditions on the VC units
-    python tools/eval/run_vc.py vd3 --phase base --frames_dir /local/path   # after the VD-3 freeze: seed-1 REF / controls, G1 / G3, tolerances, overlap; stops for review
-    python tools/eval/run_vc.py vd3 --phase cand --frames_dir /local/path --clips_dir /local/clips   # only after the tolerances are committed
+    python tools/eval/run_vc.py vd3 --phase base --frames_dir /local/path   # Phase T (approved separately): seed-1 REF / controls, G1 / G3, distributions, overlap; stops for review
+    python tools/eval/run_vc.py vd3 --phase cand --frames_dir /local/path --clips_dir /local/clips   # only after the VD-3 freeze with committed thresholds
     python tools/eval/run_vc.py vd3 --phase key --clips_dir /local/clips    # only after vd3_inspection.md is committed: copies the blind key
     python tools/eval/run_vc.py fetch --inputs dog                      # copy back VC-1 results only (no run)
     python tools/eval/run_vc.py vc1 --frames_dir /local/path            # only after the VC and VD freezes: VD precheck, then VC-1 + VD per input
@@ -320,13 +320,17 @@ def committed(path: str) -> bool:
 
 def vd3(a) -> bool:
     """Experiment VD-3 (osdi/expVD3/preregistration.md): three phases with review gates.
-    base: seed-1 units (REF + frozen-M1 OT-1 / OT-L controls), G1 (OT-1 vs the real W2 seed-1 run) and G3, metrics,
-          then the REF-only tolerances and the overlap measurement; stops so the tolerances are reviewed and committed.
-    cand: only when vd3_tolerances.json is committed: the six VD-3 conditions on all eight units, G3, merged metrics,
-          then the blinded clips and the inspection form. Verdicts wait for the recorded inspection.
+    base (Phase T; needs expVD3_phaseT_approval.md, not the freeze): seed-1 units (REF + frozen-M1 OT-1 / OT-L
+          controls), G1 (OT-1 vs the real W2 seed-1 run) and G3, metrics, then the Phase T distributions (REF variation,
+          measurement noise, cross-seed sensitivity, frozen-M1 context) and the overlap measurement; stops for review.
+    cand: only after the freeze (expVD3_freeze.md) with vd3_thresholds.json committed: the six VD-3 conditions on all
+          eight units, G3, merged metrics, then the blinded clips and the inspection form. Verdicts wait for the
+          recorded inspection.
     key:  only when vd3_inspection.md is committed with STATUS: RECORDED: copies the sealed key."""
-    if not a.dry and not (ROOT / "results/evaluation/osdi/expVD3_freeze.md").exists():
-        sys.exit("[vc] VD-3 is not frozen (results/evaluation/osdi/expVD3_freeze.md missing): no run")
+    if not a.dry and a.phase == "base" and not (ROOT / "results/evaluation/osdi/expVD3_phaseT_approval.md").exists():
+        sys.exit("[vc] Phase T is not approved (results/evaluation/osdi/expVD3_phaseT_approval.md missing): no run")
+    if not a.dry and a.phase in ("cand", "key") and not (ROOT / "results/evaluation/osdi/expVD3_freeze.md").exists():
+        sys.exit("[vc] VD-3 is not frozen (results/evaluation/osdi/expVD3_freeze.md missing): no candidate run")
     inputs = [x for x in (a.inputs or "").split(",") if x] or list(INPUTS)
     if a.phase == "key":
         insp = ROOT / VD3_OUT / "vd3_inspection.md"
@@ -336,8 +340,8 @@ def vd3(a) -> bool:
         (ROOT / VD3_OUT / "vd3_blind_key.json").write_bytes(ag.read(f"{a.clips_dir}/sealed/vd3_blind_key.json").encode())
         print("[vc] key copied to", f"{VD3_OUT}/vd3_blind_key.json", "- next: aggregate_vd3.py")
         return True
-    if a.phase == "cand" and not a.dry and not committed(f"{VD3_OUT}/vd3_tolerances.json"):
-        sys.exit("[vc] vd3_tolerances.json is not committed: the tolerances are fixed and reviewed before any candidate runs")
+    if a.phase == "cand" and not a.dry and not committed(f"{VD3_OUT}/vd3_thresholds.json"):
+        sys.exit("[vc] vd3_thresholds.json is not committed: the thresholds are chosen from the Phase T review and frozen before any candidate runs")
     if a.dry:
         py, out, ok = sys.executable, "results/evaluation/_dryrun_expVC", True
         for inp in inputs:
@@ -357,7 +361,7 @@ def vd3(a) -> bool:
                 for cmd in steps:
                     ok &= subprocess.run(cmd, cwd=ROOT).returncode == 0
         if a.phase == "base":
-            ok &= subprocess.run([py, "tools/eval/vd3_tolerances.py", "--root", out, "--inputs", ",".join(inputs), "--embedder", "pixel", "--device", "cpu", "--dry"], cwd=ROOT).returncode == 0
+            ok &= subprocess.run([py, "tools/eval/vd3_phaseT.py", "--root", out, "--inputs", ",".join(inputs), "--embedder", "pixel", "--device", "cpu", "--dry"], cwd=ROOT).returncode == 0
             ok &= subprocess.run([py, "tools/eval/vd3_overlap.py", "--dry_run", "--reps", "2"], cwd=ROOT).returncode == 0
         else:
             ok &= subprocess.run([py, "tools/eval/vc_export_clips.py", "--root", out, "--clips_dir", a.clips_dir, "--order_seed", "1", "--inputs", ",".join(inputs),
@@ -387,17 +391,17 @@ def vd3(a) -> bool:
             if not ok:
                 break
         if ok:
-            for what, cmd in (("tolerances", [PY, "tools/eval/vd3_tolerances.py", "--root", "results/evaluation/expVC", "--embedder", "dino", "--device", "cuda:0"]),
+            for what, cmd in (("phaseT", [PY, "tools/eval/vd3_phaseT.py", "--root", "results/evaluation/expVC", "--embedder", "dino", "--device", "cuda:0"]),
                               ("overlap", [PY, "tools/eval/vd3_overlap.py", "--input", "dog", "--seed", "0", "--schedule", "OT-1", "--reps", "5", "--gpu_id", "0"])):
                 rc = remote_run(ag, cmd, f"{LOG}/vd3_{stamp}_{what}.log", timeout=3 * 3600)
                 print(f"[vc] VD-3 base {what} on {a.host}: rc {rc}", flush=True)
                 ok &= rc == 0
-            for f in ("vd3_tolerances.json", "vd3_tolerances.md", "vd3_overlap.json"):
+            for f in ("vd3_phaseT.json", "vd3_phaseT.md", "vd3_overlap.json"):
                 try:
                     (ROOT / VD3_OUT / f).write_text(ag.read(f"{VD3_OUT}/{f}"))
                 except RuntimeError as exc:
                     print(f"[vc] {f} not copied: {exc}"); ok = False
-        print("[vc] VD-3 base", "done - review vd3_tolerances.md (and commit it) before --phase cand" if ok else "had failures")
+        print("[vc] VD-3 Phase T", "done - push; the distributions (vd3_phaseT.md) are reviewed before any threshold is frozen" if ok else "had failures")
     else:
         for inp in inputs:
             for sd in VD3_SEEDS:
@@ -431,7 +435,7 @@ def vd3(a) -> bool:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2", "vd3"])
-    ap.add_argument("--phase", choices=["base", "cand", "key"], default="base", help="vd3: base (REF / controls / tolerances / overlap), cand, key")
+    ap.add_argument("--phase", choices=["base", "cand", "key"], default="base", help="vd3: base (Phase T: REF / controls / distributions / overlap), cand, key")
     ap.add_argument("--clips_dir", default=None, help="vd3 cand / key: clips directory on the VC host's local disk (never committed)")
     ap.add_argument("--with_dr4", action="store_true", help="vd2: also run the exploratory DR-4 cells (section-4 trigger)")
     ap.add_argument("--host", default="D")

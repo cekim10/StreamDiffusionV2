@@ -78,7 +78,68 @@ def first_after_switch(d, s):
     return rows[0] if rows else None
 
 
+def identity_tests():
+    """Node identity check and orphan cleanup (osdi/audi_s0_w2_provenance.md)."""
+    import mobility_node as mn
+    import mobility_orchestrate as mo
+
+    print("- node identity check and orphan cleanup")
+    base = [PY, "tools/eval/mobility_node.py", "--label", "A", "--gpu_id", "0", "--migration_chunk", "34", "--post_chunks", "130"]
+    cmd = base + ["--launch_id", "A-tok", "--video_path", "examples/train.mp4", "--seed", "1"]
+    hello = {"identity": mn.node_identity(mn.parse_args(cmd[2:]))}
+    check(mo.identity_mismatches(hello, cmd, launched=True) == [], "the node this invocation started: identity and launch token match")
+    orphan = {"identity": mn.node_identity(mn.parse_args((base + ["--launch_id", "A-old", "--video_path", "examples/train.mp4", "--seed", "1"])[2:]))}
+    bad = mo.identity_mismatches(orphan, base + ["--launch_id", "A-new", "--video_path", str(ROOT / "examples/original.mp4"), "--seed", "0"], launched=True)
+    check(any(b.startswith("launch_id") for b in bad) and any(b.startswith("video_path") for b in bad) and any(b.startswith("seed") for b in bad),
+          f"an orphaned node of another invocation (other input, seed, token) is refused: {bad}")
+    check(mo.identity_mismatches({"identity": mn.node_identity(mn.parse_args((base + ["--video_path", str(ROOT / "examples/train.mp4")])[2:]))},
+                                 base + ["--video_path", "examples/train.mp4"], launched=True) == [], "absolute and repository-relative paths of the same file compare equal")
+    check(mo.identity_mismatches(orphan, base, launched=False) == [], "attached node: unstated fields (input, seed) are not compared")
+    check(mo.identity_mismatches(orphan, base + ["--seed", "0"], launched=False) == ["seed: node 1 != expected 0"], "attached node: a stated field that differs is refused")
+    check(mo.identity_mismatches({}, base, launched=False) != [], "a node without an identity (older code) is refused")
+    stepped = {"identity": mn.node_identity(mn.parse_args((cmd + ["--step", "3"])[2:]))}
+    check([b.split(":")[0] for b in mo.identity_mismatches(stepped, cmd, launched=True)] == ["config_fingerprint"], "a different generation configuration (--step) is refused by the fingerprint")
+    swapped = {"identity": dict(hello["identity"], video_sha256="0" * 64)}
+    check(any("input content differs" in b for b in mo.identity_mismatches(swapped, cmd, launched=True)), "same input name, different file content: refused")
+    check(hello["identity"]["video_sha256"] == mn.file_sha256(str(ROOT / "examples/train.mp4")) and len(hello["identity"]["config_fingerprint"]) == 16,
+          "the node reports the input's SHA-256 and a configuration fingerprint")
+    # end to end: an attached dry node with seed 1, an invocation that states seed 0
+    nd = subprocess.Popen([PY, "tools/eval/mobility_node.py", "--label", "A", "--bind", "127.0.0.1", "--ctl_port", "29981", "--data_port", "29982", "--mss", "0", "--dry_run",
+                           "--dry_sink_mb", "8", "--dry_service_s", "0.05", "--migration_chunk", "30", "--post_chunks", "200", "--seed", "1"],
+                          cwd=ROOT, stdout=open("/tmp/xbtest_ident_node.log", "w"), stderr=subprocess.STDOUT)
+    try:
+        time.sleep(2)
+        r = subprocess.run([PY, "tools/eval/mobility_orchestrate.py", "--experiment", "_xbtest_ident", "--dry_run", "--nodes", "A=127.0.0.1:29981:29982,B=127.0.0.1:29991:29992",
+                            "--mss", "0", "--hops", "1", "--policies", "split", "--reps", "1", "--migration_chunk", "30", "--post_chunks", "200", "--node_extra=--seed 0",
+                            "--connect_timeout", "20"], cwd=ROOT, capture_output=True, text=True, timeout=300)
+        check(r.returncode != 0 and "is not the node this invocation expects" in (r.stdout + r.stderr) and "seed: node 1 != expected 0" in (r.stdout + r.stderr),
+              "orchestrator refuses an attached node whose seed differs from the invocation's (end to end)")
+        check(nd.wait(timeout=30) is not None, "the refused node received SHUTDOWN in the orchestrator's cleanup")
+    finally:
+        if nd.poll() is None:
+            nd.kill()
+    shutil.rmtree(ROOT / "results/evaluation/_dryrun__xbtest_ident", ignore_errors=True)
+
+    class FakeAg:
+        def __init__(self):
+            self.calls = []
+
+        def wait(self, pid, timeout=0):
+            self.calls.append(("wait", pid)); return {"timed_out": True}
+
+        def call(self, **req):
+            self.calls.append((req["op"], req["pid"])); return {"ok": True}
+    o = mo.Orchestrator.__new__(mo.Orchestrator)
+    ag = FakeAg()
+    local = subprocess.Popen(["sleep", "300"])
+    o.nodes, o.net, o.agent_pids = {}, None, {"B": (ag, 4242), "C": (None, local)}
+    o.shutdown(grace_s=1)
+    check(ag.calls == [("kill", 4242)] and local.poll() is not None and o.agent_pids == {},
+          f"a failed invocation leaves no node behind: never-connected remote node killed {ag.calls}, local node ended")
+
+
 def main():
+    identity_tests()
     print("- single move A -> B (fake runtime, 100 Mbps)")
     R = run("_xbtest_single", "precopy_full,precopy_sink,recompute_full,recompute_win,split_wait", 1, "1e9")
     for pol in ("precopy_full", "precopy_sink", "recompute_full", "recompute_win"):

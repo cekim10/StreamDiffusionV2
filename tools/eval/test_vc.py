@@ -171,12 +171,16 @@ def vd3_tests(tmp: Path, out: dict, vc):
         check(r_.returncode == 0, f"metrics on dog seed {sd} (early / late Sink-less windows)")
     mj = json.loads((u1 / "metrics.json").read_text())["conditions"]["VD3L-DR2+TSin"]["windows"]
     check(mj["sl_early"]["calls"] == [80, 87] and mj["sl_late"]["calls"] == [146, 153], f"early / late windows are the first / last 8 Sink-less calls {mj['sl_early']['calls']} {mj['sl_late']['calls']}")
-    tol = tmp / "tol"
-    r_ = subprocess.run([PY, "tools/eval/vd3_tolerances.py", "--root", str(root), "--inputs", "dog", "--embedder", "pixel", "--device", "cpu", "--dry", "--out", str(tol)], cwd=ROOT, capture_output=True, text=True)
-    T = json.loads(tol.with_suffix(".json").read_text()) if r_.returncode == 0 else {"cells": {}}
-    t1 = T["cells"].get("dog|OT-1", {})
-    check(r_.returncode == 0 and t1 and all(t1["tolerance"][k] == min([t1["seed_to_seed"][k]] + [t1["band_widths"][s][k] for s in ("s0", "s1")]) for k in ("dino", "dE_anchor", "E", "motion"))
-          and t1["tolerance"]["dino"] > 0, f"tolerances = min(seed-to-seed, REF band widths), from REF streams only {r_.stderr[-200:]}")
+    pt = tmp / "phaseT"
+    r_ = subprocess.run([PY, "tools/eval/vd3_phaseT.py", "--root", str(root), "--inputs", "dog", "--embedder", "pixel", "--device", "cpu", "--dry", "--out", str(pt)], cwd=ROOT, capture_output=True, text=True)
+    P = json.loads(pt.with_suffix(".json").read_text()) if r_.returncode == 0 else {"cells": {}}
+    c1 = P["cells"].get("dog_s1|OT-1", {})
+    check(r_.returncode == 0 and len(P["cells"]) == 4 and c1.get("confirmation") and c1["natural_ref_variation"]["dino"].get("P95-P5") is not None
+          and c1["measurement_noise"]["embedder_recompute"] is not None and c1["sensitivity_cross_seed"] is not None and c1["context_frozen_m1"]["available"]
+          and "threshold" not in json.dumps(c1).lower() and P["cells"]["dog_s1|OT-L"]["counterfactual"],
+          f"Phase T: per-cell distributions (natural REF variation, measurement noise, cross-seed sensitivity, frozen-M1 context), no threshold chosen {r_.stderr[-200:]}")
+    tol = tmp / "thr"
+    tol.with_suffix(".json").write_text(json.dumps({"global": {"dino": 0.05, "dE_anchor": 1.5, "dE_cross": 2.9, "E": 0.4, "motion": 0.26}}))   # synthetic, test only
     clips, form = tmp / "clips", tmp / "form.md"
     r_ = subprocess.run([PY, "tools/eval/vc_export_clips.py", "--root", str(root), "--clips_dir", str(clips), "--order_seed", "3", "--inputs", "dog", "--form", str(form)], cwd=ROOT, capture_output=True, text=True)
     ftxt = form.read_text() if form.exists() else ""
@@ -187,7 +191,7 @@ def vd3_tests(tmp: Path, out: dict, vc):
           and not any(w in ftxt + " ".join(names) for w in ("TSin", "DR2", "REF", "OT-1", "OT-L", "frozen")),
           f"blinded clips: 4 cells x 6 codes + 4 grids, key SHA-256 in the form, no condition names in the form or the file names {r_.stderr[-200:]}")
     res = tmp / "res"
-    agg = lambda insp: subprocess.run([PY, "tools/eval/aggregate_vd3.py", "--root", str(root), "--tolerances", str(tol.with_suffix(".json")), "--inspection", str(insp),  # noqa: E731
+    agg = lambda insp: subprocess.run([PY, "tools/eval/aggregate_vd3.py", "--root", str(root), "--thresholds", str(tol.with_suffix(".json")), "--inspection", str(insp),  # noqa: E731
                                        "--key", str(clips / "sealed" / "vd3_blind_key.json"), "--form", str(form), "--out", str(res)], cwd=ROOT, capture_output=True, text=True)
     r_ = agg(tmp / "none.md")
     check(r_.returncode == 0 and "Verdicts withheld" in r_.stdout and "GO" not in res.with_suffix(".md").read_text().split("Verdicts withheld")[1], "no recorded inspection: verdicts withheld, validity only")
@@ -203,11 +207,28 @@ def vd3_tests(tmp: Path, out: dict, vc):
     (clips / "sealed" / "vd3_blind_key.json").write_bytes(kb.replace(b'"order_seed": 3', b'"order_seed": 4'))
     r_ = agg(tmp / "insp.md")
     check(r_.returncode == 0 and "differs from the form" in r_.stdout, "a replaced key (SHA-256 differs from the form) is refused")
+    import aggregate_vd3 as a3
+
+    P_, F_, all_ = {"R1": True, "R2": True, "R3": True, "R4": True, "R5": True, "all": True}, {"R1": False, "all": False}, {"R1": True, "R2": True, "R3": True, "R4": True}
+    m1_fail = {"R1": True, "R2": False, "R3": True, "R4": True}
+    check(a3.classify(F_, m1_fail) == "FAIL" and a3.classify(P_, m1_fail) == "DISCRIMINATIVE PASS" and a3.classify(P_, all_) == "NON-DISCRIMINATIVE PASS",
+          "D1c classes: FAIL / DISCRIMINATIVE PASS / NON-DISCRIMINATIVE PASS")
+    ins = {"dog", "train"}
+    check(a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "DISCRIMINATIVE PASS", "train_s1|OT-L": "NON-DISCRIMINATIVE PASS"}, [], ins) == "GO"
+          and a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "NON-DISCRIMINATIVE PASS"}, [], ins) == "INCONCLUSIVE"
+          and a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "FAIL"}, [], ins) == "NO-GO"
+          and a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "DISCRIMINATIVE PASS"}, ["dog_s1|OT-1"], ins) == "NO-GO",
+          "overall: any FAIL or veto -> NO-GO; an input with only non-discriminative passes -> INCONCLUSIVE; else GO")
+    r_ = subprocess.run([PY, "tools/eval/aggregate_vd3.py", "--root", str(root), "--thresholds", str(tmp / "missing.json")], cwd=ROOT, capture_output=True, text=True)
+    check(r_.returncode != 0 and "thresholds" in (r_.stdout + r_.stderr), "aggregation refuses without frozen thresholds")
     r_ = subprocess.run([PY, "tools/eval/vd3_overlap.py", "--dry_run", "--reps", "2", "--out", str(tmp / "ov.json")], cwd=ROOT, capture_output=True, text=True)
     ov = json.loads((tmp / "ov.json").read_text()) if r_.returncode == 0 else {}
     check(set(ov.get("checks", {})) == {"a_digests_equal", "b_contention_within_10pct", "c_first_output_earlier"} and len(ov["trials"]) == 4, "overlap measurement: alternating serial / overlap trials and the three checks (dry)")
     r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd3", "--phase", "cand", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
-    check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd3 refuses to run before the freeze")
+    check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd3 refuses candidate conditions before the freeze")
+    if not (ROOT / "results/evaluation/osdi/expVD3_phaseT_approval.md").exists():
+        r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd3", "--phase", "base", "--frames_dir", "/x"], cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode != 0 and "Phase T is not approved" in (r_.stdout + r_.stderr), "run_vc vd3 refuses Phase T without its approval record")
     # remote pull: a blocked pull clears only byte-identical result copies
     import d0_remote as dr
 

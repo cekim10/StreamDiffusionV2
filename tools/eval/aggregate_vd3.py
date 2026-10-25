@@ -2,12 +2,18 @@
 """Experiment VD-3 aggregation (osdi/expVD3/preregistration.md sections 3-4). GO / NO-GO for DR2+TSin and, as a
 distinct candidate, TSinKC; component and control hypotheses C1-C4. Effect sizes per phase first, then rules.
 
-Order of operations (fixed): the tolerances (vd3_tolerances.json, REF streams only) exist before this runs; the
-blinded inspection (vd3_inspection.md, STATUS: RECORDED, every code answered) is committed before the verdicts are
+Order of operations (fixed): the restoration thresholds (vd3_thresholds.json, chosen after the Phase T distributions
+were reviewed and frozen before any candidate ran) exist before this runs; the blinded inspection (vd3_inspection.md, STATUS: RECORDED, every code answered) is committed before the verdicts are
 produced. Without a recorded inspection only the validity section is written. The key
 (vd3_blind_key.json, SHA-256 printed in the form) is then used to attach the answers to conditions.
 
-    python tools/eval/aggregate_vd3.py [--dry] [--root DIR] [--key PATH] [--inspection PATH]
+Per confirmation cell and candidate (D1c, 2026-10-25): FAIL (the candidate violates a restoration rule R1-R5),
+DISCRIMINATIVE PASS (it passes and frozen M1 fails at least one of R1-R4 there), NON-DISCRIMINATIVE PASS (both pass).
+Overall: NO-GO if any confirmation cell is FAIL or the inspection vetoes; otherwise GO only if every confirmation input
+has at least one DISCRIMINATIVE PASS; otherwise INCONCLUSIVE (the evidence cannot show that the candidate resolves the
+original continuity failure there). Non-discriminative passes are listed.
+
+    python tools/eval/aggregate_vd3.py [--dry] [--root DIR] [--thresholds PATH] [--key PATH] [--inspection PATH]
 """
 
 from __future__ import annotations
@@ -111,6 +117,24 @@ def rules(v: dict, name: str, tol: dict, p99: float) -> dict:
     return R
 
 
+def classify(rr: dict, rc: dict) -> str:
+    if not rr.get("all"):
+        return "FAIL"
+    return "DISCRIMINATIVE PASS" if not all(rc.get(r_) for r_ in ("R1", "R2", "R3", "R4")) else "NON-DISCRIMINATIVE PASS"
+
+
+def overall(classes: dict, vetoes: list, inputs: set) -> str:
+    """classes: {cell: class} over the confirmation cells; inputs: the confirmation inputs."""
+    if any(c == "FAIL" for c in classes.values()) or vetoes:
+        return "NO-GO"
+    disc = {k.split("_s")[0] for k, c in classes.items() if c == "DISCRIMINATIVE PASS"}
+    return "GO" if inputs <= disc else "INCONCLUSIVE"
+
+
+def thresholds_for(T: dict, key: str) -> dict | None:
+    return (T.get("cells") or {}).get(key, {}).get("thresholds") or T.get("global")
+
+
 def improvement(v: dict, ctrl: dict) -> dict:
     gap = ctrl["P"]["sinkless"].get("D_c")
     return {"v1_ratio": (v["v1_reset"] / ctrl["v1_reset"]) if (v["v1_reset"] and ctrl["v1_reset"]) else None,
@@ -151,7 +175,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--root", default=None)
-    ap.add_argument("--tolerances", default=None)
+    ap.add_argument("--thresholds", default=None, help="frozen restoration thresholds (vd3_thresholds.json)")
     ap.add_argument("--inspection", default=None)
     ap.add_argument("--key", default=None)
     ap.add_argument("--form", default=None)
@@ -159,9 +183,9 @@ def main():
     a = ap.parse_args()
     pre = "_dryrun_" if a.dry else ""
     root = Path(a.root or ROOT / "results/evaluation" / f"{pre}expVC")
-    tpath = Path(a.tolerances or OUT / f"{pre}vd3_tolerances.json")
+    tpath = Path(a.thresholds or OUT / f"{pre}vd3_thresholds.json")
     if not tpath.exists():
-        sys.exit(f"[vd3] tolerances {tpath} missing: they are fixed from REF streams before any aggregation")
+        sys.exit(f"[vd3] thresholds {tpath} missing: they are chosen from the Phase T distributions and frozen before any candidate runs")
     T = json.loads(tpath.read_text())
     tsha = hashlib.sha256(tpath.read_bytes()).hexdigest()
     f = lambda x, n=3: "-" if x is None else (f"{x:.{n}f}" if isinstance(x, float) else str(x))  # noqa: E731
@@ -179,20 +203,19 @@ def main():
                 if ctrl is None:
                     continue
                 key = f"{inp}_s{sd}|OT-{x}"
-                tol = T["cells"].get(f"{inp}|OT-{x}", {}).get("tolerance")
+                tol = thresholds_for(T, f"{inp}_s{sd}|OT-{x}")
                 cs = {n: cell(unit, M, f"VD3{x}-{n}") for n in CELLS}
-                cells[key] = {"confirmation": (inp, sd) in CONFIRM, "p99": M.get("ref_spike_P99"), "tol": tol, "control": ctrl, "conds": cs,
-                              "sensitivity": T.get("sensitivity", {}).get(key)}
+                cells[key] = {"confirmation": (inp, sd) in CONFIRM, "p99": M.get("ref_spike_P99"), "tol": tol, "control": ctrl, "conds": cs}
+                if tol is None:
+                    validity.append(f"{key}: no frozen thresholds")
                 for n, v in cs.items():
                     if v is None:
                         validity.append(f"{key} {n}: missing")
                     elif not v["valid"]:
                         validity.append(f"{key} {n}: invalid ({v.get('invalid')})")
     L = [f"# VD-3 results{' (DRY RUN - synthetic, not a result)' if a.dry else ''}", "",
-         f"Tolerances: `{tpath.name}` (SHA-256 {tsha[:16]}), REF streams only. Cells: {len(cells)} "
+         f"Thresholds: `{tpath.name}` (SHA-256 {tsha[:16]}), frozen after the Phase T review. Cells: {len(cells)} "
          f"({sum(1 for c in cells.values() if c['confirmation'])} confirmation). Validity problems: {validity or 'none'}.", ""]
-    nd = T.get("non_discriminative_confirmation_cells") or []
-    L.append(f"Assay sensitivity (frozen M1 must fail the R2 content clause): non-discriminative confirmation cells {nd or 'none'}.")
     insp = inspection(Path(a.inspection or OUT / f"{pre}vd3_inspection.md"), Path(a.key or OUT / f"{pre}vd3_blind_key.json"),
                       (re.search(r"SHA-256 `([0-9a-f]{64})`", Path(a.form or OUT / f"{pre}vd3_inspection_form.md").read_text()) or [None, None])[1]
                       if Path(a.form or OUT / f"{pre}vd3_inspection_form.md").exists() else None)
@@ -200,14 +223,15 @@ def main():
         L += ["", f"**Verdicts withheld: the blinded inspection is not recorded / keyed yet ({insp.get('why')}).** Only validity is reported."]
         out = Path(a.out or OUT / f"{pre}vd3_results")
         out.with_suffix(".md").write_text("\n".join(L) + "\n")
-        out.with_suffix(".json").write_text(json.dumps({"validity": validity, "inspection": insp, "tolerances_sha256": tsha}, indent=1, default=str))
+        out.with_suffix(".json").write_text(json.dumps({"validity": validity, "inspection": insp, "thresholds_sha256": tsha}, indent=1, default=str))
         print("\n".join(L)); return
     # ---- effect sizes per phase, then rules
     R = {cand: {} for cand in CANDIDATES}
+    RC = {}   # frozen M1's restoration rules per confirmation cell
     C = {"C1": [], "C2": [], "C3": []}
     for key, cc in sorted(cells.items(), key=lambda kv: (not kv[1]["confirmation"], kv[0])):
         ctrl, tol, p99 = cc["control"], cc["tol"], cc["p99"]
-        L += ["", f"## {key} ({'confirmation' if cc['confirmation'] else 'replication'}; REF V1 P99 {f(p99, 2)}; tolerances {json.dumps({k_: round(v, 4) for k_, v in (tol or {}).items()})})", "",
+        L += ["", f"## {key} ({'confirmation' if cc['confirmation'] else 'replication'}; REF V1 P99 {f(p99, 2)}; thresholds {json.dumps({k_: (round(v, 4) if isinstance(v, (int, float)) else v) for k_, v in (tol or {}).items()})})", "",
               "| condition | valid | P1 V1 reset (paired REF; x M1) | P2 D_c / C_c / dE x / E / motion | P2 late D_c, excess drift X | P3 V1 bind (paired REF) | post-bind-20 D_c / C_c / E / motion | last-10 D_c | PSNR first >= 35 / terminal (diagnostic) | cost s | bytes | DINO gap closed | R1 R2 R3 R4 R5 |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for n, v in [("frozen M1", ctrl)] + [(n, cc["conds"][n]) for n in CELLS]:
@@ -218,6 +242,8 @@ def main():
             rr = rules(v, n if n != "frozen M1" else "OT", tol, p99) if tol else {}
             if n in CANDIDATES and cc["confirmation"]:
                 R[n][key] = rr
+            if n == "frozen M1" and cc["confirmation"]:
+                RC[key] = rr
             L.append(f"| {n} | {v['valid']} | {f(v['v1_reset'], 2)} ({f(v['v1_reset_ref_same_call'], 2)}; {f(imp.get('v1_ratio'), 2)}) | "
                      f"{f(sl.get('D_c'))} / {f(sl.get('C_c'), 2)} / {f(sl.get('dE_cross'), 2)} / {f(sl.get('E'), 2)} / {f(sl.get('motion'), 2)} | "
                      f"{f(v['P']['sl_late'].get('D_c'))}, {f(v['X_late'])} | {f(v['v1_bind'], 2)} ({f(v['v1_bind_ref_same_call'], 2)}) | "
@@ -232,20 +258,16 @@ def main():
             C["C2"].append(ok and ts["v1_reset"] is not None and p99 is not None and ts["v1_reset"] > p99)
             C["C3"].append(ok and None not in (dr2["v1_reset"], st_["v1_reset"], nz["v1_reset"]) and dr2["v1_reset"] < st_["v1_reset"] and dr2["v1_reset"] < nz["v1_reset"])
     n_conf = sum(1 for c in cells.values() if c["confirmation"])
-    L += ["", "## GO / NO-GO (restoration rules R1-R5 on every confirmation cell, and no inspection veto)", ""]
-    V = {}
+    L += ["", "## GO / NO-GO (D1c: FAIL / DISCRIMINATIVE PASS / NON-DISCRIMINATIVE PASS per confirmation cell; no inspection veto)", ""]
+    V, CL = {}, {}
+    conf_inputs = {k.split("_s")[0] for k, c in cells.items() if c["confirmation"]}
     for cand in CANDIDATES:
-        quant = len(R[cand]) == 12 and n_conf == 12 and all(r_["all"] for r_ in R[cand].values())
+        CL[cand] = {ck: classify(rr, RC.get(ck, {})) for ck, rr in R[cand].items()}
         vetoes = [ck for ck, cv in insp["cells"].items() if ck in cells and cells[ck]["confirmation"] and (cv.get(cand) or {}).get("veto")]
         fails = {ck: [r_ for r_ in ("R1", "R2", "R3", "R4", "R5") if not rr.get(r_)] for ck, rr in R[cand].items() if not rr["all"]}
-        if n_conf < 12:
-            V[cand] = "PENDING"
-        elif nd:
-            V[cand] = "INCONCLUSIVE (assay not discriminative on " + ", ".join(nd) + ")"
-        else:
-            V[cand] = "GO" if (quant and not vetoes) else "NO-GO"
-        L.append(f"- **{cand}: {V[cand]}** - quantitative R1-R5 on {sum(1 for r_ in R[cand].values() if r_['all'])} / {n_conf} confirmation cells; "
-                 f"failing phases per cell {fails or 'none'}; inspection vetoes {vetoes or 'none'}")
+        V[cand] = "PENDING" if (n_conf < 12 or len(R[cand]) < 12) else overall(CL[cand], vetoes, conf_inputs)
+        nd = [ck for ck, c in CL[cand].items() if c == "NON-DISCRIMINATIVE PASS"]
+        L.append(f"- **{cand}: {V[cand]}** - per cell {json.dumps(CL[cand])}; failing rules {fails or 'none'}; non-discriminative passes {nd or 'none'}; inspection vetoes {vetoes or 'none'}")
     ref_flags = [ck for ck, cv in insp["cells"].items() if (cv.get("REF") or {}).get("veto")]
     m1_flags = [ck for ck, cv in insp["cells"].items() if (cv.get("OT") or {}).get("veto")]
     L += [f"- Inspection calibration: REF clips flagged {ref_flags or 'none'}; frozen-M1 clips flagged {len(m1_flags)} of {len(insp['cells'])} cells.",
@@ -257,7 +279,7 @@ def main():
           "- C4 (TSinKC as a distinct candidate): see its GO / NO-GO line and the per-cell rows."]
     out = Path(a.out or OUT / f"{pre}vd3_results")
     out.with_suffix(".md").write_text("\n".join(L) + "\n")
-    out.with_suffix(".json").write_text(json.dumps({"cells": cells, "rules": R, "C": C, "verdicts": V, "inspection": insp, "validity": validity, "tolerances_sha256": tsha}, indent=1, default=str))
+    out.with_suffix(".json").write_text(json.dumps({"cells": cells, "rules": R, "rules_frozen_m1": RC, "classes": CL, "C": C, "verdicts": V, "inspection": insp, "validity": validity, "thresholds_sha256": tsha}, indent=1, default=str))
     print("\n".join(L[-14:]))
 
 

@@ -1,4 +1,4 @@
-# VD-3 implementation and dry-test validity report (2026-10-25; for review before the freeze)
+# VD-3 implementation and dry-test validity report (2026-10-25; revised the same day for draft 6; for review before the freeze)
 
 Nothing here is evidence about the mechanism: the dry runs use the fake runtime (synthetic frames, pixel embedder)
 and check the protocol, the bookkeeping and the gates. Sections 3 and 4 use existing frozen data (frozen-M1 controls,
@@ -76,3 +76,23 @@ schedule; the four seed-1 sources used by G1 are genuine (each shares its genera
 
 Phase T: 4 seed-1 units (REF + 2 controls), metrics, tolerances, overlap: about 1.5 h. Phase C: 96 conditions (about
 2-3 min each, as VD-2) plus metrics and clips: about 5 h. Inspection: 16 cells x 6 clips of 15-28 s.
+
+## 7. Revision for draft 6 (decisions of 2026-10-25)
+
+- `vd3_tolerances.py` is replaced by **`vd3_phaseT.py`**: per cell (16) it reports distributions only - natural REF
+  variation (window statistics with percentiles and P95 - P5 widths, lag-10 window changes, REF V1, REF early-to-late
+  change), measurement noise (embedder recomputation on the same REF frames; emulation determinism from G1 and prefix
+  digests), cross-seed differences as sensitivity, frozen-M1 paired deviations as context. It chooses no threshold.
+  Section 3's band evidence stays as information: it is not used to tighten any threshold.
+- `aggregate_vd3.py` reads the frozen thresholds (`vd3_thresholds.json`, written after the Phase T review) and refuses
+  without them; per confirmation cell and candidate it classifies FAIL / DISCRIMINATIVE PASS / NON-DISCRIMINATIVE PASS
+  (frozen M1's R1-R4 in the same cell) and applies the overall rule (any FAIL or veto -> NO-GO; every confirmation
+  input with a discriminative pass -> GO; otherwise INCONCLUSIVE); non-discriminative passes are listed.
+- `run_vc.py vd3 --phase base` (Phase T) requires `expVD3_phaseT_approval.md`; `--phase cand` / `key` require the
+  freeze, and `cand` the committed thresholds.
+- Node identity verification and orphan cleanup (`mobility_node.py`, `mobility_orchestrate.py`), the audi seed-0
+  reproduction (`run_wrn.py w2_repro`) and its comparison (`compare_wrn_audi_repro.py`): `../audi_s0_w2_provenance.md`
+  section 6. The comparison's verification refuses a non-audi run (checked on `expW_W2_train_s1`: no identity, digests
+  equal train seed 1), and the frozen W recomputation reproduces the recorded W-H1 / W-H2 / W-H3 verdicts.
+- Tests after the revision: `test_vc.py` ALL PASS (59 checks; new: Phase T outputs, D1c classes and overall rule,
+  refusal without thresholds, Phase T refusal without its approval record); `test_xb.py`: see the commit message.

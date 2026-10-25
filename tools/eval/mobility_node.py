@@ -52,6 +52,55 @@ from common import DEFAULT_MSS, MSS_WARNINGS, CsvLog, EventLog, ResourceSampler,
 from proto_handoff import MB, RecvPool, _pool, component_digest, estimate_sink_bytes, payload_slices, recv_exact, recv_msg, send_msg  # noqa: E402
 
 REJOIN_DB = 35.0
+# Node identity reported in HELLO and checked by the orchestrator (osdi/audi_s0_w2_provenance.md): what the node
+# generates (input, prompt, seed, size, window), which GPU, and the launch token of the orchestrator that started it.
+IDENTITY_FIELDS = ("label", "video_path", "prompt_file_path", "seed", "height", "width", "noise_scale", "gpu_id", "migration_chunk", "post_chunks",
+                   "dry_run", "cold_start", "launch_id")
+IDENTITY_FLAGS = {f: "--" + f for f in IDENTITY_FIELDS}
+
+
+def _norm_path(p: str) -> str:
+    """Repository-relative form of a path argument (relative arguments are resolved against the repository root, the
+    node's working directory), so the same file compares equal on every host."""
+    q = Path(p) if os.path.isabs(p) else REPO_ROOT / p
+    q = Path(os.path.normpath(q))
+    try:
+        return str(q.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(q)
+
+
+# every generation-relevant argument (ports, bind address, MSS, interface and logging flags excluded): its hash is the
+# configuration fingerprint
+CONFIG_FIELDS = IDENTITY_FIELDS[:-1] + ("config_path", "checkpoint_folder", "fps", "step", "model_type", "fixed_noise_scale", "t2v", "use_taehv",
+                                        "normalize_latents", "use_tensorrt", "fast", "sink_fp", "block_ck", "dry_sink_mb", "dry_service_s")
+
+
+def file_sha256(p: str | None) -> str | None:
+    if not p:
+        return None
+    q = Path(p) if os.path.isabs(p) else REPO_ROOT / p
+    if not q.is_file():
+        return None
+    h = hashlib.sha256()
+    with open(q, "rb") as fh:
+        for blk in iter(lambda: fh.read(1 << 22), b""):
+            h.update(blk)
+    return h.hexdigest()
+
+
+def node_identity(a, hash_inputs: bool = True) -> dict:
+    """Identity reported in HELLO: the identity fields, the SHA-256 of the input video and prompt files (content, not
+    names), and a fingerprint of the generation configuration."""
+    out = {}
+    for f in IDENTITY_FIELDS:
+        v = getattr(a, f, None)
+        out[f] = _norm_path(v) if (f.endswith("_path") and v) else v
+    cfg = {f: (_norm_path(getattr(a, f)) if (f.endswith(("_path", "_folder")) and getattr(a, f, None)) else getattr(a, f, None)) for f in CONFIG_FIELDS}
+    out["config_fingerprint"] = hashlib.sha256(json.dumps(cfg, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    if hash_inputs:
+        out["video_sha256"], out["prompt_sha256"] = file_sha256(a.video_path), file_sha256(a.prompt_file_path)
+    return out
 FULL_COMPS = ("inflight", "meta", "recent", "sink", "vae")   # Phase 1 `full` sends sorted(fg) in this order
 _DIGESTS = None
 
@@ -809,7 +858,8 @@ class Node:
             self.send("HELLO", host_info=host_info(self.a.gpu_id), mss_effective=effective_mss(self.ctl), mss_warnings=list(MSS_WARNINGS),
                       service_s=self.rt.service_s, dry_run=self.a.dry_run, data_port=self.a.data_port, k=self.rt.k, pid=os.getpid(),
                       cold_start=bool(self.a.cold_start), t_main=T_MAIN, t_runtime_ready=self.t_runtime_ready, t_listen=self.t_listen,
-                      reference=str(self.ref_path) if self.ref_path else "baseline", commit=_git_commit(), codecs=self._codecs())
+                      reference=str(self.ref_path) if self.ref_path else "baseline", commit=_git_commit(), codecs=self._codecs(),
+                      identity=node_identity(self.a))
             try:
                 while True:
                     hdr, payload = recv_msg(self.ctl)
@@ -1977,6 +2027,7 @@ def parse_args(argv=None):
     p.add_argument("--recent_slots", type=int, default=0, help="(unused: Experiment A passes recent_slots per run in EXEC_HANDOFF; kept for the dry-run driver)")
     p.add_argument("--block_ck", action="store_true", help="Task B: per-call block checksums of every (layer, key, row, sink slot) and all slot positions in the baseline record")
     p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
+    p.add_argument("--launch_id", type=str, default="", help="token of the orchestrator invocation that started this node (echoed in HELLO; identity check)")
     # model / workload (same defaults as Phase 1)
     p.add_argument("--config_path", type=str, default=str(REPO_ROOT / "configs/wan_causal_dmd_v2v.yaml"))
     p.add_argument("--checkpoint_folder", type=str, default=str(REPO_ROOT / "ckpts/wan_causal_dmd_v2v"))

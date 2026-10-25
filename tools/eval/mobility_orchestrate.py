@@ -92,6 +92,29 @@ def parse_nodes(spec: str | None, dry: bool) -> dict[str, dict]:
     return out
 
 
+# ----------------------------------------------------------------------------- node identity
+def identity_mismatches(hello: dict, cmd: list[str], launched: bool) -> list[str]:
+    """Compare the identity a node reports in HELLO with the command line it should have been started with.
+    launched: this invocation started the node, so every identity field (defaults included) and the launch token must
+    match. Otherwise (nodes started outside the orchestrator) only the fields the orchestrator's node command states
+    explicitly are compared. A node without an identity (older code) is a mismatch."""
+    import mobility_node as mn
+
+    got = hello.get("identity")
+    if not isinstance(got, dict):
+        return ["the node reports no identity (node code older than the identity check)"]
+    want = mn.node_identity(mn.parse_args(list(cmd[2:])))
+    stated = {f for f, flag in mn.IDENTITY_FLAGS.items() if any(t == flag or t.startswith(flag + "=") for t in cmd)}
+    fields = list(mn.IDENTITY_FIELDS) + ["config_fingerprint"] if launched else sorted(stated)
+    bad = [f"{f}: node {got.get(f)!r} != expected {want.get(f)!r}" for f in fields if got.get(f) != want.get(f)]
+    # input content: compared whenever both sides can read the file (the orchestrator host has the same repository
+    # layout; LOVEU inputs live outside it and are compared by path only when absent here)
+    for f, pf in (("video_sha256", "video_path"), ("prompt_sha256", "prompt_file_path")):
+        if (launched or pf in stated) and want.get(f) and got.get(f) != want.get(f):
+            bad.append(f"{f}: node {str(got.get(f))[:12]} != expected {want[f][:12]} (input content differs)")
+    return bad
+
+
 # ----------------------------------------------------------------------------- node connection
 class NodeConn:
     def __init__(self, label: str, host: str, port: int, mss, events: queue.Queue, timeout: float, retry_s: float = 5.0):
@@ -1686,6 +1709,7 @@ class Orchestrator:
         self.agent_pids = {}
         self.agents = {}
         self.net = None
+        self.node_cmds = {}   # label -> the exact command this invocation started the node with (identity check)
         self.cold_label = "B" if a.cold_dest else None   # --cold_dest: the destination is started after each trigger
 
     def labels(self):
@@ -1696,7 +1720,7 @@ class Orchestrator:
             self.agents.update(connect_all(parse_hosts(self.a.agent_hosts), [lb]))
         return self.agents[lb]
 
-    def node_cmd(self, lb, cold_start=False):
+    def node_cmd(self, lb, cold_start=False, launch_id=None):
         nd = self.node_spec[lb]
         gpus = dict(item.split("=") for item in self.a.gpus.split(","))
         cmd = [self.a.py, "tools/eval/mobility_node.py", "--label", lb, "--gpu_id", gpus.get(lb, "0"), "--ctl_port", str(nd["ctl"]), "--data_port", str(nd["data"]), "--mss", str(self.a.mss or 0),
@@ -1705,14 +1729,24 @@ class Orchestrator:
             cmd += ["--iface", self.a.iface]
         if cold_start:
             cmd += ["--cold_start"]
+        if launch_id:
+            cmd += ["--launch_id", launch_id]
         return cmd + self.a.node_extra.split()
+
+    @staticmethod
+    def new_launch_id(lb):
+        import secrets
+
+        return f"{lb}-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
 
     def launch(self):
         labels = [lb for lb in self.labels() if lb != self.cold_label]
         self.agents.update(connect_all(parse_hosts(self.a.agent_hosts), labels))
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         for lb in labels:
-            pid = self.agents[lb].run(self.node_cmd(lb), f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{stamp}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
+            cmd = self.node_cmd(lb, launch_id=self.new_launch_id(lb))
+            self.node_cmds[lb] = cmd
+            pid = self.agents[lb].run(cmd, f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{stamp}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
             self.agent_pids[lb] = (self.agents[lb], pid)
             print(f"[orch] launched node {lb} on {self.node_spec[lb]['host']} (pid {pid})", flush=True)
         if self.a.hybrid_net:
@@ -1742,6 +1776,14 @@ class Orchestrator:
               f"dry_run={h.get('dry_run')}, commit {(h.get('commit') or '?')[:7]}", flush=True)
         if h.get("dry_run") and not self.a.dry_run:
             raise SystemExit(f"node {lb} is a dry-run node; refusing to record results")
+        launched = lb in self.node_cmds
+        bad = identity_mismatches(h, self.node_cmds[lb] if launched else self.node_cmd(lb, cold_start=lb == self.cold_label), launched)
+        if bad:
+            raise SystemExit(f"node {lb} at {nd['host']}:{nd['ctl']} (pid {h.get('pid')}) is not the node this invocation expects "
+                             f"({'started by this invocation' if launched else 'attached'}): " + "; ".join(bad))
+        idn = h["identity"]
+        print(f"[orch] node {lb} identity ok ({'launch token' if launched else 'attached; stated fields'}): {idn.get('video_path')} seed {idn.get('seed')} "
+              f"{idn.get('height')}x{idn.get('width')} gpu {idn.get('gpu_id')}", flush=True)
 
     # ---- OTTER cold destination: one fresh destination process per run
     def check_reference(self, lb):
@@ -1773,16 +1815,18 @@ class Orchestrator:
         return out
 
     def start_node(self, lb, cold_start=False, tag=""):
-        cmd = self.node_cmd(lb, cold_start=cold_start)
+        cmd = self.node_cmd(lb, cold_start=cold_start, launch_id=self.new_launch_id(lb))
         if self.a.dry_run and not self.a.launch:   # local protocol test: start the dry-run node here
             import subprocess
 
             nd = self.node_spec[lb]
             cmd = [sys.executable] + cmd[1:] + ["--bind", nd["host"], "--dry_run"] + self.a.dry_node_args.split()
+            self.node_cmds[lb] = cmd
             logp = REPO_ROOT / f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{tag}.log"; logp.parent.mkdir(parents=True, exist_ok=True)
             pr = subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=open(logp, "w"), stderr=subprocess.STDOUT)
             self.agent_pids[lb] = (None, pr)
             return pr.pid
+        self.node_cmds[lb] = cmd
         pid = self.agent(lb).run(cmd, f"results/evaluation/{self.a.experiment}/_launch_logs/node_{lb}_{tag}.log", env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
         self.agent_pids[lb] = (self.agent(lb), pid)
         return pid
@@ -1795,7 +1839,8 @@ class Orchestrator:
                 send_msg(nc.sock, "SHUTDOWN", {}, b"", None)
             except OSError:
                 pass
-        ag, h = self.agent_pids.get(lb, (None, None))
+        ag, h = self.agent_pids.pop(lb, (None, None))
+        self.node_cmds.pop(lb, None)
         if ag is None and h is not None:
             h.wait(timeout=120)
         elif ag is not None:
@@ -1803,12 +1848,33 @@ class Orchestrator:
             if r.get("timed_out"):
                 ag.call(op="kill", pid=pid)
 
-    def shutdown(self):
+    def shutdown(self, grace_s: float = 60.0):
+        """SHUTDOWN to every connected node, then make sure every node process this invocation started has ended:
+        a connected node gets grace_s to exit, a node that never connected (e.g. the invocation failed while it was
+        loading) is killed at once. No node started here outlives the invocation (orphans answered a later invocation's
+        connection once: osdi/audi_s0_w2_provenance.md)."""
         for nc in self.nodes.values():
+            nc.closing = True
             try:
                 send_msg(nc.sock, "SHUTDOWN", {}, b"", None)
             except OSError:
                 pass
+        for lb, (ag, h) in list(self.agent_pids.items()):
+            connected = lb in self.nodes
+            try:
+                if ag is None and h is not None:   # local dry-run Popen
+                    try:
+                        h.wait(timeout=grace_s if connected else 0.1)
+                    except Exception:  # noqa: BLE001
+                        h.kill(); h.wait(timeout=30)
+                elif ag is not None:
+                    r = ag.wait(h, timeout=grace_s) if connected else {"timed_out": True}
+                    if r.get("timed_out"):
+                        ag.call(op="kill", pid=h)
+                        print(f"[orch] node {lb} (pid {h}) {'did not exit after SHUTDOWN' if connected else 'never connected'}: killed", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[orch] WARNING: could not confirm that node {lb} ended: {exc!r}", flush=True)
+        self.agent_pids.clear()
         if self.net is not None:
             self.net.shutdown()
 
@@ -1883,11 +1949,11 @@ def main():
     if a.dry_run:
         a.experiment = "_dryrun_" + a.experiment
     o = Orchestrator(a)
-    if a.launch:
-        o.launch()
-    o.connect()
     results = []
     try:
+        if a.launch:
+            o.launch()
+        o.connect()
         if a.measure_ts:
             out = []
             for bw_s in a.bws.split():

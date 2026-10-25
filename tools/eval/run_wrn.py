@@ -169,8 +169,11 @@ class Ctx:
             print(f"[wrn] skip {what}: every policy already has its valid runs", flush=True)
             return 0
         hops = int(args[args.index("--hops") + 1]) if "--hops" in args else 3
-        # XB invocations use only the labels of their path (one hop: A and B); every other experiment keeps the four-host check
-        self.wait_idle(what, ",".join("ABCD"[:hops + 1]) if any(x.startswith("--xb") for x in args) or ("--policies" in args and any(p in args[args.index("--policies") + 1] for p in ("precopy", "recompute", "split_wait"))) else "")
+        # XB invocations and provenance reproductions (expWP_*) use only the labels of their path (one hop: A and B); every
+        # other experiment keeps the four-host check
+        scoped = any(x.startswith("--xb") for x in args) or experiment.startswith("expWP_") or \
+            ("--policies" in args and any(p in args[args.index("--policies") + 1] for p in ("precopy", "recompute", "split_wait")))
+        self.wait_idle(what, ",".join("ABCD"[:hops + 1]) if scoped else "")
         cmd = [self.py, "tools/eval/mobility_orchestrate.py", "--experiment", experiment, "--skip_done", "--validity", "wrn", "--bw", self.bw] + args
         if self.dry:
             m = args[args.index("--migration_chunk") + 1] if "--migration_chunk" in args else "30"
@@ -601,6 +604,18 @@ def do_w2(c):
             c.orch(f"expW_W2_{w}_s{s}", w2_args(c), node_extra(w, s), f"W2 {w} seed {s}")
 
 
+WP_PREFIX = "expWP_W2"   # provenance reproductions (osdi/audi_s0_w2_provenance.md); never mixed into expW_W2
+
+
+def do_w2_repro(c):
+    """Reproduce one W2 OTTER configuration whose frozen run has a provenance defect, with the node identity check, under
+    a separate experiment (expWP_W2_<workload>_s<seed>); the frozen run stays where it is. Default: audi-snow-trail seed 0."""
+    w, s = c.a.workload or "audi-snow-trail", int(c.a.seed if c.a.seed is not None else 0)
+    args = list(w2_args(c))
+    args[args.index("--policies") + 1] = "reuse_dyn"   # the affected run is the OTTER one; the Cold-restart run is genuine
+    return c.orch(f"{WP_PREFIX}_{w}_s{s}", args, node_extra(w, s), f"W2 provenance reproduction {w} seed {s} (OTTER only)")
+
+
 def do_r(c):
     c.orch("expR_c0", r_args(c, 0), ["--sink_fp"], "R c = 0")
     c.orch("expR_c3", r_args(c, 3), ["--sink_fp"], "R c = 3 (hybrid)")
@@ -651,7 +666,7 @@ def do_list(c):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx",
+    ap.add_argument("what", choices=["list", "setup", "shakedown", "w1", "w2", "w2_repro", "r", "n", "war", "all", "m3dev", "v", "a", "b", "vacw", "m3e_shk", "m3e", "wx_shk", "wx",
                                        "xb_gate", "xb_cal", "xb_cal_rep", "xb_cal_ext", "xb_cal_jitter", "xb_lossy", "xb_shk", "xb_main", "xb_native"])
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--dry_promote", default="", help="dry: calls at which bound fake Sinks change (version-event accounting test)")
@@ -659,6 +674,8 @@ def main():
     ap.add_argument("--wait_s", type=int, default=1800)
     ap.add_argument("--tag", default="", help="m3dev: round tag (m3dev_<tag>_cell*); v: amendment tag (expV_<tag>_cell*); earlier runs are kept")
     ap.add_argument("--cells", default="", help="v: comma list of V cells to run (default all); m3e / m3e_shk: comma list of scenarios (S1..S5) for re-runs")
+    ap.add_argument("--workload", default="", help="w2_repro: the workload to reproduce (default audi-snow-trail)")
+    ap.add_argument("--seed", type=int, default=None, help="w2_repro: the seed to reproduce (default 0)")
     ap.add_argument("--py", default=os.environ.get("PY") or (str(ROOT / ".venv/bin/python") if (ROOT / ".venv/bin/python").exists() else sys.executable))
     a = ap.parse_args()
     c = Ctx(a)
@@ -667,7 +684,7 @@ def main():
             for f in (do_w1, do_w2, do_r, do_n, do_war):
                 f(c)
         else:
-            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx,
+            {"list": do_list, "setup": do_setup, "shakedown": do_shakedown, "w1": do_w1, "w2": do_w2, "w2_repro": do_w2_repro, "r": do_r, "n": do_n, "war": do_war, "m3dev": do_m3dev, "v": do_v, "a": do_a, "b": do_b, "vacw": do_vacw, "m3e_shk": lambda c: do_m3e(c, True), "m3e": do_m3e, "wx_shk": lambda c: do_wx(c, True), "wx": do_wx,
              "xb_gate": do_xb_gate, "xb_cal": do_xb_cal, "xb_cal_rep": do_xb_cal_rep, "xb_cal_ext": do_xb_cal_ext, "xb_cal_jitter": do_xb_cal_jitter, "xb_lossy": do_xb_lossy,
              "xb_shk": lambda c: do_xb_main(c, True), "xb_main": do_xb_main, "xb_native": do_xb_native}[a.what](c)
     finally:

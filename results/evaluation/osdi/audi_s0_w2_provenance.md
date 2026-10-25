@@ -50,3 +50,41 @@ crossing at call 84, last-10 median 34.9 dB (recorded in `wrn_report.md` section
 2. Keep the frozen W / R / N and VC results, and state in the paper and the artifact that the audi seed-0 OTTER unit is
    a duplicate train seed-1 sample and that the VC audi OT-1 / WFS-1 schedule is copied.
 In either case the orchestrator should get the identity check before any further testbed run.
+
+## 6. Decision (2026-10-25: reproduction approved) and disposition
+
+Decisions: add node identity verification before any new testbed run; reproduce the affected run; keep the frozen run
+unchanged; store the reproduction separately; compare the affected W / R / N metrics and verdicts; document; use
+verified results in the paper.
+
+**Node identity verification (implemented; before any new testbed run).**
+- `mobility_node.py` reports an `identity` in HELLO: label, input video and prompt (repository-relative paths and the
+  SHA-256 of their content), seed, size, noise scale, GPU, migration chunk and window, dry-run / cold-start flags, a
+  fingerprint of the generation configuration, and the **launch token** (`--launch_id`) of the invocation that started
+  it.
+- `mobility_orchestrate.py` gives every node it starts a new launch token and, on connecting, compares the HELLO identity
+  with the exact command it started the node with: launch token, every identity field, the configuration fingerprint and
+  the input content hashes. A mismatch refuses the connection and ends the invocation. A node started outside the
+  orchestrator (attach mode, the dry tests) is compared on the fields the orchestrator's node command states.
+- `launch` / `connect` now run inside the invocation's `try / finally`, and the cleanup ends every node the invocation
+  started: SHUTDOWN to connected nodes (60 s to exit, then killed), an immediate kill for nodes that never connected.
+  The 13:55 failure mode (a node left loading after a refused connection) cannot leave an orphan, and an orphan from an
+  older invocation is refused by its launch token.
+- Tests: `test_xb.py` identity section (launch token, other input / seed, configuration fingerprint, input content,
+  path normalization, attach-mode rules, an older node without identity, end-to-end refusal of a node with another
+  seed, cleanup of never-connected remote and local nodes).
+
+**Reproduction.** `run_wrn.py w2_repro` (default audi-snow-trail seed 0): the frozen W2 OTTER configuration (reuse_dyn,
+1 Gbps, move 34, window 130, hosts A -> B) once, under `results/evaluation/expWP_W2_audi-snow-trail_s0` (the frozen
+`expW_W2_audi-snow-trail_s0` is not touched; the Cold-restart run there is genuine and is kept).
+
+**Comparison.** `compare_wrn_audi_repro.py` -> `osdi/expW/audi_s0_repro_report.{md,json}`: (1) verification of the
+reproduction (valid under the frozen W / R / N rules; identity with the audi input, seed 0 and a launch token on every
+node; node A baseline digests equal to the genuine audi seed-0 generation and not to train seed 1) - no comparison is
+made unless it passes; (2) the unit's OTTER metrics frozen vs reproduction; (3) W-H1 / W-H2 (primary, S1, S2) / W-H3
+recomputed with the reproduction in place of the mislabeled run, next to the frozen recomputation (which reproduces
+the recorded verdicts: checked), changed verdicts listed; (4) the reproduction's schedule for VD-3's sensitivity
+analysis. R, N, V and A do not use the run.
+
+**Paper.** The verified results are used: once the comparison report is reviewed, the audi seed-0 unit of W is cited
+from the reproduction, with this note; the frozen run is never presented as audi.
