@@ -104,3 +104,19 @@ from the reproduction, with this note; the frozen run is never presented as audi
 
 Disposition: the paper cites the audi seed-0 unit of W from the verified reproduction, with this note; the frozen
 `..._135751` run stays in the artifact, labelled as a train seed-1 generation, never as audi.
+
+## 8. Corrected aggregates (approved 2026-10-25: recompute everything affected)
+
+`aggregate_wrn.py --corrected` writes the provenance-corrected set (`corrected_wrn_results.{json,md}`,
+`corrected_w2_table.csv`) with the audi seed-0 OTTER run replaced by the verified reproduction; the frozen outputs are
+unchanged. `diff_wrn_corrected.py` -> `expW/audi_s0_corrected_aggregate.md`:
+- 82 verdicts compared (W, R, N, V, A): **none changed**;
+- one aggregate field differs: W-H1's audi-snow-trail workload mean TTFO 0.677 -> 0.682 s;
+- one W2 table row differs (audi seed 0: TTFO, bind call, rejoin calls 40 -> 26, last-10 median 31.9 -> 34.2 dB, final
+  call 29.7 -> 34.9 dB, RVC events 11 -> 6, cuts between [62, 94] -> [62]);
+- the counts the paper cites are identical: 39 / 40 crossing, 31 sustained, 8 crossing but never sustained, 9 crossing
+  units ending with a last-10 median below 35 dB (10 including the non-crossing unit);
+- no figure script reads the W / R / N outputs (checked), so no figure changes.
+Text that quotes the audi seed-0 unit's own numbers (`wrn_report.md` section 2: "audi-snow-trail s0 31.9, whose single
+crossing came 40 calls after the bind") is cited in the paper from the corrected set (34.2 dB, 26 calls); the frozen
+report stays as recorded.

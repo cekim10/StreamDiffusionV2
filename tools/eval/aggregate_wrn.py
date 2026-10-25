@@ -4,6 +4,8 @@ followup_common.md section 3: validity, censoring, order-statistic medians, NOT 
 
     python tools/eval/aggregate_wrn.py            # -> results/evaluation/osdi/wrn_results.{json,md} + w2_table.csv, r_table.csv, n_table.csv
     python tools/eval/aggregate_wrn.py --dry      # loopback outputs (_dryrun_ prefixes); never reported
+    python tools/eval/aggregate_wrn.py --corrected   # provenance-corrected set (corrected_ prefixes; osdi/audi_s0_w2_provenance.md):
+                                                     # the W2 audi-snow-trail seed-0 OTTER run is the verified reproduction
 """
 
 from __future__ import annotations
@@ -480,12 +482,40 @@ def agg_a(dry):
     return out
 
 
+# Provenance corrections (osdi/audi_s0_w2_provenance.md): experiment -> (mislabeled run, verified reproduction experiment).
+# Applied only with --corrected and only when the reproduction report says the reproduction is verified.
+CORRECTIONS = {"expW_W2_audi-snow-trail_s0": ("policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-135751", "expWP_W2_audi-snow-trail_s0",
+                                              "results/evaluation/osdi/expW/audi_s0_repro_report.json")}
+
+
+def apply_corrections():
+    global runs_in
+    keep = runs_in
+    subs = {}
+    for exp, (bad, repro_exp, report) in CORRECTIONS.items():
+        rp = ROOT / report
+        if not rp.exists() or not json.load(open(rp)).get("verified"):
+            sys.exit(f"[wrn] --corrected: the reproduction for {exp} is not verified ({report})")
+        subs[exp] = (bad, json.load(open(rp))["repro"])
+
+    def corrected(exp, dry):
+        rs = keep(exp, dry)
+        if exp not in subs:
+            return rs
+        bad, repro = subs[exp]
+        return [r for r in rs if r["dir"].name != bad] + [run_rec(Path(repro), False)]
+    runs_in = corrected
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--corrected", action="store_true", help="provenance-corrected set (corrected_ outputs); frozen outputs untouched")
     a = ap.parse_args()
+    if a.corrected:
+        apply_corrections()
     out = {"W": agg_w(a.dry), "R": agg_r(a.dry), "N": agg_n(a.dry), "V": agg_v(a.dry), "A": agg_a(a.dry)}
-    pre = "_dryrun_" if a.dry else ""
+    pre = "_dryrun_" if a.dry else ("corrected_" if a.corrected else "")
     units = out["W"].pop("units")
     with open(OUT / f"{pre}w2_table.csv", "w", newline="") as fh:
         wr = csv.writer(fh)

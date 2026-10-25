@@ -77,6 +77,7 @@ def phase_stats(cm: dict, name: str, emb=None) -> dict:
     co, cr = sv(pc, cs, "v4_pre"), sv(pc, cs, "v4_pre_ref")
     return {"calls": [cs[0], cs[-1]], "dino": pmean(o), "dino_ref": pmean(r), "D_c": pmean(o - r), "C_c": pmean(co - cr),
             "dE_cross": w.get("v4_window_to_ref"), "E": w.get("E_ratio"), "motion": w.get("motion_ratio"),
+            "eO": pmean(sv(pc, cs, "eO")), "eR": pmean(sv(pc, cs, "eR")), "dO": pmean(sv(pc, cs, "dO")), "dR": pmean(sv(pc, cs, "dR")),
             "clip": pmean(sv(pc, cs, "v5b")), "clip_ref": pmean(sv(pc, cs, "v5b_ref")), "dinov2_D_c": pmean(sv(pc, cs, "v5a_dinov2") - sv(pc, cs, "v5a_dinov2_ref"))}
 
 
@@ -104,35 +105,90 @@ def cell(unit: Path, M: dict, cid: str) -> dict | None:
             "temp_slots_left_after_bind": v3.get("temp_slots_left_after_bind"), "ts_slots_written": v3.get("ts_slots_written"), "kc_digest_equal": v3.get("kc_digest_equal")}
 
 
-def rules(v: dict, name: str, tol: dict, p99: float) -> dict:
-    """R1-R5 (restoration) for one condition of one cell; None-safe (a missing value fails)."""
+# Engineering acceptance criteria (fixed limits, not REF-derived confidence bounds; decision of 2026-10-25)
+REL_LIMIT = 0.10      # warp-error ratio <= 1.10; frame-difference (motion) within +/- 10 % of REF
+ABS_FLOOR = 1.0       # near-zero safeguard: below a REF window mean of 1.0 gray level the allowance is 0.10 x 1.0 absolute
+PHASES = ("P1", "P2a", "P2b", "P3", "cost")
+
+
+def _rel_ok(o, r):
+    """o within REF r by the 10 % engineering limit, with the absolute safeguard for near-zero r."""
+    return o is not None and r is not None and abs(o - r) <= REL_LIMIT * max(r, ABS_FLOOR)
+
+
+def rules(v: dict, name: str, tol: dict, p99: float, ctrl: dict | None = None) -> dict:
+    """Restoration rules per phase for one condition of one cell; None-safe (a missing value fails).
+    P1  R1  boundary: V1(reset) <= REF P99
+    P2a R2a whole Sink-less window content / appearance: D_c >= -t_DINO, C_c <= t_dE, window dE vs REF <= t_dEx
+        R3  late window: excess drift X <= t_DINO and late D_c >= -t_DINO
+    P2b R2b whole Sink-less window motion / temporal consistency: warp error and frame difference within 10 % of REF
+        (absolute safeguard near zero); the warp check is one-sided (more warp error fails), motion two-sided
+    P3  R4  no-harm (proposed reading of the 2026-10-25 decision): the last 10 calls satisfy the P2a content / color and
+        P2b clauses against REF (full recovery); the bind V1 and the first 20 calls after the bind are not worse than
+        frozen M1's in the same cell by more than the same limits (V1(bind) <= max(REF P99, frozen M1's); D_c >=
+        frozen M1's - t_DINO; C_c <= frozen M1's + t_dE; warp error and frame difference within 10 % of frozen M1's).
+        Without a control (ctrl None) the absolute REF form is used.
+    cost R5 serial reconstruction <= 1.5 s and bytes <= 1 MB"""
     def le(a, b):
         return a is not None and b is not None and a <= b
     t = tol
-    within = lambda ps: (le(-t["dino"], ps.get("D_c")) and le(ps.get("C_c"), t["dE_anchor"]) and le(ps.get("E"), 1 + t["E"])  # noqa: E731
-                         and ps.get("motion") is not None and 1 - t["motion"] <= ps["motion"] <= 1 + t["motion"])
-    sl = v["P"]["sinkless"]
+
+    def content(ps, cross=False):
+        return le(-t["dino"], ps.get("D_c")) and le(ps.get("C_c"), t["dE_anchor"]) and (not cross or le(ps.get("dE_cross"), t["dE_cross"]))
+
+    def temporal(ps):
+        warp = ps.get("eO") is not None and ps.get("eR") is not None and (ps["eO"] - ps["eR"]) <= REL_LIMIT * max(ps["eR"], ABS_FLOOR)
+        return warp and _rel_ok(ps.get("dO"), ps.get("dR"))
+    sl, pb, l10 = v["P"]["sinkless"], v["P"]["post_bind_20"], v["P"]["last_10"]
     R = {"R1": le(v["v1_reset"], p99),
-         "R2": within(sl) and le(sl.get("dE_cross"), t["dE_cross"]),
+         "R2a": content(sl, cross=True),
          "R3": le(v["X_late"], t["dino"]) and le(-t["dino"], v["P"]["sl_late"].get("D_c")),
-         "R4": le(v["v1_bind"], p99) and within(v["P"]["post_bind_20"]) and within(v["P"]["last_10"]),
+         "R2b": temporal(sl),
+         "R4": no_harm(v, ctrl, t, p99, content, temporal, le),
          "R5": le(v["cost_s"], COST_LIMIT_S) and bytes_added(name) <= BYTES_LIMIT}
-    R["all"] = v["valid"] and all(R.values())
+    R["P1"], R["P2a"], R["P2b"], R["P3"], R["cost"] = R["R1"], R["R2a"] and R["R3"], R["R2b"], R["R4"], R["R5"]
+    R["valid"] = bool(v["valid"])
+    R["all"] = R["valid"] and all(R[p] for p in PHASES)
     return R
 
 
-def classify(rr: dict, rc: dict) -> str:
-    if not rr.get("all"):
-        return "FAIL"
-    return "DISCRIMINATIVE PASS" if not all(rc.get(r_) for r_ in ("R1", "R2", "R3", "R4")) else "NON-DISCRIMINATIVE PASS"
+def no_harm(v, ctrl, t, p99, content, temporal, le) -> bool:
+    pb, l10 = v["P"]["post_bind_20"], v["P"]["last_10"]
+    if ctrl is None:
+        return le(v["v1_bind"], p99) and content(pb) and content(l10) and temporal(pb) and temporal(l10)
+    cb = ctrl["P"]["post_bind_20"]
+    bind_ok = v["v1_bind"] is not None and v["v1_bind"] <= max(x for x in (p99, ctrl.get("v1_bind")) if x is not None)
+    pb_ok = (le(cb.get("D_c") - t["dino"] if cb.get("D_c") is not None else None, pb.get("D_c")) and le(pb.get("C_c"), cb.get("C_c") + t["dE_anchor"] if cb.get("C_c") is not None else None)
+             and pb.get("eO") is not None and cb.get("eO") is not None and pb["eO"] - cb["eO"] <= REL_LIMIT * max(cb["eO"], ABS_FLOOR)
+             and _rel_ok(pb.get("dO"), cb.get("dO")))
+    return bool(bind_ok and pb_ok and content(l10) and temporal(l10))
 
 
-def overall(classes: dict, vetoes: list, inputs: set) -> str:
-    """classes: {cell: class} over the confirmation cells; inputs: the confirmation inputs."""
-    if any(c == "FAIL" for c in classes.values()) or vetoes:
-        return "NO-GO"
-    disc = {k.split("_s")[0] for k, c in classes.items() if c == "DISCRIMINATIVE PASS"}
-    return "GO" if inputs <= disc else "INCONCLUSIVE"
+def classify_phases(rr: dict, rc: dict) -> dict:
+    """Per phase: FAIL (the candidate violates it), DISCRIMINATIVE PASS (passes; frozen M1 violates it in this cell),
+    NON-DISCRIMINATIVE PASS (both pass). P3 and cost are no-harm / limit checks: PASS or FAIL. An invalid stream fails
+    every phase."""
+    if not rr.get("valid"):
+        return {p: "FAIL" for p in PHASES}
+    out = {}
+    for p in PHASES:
+        if p in ("P3", "cost"):
+            out[p] = "PASS" if rr.get(p) else "FAIL"
+        else:
+            out[p] = "FAIL" if not rr.get(p) else ("DISCRIMINATIVE PASS" if not rc.get(p) else "NON-DISCRIMINATIVE PASS")
+    return out
+
+
+def overall(classes: dict, vetoes: list, inputs: set) -> dict:
+    """classes: {cell: {phase: class}} over the confirmation cells; inputs: the confirmation inputs.
+    continuity: NO-GO if any phase of any cell FAILs or the inspection vetoes; GO if every input has a discriminative
+    pass in P1 and in P2 (P2a or P2b); otherwise INCONCLUSIVE. identity (P2a): ESTABLISHED only if every input has a
+    discriminative P2a pass (and continuity is not NO-GO); otherwise INCONCLUSIVE (or NO-GO with the continuity)."""
+    if vetoes or any(c == "FAIL" for ph in classes.values() for c in ph.values()):
+        return {"continuity": "NO-GO", "identity": "NO-GO"}
+    disc = lambda ps: {k.split("_s")[0] for k, ph in classes.items() if any(ph.get(p) == "DISCRIMINATIVE PASS" for p in ps)}  # noqa: E731
+    cont = "GO" if (inputs <= disc(["P1"]) and inputs <= disc(["P2a", "P2b"])) else "INCONCLUSIVE"
+    return {"continuity": cont, "identity": "ESTABLISHED" if inputs <= disc(["P2a"]) else "INCONCLUSIVE"}
 
 
 def thresholds_for(T: dict, key: str) -> dict | None:
@@ -208,8 +264,9 @@ def main():
                     continue
                 key = f"{inp}_s{sd}|OT-{x}"
                 tol = thresholds_for(T, f"{inp}_s{sd}|OT-{x}")
+                sens = ((T.get("cells") or {}).get(f"{inp}_s{sd}|OT-{x}") or {}).get("sensitivity") or {}
                 cs = {n: cell(unit, M, f"VD3{x}-{n}") for n in CELLS}
-                cells[key] = {"confirmation": (inp, sd) in CONFIRM, "p99": M.get("ref_spike_P99"), "tol": tol, "control": ctrl, "conds": cs}
+                cells[key] = {"confirmation": (inp, sd) in CONFIRM, "p99": M.get("ref_spike_P99"), "tol": tol, "sens": sens, "control": ctrl, "conds": cs}
                 if tol is None:
                     validity.append(f"{key}: no frozen thresholds")
                 for n, v in cs.items():
@@ -232,28 +289,33 @@ def main():
     # ---- effect sizes per phase, then rules
     R = {cand: {} for cand in CANDIDATES}
     RC = {}   # frozen M1's restoration rules per confirmation cell
+    RS, RCS = {}, {}   # the same under the sensitivity threshold sets (B, C)
     C = {"C1": [], "C2": [], "C3": []}
     for key, cc in sorted(cells.items(), key=lambda kv: (not kv[1]["confirmation"], kv[0])):
         ctrl, tol, p99 = cc["control"], cc["tol"], cc["p99"]
         L += ["", f"## {key} ({'confirmation' if cc['confirmation'] else 'replication'}; REF V1 P99 {f(p99, 2)}; thresholds {json.dumps({k_: (round(v, 4) if isinstance(v, (int, float)) else v) for k_, v in (tol or {}).items()})})", "",
-              "| condition | valid | P1 V1 reset (paired REF; x M1) | P2 D_c / C_c / dE x / E / motion | P2 late D_c, excess drift X | P3 V1 bind (paired REF) | post-bind-20 D_c / C_c / E / motion | last-10 D_c | PSNR first >= 35 / terminal (diagnostic) | cost s | bytes | DINO gap closed | R1 R2 R3 R4 R5 |",
+              "| condition | valid | P1 V1 reset (paired REF; x M1) | P2 D_c / C_c / dE x / E / motion | P2 late D_c, excess drift X | P3 V1 bind (paired REF) | post-bind-20 D_c / C_c / E / motion | last-10 D_c | PSNR first >= 35 / terminal (diagnostic) | cost s | bytes | DINO gap closed | P1 P2a P2b P3 cost |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for n, v in [("frozen M1", ctrl)] + [(n, cc["conds"][n]) for n in CELLS]:
             if v is None:
                 continue
             sl, pb = v["P"]["sinkless"], v["P"]["post_bind_20"]
             imp = improvement(v, ctrl) if n != "frozen M1" else {}
-            rr = rules(v, n if n != "frozen M1" else "OT", tol, p99) if tol else {}
+            rr = rules(v, n if n != "frozen M1" else "OT", tol, p99, ctrl) if tol else {}
             if n in CANDIDATES and cc["confirmation"]:
                 R[n][key] = rr
+                for sname, st in (cc.get("sens") or {}).items():
+                    RS.setdefault(sname, {}).setdefault(n, {})[key] = rules(v, n, st, p99, ctrl)
             if n == "frozen M1" and cc["confirmation"]:
                 RC[key] = rr
+                for sname, st in (cc.get("sens") or {}).items():
+                    RCS.setdefault(sname, {})[key] = rules(v, "OT", st, p99, ctrl)
             L.append(f"| {n} | {v['valid']} | {f(v['v1_reset'], 2)} ({f(v['v1_reset_ref_same_call'], 2)}; {f(imp.get('v1_ratio'), 2)}) | "
                      f"{f(sl.get('D_c'))} / {f(sl.get('C_c'), 2)} / {f(sl.get('dE_cross'), 2)} / {f(sl.get('E'), 2)} / {f(sl.get('motion'), 2)} | "
                      f"{f(v['P']['sl_late'].get('D_c'))}, {f(v['X_late'])} | {f(v['v1_bind'], 2)} ({f(v['v1_bind_ref_same_call'], 2)}) | "
                      f"{f(pb.get('D_c'))} / {f(pb.get('C_c'), 2)} / {f(pb.get('E'), 2)} / {f(pb.get('motion'), 2)} | {f(v['P']['last_10'].get('D_c'))} | "
                      f"{v['cross_call']} / {f(v['terminal_psnr'], 1)} | {f(v['cost_s'])} | {bytes_added(n) / 1e6:.2f} MB | {f(imp.get('dino_gap_closed'), 2)} | "
-                     + " ".join(("Y" if rr.get(r_) else "n") for r_ in ("R1", "R2", "R3", "R4", "R5")) + " |")
+                     + " ".join(("Y" if rr.get(p_) else "n") for p_ in PHASES) + " |")
         if cc["confirmation"]:
             d, ts, dr2, st_, nz = (cc["conds"].get(k_) for k_ in ("DR2+TSin", "TSin", "DR2", "DR2stale", "DR2noise"))
             ok = all(x is not None and x["valid"] for x in (d, ts, dr2, st_, nz))
@@ -262,16 +324,30 @@ def main():
             C["C2"].append(ok and ts["v1_reset"] is not None and p99 is not None and ts["v1_reset"] > p99)
             C["C3"].append(ok and None not in (dr2["v1_reset"], st_["v1_reset"], nz["v1_reset"]) and dr2["v1_reset"] < st_["v1_reset"] and dr2["v1_reset"] < nz["v1_reset"])
     n_conf = sum(1 for c in cells.values() if c["confirmation"])
-    L += ["", "## GO / NO-GO (D1c: FAIL / DISCRIMINATIVE PASS / NON-DISCRIMINATIVE PASS per confirmation cell; no inspection veto)", ""]
+    L += ["", "## GO / NO-GO (phase-level discrimination; primary thresholds A)", "",
+          "Per confirmation cell and phase: FAIL / DISCRIMINATIVE PASS (frozen M1 violates that phase there) / NON-DISCRIMINATIVE PASS; "
+          "P3 (no-harm) and cost: PASS / FAIL. Continuity: NO-GO on any FAIL or inspection veto; GO if every input has a discriminative pass in P1 and in P2 "
+          "(P2a or P2b); otherwise INCONCLUSIVE. Identity preservation: ESTABLISHED only if every input has a discriminative P2a pass.", ""]
     V, CL = {}, {}
     conf_inputs = {k.split("_s")[0] for k, c in cells.items() if c["confirmation"]}
+    vetoes_of = {cand: [ck for ck, cv in insp["cells"].items() if ck in cells and cells[ck]["confirmation"] and (cv.get(cand) or {}).get("veto")] for cand in CANDIDATES}
     for cand in CANDIDATES:
-        CL[cand] = {ck: classify(rr, RC.get(ck, {})) for ck, rr in R[cand].items()}
-        vetoes = [ck for ck, cv in insp["cells"].items() if ck in cells and cells[ck]["confirmation"] and (cv.get(cand) or {}).get("veto")]
-        fails = {ck: [r_ for r_ in ("R1", "R2", "R3", "R4", "R5") if not rr.get(r_)] for ck, rr in R[cand].items() if not rr["all"]}
-        V[cand] = "PENDING" if (n_conf < 12 or len(R[cand]) < 12) else overall(CL[cand], vetoes, conf_inputs)
-        nd = [ck for ck, c in CL[cand].items() if c == "NON-DISCRIMINATIVE PASS"]
-        L.append(f"- **{cand}: {V[cand]}** - per cell {json.dumps(CL[cand])}; failing rules {fails or 'none'}; non-discriminative passes {nd or 'none'}; inspection vetoes {vetoes or 'none'}")
+        CL[cand] = {ck: classify_phases(rr, RC.get(ck, {})) for ck, rr in R[cand].items()}
+        V[cand] = {"continuity": "PENDING", "identity": "PENDING"} if (n_conf < 12 or len(R[cand]) < 12) else overall(CL[cand], vetoes_of[cand], conf_inputs)
+        L += [f"### {cand}: continuity **{V[cand]['continuity']}**, identity preservation **{V[cand]['identity']}** (inspection vetoes {vetoes_of[cand] or 'none'})", "",
+              "| cell | " + " | ".join(PHASES) + " |", "|---|" + "---|" * len(PHASES)]
+        L += [f"| {ck} | " + " | ".join(ph[p_] for p_ in PHASES) + " |" for ck, ph in sorted(CL[cand].items())]
+        for p_ in ("P1", "P2a", "P2b"):
+            nd = sorted(ck for ck, ph in CL[cand].items() if ph[p_] == "NON-DISCRIMINATIVE PASS")
+            L.append(f"- {p_} non-discriminative passes: {nd or 'none'}")
+        L.append("")
+    L += ["## Sensitivity (threshold sets B and C; never the verdict)", ""]
+    for sname in sorted(RS):
+        for cand in CANDIDATES:
+            cls = {ck: classify_phases(rr, RCS[sname].get(ck, {})) for ck, rr in RS[sname].get(cand, {}).items()}
+            res = overall(cls, vetoes_of[cand], conf_inputs) if len(cls) == 12 and n_conf == 12 else {"continuity": "PENDING", "identity": "PENDING"}
+            L.append(f"- {sname} / {cand}: continuity {res['continuity']}, identity {res['identity']}; FAIL phases {sorted({(ck, p_) for ck, ph in cls.items() for p_, c in ph.items() if c == 'FAIL'}) or 'none'}")
+    L.append("")
     ref_flags = [ck for ck, cv in insp["cells"].items() if (cv.get("REF") or {}).get("veto")]
     m1_flags = [ck for ck, cv in insp["cells"].items() if (cv.get("OT") or {}).get("veto")]
     L += [f"- Inspection calibration: REF clips flagged {ref_flags or 'none'}; frozen-M1 clips flagged {len(m1_flags)} of {len(insp['cells'])} cells.",
@@ -283,8 +359,8 @@ def main():
           "- C4 (TSinKC as a distinct candidate): see its GO / NO-GO line and the per-cell rows."]
     out = Path(a.out or OUT / f"{pre}vd3_results")
     out.with_suffix(".md").write_text("\n".join(L) + "\n")
-    out.with_suffix(".json").write_text(json.dumps({"cells": cells, "rules": R, "rules_frozen_m1": RC, "classes": CL, "C": C, "verdicts": V, "inspection": insp, "validity": validity, "thresholds_sha256": tsha}, indent=1, default=str))
-    print("\n".join(L[-14:]))
+    out.with_suffix(".json").write_text(json.dumps({"cells": cells, "rules": R, "rules_frozen_m1": RC, "rules_sensitivity": RS, "classes": CL, "C": C, "verdicts": V, "inspection": insp, "validity": validity, "thresholds_sha256": tsha}, indent=1, default=str))
+    print("\n".join(L[next((i for i, l_ in enumerate(L) if l_.startswith("## GO / NO-GO")), 0):]))
 
 
 if __name__ == "__main__":

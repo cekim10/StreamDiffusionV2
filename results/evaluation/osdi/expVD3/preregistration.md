@@ -1,13 +1,13 @@
 # Experiment VD-3 - GO / NO-GO for a continuity-preserving M1 variant (DR-2 + TS-in): preregistration REVISED DRAFT 5 (2026-10-25)
 
-Status: **REVISED DRAFT 6 (decisions of 2026-10-25 applied). Not frozen. Phase T only is approved
-(`../expVD3_phaseT_approval.md`); no candidate condition runs and no threshold is frozen until the Phase T distributions
-and the aggregation rules below are reviewed.** Changes from draft 5: the primary comparison is the paired, same-seed,
-same-call REF-relative deviation; Phase T reports distributions (natural REF variation, measurement noise; cross-seed
-differences as sensitivity only; frozen M1 as context only) and chooses no threshold (section 3); the min(band,
-cross-seed) rule and the assay-sensitivity INCONCLUSIVE of draft 5 are withdrawn; the per-cell classes and the overall
-rule of D1c (section 4); audi seed-0 OT-1 keeps the copied schedule as a counterfactual stress condition, the corrected
-reproduction's schedule is a sensitivity analysis (section 2). Changes from draft 4: execution in gated phases (section
+Status: **REVISED DRAFT 7 (Phase T decisions of 2026-10-25 applied; for the final pre-freeze review). Not frozen. Phase
+C does not run until this review.** Changes from draft 6: thresholds fixed from the Phase T distributions
+(`vd3_thresholds.json`: set A primary for content and color, B and C sensitivity; fixed 10 % warp / motion limits as
+engineering acceptance criteria with a near-zero safeguard); phase-level discrimination with P2 split into P2a
+(content / appearance) and P2b (motion / temporal); a separate identity-preservation conclusion; P3 as a no-harm check
+relative to frozen M1 (section 4). Changes from draft 5: paired same-seed REF deviation as the primary comparison;
+Phase T distributions; D1c classes; audi seed-0 OT-1 copied schedule kept as a counterfactual stress condition. Changes
+from draft 4: execution in gated phases (section
 11) and implementation notes (section 12). Changes from draft 3:
 same calls and the same pre-move anchor, with numerical tolerances derived from REF's own variation and fixed here
 (section 4); R3 measures excess late-window drift against REF's own early-to-late change; PSNR rejoin is a secondary
@@ -73,57 +73,60 @@ difference** (candidate minus REF at the same calls) is a migration-induced effe
 for both streams: the first transition into the call divided by the median of that stream's own 8 preceding
 transitions; the paired REF transition at the same call is reported next to every candidate V1.
 
-**Thresholds (D1b, 2026-10-25): chosen after Phase T, frozen before any candidate runs (`vd3_thresholds.json`).** The
-primary comparison of every continuity statistic is the **paired, same-seed, same-call deviation from REF** (candidate
-minus REF of the same seed over the same calls with the same pre-move anchor). Phase T (`vd3_phaseT.py`) reports, per
-cell, the distributions from which its threshold is chosen, and chooses none:
-- natural REF variation: REF's 10-call-window statistic over the span (content: DINO similarity to the anchor; color:
-  dE to the anchor; warp error and frame difference relative to their span median) with P5 / P25 / P50 / P75 / P95 and
-  the P95 - P5 width; the window-to-window change at a 10-call lag (P50 / P95); REF's own V1 (P50 / P95 / P99 / max);
-  REF's early-to-late change over the cell's Sink-less calls;
-- measurement noise: the same REF frames embedded twice (per-call and window maxima), and emulation determinism (G1
-  against the real run, prefix digests);
-- sensitivity only: the cross-seed difference of the same statistics (REF seed 1 vs seed 0, same windows);
-- context only: the frozen-M1 control's paired deviations in the same units.
-Thresholds are not tightened because frozen M1 passes an existing threshold; a cell where frozen M1 passes is handled
-by the D1c classes (section 4), not by a stricter threshold. The paired comparisons whose thresholds are chosen are:
-- content: D_c = DINO_cand(window, own anchor) - DINO_REF(window, REF anchor) >= -t_DINO;
-- color: C_c = dE_cand(window vs own anchor) - dE_REF(window vs REF anchor) <= +t_dE; window dE candidate vs REF <= t_dEx;
-- warp / motion: E_O / E_R <= 1 + t_E and the motion ratio within 1 +/- t_motion;
-- V1: candidate V1 <= REF's P99 of V1 over its span, per unit (R1, decided; paired REF V1 at the same call reported).
+**Thresholds (decided 2026-10-25 from the Phase T distributions; `vd3_thresholds.json`, `phaseT_review.md`).** The
+primary comparison of every continuity statistic is the paired, same-seed, same-call deviation from REF (candidate minus
+REF of the same seed over the same calls, same pre-move anchor). Per cell (16 cells; values in `vd3_thresholds.md`):
+- **set A (primary), REF natural window variation:** t_DINO = P95 - P5 of REF's 10-call DINO window statistic;
+  t_dE = P95 - P5 of REF's 10-call window dE to the anchor; t_dEx = P95 of REF's window dE to the anchor. Confirmation
+  cells: t_DINO 0.024-0.047 (dog, train, butterfly) and 0.139-0.244 (audi); t_dE 0.59-1.26 and 4.7-8.7 (audi).
+- **sets B (lag-10 window change) and C (cross-seed difference): sensitivity only**, reported next to the verdict,
+  never the verdict.
+- **fixed engineering acceptance criteria (not statistically derived REF confidence bounds):** warp-error ratio
+  E_O / E_R <= 1.10 (one-sided) and frame difference d_O / d_R within +/- 10 % of REF, with an absolute safeguard:
+  below a REF window mean of 1.0 gray level the allowance is 0.10 gray level (REF's window means are >= 1.74, so the
+  safeguard is not active on these inputs).
+- **V1** at the reset and at the bind: REF's own P99 per unit (paired REF V1 at the same call reported).
+- **late window:** paired REF excess drift X <= t_DINO and the late window's D_c >= -t_DINO.
+Measurement noise is zero (Phase T: identical re-embedding, exact emulation), so no noise term is added. No VD-3
+candidate measurement existed when the thresholds were written (checked by `vd3_thresholds.py` and recorded in the
+JSON with the Phase T file's SHA-256).
 
 Two outcome columns are reported for every continuity metric and never merged:
 - **improvement**: the fraction of the frozen-M1-to-REF paired gap closed (or the ratio to frozen M1 for V1);
 - **restoration**: whether the paired comparison is within its threshold (above; chosen after Phase T).
 
-## 4. GO / NO-GO rules (fixed at the freeze; applied to each candidate on every confirmation cell; thresholds from Phase T)
+## 4. GO / NO-GO rules (fixed at the freeze; each candidate, every confirmation cell; thresholds of section 3)
 
-The restoration rules R1-R5 below are evaluated on all 12 confirmation cells (replication cells are reported next to
-them, not judged) and combined by the D1c classes and overall rule after the table; the visual inspection of section 5
-can veto.
-
-| rule | phase | restoration requirement (GO) | improvement (reported, never sufficient) |
+| phase | rule | restoration requirement | improvement (reported, never sufficient) |
 |---|---|---|---|
-| R1 | P1 boundary | V1(reset) <= REF's P99 (same normalization; paired REF V1 at that call reported) | V1 ratio to frozen M1 (<= 0.5 expected) |
-| R2 | P2 whole window | paired content D_c >= -t_DINO; paired color C_c <= +t_dE and candidate-vs-REF window dE <= t_dEx; E_O / E_R <= 1 + t_E and motion ratio within 1 +/- t_motion | fraction of the paired DINO gap closed (>= 0.5 expected) |
-| R3 | P2 late window | **excess late drift** X = [DINO_early - DINO_late]_cand - [DINO_early - DINO_late]_REF <= +t_DINO (early = first 8 window calls, late = last 8 before the bind; both paired), and the late window's paired D_c >= -t_DINO | - |
-| R4 | P3 bind and recovery | V1(bind) <= REF's P99; post-bind-20 and last-10: paired D_c >= -t_DINO, paired C_c <= +t_dE, E_O / E_R <= 1 + t_E, motion ratio within 1 +/- t_motion. **Secondary diagnostic, not a GO criterion:** PSNR trajectory (first call >= 35 dB vs frozen M1's; terminal median) | - |
-| R5 | cost | serial reconstruction time <= 1.5 s and bytes <= 1 MB (DR2+TSin); the 0.3 s preferred target reported | - |
+| P1 boundary | R1 | V1(reset) <= REF P99 | V1 ratio to frozen M1 |
+| P2a content / appearance | R2a | whole Sink-less window: D_c >= -t_DINO; C_c <= t_dE; window dE candidate vs REF <= t_dEx | fraction of the paired DINO gap closed |
+| | R3 | late window: excess drift X <= t_DINO and late D_c >= -t_DINO | - |
+| P2b motion / temporal consistency | R2b | whole Sink-less window: warp error <= 1.10 x REF's; frame difference within +/- 10 % of REF's (absolute safeguard near zero) | - |
+| P3 no-harm | R4 | last 10 calls: the P2a content / color and P2b clauses against REF (full recovery); bind V1 <= max(REF P99, frozen M1's); first 20 calls after the bind not worse than frozen M1's in the same cell by more than t_DINO (content), t_dE (color), 10 % (warp, motion). PSNR trajectory: secondary diagnostic only | - |
+| cost | R5 | serial reconstruction <= 1.5 s and bytes <= 1 MB; 0.3 s preferred target reported | - |
 
-**Per-cell classes and the overall rule (D1c, 2026-10-25; fixed before any candidate runs).** For each candidate and
-confirmation cell:
-- **FAIL**: the candidate violates any of R1-R5;
-- **DISCRIMINATIVE PASS**: the candidate passes R1-R5 and frozen M1 fails at least one of R1-R4 in that cell;
-- **NON-DISCRIMINATIVE PASS**: both pass (the cell does not show the original failure under the thresholds).
-No cell is excluded; every non-discriminative pass is listed. Overall, per candidate:
-- **NO-GO** if any confirmation cell is FAIL or the blinded inspection vetoes;
-- otherwise **GO** only if every confirmation input (dog, train, butterfly, audi-snow-trail) has at least one
-  DISCRIMINATIVE PASS;
-- otherwise **INCONCLUSIVE**: the evidence cannot show that the candidate resolves the original continuity failure on
-  every input.
-No partial GO. **A NO-GO rejects the preregistered general claim** ("DR-2 + TS-in preserves continuity across the
-confirmation workloads and schedules"); it does not rule out utility on a subset of conditions, which may be reported
-descriptively but never as a continuity-preservation claim.
+P3 is read as "no harm relative to the frozen mechanism": the bind and its recovery are governed by the exact Sink in
+every condition, and frozen M1 itself exceeds absolute REF limits in the first 20 calls after the bind on three cells
+(post-bind warp 1.11-1.12 on dog OT-L; content 0.002 beyond t_DINO on butterfly s0 OT-L), all of which recover fully
+within the last 10 calls. (Proposed reading; confirmed at the final review.)
+
+**Per phase and cell** (P1, P2a, P2b): **FAIL** (the candidate violates the phase), **DISCRIMINATIVE PASS** (it passes
+and frozen M1 violates that phase in the same cell), **NON-DISCRIMINATIVE PASS** (both pass). P3 and cost: PASS / FAIL.
+All are reported per phase and cell; nothing is excluded.
+
+**Overall, per candidate:**
+- **Continuity: NO-GO** if any phase of any confirmation cell is FAIL (R1-R5 must all hold everywhere) or the blinded
+  inspection vetoes; **GO** if, in addition, every confirmation input has at least one DISCRIMINATIVE PASS in P1 and at
+  least one in P2 (P2a or P2b); otherwise **INCONCLUSIVE**.
+- **Identity preservation: ESTABLISHED** only if every confirmation input also has a DISCRIMINATIVE PASS in P2a;
+  otherwise **INCONCLUSIVE** (NO-GO when continuity is NO-GO).
+- No partial GO. A NO-GO rejects the preregistered general claim; descriptive utility on a subset is reported as such,
+  never as continuity preservation. Sets B and C are evaluated the same way and reported as sensitivity.
+
+Frozen M1 under set A (context; F = violates): P1 violated in every confirmation cell except train OT-1 (both seeds);
+P2a in every one except audi OT-L (both seeds); P2b in every one; P3 in none. Every confirmation input therefore has
+cells where a candidate pass in P1, P2a and P2b would be discriminative.
 
 Component and control hypotheses (reported with effect sizes; they shape the implementation and the explanation, not
 the GO):
@@ -162,6 +165,12 @@ output digest equals the serial order's; (b) the generation call's wall time und
 10 % of its wall time alone; (c) the time to the first output is lower than in the serial order. Overlap counts as a
 latency optimization only if (a)-(c) hold; otherwise the serial cost stands. The emulator does not model the network;
 the TTFO numbers here are destination-side bounds, not migration TTFO (section 9).
+
+**Disposition (2026-10-25).** The first run of `vd3_overlap.py` in Phase T ended with an AttributeError before any
+trial (log on host D: `GpuRuntime.step` reads the baseline reference, which the script never built); fixed in 21532c3,
+re-run with `run_vc.py vd3 --phase overlap`. If the overlap cannot be validated by checks (a)-(c), the report gives the
+serial costs only and marks overlap as an **unvalidated optional optimization**. Emulator timings are destination-side
+GPU times; they are never extrapolated to testbed TTFO (section 9 measures that end to end).
 
 ## 7. If VD-3 fails (fixed now)
 
@@ -229,16 +238,11 @@ reps. Frozen results stay as recorded; the variant is reported beside them.
 - `d0_remote.py pull`: a pull blocked by local copies of result files clears only the copies byte-identical to the
   incoming commit and retries; differing files are left untouched and reported.
 
-## 13. Decisions of 2026-10-25 and open items
+## 13. Decisions (2026-10-25) and the final pre-freeze review
 
-- **D1b (conditional)**: primary comparison = paired same-seed same-call REF-relative deviation; Phase T returns the
-  distributions (section 3); cross-seed differences are sensitivity only; no tightening because frozen M1 passes a
-  threshold. Open: the threshold values, after the Phase T review.
-- **D1c (decided)**: classes FAIL / DISCRIMINATIVE PASS / NON-DISCRIMINATIVE PASS, nothing excluded, overall rule of
-  section 4 (proposed exact form; reviewed with the Phase T distributions).
-- **D2b (decided)**: the audi seed-0 OT-1 cell keeps its copied schedule as a counterfactual stress condition, with its
-  provenance (`../audi_s0_w2_provenance.md`); it is never presented as an observed audi migration trace. The schedule
-  of the corrected audi seed-0 reproduction (`../expW/audi_s0_repro_report.json`, `repro_schedule`) is recorded for a
-  sensitivity analysis.
-- **Execution**: Phase T only; no candidate condition and no threshold freeze until the Phase T distributions and the
-  revised aggregation rules are reviewed.
+- Phase T review: thresholds and rules of sections 3-4 (set A primary; B, C sensitivity; fixed engineering limits;
+  phase-level discrimination with P2a / P2b; identity conclusion; P3 no-harm).
+- **Open for the final review:** the P3 reading of section 4 (relative to frozen M1); the overlap disposition
+  (`phaseT_review.md`); then the freeze and Phase C.
+- D2b: the audi seed-0 OT-1 cell keeps its copied schedule (counterfactual stress condition, provenance documented);
+  the verified reproduction's schedule (move 34, bind 58) is recorded for a sensitivity analysis.

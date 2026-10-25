@@ -209,16 +209,50 @@ def vd3_tests(tmp: Path, out: dict, vc):
     check(r_.returncode == 0 and "differs from the form" in r_.stdout, "a replaced key (SHA-256 differs from the form) is refused")
     import aggregate_vd3 as a3
 
-    P_, F_, all_ = {"R1": True, "R2": True, "R3": True, "R4": True, "R5": True, "all": True}, {"R1": False, "all": False}, {"R1": True, "R2": True, "R3": True, "R4": True}
-    m1_fail = {"R1": True, "R2": False, "R3": True, "R4": True}
-    check(a3.classify(F_, m1_fail) == "FAIL" and a3.classify(P_, m1_fail) == "DISCRIMINATIVE PASS" and a3.classify(P_, all_) == "NON-DISCRIMINATIVE PASS",
-          "D1c classes: FAIL / DISCRIMINATIVE PASS / NON-DISCRIMINATIVE PASS")
+    # synthetic phase statistics: each rule clause, then the phase classes and the overall rule (PASS / FAIL / INCONCLUSIVE)
+    t = {"dino": 0.04, "dE_anchor": 0.9, "dE_cross": 1.5}
+    good = {"D_c": -0.01, "C_c": 0.2, "dE_cross": 0.5, "eO": 2.6, "eR": 2.5, "dO": 3.0, "dR": 3.1, "dino": 0.95, "dino_ref": 0.96}
+    def syn(**over):
+        P = {k: dict(good) for k in ("sinkless", "sl_early", "sl_late", "post_bind_20", "last_10")}
+        for k, v in over.items():
+            if "__" in k:
+                ph, key = k.split("__")
+                P[ph][key] = v
+        return {"valid": True, "v1_reset": over.get("v1", 2.0), "v1_bind": 1.0, "P": P, "X_late": over.get("X", 0.0), "cost_s": 1.0}
+    R0 = a3.rules(syn(), "DR2+TSin", t, 3.4)
+    check(R0["all"] and all(R0[p] for p in a3.PHASES), "synthetic: a stream inside every limit passes P1, P2a, P2b, P3 and cost")
+    cases = {"P1": syn(v1=5.0), "P2a": syn(sinkless__D_c=-0.08), "P2a ": syn(X=0.06), "P2b": syn(sinkless__eO=2.8), "P2b  ": syn(sinkless__dO=2.7), "P3": syn(post_bind_20__C_c=1.2)}
+    check(all(not a3.rules(v, "DR2+TSin", t, 3.4)[p.strip()] for p, v in cases.items()),
+          "synthetic: boundary V1, content drift, late excess drift, warp error +12 %, motion -13 %, post-bind color each fail their phase")
+    near0 = syn(sinkless__eO=0.55, sinkless__eR=0.5)   # +10 % of 0.5 = 0.05 < 0.10 absolute allowance
+    check(a3.rules(near0, "DR2+TSin", t, 3.4)["P2b"] and not a3.rules(syn(sinkless__eO=0.65, sinkless__eR=0.5), "DR2+TSin", t, 3.4)["P2b"]
+          and a3.rules(syn(sinkless__eO=2.0), "DR2+TSin", t, 3.4)["P2b"],
+          "warp: absolute safeguard near zero REF (0.05 above 0.5 passes, 0.15 fails); less warp error than REF passes (one-sided)")
+    ctrl_ = syn(v1=8.0, sinkless__D_c=-0.4, post_bind_20__eO=2.9, post_bind_20__D_c=-0.03)   # frozen M1: post-bind still recovering
+    check(a3.rules(ctrl_, "OT", t, 3.4, ctrl_)["P3"] and not a3.rules(ctrl_, "OT", t, 3.4)["P3"],
+          "P3 no-harm is relative to frozen M1: its own post-bind recovery passes (the absolute REF form would fail it)")
+    check(a3.rules(syn(post_bind_20__eO=2.9, post_bind_20__D_c=-0.03), "DR2+TSin", t, 3.4, ctrl_)["P3"]
+          and not a3.rules(syn(post_bind_20__eO=3.3, post_bind_20__D_c=-0.03), "DR2+TSin", t, 3.4, ctrl_)["P3"]
+          and not a3.rules(syn(post_bind_20__eO=2.9, last_10__D_c=-0.08), "DR2+TSin", t, 3.4, ctrl_)["P3"],
+          "P3: a candidate equal to frozen M1 after the bind passes; 14 % more post-bind warp error than M1, or a last-10 content gap, fails")
+    m1 = a3.rules(syn(v1=8.0, sinkless__D_c=-0.4), "OT", t, 3.4)
+    cl = a3.classify_phases(R0, m1)
+    check(cl == {"P1": "DISCRIMINATIVE PASS", "P2a": "DISCRIMINATIVE PASS", "P2b": "NON-DISCRIMINATIVE PASS", "P3": "PASS", "cost": "PASS"}
+          and set(a3.classify_phases(dict(R0, valid=False), m1).values()) == {"FAIL"},
+          f"phase classes vs frozen M1 (P1, P2a discriminative; P2b not; P3 / cost no-harm); an invalid stream fails every phase {cl}")
+    D, N_, F = "DISCRIMINATIVE PASS", "NON-DISCRIMINATIVE PASS", "FAIL"
+    ph = lambda p1, p2a, p2b, p3="PASS": {"P1": p1, "P2a": p2a, "P2b": p2b, "P3": p3, "cost": "PASS"}  # noqa: E731
     ins = {"dog", "train"}
-    check(a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "DISCRIMINATIVE PASS", "train_s1|OT-L": "NON-DISCRIMINATIVE PASS"}, [], ins) == "GO"
-          and a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "NON-DISCRIMINATIVE PASS"}, [], ins) == "INCONCLUSIVE"
-          and a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "FAIL"}, [], ins) == "NO-GO"
-          and a3.overall({"dog_s1|OT-1": "DISCRIMINATIVE PASS", "train_s0|OT-1": "DISCRIMINATIVE PASS"}, ["dog_s1|OT-1"], ins) == "NO-GO",
-          "overall: any FAIL or veto -> NO-GO; an input with only non-discriminative passes -> INCONCLUSIVE; else GO")
+    go = {"dog_s1|OT-1": ph(D, D, N_), "train_s0|OT-1": ph(D, N_, N_), "train_s1|OT-1": ph(N_, D, D)}
+    check(a3.overall(go, [], ins) == {"continuity": "GO", "identity": "ESTABLISHED"}, "overall GO: every input has discriminative P1 and P2; identity established (P2a)")
+    check(a3.overall({"dog_s1|OT-1": ph(D, D, N_), "train_s0|OT-1": ph(D, N_, D)}, [], ins) == {"continuity": "GO", "identity": "INCONCLUSIVE"},
+          "GO on continuity but train has only motion (P2b) discrimination: identity INCONCLUSIVE")
+    check(a3.overall({"dog_s1|OT-1": ph(D, D, N_), "train_s0|OT-1": ph(N_, D, N_)}, [], ins)["continuity"] == "INCONCLUSIVE",
+          "no discriminative boundary (P1) evidence on train: INCONCLUSIVE")
+    check(a3.overall(dict(go, **{"train_s1|OT-L": ph(D, D, D, p3="FAIL")}), [], ins)["continuity"] == "NO-GO"
+          and a3.overall(dict(go, **{"train_s1|OT-L": ph(F, D, D)}), [], ins)["continuity"] == "NO-GO"
+          and a3.overall(go, ["dog_s1|OT-1"], ins)["continuity"] == "NO-GO",
+          "NO-GO: a P3 (no-harm) failure, a phase FAIL, or an inspection veto")
     r_ = subprocess.run([PY, "tools/eval/aggregate_vd3.py", "--root", str(root), "--thresholds", str(tmp / "missing.json")], cwd=ROOT, capture_output=True, text=True)
     check(r_.returncode != 0 and "thresholds" in (r_.stdout + r_.stderr), "aggregation refuses without frozen thresholds")
     r_ = subprocess.run([PY, "tools/eval/vd3_overlap.py", "--dry_run", "--reps", "2", "--out", str(tmp / "ov.json")], cwd=ROOT, capture_output=True, text=True)
