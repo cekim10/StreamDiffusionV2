@@ -18,6 +18,7 @@
   - VD21-DR1: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
   - VD21-DR2: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
   - VD21-DR2+TSout: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-DR4: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
   - VD21-RP1: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
   - VD21-RP1+TSout: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
   - VD21-TSin: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
@@ -25,6 +26,7 @@
   - VD2L-DR1: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD2L-DR2: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD2L-DR2+TSout: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-DR4: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD2L-RP1: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD2L-RP1+TSout: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD2L-TSin: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
