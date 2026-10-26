@@ -348,9 +348,24 @@ def vd3(a) -> bool:
         insp = ROOT / VD3_OUT / "vd3_inspection.md"
         if not (insp.exists() and "STATUS: RECORDED" in insp.read_text() and committed(f"{VD3_OUT}/vd3_inspection.md")):
             sys.exit("[vc] vd3_inspection.md is not recorded and committed: the key stays sealed")
+        import base64
+        import gzip
+        import hashlib
+        import re
+
         ag = agent(a)
-        (ROOT / VD3_OUT / "vd3_blind_key.json").write_bytes(ag.read(f"{a.clips_dir}/sealed/vd3_blind_key.json").encode())
-        print("[vc] key copied to", f"{VD3_OUT}/vd3_blind_key.json", "- next: aggregate_vd3.py")
+        # the key lives outside the repository (the agent's read is repository-only): fetched compressed through exec
+        r = ag.exec(["bash", "-c", f"gzip -c {a.clips_dir}/sealed/vd3_blind_key.json | base64 -w0"], timeout=60)
+        if r.get("rc") != 0:
+            sys.exit(f"[vc] key not readable on {a.host}: {r.get('stderr')}")
+        kb = gzip.decompress(base64.b64decode(r["stdout"].strip()))
+        form = (ROOT / VD3_OUT / "vd3_inspection_form.md").read_text()
+        want = re.search(r"SHA-256 `([0-9a-f]{64})`", form).group(1)
+        got = hashlib.sha256(kb).hexdigest()
+        if got != want:
+            sys.exit(f"[vc] key SHA-256 {got[:16]} differs from the form's {want[:16]}: not saved")
+        (ROOT / VD3_OUT / "vd3_blind_key.json").write_bytes(kb)
+        print("[vc] key copied to", f"{VD3_OUT}/vd3_blind_key.json", f"(SHA-256 {got[:16]} = the form's) - next: aggregate_vd3.py")
         return True
     if a.phase == "cand" and not a.dry and not committed(f"{VD3_OUT}/vd3_thresholds.json"):
         sys.exit("[vc] vd3_thresholds.json is not committed: the thresholds are chosen from the Phase T review and frozen before any candidate runs")
