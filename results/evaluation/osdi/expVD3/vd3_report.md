@@ -68,3 +68,11 @@ All 12 confirmation cells and 4 replication cells are in `vd3_results.md` (per p
 Emulator only (one GPU, frozen-M1 schedules, three copied schedules labelled counterfactual, audi seed-0 OT-1 a
 counterfactual stress condition); one model; four inputs; two seeds. The inspection is one rater's, unblinded only
 after recording; its false-positive rate on REF was 2 boundary flags and 1 appearance flag in 16 REF clips.
+
+## 5. Note added 2026-10-26 (no result changed)
+
+The temporary-Sink keys of TS-in (VD-2, VD-3) are rotated at the prepare session's positions and were written into
+slots whose recorded positions are the source's. Where the source had promoted or realigned a sink slot (train,
+butterfly, audi; not dog) the keys are positionally misaligned by 16-34 frames. Whether this contributes to the P2
+failures is not known (misaligned audi s0 OT-1 passed every phase; aligned dog failed P2b); VD-4 tests it (condition
+A1). The frozen VD-2 / VD-3 results and verdicts stand as recorded.
