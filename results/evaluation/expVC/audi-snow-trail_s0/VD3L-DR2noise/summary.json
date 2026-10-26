@@ -1,0 +1,323 @@
+{
+ "condition": {
+  "id": "VD3L-DR2noise",
+  "input": "audi-snow-trail",
+  "kind": "vd3",
+  "label": "VD-3 DR2noise at the OT-L schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_audi-snow-trail/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-164522"
+  ],
+  "counterfactual": false,
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "vd3_of": "OT-L"
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "ec3cd5dc756e53dd",
+   "reset_s": 3.558298222720623
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "ec3cd5dc756e53dd",
+   "packed_at": 80,
+   "slots_rerotated": 93,
+   "bind_s": 0.0983421802520752
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "cost_s": {
+   "dr_decode_s": 0.5209064558148384,
+   "total_serial_s": 0.5209064558148384
+  },
+  "noise": {
+   "seed": 80,
+   "real_std": [
+    1.3239810466766357,
+    1.3079838752746582
+   ],
+   "real_mean": [
+    0.2607099115848541,
+    0.2474697083234787
+   ]
+  },
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "fidelity": {
+   "per_layer": [
+    {
+     "layer": 0,
+     "max_abs": 8.9375,
+     "rel_fro": 1.2682021724858186,
+     "numel": 199680
+    },
+    {
+     "layer": 1,
+     "max_abs": 4.4375,
+     "rel_fro": 1.5139112644746062,
+     "numel": 4792320
+    },
+    {
+     "layer": 2,
+     "max_abs": 1.0,
+     "rel_fro": 1.6749572854287125,
+     "numel": 4792320
+    },
+    {
+     "layer": 3,
+     "max_abs": 3.380859375,
+     "rel_fro": 1.4182611725164156,
+     "numel": 4792320
+    },
+    {
+     "layer": 4,
+     "max_abs": 1.82177734375,
+     "rel_fro": 3.3911833350286877,
+     "numel": 4792320
+    },
+    {
+     "layer": 5,
+     "max_abs": 6.9384765625,
+     "rel_fro": 1.6942554964129286,
+     "numel": 4792320
+    },
+    {
+     "layer": 6,
+     "max_abs": 2.787109375,
+     "rel_fro": 3.654747775111989,
+     "numel": 4792320
+    },
+    {
+     "layer": 7,
+     "max_abs": 6.82421875,
+     "rel_fro": 1.9241267433900506,
+     "numel": 4792320
+    },
+    {
+     "layer": 8,
+     "max_abs": 8.7509765625,
+     "rel_fro": 3.398816124261148,
+     "numel": 4792320
+    },
+    {
+     "layer": 9,
+     "max_abs": 5.23046875,
+     "rel_fro": 1.8142692101819509,
+     "numel": 4792320
+    },
+    {
+     "layer": 10,
+     "max_abs": 6.286865234375,
+     "rel_fro": 3.003216627427399,
+     "numel": 4792320
+    },
+    {
+     "layer": 11,
+     "max_abs": 12.9140625,
+     "rel_fro": 2.842171364732771,
+     "numel": 4792320
+    },
+    {
+     "layer": 12,
+     "max_abs": 12.7734375,
+     "rel_fro": 1.4253053095271555,
+     "numel": 9584640
+    },
+    {
+     "layer": 13,
+     "max_abs": 4.736328125,
+     "rel_fro": 1.6495182429581652,
+     "numel": 19169280
+    },
+    {
+     "layer": 14,
+     "max_abs": 5.369140625,
+     "rel_fro": 2.2482187770871915,
+     "numel": 19169280
+    },
+    {
+     "layer": 15,
+     "max_abs": 6.8271484375,
+     "rel_fro": 2.277279581403625,
+     "numel": 19169280
+    },
+    {
+     "layer": 16,
+     "max_abs": 4.720703125,
+     "rel_fro": 2.1266757151756517,
+     "numel": 19169280
+    },
+    {
+     "layer": 17,
+     "max_abs": 6.43359375,
+     "rel_fro": 2.910935390858443,
+     "numel": 19169280
+    },
+    {
+     "layer": 18,
+     "max_abs": 29.0625,
+     "rel_fro": 2.3274751827676026,
+     "numel": 19169280
+    },
+    {
+     "layer": 19,
+     "max_abs": 4.6591796875,
+     "rel_fro": 1.8545690731260125,
+     "numel": 38338560
+    },
+    {
+     "layer": 20,
+     "max_abs": 7.23046875,
+     "rel_fro": 2.0958406065475645,
+     "numel": 38338560
+    },
+    {
+     "layer": 21,
+     "max_abs": 4.951171875,
+     "rel_fro": 1.969082090134066,
+     "numel": 38338560
+    },
+    {
+     "layer": 22,
+     "max_abs": 7.1044921875,
+     "rel_fro": 2.059698135109648,
+     "numel": 38338560
+    },
+    {
+     "layer": 23,
+     "max_abs": 3.99609375,
+     "rel_fro": 1.860452714151555,
+     "numel": 38338560
+    },
+    {
+     "layer": 24,
+     "max_abs": 5.8056640625,
+     "rel_fro": 2.0877585068220235,
+     "numel": 38338560
+    },
+    {
+     "layer": 25,
+     "max_abs": 5.5869140625,
+     "rel_fro": 1.5641377315888867,
+     "numel": 76677120
+    },
+    {
+     "layer": 26,
+     "max_abs": 8.21875,
+     "rel_fro": 1.4579650384941143,
+     "numel": 76677120
+    },
+    {
+     "layer": 27,
+     "max_abs": 4.94677734375,
+     "rel_fro": 1.5648997956362547,
+     "numel": 76677120
+    },
+    {
+     "layer": 28,
+     "max_abs": 10.712890625,
+     "rel_fro": 1.33933481694135,
+     "numel": 76677120
+    },
+    {
+     "layer": 29,
+     "max_abs": 4.9931640625,
+     "rel_fro": 1.632965567948978,
+     "numel": 76677120
+    },
+    {
+     "layer": 30,
+     "max_abs": 9.0078125,
+     "rel_fro": 1.23940642583898,
+     "numel": 76677120
+    },
+    {
+     "layer": 31,
+     "max_abs": 3.6015625,
+     "rel_fro": 1.6685611598463521,
+     "numel": 76677120
+    }
+   ],
+   "median_rel_fro": 1.860452714151555,
+   "worst_rel_fro": 3.654747775111989,
+   "worst_layer": 6
+  },
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "ec3cd5dc756e53dddebf6e0ff1feb67d63ea398583534629a8bb7d1f8e3eecfa",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 162.57630228996277,
+ "input": "audi-snow-trail",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261025-203100/VD3L-DR2noise",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 146.33854413032532,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail__multiple.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261025-203100",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

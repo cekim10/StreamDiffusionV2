@@ -1,0 +1,323 @@
+{
+ "condition": {
+  "id": "VD3L-DR2noise",
+  "input": "train",
+  "kind": "vd3",
+  "label": "VD-3 DR2noise at the OT-L schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_dog/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548"
+  ],
+  "counterfactual": true,
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "vd3_of": "OT-L"
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "6189ca54d0c8ed2f",
+   "reset_s": 3.604310616850853
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "6189ca54d0c8ed2f",
+   "packed_at": 80,
+   "slots_rerotated": 93,
+   "bind_s": 0.09869475662708282
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "cost_s": {
+   "dr_decode_s": 0.5195332169532776,
+   "total_serial_s": 0.5195332169532776
+  },
+  "noise": {
+   "seed": 80,
+   "real_std": [
+    0.9764831066131592,
+    0.9404659271240234
+   ],
+   "real_mean": [
+    0.0008884046692401171,
+    0.01620965451002121
+   ]
+  },
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "fidelity": {
+   "per_layer": [
+    {
+     "layer": 0,
+     "max_abs": 7.140625,
+     "rel_fro": 1.3858643501908419,
+     "numel": 199680
+    },
+    {
+     "layer": 1,
+     "max_abs": 5.076171875,
+     "rel_fro": 1.4440630439162263,
+     "numel": 4792320
+    },
+    {
+     "layer": 2,
+     "max_abs": 0.94189453125,
+     "rel_fro": 1.8241083208866669,
+     "numel": 4792320
+    },
+    {
+     "layer": 3,
+     "max_abs": 4.662109375,
+     "rel_fro": 1.3318578064272306,
+     "numel": 4792320
+    },
+    {
+     "layer": 4,
+     "max_abs": 1.91912841796875,
+     "rel_fro": 3.85660931880737,
+     "numel": 4792320
+    },
+    {
+     "layer": 5,
+     "max_abs": 7.0927734375,
+     "rel_fro": 1.6390749667318503,
+     "numel": 4792320
+    },
+    {
+     "layer": 6,
+     "max_abs": 2.7490234375,
+     "rel_fro": 3.997137379275809,
+     "numel": 4792320
+    },
+    {
+     "layer": 7,
+     "max_abs": 6.357421875,
+     "rel_fro": 1.8818770175268653,
+     "numel": 4792320
+    },
+    {
+     "layer": 8,
+     "max_abs": 8.962890625,
+     "rel_fro": 3.3582817956362057,
+     "numel": 4792320
+    },
+    {
+     "layer": 9,
+     "max_abs": 5.1103515625,
+     "rel_fro": 1.7488912171685846,
+     "numel": 4792320
+    },
+    {
+     "layer": 10,
+     "max_abs": 6.494140625,
+     "rel_fro": 3.2707840702318984,
+     "numel": 4792320
+    },
+    {
+     "layer": 11,
+     "max_abs": 13.638671875,
+     "rel_fro": 3.275901277237448,
+     "numel": 4792320
+    },
+    {
+     "layer": 12,
+     "max_abs": 12.7275390625,
+     "rel_fro": 1.519095847821105,
+     "numel": 9584640
+    },
+    {
+     "layer": 13,
+     "max_abs": 4.7021484375,
+     "rel_fro": 1.8476206421876071,
+     "numel": 19169280
+    },
+    {
+     "layer": 14,
+     "max_abs": 5.4052734375,
+     "rel_fro": 2.4556314684206653,
+     "numel": 19169280
+    },
+    {
+     "layer": 15,
+     "max_abs": 7.4990234375,
+     "rel_fro": 2.3975513119215353,
+     "numel": 19169280
+    },
+    {
+     "layer": 16,
+     "max_abs": 4.8896484375,
+     "rel_fro": 2.253084818199298,
+     "numel": 19169280
+    },
+    {
+     "layer": 17,
+     "max_abs": 6.419921875,
+     "rel_fro": 2.967600710373967,
+     "numel": 19169280
+    },
+    {
+     "layer": 18,
+     "max_abs": 31.75,
+     "rel_fro": 2.480225468315029,
+     "numel": 19169280
+    },
+    {
+     "layer": 19,
+     "max_abs": 4.54296875,
+     "rel_fro": 2.0957523504671323,
+     "numel": 38338560
+    },
+    {
+     "layer": 20,
+     "max_abs": 6.8740234375,
+     "rel_fro": 2.1438988418725944,
+     "numel": 38338560
+    },
+    {
+     "layer": 21,
+     "max_abs": 4.9609375,
+     "rel_fro": 2.2105310611628792,
+     "numel": 38338560
+    },
+    {
+     "layer": 22,
+     "max_abs": 7.650390625,
+     "rel_fro": 2.0530681042773926,
+     "numel": 38338560
+    },
+    {
+     "layer": 23,
+     "max_abs": 4.45703125,
+     "rel_fro": 2.087014090117753,
+     "numel": 38338560
+    },
+    {
+     "layer": 24,
+     "max_abs": 5.8369140625,
+     "rel_fro": 2.235417559685166,
+     "numel": 38338560
+    },
+    {
+     "layer": 25,
+     "max_abs": 4.1142578125,
+     "rel_fro": 1.8034220887316263,
+     "numel": 76677120
+    },
+    {
+     "layer": 26,
+     "max_abs": 6.9853515625,
+     "rel_fro": 1.4397565116907012,
+     "numel": 76677120
+    },
+    {
+     "layer": 27,
+     "max_abs": 4.5146484375,
+     "rel_fro": 1.7813987404583709,
+     "numel": 76677120
+    },
+    {
+     "layer": 28,
+     "max_abs": 8.775390625,
+     "rel_fro": 1.419415024854909,
+     "numel": 76677120
+    },
+    {
+     "layer": 29,
+     "max_abs": 4.2236328125,
+     "rel_fro": 1.8350190329946725,
+     "numel": 76677120
+    },
+    {
+     "layer": 30,
+     "max_abs": 8.564453125,
+     "rel_fro": 1.1856584399514045,
+     "numel": 76677120
+    },
+    {
+     "layer": 31,
+     "max_abs": 3.7119140625,
+     "rel_fro": 1.69850575057444,
+     "numel": 76677120
+    }
+   ],
+   "median_rel_fro": 2.0530681042773926,
+   "worst_rel_fro": 3.997137379275809,
+   "worst_layer": 6
+  },
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "6189ca54d0c8ed2f9c8ce4eabc072f430ba691ee5919eba1d8c95d0fbcddf451",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 163.99942779541016,
+ "input": "train",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_train_s0_20261025-175844/VD3L-DR2noise",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 144.8731973171234,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/train.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/train_prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_train_s0_20261025-175844",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

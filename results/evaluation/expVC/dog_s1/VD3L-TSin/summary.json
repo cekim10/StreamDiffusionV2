@@ -1,0 +1,100 @@
+{
+ "condition": {
+  "id": "VD3L-TSin",
+  "input": "dog",
+  "kind": "vd3",
+  "label": "VD-3 TSin at the OT-L schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_dog/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548"
+  ],
+  "counterfactual": true,
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "vd3_of": "OT-L",
+  "seed": 1
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "a7d7ab4a26fef346",
+   "reset_s": 3.690506547689438
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "a7d7ab4a26fef346",
+   "packed_at": 80,
+   "slots_rerotated": 75,
+   "bind_s": 0.10088614374399185
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "cost_s": {
+   "ts_prepare_s": 0.7769839912652969,
+   "total_serial_s": 0.7769839912652969
+  },
+  "ts_slots_written": 2,
+  "temp_slots_left_after_bind": 0,
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "a7d7ab4a26fef346e6115fcd0ecf3dad464c3f08e2e89d2b08ecd4f929d0b0b6",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 164.51535630226135,
+ "input": "dog",
+ "seed": 1,
+ "frames": "/home/ckim151/vc_frames/expVC_dog_s1_20261025-172101/VD3L-TSin",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 144.8527171611786,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_dog_s1_20261025-172101",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

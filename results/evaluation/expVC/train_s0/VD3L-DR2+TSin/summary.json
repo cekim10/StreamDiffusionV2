@@ -1,0 +1,315 @@
+{
+ "condition": {
+  "id": "VD3L-DR2+TSin",
+  "input": "train",
+  "kind": "vd3",
+  "label": "VD-3 DR2+TSin at the OT-L schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_dog/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548"
+  ],
+  "counterfactual": true,
+  "dr": 2,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "vd3_of": "OT-L"
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "6189ca54d0c8ed2f",
+   "reset_s": 4.381068781018257
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "6189ca54d0c8ed2f",
+   "packed_at": 80,
+   "slots_rerotated": 93,
+   "bind_s": 0.10226871818304062
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 2,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "cost_s": {
+   "ts_prepare_s": 0.7741674259305,
+   "dr_decode_s": 0.5194026976823807,
+   "total_serial_s": 1.2935701236128807
+  },
+  "ts_slots_written": 2,
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "fidelity": {
+   "per_layer": [
+    {
+     "layer": 0,
+     "max_abs": 0.0,
+     "rel_fro": 0.0,
+     "numel": 199680
+    },
+    {
+     "layer": 1,
+     "max_abs": 1.703125,
+     "rel_fro": 0.442782728186627,
+     "numel": 4792320
+    },
+    {
+     "layer": 2,
+     "max_abs": 0.68701171875,
+     "rel_fro": 0.7456700191424519,
+     "numel": 4792320
+    },
+    {
+     "layer": 3,
+     "max_abs": 1.59375,
+     "rel_fro": 0.5480332954270538,
+     "numel": 4792320
+    },
+    {
+     "layer": 4,
+     "max_abs": 0.544921875,
+     "rel_fro": 0.9756722121823072,
+     "numel": 4792320
+    },
+    {
+     "layer": 5,
+     "max_abs": 1.5732421875,
+     "rel_fro": 0.6175848468804831,
+     "numel": 4792320
+    },
+    {
+     "layer": 6,
+     "max_abs": 2.7470703125,
+     "rel_fro": 1.5433148769753338,
+     "numel": 4792320
+    },
+    {
+     "layer": 7,
+     "max_abs": 1.865234375,
+     "rel_fro": 0.7379883752982579,
+     "numel": 4792320
+    },
+    {
+     "layer": 8,
+     "max_abs": 2.44140625,
+     "rel_fro": 1.0313212348042309,
+     "numel": 4792320
+    },
+    {
+     "layer": 9,
+     "max_abs": 3.25,
+     "rel_fro": 0.7449748071359396,
+     "numel": 4792320
+    },
+    {
+     "layer": 10,
+     "max_abs": 2.9296875,
+     "rel_fro": 1.1057900448461004,
+     "numel": 4792320
+    },
+    {
+     "layer": 11,
+     "max_abs": 5.015625,
+     "rel_fro": 0.8589647180479191,
+     "numel": 4792320
+    },
+    {
+     "layer": 12,
+     "max_abs": 2.28125,
+     "rel_fro": 0.3587589038807466,
+     "numel": 9584640
+    },
+    {
+     "layer": 13,
+     "max_abs": 1.0234375,
+     "rel_fro": 0.4584866768886362,
+     "numel": 19169280
+    },
+    {
+     "layer": 14,
+     "max_abs": 2.29296875,
+     "rel_fro": 0.6128026930752476,
+     "numel": 19169280
+    },
+    {
+     "layer": 15,
+     "max_abs": 5.7548828125,
+     "rel_fro": 0.803787923179778,
+     "numel": 19169280
+    },
+    {
+     "layer": 16,
+     "max_abs": 2.6044921875,
+     "rel_fro": 0.7217591094762796,
+     "numel": 19169280
+    },
+    {
+     "layer": 17,
+     "max_abs": 5.527252197265625,
+     "rel_fro": 0.9751540022048666,
+     "numel": 19169280
+    },
+    {
+     "layer": 18,
+     "max_abs": 7.0546875,
+     "rel_fro": 0.7146592636719652,
+     "numel": 19169280
+    },
+    {
+     "layer": 19,
+     "max_abs": 1.875,
+     "rel_fro": 0.5299821673873769,
+     "numel": 38338560
+    },
+    {
+     "layer": 20,
+     "max_abs": 4.3955078125,
+     "rel_fro": 0.6411141221588228,
+     "numel": 38338560
+    },
+    {
+     "layer": 21,
+     "max_abs": 2.52734375,
+     "rel_fro": 0.5420481422753567,
+     "numel": 38338560
+    },
+    {
+     "layer": 22,
+     "max_abs": 6.833251953125,
+     "rel_fro": 0.7178239318773959,
+     "numel": 38338560
+    },
+    {
+     "layer": 23,
+     "max_abs": 2.33203125,
+     "rel_fro": 0.5987787038913739,
+     "numel": 38338560
+    },
+    {
+     "layer": 24,
+     "max_abs": 4.0166015625,
+     "rel_fro": 0.6795180024421631,
+     "numel": 38338560
+    },
+    {
+     "layer": 25,
+     "max_abs": 3.474609375,
+     "rel_fro": 0.3555041199876487,
+     "numel": 76677120
+    },
+    {
+     "layer": 26,
+     "max_abs": 6.3720703125,
+     "rel_fro": 0.4591615087067882,
+     "numel": 76677120
+    },
+    {
+     "layer": 27,
+     "max_abs": 3.87158203125,
+     "rel_fro": 0.3554285550018985,
+     "numel": 76677120
+    },
+    {
+     "layer": 28,
+     "max_abs": 8.36474609375,
+     "rel_fro": 0.5071694001683468,
+     "numel": 76677120
+    },
+    {
+     "layer": 29,
+     "max_abs": 4.1298828125,
+     "rel_fro": 0.3177391428201169,
+     "numel": 76677120
+    },
+    {
+     "layer": 30,
+     "max_abs": 8.444793701171875,
+     "rel_fro": 0.3306937810265538,
+     "numel": 76677120
+    },
+    {
+     "layer": 31,
+     "max_abs": 2.017578125,
+     "rel_fro": 0.23153700956550458,
+     "numel": 76677120
+    }
+   ],
+   "median_rel_fro": 0.6175848468804831,
+   "worst_rel_fro": 1.5433148769753338,
+   "worst_layer": 6
+  },
+  "temp_slots_left_after_bind": 0,
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "6189ca54d0c8ed2f9c8ce4eabc072f430ba691ee5919eba1d8c95d0fbcddf451",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 164.8318681716919,
+ "input": "train",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_train_s0_20261025-175844/VD3L-DR2+TSin",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 144.8731973171234,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/train.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/train_prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_train_s0_20261025-175844",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

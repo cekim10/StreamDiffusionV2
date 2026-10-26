@@ -1,0 +1,323 @@
+{
+ "condition": {
+  "id": "VD3L-DR2noise",
+  "input": "dog",
+  "kind": "vd3",
+  "label": "VD-3 DR2noise at the OT-L schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_dog/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-165548"
+  ],
+  "counterfactual": false,
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "vd3_of": "OT-L"
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "0290f6bf81d23676",
+   "reset_s": 3.5645258352160454
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "0290f6bf81d23676",
+   "packed_at": 80,
+   "slots_rerotated": 75,
+   "bind_s": 0.0966629683971405
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "cost_s": {
+   "dr_decode_s": 0.5204603746533394,
+   "total_serial_s": 0.5204603746533394
+  },
+  "noise": {
+   "seed": 80,
+   "real_std": [
+    1.764763593673706,
+    1.744328260421753
+   ],
+   "real_mean": [
+    -0.1178472712635994,
+    -0.12103774398565292
+   ]
+  },
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "fidelity": {
+   "per_layer": [
+    {
+     "layer": 0,
+     "max_abs": 9.8125,
+     "rel_fro": 1.118058158120738,
+     "numel": 199680
+    },
+    {
+     "layer": 1,
+     "max_abs": 5.103515625,
+     "rel_fro": 1.38804836115248,
+     "numel": 4792320
+    },
+    {
+     "layer": 2,
+     "max_abs": 1.3134765625,
+     "rel_fro": 1.3454248232127055,
+     "numel": 4792320
+    },
+    {
+     "layer": 3,
+     "max_abs": 4.5546875,
+     "rel_fro": 1.3226493418326442,
+     "numel": 4792320
+    },
+    {
+     "layer": 4,
+     "max_abs": 1.9398193359375,
+     "rel_fro": 2.7544298833250345,
+     "numel": 4792320
+    },
+    {
+     "layer": 5,
+     "max_abs": 7.201171875,
+     "rel_fro": 1.5645989166945764,
+     "numel": 4792320
+    },
+    {
+     "layer": 6,
+     "max_abs": 3.015625,
+     "rel_fro": 3.3132670479732065,
+     "numel": 4792320
+    },
+    {
+     "layer": 7,
+     "max_abs": 6.9287109375,
+     "rel_fro": 1.8158375543742706,
+     "numel": 4792320
+    },
+    {
+     "layer": 8,
+     "max_abs": 8.76953125,
+     "rel_fro": 3.3534034133280346,
+     "numel": 4792320
+    },
+    {
+     "layer": 9,
+     "max_abs": 5.291015625,
+     "rel_fro": 1.7302356962372538,
+     "numel": 4792320
+    },
+    {
+     "layer": 10,
+     "max_abs": 6.3388671875,
+     "rel_fro": 3.0307951537175417,
+     "numel": 4792320
+    },
+    {
+     "layer": 11,
+     "max_abs": 14.171875,
+     "rel_fro": 2.234800424520569,
+     "numel": 4792320
+    },
+    {
+     "layer": 12,
+     "max_abs": 12.777587890625,
+     "rel_fro": 1.5098133789093822,
+     "numel": 9584640
+    },
+    {
+     "layer": 13,
+     "max_abs": 4.73828125,
+     "rel_fro": 1.5465779438001837,
+     "numel": 19169280
+    },
+    {
+     "layer": 14,
+     "max_abs": 5.458984375,
+     "rel_fro": 2.341063411127757,
+     "numel": 19169280
+    },
+    {
+     "layer": 15,
+     "max_abs": 6.951171875,
+     "rel_fro": 2.171260520310767,
+     "numel": 19169280
+    },
+    {
+     "layer": 16,
+     "max_abs": 4.93359375,
+     "rel_fro": 2.280257131664561,
+     "numel": 19169280
+    },
+    {
+     "layer": 17,
+     "max_abs": 6.3173828125,
+     "rel_fro": 2.953126777439241,
+     "numel": 19169280
+    },
+    {
+     "layer": 18,
+     "max_abs": 26.75,
+     "rel_fro": 1.9623798106232122,
+     "numel": 19169280
+    },
+    {
+     "layer": 19,
+     "max_abs": 4.37109375,
+     "rel_fro": 1.9437234370395975,
+     "numel": 38338560
+    },
+    {
+     "layer": 20,
+     "max_abs": 7.0859375,
+     "rel_fro": 2.359923262758147,
+     "numel": 38338560
+    },
+    {
+     "layer": 21,
+     "max_abs": 4.75634765625,
+     "rel_fro": 2.061266523268485,
+     "numel": 38338560
+    },
+    {
+     "layer": 22,
+     "max_abs": 6.43359375,
+     "rel_fro": 2.2453593436205876,
+     "numel": 38338560
+    },
+    {
+     "layer": 23,
+     "max_abs": 4.5927734375,
+     "rel_fro": 1.8659294704725826,
+     "numel": 38338560
+    },
+    {
+     "layer": 24,
+     "max_abs": 6.57421875,
+     "rel_fro": 2.2606340838838346,
+     "numel": 38338560
+    },
+    {
+     "layer": 25,
+     "max_abs": 4.2158203125,
+     "rel_fro": 1.2752004374013124,
+     "numel": 76677120
+    },
+    {
+     "layer": 26,
+     "max_abs": 8.0869140625,
+     "rel_fro": 1.346609997809503,
+     "numel": 76677120
+    },
+    {
+     "layer": 27,
+     "max_abs": 4.98681640625,
+     "rel_fro": 1.2121529133345548,
+     "numel": 76677120
+    },
+    {
+     "layer": 28,
+     "max_abs": 11.3115234375,
+     "rel_fro": 1.3952080204656756,
+     "numel": 76677120
+    },
+    {
+     "layer": 29,
+     "max_abs": 4.421875,
+     "rel_fro": 1.2537494727008258,
+     "numel": 76677120
+    },
+    {
+     "layer": 30,
+     "max_abs": 8.3388671875,
+     "rel_fro": 1.179164306901859,
+     "numel": 76677120
+    },
+    {
+     "layer": 31,
+     "max_abs": 3.7890625,
+     "rel_fro": 1.1693472639160927,
+     "numel": 76677120
+    }
+   ],
+   "median_rel_fro": 1.8659294704725826,
+   "worst_rel_fro": 3.3534034133280346,
+   "worst_layer": 8
+  },
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "0290f6bf81d23676409a785f0c29927f4ddf901d17ca5e34621e5c151985d73c",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 163.31722211837769,
+ "input": "dog",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_dog_s0_20261025-164000/VD3L-DR2noise",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 144.9120602607727,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_dog_s0_20261025-164000",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

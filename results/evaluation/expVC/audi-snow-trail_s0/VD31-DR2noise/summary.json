@@ -1,0 +1,324 @@
+{
+ "condition": {
+  "id": "VD31-DR2noise",
+  "input": "audi-snow-trail",
+  "kind": "vd3",
+  "label": "VD-3 DR2noise at the OT-1 schedule (counterfactual reconstruction at the destination) - copied schedule: the source run generated train seed 1 (an orphaned node of a failed train seed-1 invocation), not audi-snow-trail seed 0; for audi-snow-trail its schedule is a copied schedule",
+  "resets": [
+   34
+  ],
+  "binds": [
+   59
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 158,
+  "frames_from": 18,
+  "frames_to": 158,
+  "sources": [
+   "results/evaluation/expW_W2_audi-snow-trail_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-135751"
+  ],
+  "counterfactual": true,
+  "provenance_note": "the source run generated train seed 1 (an orphaned node of a failed train seed-1 invocation), not audi-snow-trail seed 0; for audi-snow-trail its schedule is a copied schedule",
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "vd3_of": "OT-1"
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "15aa7c86523b79dc",
+   "reset_s": 3.49736151099205
+  },
+  {
+   "call": 59,
+   "op": "bind",
+   "sha": "15aa7c86523b79dc",
+   "packed_at": 34,
+   "slots_rerotated": 92,
+   "bind_s": 0.09806174784898758
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "cost_s": {
+   "dr_decode_s": 0.5203522071242332,
+   "total_serial_s": 0.5203522071242332
+  },
+  "noise": {
+   "seed": 34,
+   "real_std": [
+    1.2149643898010254,
+    1.2732983827590942
+   ],
+   "real_mean": [
+    0.22861860692501068,
+    0.27278557419776917
+   ]
+  },
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "fidelity": {
+   "per_layer": [
+    {
+     "layer": 0,
+     "max_abs": 8.9375,
+     "rel_fro": 1.3101870447223762,
+     "numel": 199680
+    },
+    {
+     "layer": 1,
+     "max_abs": 4.653076171875,
+     "rel_fro": 1.4896862851904855,
+     "numel": 4792320
+    },
+    {
+     "layer": 2,
+     "max_abs": 0.9765625,
+     "rel_fro": 1.666850193960056,
+     "numel": 4792320
+    },
+    {
+     "layer": 3,
+     "max_abs": 3.4423828125,
+     "rel_fro": 1.3563755559060864,
+     "numel": 4792320
+    },
+    {
+     "layer": 4,
+     "max_abs": 1.9521484375,
+     "rel_fro": 3.060786604021355,
+     "numel": 4792320
+    },
+    {
+     "layer": 5,
+     "max_abs": 6.9365234375,
+     "rel_fro": 1.6049781032259103,
+     "numel": 4792320
+    },
+    {
+     "layer": 6,
+     "max_abs": 2.287109375,
+     "rel_fro": 3.4042264778546505,
+     "numel": 4792320
+    },
+    {
+     "layer": 7,
+     "max_abs": 5.697265625,
+     "rel_fro": 1.7972318754605634,
+     "numel": 4792320
+    },
+    {
+     "layer": 8,
+     "max_abs": 8.525390625,
+     "rel_fro": 2.731611652483447,
+     "numel": 4792320
+    },
+    {
+     "layer": 9,
+     "max_abs": 4.609375,
+     "rel_fro": 1.6760571773533843,
+     "numel": 4792320
+    },
+    {
+     "layer": 10,
+     "max_abs": 5.927734375,
+     "rel_fro": 2.7709318623085015,
+     "numel": 4792320
+    },
+    {
+     "layer": 11,
+     "max_abs": 14.1796875,
+     "rel_fro": 2.828460149688344,
+     "numel": 4792320
+    },
+    {
+     "layer": 12,
+     "max_abs": 13.7333984375,
+     "rel_fro": 1.3722348857451165,
+     "numel": 9584640
+    },
+    {
+     "layer": 13,
+     "max_abs": 4.6875,
+     "rel_fro": 1.6350912269958893,
+     "numel": 19169280
+    },
+    {
+     "layer": 14,
+     "max_abs": 5.359375,
+     "rel_fro": 2.099192594951556,
+     "numel": 19169280
+    },
+    {
+     "layer": 15,
+     "max_abs": 6.994140625,
+     "rel_fro": 2.132164666915387,
+     "numel": 19169280
+    },
+    {
+     "layer": 16,
+     "max_abs": 4.9921875,
+     "rel_fro": 1.988063203968748,
+     "numel": 19169280
+    },
+    {
+     "layer": 17,
+     "max_abs": 6.3671875,
+     "rel_fro": 2.583749364399196,
+     "numel": 19169280
+    },
+    {
+     "layer": 18,
+     "max_abs": 29.8125,
+     "rel_fro": 2.3400373373793584,
+     "numel": 19169280
+    },
+    {
+     "layer": 19,
+     "max_abs": 5.052734375,
+     "rel_fro": 1.770694746182551,
+     "numel": 38338560
+    },
+    {
+     "layer": 20,
+     "max_abs": 7.1717529296875,
+     "rel_fro": 2.01332827628665,
+     "numel": 38338560
+    },
+    {
+     "layer": 21,
+     "max_abs": 4.337890625,
+     "rel_fro": 1.9279296952661413,
+     "numel": 38338560
+    },
+    {
+     "layer": 22,
+     "max_abs": 6.96728515625,
+     "rel_fro": 2.012461773493965,
+     "numel": 38338560
+    },
+    {
+     "layer": 23,
+     "max_abs": 5.138671875,
+     "rel_fro": 1.7959705162717419,
+     "numel": 38338560
+    },
+    {
+     "layer": 24,
+     "max_abs": 5.91015625,
+     "rel_fro": 2.090069913571102,
+     "numel": 38338560
+    },
+    {
+     "layer": 25,
+     "max_abs": 5.59765625,
+     "rel_fro": 1.532273091537537,
+     "numel": 76677120
+    },
+    {
+     "layer": 26,
+     "max_abs": 9.5615234375,
+     "rel_fro": 1.455553227358074,
+     "numel": 76677120
+    },
+    {
+     "layer": 27,
+     "max_abs": 5.9541015625,
+     "rel_fro": 1.508017340699004,
+     "numel": 76677120
+    },
+    {
+     "layer": 28,
+     "max_abs": 11.08984375,
+     "rel_fro": 1.3541923121864057,
+     "numel": 76677120
+    },
+    {
+     "layer": 29,
+     "max_abs": 5.462890625,
+     "rel_fro": 1.5836240938104662,
+     "numel": 76677120
+    },
+    {
+     "layer": 30,
+     "max_abs": 8.8212890625,
+     "rel_fro": 1.2621986370441216,
+     "numel": 76677120
+    },
+    {
+     "layer": 31,
+     "max_abs": 3.791748046875,
+     "rel_fro": 1.592091004173538,
+     "numel": 76677120
+    }
+   ],
+   "median_rel_fro": 1.7959705162717419,
+   "worst_rel_fro": 3.4042264778546505,
+   "worst_layer": 6
+  },
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 59,
+   "sha": "15aa7c86523b79dc77b0e19e3cf3f9d5be1188cc7470ed7dce2273ed71d12b8b",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   59
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 104.97647881507874,
+ "input": "audi-snow-trail",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261025-203100/VD31-DR2noise",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 146.33854413032532,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail__multiple.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261025-203100",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

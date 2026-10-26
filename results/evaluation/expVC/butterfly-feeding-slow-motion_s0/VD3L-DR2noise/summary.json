@@ -1,0 +1,323 @@
+{
+ "condition": {
+  "id": "VD3L-DR2noise",
+  "input": "butterfly-feeding-slow-motion",
+  "kind": "vd3",
+  "label": "VD-3 DR2noise at the OT-L schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 253,
+  "frames_from": 64,
+  "frames_to": 253,
+  "sources": [
+   "results/evaluation/expRDX_butterfly-feeding-slow-motion/policy=split_bw=320_rho=none_tm=inf_rep=1_20261020-163450"
+  ],
+  "counterfactual": false,
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "vd3_of": "OT-L"
+ },
+ "t_first_op": 80,
+ "events": [
+  {
+   "call": 80,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "7ba13fdee4ed283f",
+   "reset_s": 3.5753011405467987
+  },
+  {
+   "call": 154,
+   "op": "bind",
+   "sha": "7ba13fdee4ed283f",
+   "packed_at": 80,
+   "slots_rerotated": 97,
+   "bind_s": 0.09861788898706436
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 2,
+  "ts": null,
+  "keep_cache": false,
+  "dr_source": "noise",
+  "cost_s": {
+   "dr_decode_s": 0.5211085081100464,
+   "total_serial_s": 0.5211085081100464
+  },
+  "noise": {
+   "seed": 80,
+   "real_std": [
+    0.9360466599464417,
+    0.998557984828949
+   ],
+   "real_mean": [
+    0.056680094450712204,
+    0.06842702627182007
+   ]
+  },
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "fidelity": {
+   "per_layer": [
+    {
+     "layer": 0,
+     "max_abs": 7.765625,
+     "rel_fro": 1.5657324877240917,
+     "numel": 199680
+    },
+    {
+     "layer": 1,
+     "max_abs": 4.67333984375,
+     "rel_fro": 1.398413651215372,
+     "numel": 4792320
+    },
+    {
+     "layer": 2,
+     "max_abs": 1.109375,
+     "rel_fro": 1.6418472830914057,
+     "numel": 4792320
+    },
+    {
+     "layer": 3,
+     "max_abs": 3.4931640625,
+     "rel_fro": 1.2216937752349297,
+     "numel": 4792320
+    },
+    {
+     "layer": 4,
+     "max_abs": 2.064453125,
+     "rel_fro": 2.609408767953839,
+     "numel": 4792320
+    },
+    {
+     "layer": 5,
+     "max_abs": 7.1533203125,
+     "rel_fro": 1.3635315372545835,
+     "numel": 4792320
+    },
+    {
+     "layer": 6,
+     "max_abs": 2.6845703125,
+     "rel_fro": 2.7852201771996388,
+     "numel": 4792320
+    },
+    {
+     "layer": 7,
+     "max_abs": 6.51953125,
+     "rel_fro": 1.4875335639009786,
+     "numel": 4792320
+    },
+    {
+     "layer": 8,
+     "max_abs": 8.216796875,
+     "rel_fro": 2.4192589165798055,
+     "numel": 4792320
+    },
+    {
+     "layer": 9,
+     "max_abs": 5.185546875,
+     "rel_fro": 1.4952281963830563,
+     "numel": 4792320
+    },
+    {
+     "layer": 10,
+     "max_abs": 6.462890625,
+     "rel_fro": 2.5947892393094536,
+     "numel": 4792320
+    },
+    {
+     "layer": 11,
+     "max_abs": 13.6328125,
+     "rel_fro": 3.056610261750897,
+     "numel": 4792320
+    },
+    {
+     "layer": 12,
+     "max_abs": 12.470703125,
+     "rel_fro": 1.3655618621411163,
+     "numel": 9584640
+    },
+    {
+     "layer": 13,
+     "max_abs": 4.728515625,
+     "rel_fro": 1.6154871049937616,
+     "numel": 19169280
+    },
+    {
+     "layer": 14,
+     "max_abs": 5.3486328125,
+     "rel_fro": 2.0954322400763563,
+     "numel": 19169280
+    },
+    {
+     "layer": 15,
+     "max_abs": 6.931640625,
+     "rel_fro": 1.9889401500977109,
+     "numel": 19169280
+    },
+    {
+     "layer": 16,
+     "max_abs": 4.93359375,
+     "rel_fro": 1.9639629110798578,
+     "numel": 19169280
+    },
+    {
+     "layer": 17,
+     "max_abs": 7.4013671875,
+     "rel_fro": 2.3082853194095123,
+     "numel": 19169280
+    },
+    {
+     "layer": 18,
+     "max_abs": 27.65625,
+     "rel_fro": 2.2754540525438127,
+     "numel": 19169280
+    },
+    {
+     "layer": 19,
+     "max_abs": 4.560546875,
+     "rel_fro": 1.8345834214882752,
+     "numel": 38338560
+    },
+    {
+     "layer": 20,
+     "max_abs": 7.1728515625,
+     "rel_fro": 1.7174167191900522,
+     "numel": 38338560
+    },
+    {
+     "layer": 21,
+     "max_abs": 4.9130859375,
+     "rel_fro": 1.9451582441249236,
+     "numel": 38338560
+    },
+    {
+     "layer": 22,
+     "max_abs": 6.822265625,
+     "rel_fro": 1.8215835013307788,
+     "numel": 38338560
+    },
+    {
+     "layer": 23,
+     "max_abs": 3.66796875,
+     "rel_fro": 1.7826785959630953,
+     "numel": 38338560
+    },
+    {
+     "layer": 24,
+     "max_abs": 6.48046875,
+     "rel_fro": 2.0196570115461605,
+     "numel": 38338560
+    },
+    {
+     "layer": 25,
+     "max_abs": 4.509765625,
+     "rel_fro": 1.6438543692755583,
+     "numel": 76677120
+    },
+    {
+     "layer": 26,
+     "max_abs": 6.7802734375,
+     "rel_fro": 1.3458385695831137,
+     "numel": 76677120
+    },
+    {
+     "layer": 27,
+     "max_abs": 3.86328125,
+     "rel_fro": 1.5870204890694193,
+     "numel": 76677120
+    },
+    {
+     "layer": 28,
+     "max_abs": 7.3818359375,
+     "rel_fro": 1.4252861730988116,
+     "numel": 76677120
+    },
+    {
+     "layer": 29,
+     "max_abs": 4.0048828125,
+     "rel_fro": 1.6635661205767378,
+     "numel": 76677120
+    },
+    {
+     "layer": 30,
+     "max_abs": 7.75244140625,
+     "rel_fro": 1.18904268763027,
+     "numel": 76677120
+    },
+    {
+     "layer": 31,
+     "max_abs": 3.4638671875,
+     "rel_fro": 1.5391362257225978,
+     "numel": 76677120
+    }
+   ],
+   "median_rel_fro": 1.7174167191900522,
+   "worst_rel_fro": 3.056610261750897,
+   "worst_layer": 11
+  },
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 154,
+   "sha": "7ba13fdee4ed283fca239a4c125bb2b9a51a25acf6b6f12aa4f6e7421bcc8044",
+   "packed_at": 80
+  }
+ ],
+ "realized": {
+  "resets": [
+   80
+  ],
+  "binds": [
+   154
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 163.31498217582703,
+ "input": "butterfly-feeding-slow-motion",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261025-191345/VD3L-DR2noise",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.37800669670105,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_butterfly-feeding-slow-motion_s0_20261025-191345",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

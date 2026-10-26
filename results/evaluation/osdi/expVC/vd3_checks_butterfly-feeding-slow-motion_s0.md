@@ -1,0 +1,57 @@
+# VC-1 checks (results/evaluation/expVC/butterfly-feeding-slow-motion_s0)
+
+- **G3: PASS** {}
+  - COLD-1: ok {"calls": 140, "files": 6, "decoded_calls": 139, "digest_ok_calls": 139, "no_output_calls": [34]}
+  - COLD-L: ok {"calls": 190, "files": 8, "decoded_calls": 189, "digest_ok_calls": 189, "no_output_calls": [80]}
+  - OT-1: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - OT-L: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - OT-R: ok {"calls": 164, "files": 7, "decoded_calls": 164, "digest_ok_calls": 164, "no_output_calls": []}
+  - REF: ok {"calls": 240, "files": 10, "decoded_calls": 240, "digest_ok_calls": 240, "no_output_calls": []}
+  - VD1-mask-dec-norec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-mask-dec-rec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-mask-nodec-norec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-mask-nodec-rec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-zero-dec-norec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-zero-dec-rec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-zero-encdec-norec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD1-zero-nodec-rec: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-DR1: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-DR2: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-DR2+TSout: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-DR4: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-RP1: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-RP1+TSout: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-TSin: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD21-TSout: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD2L-DR1: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-DR2: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-DR2+TSout: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-DR4: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-RP1: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-RP1+TSout: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-TSin: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD2L-TSout: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD31-DR2: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD31-DR2+TSin: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD31-DR2noise: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD31-DR2stale: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD31-TSin: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD31-TSinKC: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": []}
+  - VD3L-DR2: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD3L-DR2+TSin: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD3L-DR2noise: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD3L-DR2stale: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD3L-TSin: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD3L-TSinKC: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-mask-dec-norec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-mask-dec-rec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-mask-nodec-norec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-mask-nodec-rec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-zero-dec-norec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-zero-dec-rec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-zero-encdec-norec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VDL-zero-nodec-rec: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - WFS-1: ok {"calls": 140, "files": 6, "decoded_calls": 140, "digest_ok_calls": 140, "no_output_calls": [], "stall_s": 14.604268550872803, "skipped_input_calls_harness": [], "skipped_input_calls_live_realtime": [34, 92, 59], "resume_call": 34, "first_output_input_chunk": 33}
+  - WFS-L: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": [], "stall_s": 43.83840084075928, "skipped_input_calls_harness": [], "skipped_input_calls_live_realtime": [80, 255, 176], "resume_call": 80, "first_output_input_chunk": 79}
+
+VC-1 checks: ALL PASS

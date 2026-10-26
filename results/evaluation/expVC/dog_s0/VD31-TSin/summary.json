@@ -1,0 +1,99 @@
+{
+ "condition": {
+  "id": "VD31-TSin",
+  "input": "dog",
+  "kind": "vd3",
+  "label": "VD-3 TSin at the OT-1 schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 157,
+  "frames_from": 18,
+  "frames_to": 157,
+  "sources": [
+   "results/evaluation/expW_W2_dog_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-000810"
+  ],
+  "counterfactual": false,
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "vd3_of": "OT-1"
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "3063d1aed455ca70",
+   "reset_s": 3.751843348145485
+  },
+  {
+   "call": 58,
+   "op": "bind",
+   "sha": "3063d1aed455ca70",
+   "packed_at": 34,
+   "slots_rerotated": 73,
+   "bind_s": 0.10285216569900513
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "cost_s": {
+   "ts_prepare_s": 0.7785012722015381,
+   "total_serial_s": 0.7785012722015381
+  },
+  "ts_slots_written": 2,
+  "temp_slots_left_after_bind": 0,
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 58,
+   "sha": "3063d1aed455ca70dd2cb6ee7adc7fd693500fe497333213d23b6f56e8517a68",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 105.54419445991516,
+ "input": "dog",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_dog_s0_20261025-164000/VD31-TSin",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 144.9120602607727,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_dog_s0_20261025-164000",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

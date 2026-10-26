@@ -1,0 +1,100 @@
+{
+ "condition": {
+  "id": "VD31-TSin",
+  "input": "audi-snow-trail",
+  "kind": "vd3",
+  "label": "VD-3 TSin at the OT-1 schedule (counterfactual reconstruction at the destination) - copied schedule: the source run generated train seed 1 (an orphaned node of a failed train seed-1 invocation), not audi-snow-trail seed 0; for audi-snow-trail its schedule is a copied schedule",
+  "resets": [
+   34
+  ],
+  "binds": [
+   59
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 158,
+  "frames_from": 18,
+  "frames_to": 158,
+  "sources": [
+   "results/evaluation/expW_W2_audi-snow-trail_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-135751"
+  ],
+  "counterfactual": true,
+  "provenance_note": "the source run generated train seed 1 (an orphaned node of a failed train seed-1 invocation), not audi-snow-trail seed 0; for audi-snow-trail its schedule is a copied schedule",
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "vd3_of": "OT-1"
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "15aa7c86523b79dc",
+   "reset_s": 3.744842939078808
+  },
+  {
+   "call": 59,
+   "op": "bind",
+   "sha": "15aa7c86523b79dc",
+   "packed_at": 34,
+   "slots_rerotated": 92,
+   "bind_s": 0.10256989300251007
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "cost_s": {
+   "ts_prepare_s": 0.7800752744078636,
+   "total_serial_s": 0.7800752744078636
+  },
+  "ts_slots_written": 2,
+  "temp_slots_left_after_bind": 0,
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 59,
+   "sha": "15aa7c86523b79dc77b0e19e3cf3f9d5be1188cc7470ed7dce2273ed71d12b8b",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   59
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 105.98454093933105,
+ "input": "audi-snow-trail",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261025-203100/VD31-TSin",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 146.33854413032532,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail__multiple.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s0_20261025-203100",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

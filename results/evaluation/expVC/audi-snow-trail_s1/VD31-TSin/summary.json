@@ -1,0 +1,100 @@
+{
+ "condition": {
+  "id": "VD31-TSin",
+  "input": "audi-snow-trail",
+  "kind": "vd3",
+  "label": "VD-3 TSin at the OT-1 schedule (counterfactual reconstruction at the destination)",
+  "resets": [
+   34
+  ],
+  "binds": [
+   59
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 158,
+  "frames_from": 18,
+  "frames_to": 158,
+  "sources": [
+   "results/evaluation/expW_W2_audi-snow-trail_s1/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-053458"
+  ],
+  "counterfactual": false,
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "vd3_of": "OT-1",
+  "seed": 1
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "9b08816d53b35c2f",
+   "reset_s": 3.7463974729180336
+  },
+  {
+   "call": 59,
+   "op": "bind",
+   "sha": "9b08816d53b35c2f",
+   "packed_at": 34,
+   "slots_rerotated": 91,
+   "bind_s": 0.1026812195777893
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": {
+  "dr": 0,
+  "ts": "in",
+  "keep_cache": false,
+  "dr_source": "last",
+  "cost_s": {
+   "ts_prepare_s": 0.7784383147954941,
+   "total_serial_s": 0.7784383147954941
+  },
+  "ts_slots_written": 2,
+  "temp_slots_left_after_bind": 0,
+  "stale_calls": []
+ },
+ "bound_sink": [
+  {
+   "call": 59,
+   "sha": "9b08816d53b35c2f2f4e78c49c73513c17238d03ca6fe7494a09a39a1ef4915e",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   59
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 106.25226831436157,
+ "input": "audi-snow-trail",
+ "seed": 1,
+ "frames": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s1_20261025-210913/VD31-TSin",
+ "commit": "9de6258859ba3d027c4c81752cacb4394a77b9bb",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.01228284835815,
+ "video": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/data/loveu_tgve_2023/audi-snow-trail__multiple.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_audi-snow-trail_s1_20261025-210913",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}
