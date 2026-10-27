@@ -66,3 +66,23 @@ is unresolved between the blinded note and an unblinded re-watch.
 - The correspondence tables count the five scored conditions (60 clips); the preregistration said "REF and B0
   included". REF carries no flags, so the flag columns would not change; noted as a difference between the aggregator
   and the text.
+
+## 5. Noted before the stage-2 inspection (2026-10-27, after the S3 runs, before any stage-2 form was filled)
+
+Numeric stage-2 outcome (frozen rules): S3 P1 10 / 12, P2a 11 / 12, P2b 11 / 12, P3 12 / 12. Two consequences of
+the frozen design are recorded here before the inspection so that they are not read as post-hoc interpretation:
+
+- **The frozen resolution rule needs 12 / 12 numeric passes.** S3's P2a (fails butterfly s1 OT-L on R3: X_late
+  +0.022 > t_DINO 0.027? no - late D_c -0.028 < -0.027) and P2b (fails dog s1 OT-1 on the warp clause: eO - eR
+  +0.59 > 0.27) each miss by one cell, so by the frozen rule S3 cannot be STRICT or NEAR for P2a or P2b whatever the
+  inspection shows; `s3_resolves_p2` will be false and stage 2b takes its "S3 did not resolve" form (S1, S2, A1S1,
+  A1S2 on the four-cell subset) and stage 3 does not run. The rule is not changed; 11 / 12 is reported descriptively.
+- **The stage-2 session shows REF and B0 again (preregistration section 5: "stage2: REF, B0, S3").** The aggregator
+  reports any control inspected in two sessions under `duplicate_controls` ("protocol error", section 4). Both are
+  frozen; the section-5 design requires per-session REF baselines, so the stage-2 REF / B0 entries will appear in
+  that list by construction. Nothing is counted twice: each (cell, condition) keeps its first session, and S3's
+  baseline is the stage-2 REF of the same cell. The list is a reporting artifact of the frozen design, not a protocol
+  error, and the code is not changed.
+- Stage 2 made 9 new S3 runs; the S3 runs of the three stage-0 confirmation cells (train s0 OT-1, dog s1 OT-1, audi s1
+  OT-1) are the stage-0 runs reused by `--skip_done` (as the preregistered count of 9 says). They carry the frozen
+  checks only (no supplemental `checks_supp`, which were introduced for A1 / D / R in addendum 1 and do not gate S3).
