@@ -49,7 +49,8 @@ SUPP_DR_CELL = "train_s0|OT-1"
 ROWS_ROOT = ROOT / "results/evaluation/expVD4r"
 # addendum 2 (expVD4/addendum2.md): the corrected row-wise A1 on the four stage-0 cells; every frozen / addendum-1 / 1b /
 # 2 check must hold; post-move digest differences from the stage-0r A1 run are reported descriptively
-A1_ROOT = ROOT / "results/evaluation/expVD4a"
+A1_ROOT = ROOT / "results/evaluation/expVD4a"      # first run (52a1c461): the reference's theta was wrong (addendum 2a); preserved, reported
+A1_ROOT2 = ROOT / "results/evaluation/expVD4a2"    # addendum 2a: the rerun with the corrected reference; the gate comes from it
 A1_REQUIRED = ("a1_deltas_applied_per_row", "a1_deltas_equal_independent", "ts_k_as_written_rows", "ts_v_unrotated_rows", "a1_zero_delta_rows_unchanged",
                "a1_k_within_1ulp_of_independent_reference", "prepare_rows_filled_identical", "meta_positions_rows_equal_snapshot", "positions_rows_final_equal_snapshot",
                "ts_positions_rows_equal_snapshot", "positions_final_equal_snapshot", "ts_k_as_written_per_layer_slot", "ts_v_unrotated_per_layer_slot")
@@ -255,8 +256,8 @@ def a1_rows(rroot: Path, aroot: Path, dry: bool) -> dict:
     return {"root": str(aroot), "runs": runs, "valid": bool(runs) and ok}
 
 
-def a1_lines(a1r: dict) -> list:
-    L = ["## Corrected A1 (addendum 2; row-wise deltas; validity and descriptive records)", ""]
+def a1_lines(a1r: dict, what: str = "") -> list:
+    L = [f"## Corrected A1 (addendum 2; row-wise deltas; validity and descriptive records){' - ' + what if what else ''}", ""]
     if not any(r["present"] for r in a1r["runs"]):
         return L + ["- not run", ""]
     for r in a1r["runs"]:
@@ -269,7 +270,7 @@ def a1_lines(a1r: dict) -> list:
                  f"K changed at zero delta {ro['zero_delta_k_changed']}, round-trip max {ro['round_trip_max_abs']}; independent reference: within {rf.get('n_ulp')} ulp {rf.get('within_ulp')}, "
                  f"max abs {rf.get('max_abs')}, bitwise-equal element fraction {rf.get('bitwise_equal_fraction')}, bitwise-equal (layer, row, slot) {rf.get('bitwise_equal_slots')} / {rf.get('slots')}; "
                  f"output digests vs stage 0r: pre-move differing {dg['pre_move_differing']}, post-move differing {dg['post_move_differing']} / {dg['post_move_calls']} (first at call {dg['first_differing_call']})")
-    return L + [f"- corrected-A1 gate: {a1r['valid']}", "Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.", ""]
+    return L + [f"- corrected-A1 {'gate' if 'gate' in what or not what else 'validity (not the gate)'}: {a1r['valid']}", "Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.", ""]
 
 
 def rows_lines(rows: dict) -> list:
@@ -323,7 +324,8 @@ def main():
     ap.add_argument("--insp_dir", default=str(OUT), help="where the inspection forms, records and keys are")
     ap.add_argument("--supp_root", default=str(SUPP_ROOT), help="addendum 1: the supplemental stage-0 units")
     ap.add_argument("--rows_root", default=str(ROWS_ROOT), help="addendum 1b: the batch-row validation units")
-    ap.add_argument("--a1_root", default=str(A1_ROOT), help="addendum 2: the corrected-A1 validation units")
+    ap.add_argument("--a1_root", default=str(A1_ROOT), help="addendum 2: the corrected-A1 validation units (first run)")
+    ap.add_argument("--a1_root2", default=str(A1_ROOT2), help="addendum 2a: the corrected-A1 validation units (rerun with the corrected reference); the gate")
     ap.add_argument("--dry", action="store_true", help="synthetic units (pixel embedder); thresholds SHA not enforced; _dryrun_ session files")
     a = ap.parse_args()
     root, pre = Path(a.root), ("_dryrun_" if a.dry else "")
@@ -436,7 +438,8 @@ def main():
     gates["stage0_rows_valid"] = rows["valid"]
     gates["batch_rows_identical"] = rows["identical"]
     a1r = a1_rows(Path(a.rows_root), Path(a.a1_root), a.dry)
-    gates["stage0_a1_rows_valid"] = a1r["valid"]
+    a1r2 = a1_rows(Path(a.rows_root), Path(a.a1_root2), a.dry)
+    gates["stage0_a1_rows_valid"] = a1r2["valid"]
     f = lambda v, n=3: "-" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))  # noqa: E731
     pos = {k: {"source_sink_positions": (numeric.get("B0", {}).get(k) or {}).get("source_positions"), "a1_deltas": (numeric.get("A1", {}).get(k) or {}).get("a1_deltas"),
                "a1_round_trip": (numeric.get("A1", {}).get(k) or {}).get("a1")} for k in STAGE0}
@@ -455,7 +458,8 @@ def main():
     L += [f"- duplicate controls across sessions: {dup or 'none'}", ""]
     L += supp_lines(supp)
     L += rows_lines(rows)
-    L += a1_lines(a1r)
+    L += a1_lines(a1r, "first run (stage 0a, 52a1c461): the independent reference's theta ran over the head dim, not the temporal RoPE dim - addendum 2a; preserved, not the gate")
+    L += a1_lines(a1r2, "rerun with the corrected reference (stage 0a2, addendum 2a); the gate")
     L += [
          f"Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 {hashlib.sha256(tb).hexdigest()[:16]}). Sessions recorded: "
          f"{[s for s, i in sessions.items() if i] or 'none'}. Validity problems: {[v for v in validity if not v['pass']] or 'none'}.", "",
@@ -480,7 +484,7 @@ def main():
           f"both clean {c['metric_pass_no_flag']}; kappa {f(c['kappa'], 2)}" for p, c in corr.items()]
     L += ["", f"## Gates: {json.dumps(gates)}"]
     Path(a.out).with_suffix(".md").write_text("\n".join(L) + "\n")
-    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "batch_rows": rows, "a1_rows": a1r, "gates": gates}, indent=1, default=str))
+    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "batch_rows": rows, "a1_rows": a1r, "a1_rows_rerun": a1r2, "gates": gates}, indent=1, default=str))
     (Path(a.out).parent / f"{pre}vd4_gates.json").write_text(json.dumps(gates, indent=1, default=str))
     print("\n".join(L))
 

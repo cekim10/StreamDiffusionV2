@@ -617,7 +617,8 @@ def vd4_a1_tests():
 
     print("- 10 VD-4 addendum 2 (dry)")
     units, sess = rv.vd4_plan("0a", {})
-    check(units == {"dog_s1": ["VD41-A1"], "train_s0": ["VD41-A1"], "butterfly-feeding-slow-motion_s0": ["VD4L-A1"], "audi-snow-trail_s1": ["VD41-A1"]} and sess == [], "stage 0a: the corrected A1 on the four stage-0 cells")
+    check(units == {"dog_s1": ["VD41-A1"], "train_s0": ["VD41-A1"], "butterfly-feeding-slow-motion_s0": ["VD4L-A1"], "audi-snow-trail_s1": ["VD41-A1"]} and sess == []
+          and rv.vd4_plan("0a2", {}) == (units, []), "stage 0a / 0a2: the corrected A1 on the four stage-0 cells")
     margs = mn.parse_args(["--label", "T", "--dry_run", "--dry_sink_mb", "4", "--dry_service_s", "0.0005", "--migration_chunk", "0", "--post_chunks", "10"])
 
     def reset(cls, cond):
@@ -669,19 +670,25 @@ def vd4_a1_tests():
             subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
             subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / unit), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
         us, _ = rv.vd4_plan("0s", {})
-        for stage_units, out in ((us, sroot), (units, rroot), (units, aroot)):
+        aroot2 = tmp / "expVD4a2"
+        for stage_units, out in ((us, sroot), (units, rroot), (units, aroot), (units, aroot2)):
             for unit, ids in stage_units.items():
                 inp, sd = unit.rsplit("_s", 1)
                 subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(out), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
 
         def agg(tag):
-            r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--supp_root", str(sroot), "--rows_root", str(rroot), "--a1_root", str(aroot), "--dry", "--sessions", "", "--out", str(tmp / tag)], cwd=ROOT, capture_output=True, text=True)
+            r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--supp_root", str(sroot), "--rows_root", str(rroot), "--a1_root", str(aroot), "--a1_root2", str(aroot2), "--dry", "--sessions", "", "--out", str(tmp / tag)], cwd=ROOT, capture_output=True, text=True)
             return (json.loads((tmp / f"{tag}.json").read_text()) if r_.returncode == 0 else {"gates": {}}), r_
         R, r_ = agg("a_ok")
-        a1 = R.get("a1_rows", {}).get("runs", [])
+        a1 = R.get("a1_rows_rerun", {}).get("runs", [])
         check(R["gates"].get("stage0_a1_rows_valid") is True and len(a1) == 4 and all(r["digests_vs_stage0r"]["pre_move_differing"] == 0 for r in a1)
-              and "Corrected A1 (addendum 2" in (tmp / "a_ok.md").read_text(), f"corrected-A1 gate opens on a complete dry stage 0a; digest differences vs stage 0r reported {r_.stderr[-300:]}")
-        p_ = aroot / "dog_s1" / "VD41-A1" / "summary.json"
+              and R.get("a1_rows", {}).get("valid") is True and "first run (stage 0a" in (tmp / "a_ok.md").read_text() and "rerun with the corrected reference" in (tmp / "a_ok.md").read_text(),
+              f"corrected-A1 gate (from the stage-0a2 rerun) opens on a complete dry run; the first run is reported separately; digest differences vs stage 0r reported {r_.stderr[-300:]}")
+        pa = aroot / "dog_s1" / "VD41-A1" / "summary.json"
+        sa = json.loads(pa.read_text()); sa["vd4"]["checks_supp"]["a1_k_within_1ulp_of_independent_reference"] = False; pa.write_text(json.dumps(sa))
+        R, _ = agg("a_first")
+        check(R["gates"].get("stage0_a1_rows_valid") is True and R.get("a1_rows", {}).get("valid") is False, "a failed first run (stage 0a) is reported and does not decide the gate; the rerun does")
+        p_ = aroot2 / "dog_s1" / "VD41-A1" / "summary.json"
         sj = json.loads(p_.read_text()); sj["vd4"]["checks_supp"]["a1_k_within_1ulp_of_independent_reference"] = False; p_.write_text(json.dumps(sj))
         R, _ = agg("a_ref")
         check(R["gates"].get("stage0_a1_rows_valid") is False and R["gates"].get("stage0_rows_valid") is True, "a rotated K outside 1 ulp of the independent reference closes the corrected-A1 gate (earlier gates untouched)")
@@ -714,10 +721,12 @@ def vd4_a1_torch_tests():
     try:
         import mobility_node as mn
         G = mn.GpuRuntime
-        H, D, fsl, L, NS, B = 2, 16, 3, 4, 6, 2
-        c = D // 2
-        inv = 1.0 / (10000 ** (torch.arange(0, c, dtype=torch.float64) / c))
-        freqs = torch.polar(torch.ones(1024, c, dtype=torch.float64), torch.outer(torch.arange(1024, dtype=torch.float64), inv))
+        H, D, fsl, L, NS, B = 2, 24, 3, 4, 6, 2
+        # the model's own table (WanModel.__init__: time d - 4 * (d // 6), then two spatial parts), built with rope_params' source
+        msrc = (ROOT / "models/wan/wan_base/modules/model.py").read_text()
+        rp = re.search(r"def rope_params\(.*?\n(?=\n\n)", msrc, re.S).group(0)
+        ns = {"torch": torch}; exec(rp, ns)
+        freqs = torch.cat([ns["rope_params"](1024, D - 4 * (D // 6)), ns["rope_params"](1024, 2 * (D // 6)), ns["rope_params"](1024, 2 * (D // 6))], dim=1)
         torch.manual_seed(0)
         # per-layer source positions = the prepare's (0, 1) plus the deltas below; slot 2 is empty in the prepare
         POS = [[[22, 24, 6, 33, 34, 35], [34, 24, 6, 32, 33, 31]], [[0, 1, 6, 33, 34, 35], [7, 1, 6, 32, 33, 31]],
@@ -756,7 +765,15 @@ def vd4_a1_torch_tests():
         w = rt.within_ulp([0, 1], ref_k, 1)
         eqr = rt.slot_equal_rows([0, 1], "k", tensors=ref_k)
         check(w["within_ulp"] and w["max_abs"] <= 0.25 and all(all(r) for rows in eqr for r in rows) and w["bitwise_equal_fraction"] == 1.0,
-              f"the rotated K equals the independently built expectation (bitwise on CPU; max abs {w['max_abs']})")
+              f"the rotated K equals the independently built expectation against the model's own RoPE table (bitwise on CPU; max abs {w['max_abs']})")
+        # addendum 2a regression: a reference with theta over the head dim (the first version's error) does NOT match
+        d_t = D - 4 * (D // 6); n_t = d_t // 2
+        wrong = 1.0 / torch.pow(10000.0, torch.arange(0, D, 2, dtype=torch.float64) / D)[:n_t]
+        blk = temp[0][0][0, :fsl].to(torch.float64); x = torch.view_as_complex(blk.reshape(blk.shape[0], blk.shape[1], -1, 2).contiguous())
+        y = x.clone(); y[..., :n_t] = x[..., :n_t] * torch.polar(torch.ones(n_t, dtype=torch.float64), 22 * wrong)
+        kw = torch.view_as_real(y).flatten(2).to(torch.bfloat16)
+        check(not eq(kw, out[0][0][0, :fsl]) and float((kw.float() - out[0][0][0, :fsl].float()).abs().max()) > 1.0,
+              "a reference built with theta over the head dim instead of the temporal RoPE dim differs from the rotated K by far more than rounding (the stage-0a oracle error)")
         ku = rt.slot_equal_rows([0, 1], "k", saved=temp)
         check(ku[1][0] == [True, True] and ku[1][1] == [False, True] and ku[3][0] == [False, True] and ku[3][1] == [False, True], "zero-delta (layer, row, slot) entries keep the prepare's K bitwise; rotated ones differ")
         layers[0]["k"][1, 0, 0, 0] += 1.0   # one element off in row 1

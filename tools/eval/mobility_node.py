@@ -749,8 +749,9 @@ class GpuRuntime:
         """Addendum 2: the expected A1 keys built independently of rotate_temp, from the ORIGINAL prepare tensors and the
         snapshot's position tensors: delta[l][b][s] = ring pos[l][b, s] - prepare pos[l][b, s] (tensor arithmetic);
         the temporal RoPE channels (the first c - 2 * (c // 3) complex pairs, as the model's rope_apply splits them)
-        of row b, slot s are multiplied by exp(i * delta * theta_j) with theta_j = 10000 ** (-2 j / c) recomputed here
-        (rope_params' formula), in float64 as the model does, then cast to the key dtype. Returns (expected K per
+        of row b, slot s are multiplied by exp(i * delta * theta_j) with theta_j = 10000 ** (-2 j / d_t), d_t = d - 4 * (d // 6)
+        the temporal RoPE dim the model passes to rope_params (WanModel.__init__), recomputed here in float64 as
+        rope_params does, then cast to the key dtype. (Addendum 2a: the first version used d instead of d_t.) Returns (expected K per
         layer, deltas per (layer, row, slot))."""
         torch = self.torch
         from models.wan.causal_model import KV_POS_EMPTY
@@ -762,9 +763,11 @@ class GpuRuntime:
             empty = pos == KV_POS_EMPTY
             k_exp = k.clone()
             rows, slots = pos.shape
-            c = k.shape[-1] // 2
-            n_t = c - 2 * (c // 3)
-            theta = 1.0 / torch.pow(10000.0, torch.arange(0, k.shape[-1], 2, dtype=torch.float64, device=k.device) / k.shape[-1])[:n_t]
+            d = k.shape[-1]                                   # head dim; the model's table: rope_params(1024, d - 4 * (d // 6)) for time,
+            dim_t = d - 4 * (d // 6)                          # then two spatial tables (WanModel.__init__); _shift_temporal_rope uses
+            n_t = (d // 2) - 2 * ((d // 2) // 3)              # the first (d/2) - 2 * ((d/2) // 3) = dim_t / 2 complex pairs
+            assert n_t == dim_t // 2, (n_t, dim_t)
+            theta = 1.0 / torch.pow(10000.0, torch.arange(0, dim_t, 2, dtype=torch.float64, device=k.device) / dim_t)
             for b in range(rows):
                 for s_ in range(slots):
                     if bool(empty[b, s_]):
