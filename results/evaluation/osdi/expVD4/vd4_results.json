@@ -2509,6 +2509,184 @@
   ],
   "valid": false
  },
+ "a1_rows_rerun": {
+  "root": "/home/ckim151/StreamDiffusionV2/results/evaluation/expVD4a2",
+  "runs": [
+   {
+    "cell": "dog_s1|OT-1",
+    "present": true,
+    "missing": [],
+    "failed": [],
+    "stream_valid": true,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 13,
+     "k_changed_where_nonzero": 13,
+     "min_changed_fraction": 0.2928927951388889,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.0625,
+     "per_row_nonzero": {
+      "0": 9,
+      "1": 4
+     },
+     "rows_with_different_deltas": 6
+    },
+    "reference": {
+     "max_abs": 0.0,
+     "bitwise_equal_fraction": 1.0,
+     "within_ulp": true,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 120,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 158,
+     "post_move_calls": 124,
+     "post_move_differing": 124,
+     "pre_move_differing": 0,
+     "first_differing_call": 34
+    },
+    "digests_vs_first_run": {
+     "calls": 158,
+     "first_run_calls": 158,
+     "differing": 0
+    },
+    "pass": true
+   },
+   {
+    "cell": "train_s0|OT-1",
+    "present": true,
+    "missing": [],
+    "failed": [],
+    "stream_valid": true,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 29,
+     "k_changed_where_nonzero": 29,
+     "min_changed_fraction": 0.2935096153846154,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.0625,
+     "per_row_nonzero": {
+      "0": 17,
+      "1": 12
+     },
+     "rows_with_different_deltas": 9
+    },
+    "reference": {
+     "max_abs": 0.0,
+     "bitwise_equal_fraction": 1.0,
+     "within_ulp": true,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 120,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 158,
+     "post_move_calls": 124,
+     "post_move_differing": 124,
+     "pre_move_differing": 0,
+     "first_differing_call": 34
+    },
+    "digests_vs_first_run": {
+     "calls": 158,
+     "first_run_calls": 158,
+     "differing": 0
+    },
+    "pass": true
+   },
+   {
+    "cell": "butterfly-feeding-slow-motion_s0|OT-L",
+    "present": true,
+    "missing": [],
+    "failed": [],
+    "stream_valid": true,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 37,
+     "k_changed_where_nonzero": 37,
+     "min_changed_fraction": 0.26515299479166665,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.125,
+     "per_row_nonzero": {
+      "0": 19,
+      "1": 18
+     },
+     "rows_with_different_deltas": 12
+    },
+    "reference": {
+     "max_abs": 0.0,
+     "bitwise_equal_fraction": 1.0,
+     "within_ulp": true,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 120,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 254,
+     "post_move_calls": 174,
+     "post_move_differing": 174,
+     "pre_move_differing": 0,
+     "first_differing_call": 80
+    },
+    "digests_vs_first_run": {
+     "calls": 254,
+     "first_run_calls": 254,
+     "differing": 0
+    },
+    "pass": true
+   },
+   {
+    "cell": "audi-snow-trail_s1|OT-1",
+    "present": true,
+    "missing": [],
+    "failed": [],
+    "stream_valid": true,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 31,
+     "k_changed_where_nonzero": 31,
+     "min_changed_fraction": 0.28964760283119656,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.0625,
+     "per_row_nonzero": {
+      "0": 17,
+      "1": 14
+     },
+     "rows_with_different_deltas": 7
+    },
+    "reference": {
+     "max_abs": 0.0,
+     "bitwise_equal_fraction": 1.0,
+     "within_ulp": true,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 120,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 159,
+     "post_move_calls": 125,
+     "post_move_differing": 125,
+     "pre_move_differing": 0,
+     "first_differing_call": 34
+    },
+    "digests_vs_first_run": {
+     "calls": 159,
+     "first_run_calls": 159,
+     "differing": 0
+    },
+    "pass": true
+   }
+  ],
+  "valid": true
+ },
  "gates": {
   "stage0_valid": true,
   "duplicate_controls": [],
@@ -2519,6 +2697,6 @@
   "stage0_supp_valid": true,
   "stage0_rows_valid": true,
   "batch_rows_identical": false,
-  "stage0_a1_rows_valid": false
+  "stage0_a1_rows_valid": true
  }
 }
