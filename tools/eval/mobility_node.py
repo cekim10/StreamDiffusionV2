@@ -654,6 +654,49 @@ class GpuRuntime:
                 h.update((k if part == "k" else v)[:, self._slot(s_)].detach().contiguous().view(self.torch.uint8).cpu().numpy().tobytes())
         return h.hexdigest()
 
+    def slot_equal(self, slots: list, part: str, snap: dict | None = None, saved: list | None = None, override: dict | None = None) -> list:
+        """Addendum 1: per layer, per slot, whether the live K or V is bitwise equal to the snapshot's (snap), an
+        override's (quantized Sink) or a saved temporary Sink's (saved)."""
+        torch = self.torch
+        out = []
+        for li, layer in enumerate(self.sa.kv_layers(self.pl)):
+            row = []
+            for s_ in slots:
+                if override is not None:
+                    ref = override[s_][li][0 if part == "k" else 1]
+                elif snap is not None:
+                    ref = snap["kv"][li][part][:, self._slot(s_)]
+                else:
+                    ref = saved[li][0 if part == "k" else 1][:, self._slot(s_)]
+                a = layer[part][:, self._slot(s_)]
+                row.append(a.shape == ref.shape and a.dtype == ref.dtype and bool(torch.equal(a.contiguous().view(torch.uint8), ref.contiguous().view(torch.uint8))))
+            out.append(row)
+        return out
+
+    def dec_layout(self, snap: dict) -> dict:
+        """Addendum 1: the live decoder cache against the snapshot, entry by entry of `_feat_map` (tensor or not, shape,
+        dtype, bitwise equality) and the bookkeeping attributes."""
+        torch = self.torch
+        vm = self.pl.vae.model
+        live, src = getattr(vm, "_feat_map", None), snap["vae"].get("_feat_map")
+        out = {"entries_live": len(live) if isinstance(live, list) else None, "entries_snapshot": len(src) if isinstance(src, list) else None,
+               "tensors": 0, "layout_mismatch": [], "unequal": [], "bytes": 0}
+        if isinstance(live, list) and isinstance(src, list) and len(live) == len(src):
+            for i, (a, b) in enumerate(zip(live, src)):
+                ta, tb = isinstance(a, torch.Tensor), isinstance(b, torch.Tensor)
+                if ta != tb or (ta and (tuple(a.shape) != tuple(b.shape) or a.dtype != b.dtype)):
+                    out["layout_mismatch"].append(i); continue
+                if ta:
+                    out["tensors"] += 1; out["bytes"] += int(a.numel() * a.element_size())
+                    if not torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)):
+                        out["unequal"].append(i)
+        out["layout_ok"] = out["entries_live"] is not None and out["entries_live"] == out["entries_snapshot"] and not out["layout_mismatch"] and out["tensors"] > 0
+        out["tensors_equal"] = out["layout_ok"] and not out["unequal"]
+        attrs = {a: (getattr(vm, a, None) == snap["vae"].get(a)) for a in self._DEC_ATTRS}
+        out["attrs"] = attrs
+        out["attrs_equal"] = all(attrs.values())
+        return out
+
     def kv_nbytes(self, slots: list) -> int:
         layers = self.sa.kv_layers(self.pl)
         return int(sum(2 * layer["k"][:, self._slot(s_)].numel() * layer["k"].element_size() for layer in layers for s_ in slots))
@@ -674,20 +717,26 @@ class GpuRuntime:
         from models.wan.causal_model import _shift_temporal_rope
 
         freqs = self.pl.generator.model.freqs.to(self.device)
-        out, worst, n_rot = [], 0.0, 0
-        for (k, v, pos), dl in zip(saved, deltas):
+        out, worst, n_rot, per = [], 0.0, 0, []
+        for li, ((k, v, pos), dl) in enumerate(zip(saved, deltas)):
             k2 = k.clone()
             for s_, d in enumerate(dl):
+                rec = {"layer": li, "slot": s_, "delta": d, "k_elements_changed": 0, "k_elements": int(k[:, self._slot(s_)].numel()), "round_trip_max_abs": 0.0}
+                per.append(rec)   # addendum 1: per layer and slot (slots the prepare left empty carry delta None)
                 if d is None or d == 0:
                     continue
                 for b in range(k.shape[0]):
                     r = _shift_temporal_rope(k[b, self._slot(s_)], freqs, int(d))
                     back = _shift_temporal_rope(r, freqs, -int(d))
-                    worst = max(worst, float((back.float() - k[b, self._slot(s_)].float()).abs().max().item()))
+                    err = float((back.float() - k[b, self._slot(s_)].float()).abs().max().item())
+                    worst = max(worst, err)
+                    rec["round_trip_max_abs"] = max(rec["round_trip_max_abs"], err)
+                    bits = {1: self.torch.uint8, 2: self.torch.int16, 4: self.torch.int32}[k.element_size()]   # bitwise, one integer per element
+                    rec["k_elements_changed"] += int((r.contiguous().view(bits) != k[b, self._slot(s_)].contiguous().view(bits)).sum().item())
                     k2[b, self._slot(s_)] = r
                     n_rot += 1
             out.append((k2, v, pos))
-        return out, {"rotated_slot_layers": n_rot, "round_trip_max_abs": worst}
+        return out, {"rotated_slot_layers": n_rot, "round_trip_max_abs": worst, "per_layer_slot": per}
 
     def quantize_slots(self, snap: dict, slots: list, mode: str) -> tuple[dict, int]:
         """Exploratory: the snapshot's K / V of `slots` quantized and dequantized. fp8: e4m3 with a per-tensor scale;
@@ -918,6 +967,13 @@ class FakeRuntime:
 
     def kv_nbytes(self, slots):
         return 575078880 * len(slots)
+
+    def slot_equal(self, slots, part, snap=None, saved=None, override=None):
+        return [[True] * len(slots) for _ in range(30)]
+
+    def dec_layout(self, snap):
+        return {"entries_live": 1, "entries_snapshot": 1, "tensors": 1, "layout_mismatch": [], "unequal": [], "bytes": 0,
+                "layout_ok": True, "tensors_equal": True, "attrs": {}, "attrs_equal": True}
 
     def positions(self, slots, snap=None):
         return [[[0, 1, 6, 31, 32, 33][s_] for s_ in slots] for _ in range(30)]

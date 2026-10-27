@@ -130,6 +130,7 @@ def main():
         check(r_.returncode == 0 and "VD-H2" in r_.stdout and "dog | OT-1" in r_.stdout, f"VD aggregation (main effects, verdicts) {r_.stderr[-300:]}")
         vd3_tests(tmp, out, vc)
         vd4_tests()
+        vd4_supp_tests()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
@@ -399,7 +400,111 @@ def vd4_tests():
         check(a4.STAGE0 == list(s0pos) and {c.split("_s")[0] for c in a4.STAGE0} == {"dog", "train", "butterfly-feeding-slow-motion", "audi-snow-trail"},
               "stage 0: one cell per input covering aligned, positive, negative and mixed sink positions")
         r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd4", "--stage", "1", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
-        check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd4 refuses before the VD-4 freeze")
+        gates_ = json.loads((ROOT / "results/evaluation/osdi/expVD4/vd4_gates.json").read_text()) if (ROOT / "results/evaluation/osdi/expVD4/vd4_gates.json").exists() else {}
+        if not (ROOT / "results/evaluation/osdi/expVD4_freeze.md").exists():
+            check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd4 refuses before the VD-4 freeze")
+        elif not gates_.get("stage0_supp_valid"):   # frozen, stage 0 passed: stage 1 still waits for addendum 1's supplemental validation
+            check(r_.returncode != 0 and "supplemental stage-0 validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the supplemental stage-0 validation (addendum 1) passed")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def vd4_supp_tests():
+    """VD-4 addendum 1 (dry): the stage-0s plan, per-layer / per-slot records and checks, negative cases (overwrite after
+    the write, decoder layout, per-slot mismatch, positions), the supplemental gate incl. A1 digest equality."""
+    import csv as csv_
+
+    import aggregate_vd4 as a4
+    import mobility_node as mn
+    import run_vc as rv
+    import vc_emulate as ve
+
+    print("- 8 VD-4 addendum 1 (dry)")
+    units, sess = rv.vd4_plan("0s", {})
+    check(units == {"dog_s1": ["VD41-A1"], "train_s0": ["VD41-A1", "VD41-D", "VD41-R"], "butterfly-feeding-slow-motion_s0": ["VD4L-A1"], "audi-snow-trail_s1": ["VD41-A1"]} and sess == [],
+          f"stage 0s: A1 on the four stage-0 cells, D and R on {a4.SUPP_DR_CELL}, no inspection ({units})")
+    margs = mn.parse_args(["--label", "T", "--dry_run", "--dry_sink_mb", "4", "--dry_service_s", "0.0005", "--migration_chunk", "0", "--post_chunks", "10"])
+
+    def reset(cls, cond):
+        rt = cls(margs); rt.provision()
+        log = {"cost_s": {}, "checks": {}, "bytes": {}}
+        ve.vd4_reset(rt, 5, cond, {}, [], True, log, None, [])
+        return log
+    ok_d = reset(mn.FakeRuntime, {"dec": "oracle", "ts": "in"}); ok_r = reset(mn.FakeRuntime, {"dec": "dr2", "oracle_recent": True, "ts": "in"})
+    ok_a = reset(mn.FakeRuntime, {"dec": "dr2", "ts": "in_aligned"})
+    check(all(ok_d["checks_supp"].get(c) for c in a4.SUPP_REQUIRED["D"][1]) and all(ok_r["checks_supp"].get(c) for c in a4.SUPP_REQUIRED["R"][1])
+          and all(ok_a["checks_supp"].get(c) for c in a4.SUPP_REQUIRED["A1"][1]) and len(ok_a["supp"]["source_positions"]) == 30 and len(ok_a["supp"]["final_positions"]) == 30
+          and len(ok_a["supp"]["a1_per_layer_slot"]) == 60,
+          "D / R / A1: every supplemental check present and true; positions logged for every layer; 30 x 2 A1 (layer, slot) records")
+
+    class DecOverwrite(mn.FakeRuntime):   # the decoder equals the snapshot at the write (the fake write's digest), a later step changes it
+        def dec_digest(self, tensors=None):
+            return "changed"
+
+    class DecLayout(mn.FakeRuntime):
+        def dec_layout(self, snap):
+            return {**super().dec_layout(snap), "layout_mismatch": [3], "layout_ok": False, "tensors_equal": False}
+
+    class SlotBad(mn.FakeRuntime):
+        def slot_equal(self, slots, part, snap=None, saved=None, override=None):
+            rows = super().slot_equal(slots, part, snap, saved, override)
+            rows[17][0] = False   # one layer, one slot
+            return rows
+
+    class PosMoved(mn.FakeRuntime):
+        n = 0
+
+        def positions(self, slots, snap=None):
+            if snap is None:
+                self.n += 1
+            out = super().positions(slots, snap)
+            if snap is None and self.n > 1 and len(slots) == 6:
+                out[29] = [out[29][0] + 1] + out[29][1:]   # the last layer's slot 0 moved after the restore
+            return out
+    for cls, cond, key_, what in ((DecOverwrite, {"dec": "oracle", "ts": "in"}, "decoder_equal", "the decoder cache changed after its write (equal at the write)"),
+                                  (DecLayout, {"dec": "oracle", "ts": "in"}, "supp:decoder_layout_equal", "a decoder-cache layout mismatch (entry 3)"),
+                                  (SlotBad, {"dec": "dr2", "oracle_recent": True, "ts": "in"}, "supp:recent_k_equal_per_layer_slot", "one (layer, slot) of the recent KV differing"),
+                                  (SlotBad, {"dec": "dr2", "ts": "in_aligned"}, "supp:ts_k_as_written_per_layer_slot", "one (layer, slot) of A1's rotated K differing"),
+                                  (PosMoved, {"dec": "dr2", "ts": "in_aligned"}, "supp:positions_final_equal_snapshot", "a position changed after the restore")):
+        lg = reset(cls, cond)
+        bad = [k for k, v in lg["checks"].items() if v is False] + [f"supp:{k}" for k, v in lg["checks_supp"].items() if v is False]
+        extra = (lg["checks_supp"].get("decoder_equal_at_write") is True) if cls is DecOverwrite else True
+        check(key_ in bad and extra, f"addendum 1 catches {what} ({bad})")
+    tmp = Path(tempfile.mkdtemp(prefix="vd4s_test_"))
+    try:
+        S = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())
+        root, sroot, frames = tmp / "expVC", tmp / "expVD4s", tmp / "frames"
+        s0, _ = rv.vd4_plan("0", {})
+        for unit, ids in s0.items():   # the original stage 0 (dry), then stage 0s in its own root
+            inp, sd = unit.rsplit("_s", 1)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", "OT-1,OT-L,VD31-DR2+TSin,VD3L-DR2+TSin"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / unit), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
+        nvalid = 0
+        for unit, ids in units.items():
+            inp, sd = unit.rsplit("_s", 1)
+            r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(sroot), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+            nvalid += r_.stdout.count("valid True")
+        check(nvalid == 6 and not (sroot / "train_s0" / "VD41-B0").exists() and (root / "train_s0" / "VD41-A1" / "summary.json").exists(),
+              "stage 0s: six valid streams in their own root; the stage-0 results stay where they are")
+
+        def agg(tag):
+            r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--supp_root", str(sroot), "--dry", "--sessions", "", "--out", str(tmp / tag)], cwd=ROOT, capture_output=True, text=True)
+            return (json.loads((tmp / f"{tag}.json").read_text()) if r_.returncode == 0 else {"gates": {}, "supplemental_stage0": {"runs": []}}), r_
+        R, r_ = agg("s_ok")
+        a1 = [r for r in R["supplemental_stage0"]["runs"] if r["condition"] == "A1"]
+        check(R["gates"].get("stage0_valid") is True and R["gates"].get("stage0_supp_valid") is True and len(a1) == 4 and all(r["digests_equal_stage0"] for r in a1)
+              and "Stage-0 supplemental validity (addendum 1" in (tmp / "s_ok.md").read_text(), f"supplemental gate opens on a complete dry stage 0s; A1 digests equal stage 0 {r_.stderr[-300:]}")
+        p_ = sroot / "train_s0" / "VD41-A1" / "calls.csv"
+        rows = list(csv_.DictReader(open(p_, newline="")))
+        rows[-1]["frame_digest"] = "0" * 16
+        with open(p_, "w", newline="") as fh:
+            w = csv_.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
+        R, _ = agg("s_dig")
+        check(R["gates"].get("stage0_supp_valid") is False and R["gates"].get("stage0_valid") is True, "one A1 output digest differing from stage 0 closes the supplemental gate (the stage-0 gate is untouched)")
+        shutil.rmtree(sroot / "train_s0" / "VD41-D")
+        R, _ = agg("s_noD")
+        check(R["gates"].get("stage0_supp_valid") is False, "a missing D run closes the supplemental gate")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

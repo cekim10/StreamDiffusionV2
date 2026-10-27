@@ -38,6 +38,19 @@ SUBSET4 = ["dog_s1|OT-1", "train_s0|OT-1", "butterfly-feeding-slow-motion_s1|OT-
 # s0 OT-L [-29, -10]) and mixed (audi s1 OT-1 [22, 1])
 STAGE0 = ["dog_s1|OT-1", "train_s0|OT-1", "butterfly-feeding-slow-motion_s0|OT-L", "audi-snow-trail_s1|OT-1"]
 STAGE0_NAMES = ("V0", "B0", "A1", "S3")   # A1 / S3: validity of the rotation and of the oracle Sink writes only; no metrics at stage 0
+# addendum 1 (expVD4/addendum1.md): supplemental stage-0 validation in its own root (the stage-0 results stay as they are):
+# A1 again on the four stage-0 cells (output digests must equal the stage-0 A1 run call by call) with per-layer / per-slot
+# checks, and the oracle decoder (D) and recent-KV (R) writes on one cell
+SUPP_ROOT = ROOT / "results/evaluation/expVD4s"
+SUPP_DR_CELL = "train_s0|OT-1"
+SUPP_REQUIRED = {   # check names that must be present and true (frozen "checks" / supplemental "checks_supp")
+    "A1": (("meta_positions_equal_snapshot", "ts_k_as_written", "ts_v_unrotated"),
+           ("positions_final_equal_snapshot", "ts_k_as_written_per_layer_slot", "ts_v_unrotated_per_layer_slot", "ts_positions_equal_snapshot_per_layer_slot")),
+    "D": (("meta_positions_equal_snapshot", "decoder_equal", "ts_k_as_written", "ts_v_unrotated"),
+          ("positions_final_equal_snapshot", "decoder_equal_at_write", "decoder_layout_equal", "decoder_tensors_equal_per_entry", "decoder_attrs_equal")),
+    "R": (("meta_positions_equal_snapshot", "recent_k_equal", "recent_v_equal", "recent_positions_equal", "ts_k_as_written", "ts_v_unrotated"),
+          ("positions_final_equal_snapshot", "recent_k_equal_at_write", "recent_v_equal_at_write", "recent_k_equal_per_layer_slot", "recent_v_equal_per_layer_slot")),
+}
 # stage-1 inspection split by cell (each input and both schedules in each session; every cell's REF / B0 in one session)
 STAGE1_SESSIONS = {"stage1a": ["train_s0|OT-1", "train_s1|OT-L", "audi-snow-trail_s0|OT-1", "audi-snow-trail_s1|OT-L", "dog_s1|OT-1", "butterfly-feeding-slow-motion_s1|OT-L"],
                    "stage1b": ["train_s0|OT-L", "train_s1|OT-1", "audi-snow-trail_s0|OT-L", "audi-snow-trail_s1|OT-1", "dog_s1|OT-L", "butterfly-feeding-slow-motion_s1|OT-1"]}
@@ -100,6 +113,84 @@ def kappa(tab: dict) -> float | None:
     return None if pe == 1 else (po - pe) / (1 - pe)
 
 
+def supplemental(root: Path, sroot: Path, dry: bool) -> dict:
+    """Addendum 1: per run the frozen and supplemental checks (required names present and true), stream validity,
+    A1's output digests vs the stage-0 A1 run, and per-layer / per-slot summaries (positions, deltas, K changes,
+    round-trip errors, decoder layout). valid = every required run present and passing."""
+    runs, ok = [], True
+    want = [(k, "A1") for k in STAGE0] + [(SUPP_DR_CELL, "D"), (SUPP_DR_CELL, "R")]
+    for key, n in want:
+        unit_name, ot = key.split("|"); x = ot.split("-")[1]
+        cid = f"VD4{x}-{n}"
+        s = vd4_summary(sroot / unit_name, cid)
+        r = {"cell": key, "condition": n, "present": bool(s)}
+        if s:
+            v4 = s.get("vd4") or {}
+            ck, cs = v4.get("checks") or {}, v4.get("checks_supp") or {}
+            need_f, need_s = SUPP_REQUIRED[n]
+            if n == "A1" and any(d for d in (v4.get("a1_deltas_layer0") or []) if d):
+                need_f = need_f + ("a1_k_rotated",)
+            r["missing"] = [c for c in need_f if c not in ck] + [f"supp:{c}" for c in need_s if c not in cs]
+            r["failed"] = [c for c, v in ck.items() if v is False] + [f"supp:{c}" for c, v in cs.items() if v is False]
+            r["stream_valid"] = bool(s.get("valid"))
+            sp = v4.get("supp") or {}
+            src = sp.get("source_positions") or []
+            r["layers"] = len(src)
+            r["sink_position_patterns"] = sorted({tuple(p_[:3]) for p_ in src}) if src else []
+            r["layers_sink_equal_layer0"] = sum(1 for p_ in src if src and p_[:3] == src[0][:3])
+            if n == "A1":
+                per = sp.get("a1_per_layer_slot") or []
+                nz = [q for q in per if q.get("delta")]
+                r["a1"] = {"records": len(per), "nonzero_delta": len(nz), "k_changed_where_nonzero": sum(1 for q in nz if q.get("k_elements_changed", 0) > 0),
+                           "min_changed_fraction_where_nonzero": min((q["k_elements_changed"] / q["k_elements"] for q in nz if q.get("k_elements")), default=None),
+                           "zero_delta_k_changed": sum(1 for q in per if not q.get("delta") and q.get("k_elements_changed", 0) > 0),
+                           "round_trip_max_abs": max((q.get("round_trip_max_abs", 0.0) for q in per), default=None),
+                           "k_as_expected": sum(1 for q in per if q.get("k_as_expected")), "v_unrotated": sum(1 for q in per if q.get("v_unrotated")),
+                           "positions_equal_snapshot": sum(1 for q in per if q.get("position_equal_snapshot")),
+                           "deltas_by_slot": {str(sl): sorted({q.get("delta") for q in per if q.get("slot") == sl}, key=lambda d: (d is None, d or 0)) for sl in (0, 1)}}
+                if not dry and r["a1"]["records"] != 2 * max(r["layers"], 1):
+                    r["missing"].append(f"a1_per_layer_slot records {r['a1']['records']} (expected {2 * r['layers']})")
+                new, old = digests(sroot / unit_name, cid), digests(root / unit_name, cid)
+                r["digests_equal_stage0"] = bool(new) and bool(old) and new == old
+                r["digest_calls"] = len(new)
+                r["digest_calls_differing"] = sum(1 for c in set(new) | set(old) if new.get(c) != old.get(c))
+            if n == "D":
+                lay = sp.get("decoder_layout") or {}
+                r["decoder"] = {k_: lay.get(k_) for k_ in ("entries_live", "entries_snapshot", "tensors", "bytes", "layout_mismatch", "unequal", "attrs")}
+            if n == "R":
+                r["recent_bytes"] = (v4.get("bytes") or {}).get("oracle_recent")
+            r["pass"] = r["stream_valid"] and not r["missing"] and not r["failed"] and (n != "A1" or r["digests_equal_stage0"])
+        else:
+            r["pass"] = False
+        ok &= r["pass"]
+        runs.append(r)
+    return {"root": str(sroot), "runs": runs, "valid": bool(runs) and ok}
+
+
+def supp_lines(supp: dict) -> list:
+    L = ["## Stage-0 supplemental validity (addendum 1; separate from the original stage-0 checks above)", ""]
+    if not any(r["present"] for r in supp["runs"]):
+        return L + ["- not run", ""]
+    for r in supp["runs"]:
+        head = f"- {r['cell']} {r['condition']}: {'PASS' if r['pass'] else 'FAIL'}"
+        if not r["present"]:
+            L.append(head + " (missing)"); continue
+        head += f"; stream valid {r['stream_valid']}; failed {r['failed'] or 'none'}; missing {r['missing'] or 'none'}; layers {r['layers']}, layers with layer 0's sink positions {r['layers_sink_equal_layer0']}"
+        if r["condition"] == "A1":
+            a1 = r["a1"]
+            head += (f"; output digests = stage-0 A1 {r['digests_equal_stage0']} ({r['digest_calls']} calls, {r['digest_calls_differing']} differ); (layer, slot) records {a1['records']}: "
+                     f"non-zero delta {a1['nonzero_delta']}, K changed there {a1['k_changed_where_nonzero']} (min fraction {a1['min_changed_fraction_where_nonzero']}), "
+                     f"K changed at zero delta {a1['zero_delta_k_changed']}, round-trip max {a1['round_trip_max_abs']}, K as expected {a1['k_as_expected']}, V unrotated {a1['v_unrotated']}, "
+                     f"positions = snapshot {a1['positions_equal_snapshot']}; deltas slot 0 {a1['deltas_by_slot']['0']}, slot 1 {a1['deltas_by_slot']['1']}")
+        if r["condition"] == "D":
+            head += f"; decoder {r['decoder']}"
+        if r["condition"] == "R":
+            head += f"; recent KV bytes {r['recent_bytes']}"
+        L.append(head)
+        L.append(f"  - sink positions (slots 0-2) across layers: {r['sink_position_patterns']}")
+    return L + [f"- supplemental gate: {supp['valid']}", ""]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=str(ROOT / "results/evaluation/expVC"))
@@ -107,6 +198,7 @@ def main():
     ap.add_argument("--sessions", default="stage1a,stage1b,stage2,stage2b,stage3")
     ap.add_argument("--thresholds", default=str(THR))
     ap.add_argument("--insp_dir", default=str(OUT), help="where the inspection forms, records and keys are")
+    ap.add_argument("--supp_root", default=str(SUPP_ROOT), help="addendum 1: the supplemental stage-0 units")
     ap.add_argument("--dry", action="store_true", help="synthetic units (pixel embedder); thresholds SHA not enforced; _dryrun_ session files")
     a = ap.parse_args()
     root, pre = Path(a.root), ("_dryrun_" if a.dry else "")
@@ -213,6 +305,8 @@ def main():
              "s3_resolves_p2": s3_resolves,
              "stage2b_cells": (CONFIRM if s3_resolves else SUBSET4) if ("S3" in res and s3.get("P2a", {}).get("resolution") != "not inspected") else None,
              "stage3_runs": s3_resolves}
+    supp = supplemental(root, Path(a.supp_root), a.dry)
+    gates["stage0_supp_valid"] = supp["valid"]
     f = lambda v, n=3: "-" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))  # noqa: E731
     pos = {k: {"source_sink_positions": (numeric.get("B0", {}).get(k) or {}).get("source_positions"), "a1_deltas": (numeric.get("A1", {}).get(k) or {}).get("a1_deltas"),
                "a1_round_trip": (numeric.get("A1", {}).get(k) or {}).get("a1")} for k in STAGE0}
@@ -229,6 +323,7 @@ def main():
         L.append(f"- {k}: {'PASS' if rows_ and all(v['pass'] for v in rows_) else 'FAIL'} ({len(rows_)} checks; failed {[v['check'] for v in rows_ if not v['pass']] or 'none'}); "
                  f"source positions {pos[k]['source_sink_positions'] and pos[k]['source_sink_positions'][:3]}, A1 deltas {pos[k]['a1_deltas']}, A1 rotation {pos[k]['a1_round_trip']}")
     L += [f"- duplicate controls across sessions: {dup or 'none'}", ""]
+    L += supp_lines(supp)
     L += [
          f"Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 {hashlib.sha256(tb).hexdigest()[:16]}). Sessions recorded: "
          f"{[s for s, i in sessions.items() if i] or 'none'}. Validity problems: {[v for v in validity if not v['pass']] or 'none'}.", "",
@@ -253,7 +348,7 @@ def main():
           f"both clean {c['metric_pass_no_flag']}; kappa {f(c['kappa'], 2)}" for p, c in corr.items()]
     L += ["", f"## Gates: {json.dumps(gates)}"]
     Path(a.out).with_suffix(".md").write_text("\n".join(L) + "\n")
-    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "gates": gates}, indent=1, default=str))
+    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "gates": gates}, indent=1, default=str))
     (Path(a.out).parent / f"{pre}vd4_gates.json").write_text(json.dumps(gates, indent=1, default=str))
     print("\n".join(L))
 

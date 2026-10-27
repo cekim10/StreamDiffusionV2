@@ -181,6 +181,7 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
     quantized if requested] -> [decoder: oracle cache | DR-2 decode] -> refresh frozen -> verification of every
     injected component (bytes, digests, positions) after the last reset operation, i.e. nothing later overwrote it."""
     cost, chk = log["cost_s"], log["checks"]
+    sup, chs = log.setdefault("supp", {}), log.setdefault("checks_supp", {})   # VD-4 addendum 1: per-layer / per-slot records and checks
     if cond.get("v0"):
         rt.restore_all_from(snap)
         log["v0"] = True
@@ -192,16 +193,21 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
         images = None if dry else rt.torch.cat([src_last_image, rt.runner.frames_for_call(c)], dim=2)
         temp, cost["ts_prepare_s"] = rt.temp_sink_prepare(images, c)
         log["prepare_positions_layer0"] = [int(p) for p in (temp[0][2][0, :sink].tolist() if not dry else [0, 1, -(1 << 30)])]
+        sup["prepare_positions"] = [[int(p) for p in t_[2][0, :sink].tolist()] for t_ in temp] if not dry else []
     for h, pl in fast_pl:
         rt.unpack(dict(h), pl)
     rt.restore_fast()
     src_pos = rt.positions(list(range(n_slots)), snap)
     live_pos = rt.positions(list(range(n_slots)))
     log["source_positions_layer0"] = src_pos[0]
+    sup["source_positions"] = src_pos   # every layer, every slot
     chk["meta_positions_equal_snapshot"] = live_pos == src_pos
     if rec:
         rt.write_snap_slots(snap, list(range(sink, n_slots)))
         log["bytes"]["oracle_recent"] = rt.kv_nbytes(list(range(sink, n_slots)))
+        rs = list(range(sink, n_slots))   # addendum 1: equal right after the write (and again after the last reset step below)
+        chs["recent_k_equal_at_write"] = rt.kv_digest(rs, "k") == rt.kv_digest(rs, "k", snap=snap)
+        chs["recent_v_equal_at_write"] = rt.kv_digest(rs, "v") == rt.kv_digest(rs, "v", snap=snap)
     ts_written, expect_k = [], None
     if temp is not None:
         if ts == "in_aligned":
@@ -212,6 +218,8 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
                 deltas.append([None if pp[s_] == EMPTY else live_pos[li][s_] - int(pp[s_]) for s_ in range(sink)])
             temp_w, log["a1_rotation"] = rt.rotate_temp(temp, deltas)
             log["a1_deltas_layer0"] = deltas[0]
+            sup["a1_deltas"] = deltas
+            sup["a1_per_layer_slot"] = log["a1_rotation"].pop("per_layer_slot", [])   # delta, K changed (elements), round-trip error
         else:
             temp_w = temp
         log["ts_slots_written"] = rt.write_sink_slots(temp_w)
@@ -228,6 +236,7 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
         log["oracle_dec_copy_s"], live_dg = rt.vae_dec_state_write(st)
         log["bytes"]["oracle_decoder"] = int(sum(t.numel() * t.element_size() for t in st["tensors"])) if not dry else 1800000000
         log["dec_snapshot_digest"] = rt.dec_digest(st["tensors"]) if not dry else live_dg
+        chs["decoder_equal_at_write"] = live_dg == log["dec_snapshot_digest"]
     elif dec == "dr2":
         if not dry:
             log["latent_shapes"] = [list(z.shape) for z in src_latents]
@@ -254,6 +263,36 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
     if dec == "oracle":
         chk["decoder_equal"] = rt.dec_digest() == log["dec_snapshot_digest"]
     chk["layers"] = len(rt.positions([0]))
+    # ---- addendum 1 (supplemental; recorded separately from the frozen checks above): per layer and slot, after the
+    # last reset operation; K changes from the A1 rotation are recorded, never required (bf16 rounding)
+    fin = rt.positions(list(range(n_slots)))
+    sup["final_positions"] = fin
+    chs["positions_final_equal_snapshot"] = fin == src_pos
+    if rec:
+        rs = list(range(sink, n_slots))
+        for part in ("k", "v"):
+            eq = rt.slot_equal(rs, part, snap=snap)
+            sup[f"recent_{part}_equal_per_layer_slot"] = eq
+            chs[f"recent_{part}_equal_per_layer_slot"] = all(all(r) for r in eq)
+    if slots:
+        for part in ("k", "v"):
+            eq = rt.slot_equal(slots, part, snap=snap, override=kv_over)
+            chs[f"sink_{part}_equal_per_layer_slot"] = all(all(r) for r in eq)
+    if left_ts:
+        ke, ve = rt.slot_equal(left_ts, "k", saved=expect_k), rt.slot_equal(left_ts, "v", saved=temp)
+        chs["ts_k_as_written_per_layer_slot"], chs["ts_v_unrotated_per_layer_slot"] = all(all(r) for r in ke), all(all(r) for r in ve)
+        pos_ok = [[fin[li][s_] == src_pos[li][s_] for s_ in left_ts] for li in range(len(fin))]
+        chs["ts_positions_equal_snapshot_per_layer_slot"] = all(all(r) for r in pos_ok)
+        if ts == "in_aligned":
+            by = {(r["layer"], r["slot"]): r for r in sup.get("a1_per_layer_slot", [])}
+            sup["a1_per_layer_slot"] = [{**by.get((li, s_), {"layer": li, "slot": s_}), "k_as_expected": ke[li][j], "v_unrotated": ve[li][j], "position_equal_snapshot": pos_ok[li][j],
+                                         "position": fin[li][s_]} for li in range(len(ke)) for j, s_ in enumerate(left_ts)]
+    if dec == "oracle":
+        lay = rt.dec_layout(snap)
+        sup["decoder_layout"] = lay
+        chs["decoder_layout_equal"] = bool(lay.get("layout_ok"))
+        chs["decoder_tensors_equal_per_entry"] = bool(lay.get("tensors_equal"))
+        chs["decoder_attrs_equal"] = bool(lay.get("attrs_equal"))
     return temp
 
 
@@ -413,7 +452,7 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             vd4_log["v0_pass"] = vd4_log["v0_identical_calls"] == len(post) and len(post) > 0
             if not vd4_log["v0_pass"]:
                 valid = False; vd4_log["invalid"] = f"V0: {vd4_log['v0_identical_calls']} of {len(post)} post-move outputs equal REF"
-        bad = [k_ for k_, v in vd4_log["checks"].items() if v is False]
+        bad = [k_ for k_, v in vd4_log["checks"].items() if v is False] + [f"supp:{k_}" for k_, v in (vd4_log.get("checks_supp") or {}).items() if v is False]
         if bad:
             valid = False; vd4_log["invalid"] = f"oracle checks failed: {bad}"
         if vd4_log.get("ts_slots_written") not in (None, 2) or (vd4_log.get("temp_slots_left_after_bind") or 0) != 0:
