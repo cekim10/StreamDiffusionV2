@@ -24,6 +24,178 @@
   - sink positions (slots 0-2) across layers: [(0, 1, 6), (8, 10, 9), (8, 11, 6), (9, 10, 6), (15, 1, 6), (15, 35, 6), (22, 16, 6), (22, 24, 6)]
 - supplemental gate: True
 
+## Batch-row positions (addendum 1b; recorded finding, separate from the checks above)
+
+- dog_s1|OT-1 A1: PASS; stream valid True; failed none; missing none; output digests = stage-0s A1 True (158 calls, 0 differ); batch rows 2; rows identical {'sink': False, 'recent': False, 'all': False}; A1 row deltas = row 0's False; (layer, row, slot) differing 52
+  - layer 0 row 1 slot 4: row 0 35, row 1 32
+  - layer 1 row 1 slot 0: row 0 7, row 1 9
+  - layer 1 row 1 slot 1: row 0 16, row 1 1
+  - layer 1 row 1 slot 2: row 0 8, row 1 6
+  - layer 1 row 1 slot 3: row 0 34, row 1 32
+  - layer 1 row 1 slot 4: row 0 35, row 1 33
+  - layer 1 row 1 slot 5: row 0 33, row 1 34
+  - layer 2 row 1 slot 0: row 0 9, row 1 15
+  - layer 2 row 1 slot 1: row 0 16, row 1 1
+  - layer 2 row 1 slot 3: row 0 33, row 1 32
+  - layer 2 row 1 slot 4: row 0 34, row 1 33
+  - layer 2 row 1 slot 5: row 0 35, row 1 34
+  - layer 3 row 1 slot 0: row 0 9, row 1 22
+  - layer 3 row 1 slot 2: row 0 6, row 1 7
+  - layer 3 row 1 slot 3: row 0 35, row 1 33
+  - layer 3 row 1 slot 4: row 0 33, row 1 34
+  - layer 3 row 1 slot 5: row 0 34, row 1 32
+  - layer 4 row 1 slot 0: row 0 22, row 1 0
+  - layer 4 row 1 slot 3: row 0 35, row 1 34
+  - layer 4 row 1 slot 4: row 0 33, row 1 32
+  - layer 4 row 1 slot 5: row 0 34, row 1 33
+  - layer 5 row 1 slot 1: row 0 17, row 1 1
+  - layer 5 row 1 slot 3: row 0 33, row 1 32
+  - layer 5 row 1 slot 4: row 0 34, row 1 33
+  - layer 5 row 1 slot 5: row 0 35, row 1 34
+  - layer 6 row 1 slot 4: row 0 35, row 1 32
+  - layer 7 row 1 slot 4: row 0 35, row 1 32
+  - layer 8 row 1 slot 0: row 0 9, row 1 0
+  - layer 8 row 1 slot 3: row 0 35, row 1 34
+  - layer 8 row 1 slot 4: row 0 33, row 1 32
+  - layer 8 row 1 slot 5: row 0 34, row 1 33
+  - layer 9 row 1 slot 4: row 0 35, row 1 32
+  - layer 10 row 1 slot 4: row 0 35, row 1 32
+  - layer 11 row 1 slot 4: row 0 35, row 1 32
+  - layer 12 row 1 slot 4: row 0 35, row 1 32
+  - layer 13 row 1 slot 4: row 0 35, row 1 32
+  - layer 14 row 1 slot 4: row 0 35, row 1 32
+  - layer 15 row 1 slot 4: row 0 35, row 1 32
+  - layer 16 row 1 slot 4: row 0 35, row 1 32
+  - layer 17 row 1 slot 4: row 0 35, row 1 32
+  - ... 12 more
+- train_s0|OT-1 A1: PASS; stream valid True; failed none; missing none; output digests = stage-0s A1 True (158 calls, 0 differ); batch rows 2; rows identical {'sink': False, 'recent': False, 'all': False}; A1 row deltas = row 0's False; (layer, row, slot) differing 57
+  - layer 0 row 1 slot 0: row 0 22, row 1 34
+  - layer 0 row 1 slot 3: row 0 33, row 1 32
+  - layer 0 row 1 slot 4: row 0 34, row 1 33
+  - layer 0 row 1 slot 5: row 0 35, row 1 31
+  - layer 1 row 1 slot 0: row 0 8, row 1 7
+  - layer 1 row 1 slot 2: row 0 9, row 1 8
+  - layer 1 row 1 slot 3: row 0 35, row 1 34
+  - layer 1 row 1 slot 4: row 0 33, row 1 32
+  - layer 1 row 1 slot 5: row 0 34, row 1 33
+  - layer 2 row 1 slot 0: row 0 9, row 1 15
+  - layer 2 row 1 slot 1: row 0 10, row 1 16
+  - layer 2 row 1 slot 5: row 0 35, row 1 32
+  - layer 3 row 1 slot 1: row 0 11, row 1 16
+  - layer 3 row 1 slot 5: row 0 35, row 1 32
+  - layer 4 row 1 slot 0: row 0 15, row 1 22
+  - layer 4 row 1 slot 1: row 0 35, row 1 1
+  - layer 5 row 1 slot 0: row 0 9, row 1 24
+  - layer 5 row 1 slot 1: row 0 10, row 1 16
+  - layer 5 row 1 slot 2: row 0 6, row 1 28
+  - layer 5 row 1 slot 3: row 0 33, row 1 32
+  - layer 5 row 1 slot 4: row 0 34, row 1 33
+  - layer 5 row 1 slot 5: row 0 35, row 1 34
+  - layer 6 row 1 slot 4: row 0 35, row 1 32
+  - layer 7 row 1 slot 4: row 0 35, row 1 32
+  - layer 8 row 1 slot 0: row 0 15, row 1 0
+  - layer 8 row 1 slot 3: row 0 35, row 1 34
+  - layer 8 row 1 slot 4: row 0 33, row 1 32
+  - layer 8 row 1 slot 5: row 0 34, row 1 33
+  - layer 9 row 1 slot 4: row 0 35, row 1 32
+  - layer 10 row 1 slot 4: row 0 35, row 1 32
+  - layer 11 row 1 slot 4: row 0 35, row 1 32
+  - layer 12 row 1 slot 4: row 0 35, row 1 32
+  - layer 13 row 1 slot 4: row 0 35, row 1 32
+  - layer 14 row 1 slot 4: row 0 35, row 1 32
+  - layer 15 row 1 slot 4: row 0 35, row 1 32
+  - layer 16 row 1 slot 4: row 0 35, row 1 32
+  - layer 17 row 1 slot 4: row 0 35, row 1 32
+  - layer 18 row 1 slot 4: row 0 35, row 1 32
+  - layer 19 row 1 slot 4: row 0 35, row 1 32
+  - layer 20 row 1 slot 0: row 0 22, row 1 0
+  - ... 17 more
+- butterfly-feeding-slow-motion_s0|OT-L A1: PASS; stream valid True; failed none; missing none; output digests = stage-0s A1 True (254 calls, 0 differ); batch rows 2; rows identical {'sink': False, 'recent': False, 'all': False}; A1 row deltas = row 0's False; (layer, row, slot) differing 64
+  - layer 0 row 1 slot 1: row 0 -10, row 1 1
+  - layer 0 row 1 slot 3: row 0 36, row 1 35
+  - layer 0 row 1 slot 4: row 0 34, row 1 33
+  - layer 0 row 1 slot 5: row 0 35, row 1 34
+  - layer 1 row 1 slot 0: row 0 16, row 1 11
+  - layer 1 row 1 slot 1: row 0 -35, row 1 21
+  - layer 1 row 1 slot 2: row 0 17, row 1 19
+  - layer 1 row 1 slot 5: row 0 36, row 1 33
+  - layer 2 row 1 slot 0: row 0 16, row 1 22
+  - layer 2 row 1 slot 1: row 0 24, row 1 27
+  - layer 2 row 1 slot 2: row 0 14, row 1 17
+  - layer 2 row 1 slot 3: row 0 36, row 1 34
+  - layer 2 row 1 slot 4: row 0 34, row 1 35
+  - layer 2 row 1 slot 5: row 0 35, row 1 33
+  - layer 3 row 1 slot 1: row 0 -34, row 1 -29
+  - layer 3 row 1 slot 3: row 0 36, row 1 33
+  - layer 4 row 1 slot 0: row 0 -31, row 1 -3
+  - layer 4 row 1 slot 3: row 0 35, row 1 33
+  - layer 4 row 1 slot 4: row 0 36, row 1 34
+  - layer 4 row 1 slot 5: row 0 34, row 1 35
+  - layer 5 row 1 slot 0: row 0 17, row 1 30
+  - layer 5 row 1 slot 1: row 0 9, row 1 35
+  - layer 5 row 1 slot 2: row 0 33, row 1 22
+  - layer 5 row 1 slot 4: row 0 35, row 1 32
+  - layer 5 row 1 slot 5: row 0 36, row 1 33
+  - layer 6 row 1 slot 5: row 0 36, row 1 33
+  - layer 7 row 1 slot 5: row 0 36, row 1 33
+  - layer 8 row 1 slot 0: row 0 9, row 1 35
+  - layer 8 row 1 slot 1: row 0 10, row 1 22
+  - layer 8 row 1 slot 2: row 0 18, row 1 -4
+  - layer 8 row 1 slot 3: row 0 35, row 1 32
+  - layer 8 row 1 slot 4: row 0 36, row 1 33
+  - layer 9 row 1 slot 0: row 0 35, row 1 0
+  - layer 9 row 1 slot 4: row 0 36, row 1 35
+  - layer 10 row 1 slot 5: row 0 36, row 1 33
+  - layer 11 row 1 slot 5: row 0 36, row 1 33
+  - layer 12 row 1 slot 5: row 0 36, row 1 33
+  - layer 13 row 1 slot 5: row 0 36, row 1 33
+  - layer 14 row 1 slot 5: row 0 36, row 1 33
+  - layer 15 row 1 slot 5: row 0 36, row 1 33
+  - ... 24 more
+- audi-snow-trail_s1|OT-1 A1: PASS; stream valid True; failed none; missing none; output digests = stage-0s A1 True (159 calls, 0 differ); batch rows 2; rows identical {'sink': False, 'recent': False, 'all': False}; A1 row deltas = row 0's False; (layer, row, slot) differing 49
+  - layer 0 row 1 slot 3: row 0 35, row 1 32
+  - layer 1 row 1 slot 1: row 0 10, row 1 16
+  - layer 1 row 1 slot 4: row 0 35, row 1 32
+  - layer 2 row 1 slot 1: row 0 16, row 1 23
+  - layer 2 row 1 slot 5: row 0 35, row 1 32
+  - layer 3 row 1 slot 0: row 0 8, row 1 9
+  - layer 3 row 1 slot 1: row 0 16, row 1 23
+  - layer 3 row 1 slot 5: row 0 35, row 1 32
+  - layer 4 row 1 slot 1: row 0 16, row 1 1
+  - layer 4 row 1 slot 3: row 0 33, row 1 32
+  - layer 4 row 1 slot 4: row 0 34, row 1 33
+  - layer 4 row 1 slot 5: row 0 35, row 1 34
+  - layer 5 row 1 slot 0: row 0 7, row 1 29
+  - layer 5 row 1 slot 1: row 0 32, row 1 16
+  - layer 5 row 1 slot 2: row 0 8, row 1 30
+  - layer 5 row 1 slot 3: row 0 35, row 1 33
+  - layer 5 row 1 slot 4: row 0 33, row 1 34
+  - layer 5 row 1 slot 5: row 0 34, row 1 32
+  - layer 6 row 1 slot 4: row 0 35, row 1 32
+  - layer 7 row 1 slot 4: row 0 35, row 1 32
+  - layer 8 row 1 slot 0: row 0 8, row 1 9
+  - layer 8 row 1 slot 1: row 0 16, row 1 1
+  - layer 8 row 1 slot 3: row 0 33, row 1 32
+  - layer 8 row 1 slot 4: row 0 34, row 1 33
+  - layer 8 row 1 slot 5: row 0 35, row 1 34
+  - layer 9 row 1 slot 4: row 0 35, row 1 32
+  - layer 10 row 1 slot 4: row 0 35, row 1 32
+  - layer 11 row 1 slot 4: row 0 35, row 1 32
+  - layer 12 row 1 slot 4: row 0 35, row 1 32
+  - layer 13 row 1 slot 4: row 0 35, row 1 32
+  - layer 14 row 1 slot 4: row 0 35, row 1 32
+  - layer 15 row 1 slot 4: row 0 35, row 1 32
+  - layer 16 row 1 slot 4: row 0 35, row 1 32
+  - layer 17 row 1 slot 4: row 0 35, row 1 32
+  - layer 18 row 1 slot 4: row 0 35, row 1 32
+  - layer 19 row 1 slot 4: row 0 35, row 1 32
+  - layer 20 row 1 slot 5: row 0 35, row 1 32
+  - layer 21 row 1 slot 4: row 0 35, row 1 32
+  - layer 22 row 1 slot 4: row 0 35, row 1 32
+  - layer 23 row 1 slot 4: row 0 35, row 1 32
+  - ... 9 more
+- rows validation gate: True; batch rows identical on every cell: False
+
 Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sessions recorded: none. Validity problems: none.
 
 | condition | phase | numeric pass (of 12) | visual flags (REF same session) | resolution | bytes added | lower bound 1 / 10 Gbps |
@@ -43,4 +215,4 @@ STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEA
 - P2a: metric fail & flagged 0, metric fail & not flagged 0, metric pass & flagged 0, both clean 0; kappa -
 - P2b: metric fail & flagged 0, metric fail & not flagged 0, metric pass & flagged 0, both clean 0; kappa -
 
-## Gates: {"stage0_valid": true, "duplicate_controls": [], "stage2_inspected": false, "s3_resolves_p2": false, "stage2b_cells": null, "stage3_runs": false, "stage0_supp_valid": true}
+## Gates: {"stage0_valid": true, "duplicate_controls": [], "stage2_inspected": false, "s3_resolves_p2": false, "stage2b_cells": null, "stage3_runs": false, "stage0_supp_valid": true, "stage0_rows_valid": true, "batch_rows_identical": false}
