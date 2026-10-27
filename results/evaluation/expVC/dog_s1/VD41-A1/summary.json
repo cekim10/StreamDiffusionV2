@@ -1,0 +1,155 @@
+{
+ "condition": {
+  "id": "VD41-A1",
+  "input": "dog",
+  "kind": "vd4",
+  "label": "VD-4 A1 at the OT-1 schedule (oracle diagnostic; not a practical migration)",
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 157,
+  "frames_from": 18,
+  "frames_to": 157,
+  "sources": [
+   "results/evaluation/expW_W2_dog_s1/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-001459"
+  ],
+  "counterfactual": false,
+  "seed": 1,
+  "dec": "dr2",
+  "oracle_recent": false,
+  "ts": "in_aligned",
+  "oracle_sink_slots": [],
+  "quant": null,
+  "exploratory": false,
+  "v0": false,
+  "vd4_of": "OT-1"
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "7f595edc354f19ce",
+   "reset_s": 5.743124023079872
+  },
+  {
+   "call": 58,
+   "op": "bind",
+   "sha": "7f595edc354f19ce",
+   "packed_at": 34,
+   "slots_rerotated": 73,
+   "bind_s": 0.10095912963151932
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": null,
+ "vd4": {
+  "cost_s": {
+   "ts_prepare_s": 0.7769016548991203,
+   "dr_decode_s": 0.518585667014122,
+   "total_serial_s": 1.2954873219132423
+  },
+  "checks": {
+   "meta_positions_equal_snapshot": true,
+   "ts_k_as_written": true,
+   "ts_v_unrotated": true,
+   "layers": 30
+  },
+  "bytes": {
+   "dr2_latents": 399360
+  },
+  "condition": {
+   "dec": "dr2",
+   "oracle_recent": false,
+   "ts": "in_aligned",
+   "oracle_sink_slots": [],
+   "quant": null,
+   "v0": false
+  },
+  "prepare_positions_layer0": [
+   0,
+   1,
+   -1073741824
+  ],
+  "source_positions_layer0": [
+   0,
+   1,
+   6,
+   34,
+   35,
+   33
+  ],
+  "a1_rotation": {
+   "rotated_slot_layers": 18,
+   "round_trip_max_abs": 0.0625
+  },
+  "a1_deltas_layer0": [
+   0,
+   0,
+   null
+  ],
+  "ts_slots_written": 2,
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ],
+  "temp_slots_left_after_bind": 0
+ },
+ "bound_sink": [
+  {
+   "call": 58,
+   "sha": "7f595edc354f19ce82a14e5b21b691c1e1b5bc2b70319697134050ef29d72797",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 108.14712524414062,
+ "input": "dog",
+ "seed": 1,
+ "frames": "/home/ckim151/vc_frames/expVC_dog_s1_20261026-173600/VD41-A1",
+ "commit": "f77302077da82bc41346bd73c421077983cab663",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.11560654640198,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/original.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_dog_s1_20261026-173600",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}

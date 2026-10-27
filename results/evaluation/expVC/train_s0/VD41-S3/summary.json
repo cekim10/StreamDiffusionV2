@@ -1,0 +1,147 @@
+{
+ "condition": {
+  "id": "VD41-S3",
+  "input": "train",
+  "kind": "vd4",
+  "label": "VD-4 S3 at the OT-1 schedule (oracle diagnostic; not a practical migration)",
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold_call": null,
+  "sink_source": "withheld",
+  "end": 157,
+  "frames_from": 18,
+  "frames_to": 157,
+  "sources": [
+   "results/evaluation/expW_W2_train_s0/policy=reuse_dyn_bw=1000_rho=none_tm=inf_rep=1_20261019-004846"
+  ],
+  "counterfactual": false,
+  "dec": "dr2",
+  "oracle_recent": false,
+  "ts": null,
+  "oracle_sink_slots": [
+   2,
+   1,
+   0
+  ],
+  "quant": null,
+  "exploratory": false,
+  "v0": false,
+  "vd4_of": "OT-1"
+ },
+ "t_first_op": 34,
+ "events": [
+  {
+   "call": 34,
+   "op": "episode_open",
+   "sink": "packed",
+   "sha": "be440b76f661f8c2",
+   "reset_s": 5.804306000471115
+  },
+  {
+   "call": 58,
+   "op": "bind",
+   "sha": "be440b76f661f8c2",
+   "packed_at": 34,
+   "slots_rerotated": 89,
+   "bind_s": 0.09762369096279144
+  }
+ ],
+ "vd": null,
+ "vd2": null,
+ "vd3": null,
+ "vd4": {
+  "cost_s": {
+   "dr_decode_s": 0.521564319729805,
+   "total_serial_s": 0.521564319729805
+  },
+  "checks": {
+   "meta_positions_equal_snapshot": true,
+   "sink_k_equal": true,
+   "sink_v_equal": true,
+   "sink_positions_equal": true,
+   "layers": 30
+  },
+  "bytes": {
+   "oracle_sink": 1725235200,
+   "dr2_latents": 399360
+  },
+  "condition": {
+   "dec": "dr2",
+   "oracle_recent": false,
+   "ts": null,
+   "oracle_sink_slots": [
+    2,
+    1,
+    0
+   ],
+   "quant": null,
+   "v0": false
+  },
+  "source_positions_layer0": [
+   22,
+   24,
+   6,
+   33,
+   34,
+   35
+  ],
+  "latent_shapes": [
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ],
+   [
+    1,
+    1,
+    16,
+    60,
+    104
+   ]
+  ]
+ },
+ "bound_sink": [
+  {
+   "call": 58,
+   "sha": "be440b76f661f8c2a46e49ac258dc7147e076fafa834d687d0952876a0f01833",
+   "packed_at": 34
+  }
+ ],
+ "realized": {
+  "resets": [
+   34
+  ],
+  "binds": [
+   58
+  ],
+  "cold": [],
+  "no_output": [
+   0
+  ]
+ },
+ "prefix_identical_to_reference": true,
+ "valid": true,
+ "elapsed_s": 106.77201056480408,
+ "input": "train",
+ "seed": 0,
+ "frames": "/home/ckim151/vc_frames/expVC_train_s0_20261026-174836/VD41-S3",
+ "commit": "f77302077da82bc41346bd73c421077983cab663",
+ "host": "elves-04",
+ "gpu_id": 0,
+ "dry_run": false,
+ "k": 2,
+ "baseline_s": 145.62966537475586,
+ "video": "/home/ckim151/StreamDiffusionV2/examples/train.mp4",
+ "prompt_file": "/home/ckim151/StreamDiffusionV2/examples/train_prompt.txt",
+ "frames_dir": "/home/ckim151/vc_frames/expVC_train_s0_20261026-174836",
+ "versions": {
+  "torch": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+ }
+}
