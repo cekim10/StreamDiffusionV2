@@ -29,5 +29,6 @@
   - VD4L-D: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD4L-DR: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD4L-R: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD4L-S3: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
 
 VC-1 checks: ALL PASS

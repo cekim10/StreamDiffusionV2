@@ -238,6 +238,10 @@ Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sess
 | DR | P2a | 6 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P2b | 3 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P3 | 12 / 12 | 0 (0) | no harm | 3613.8 MB | 28.9 / 2.89 s |
+| S3 | P1 | 10 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| S3 | P2a | 11 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| S3 | P2b | 11 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| S3 | P3 | 12 / 12 | 0 (0) | no harm | 1725.6 MB | 13.8 / 1.38 s |
 
 STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEAR: <= REF's + 1. Raw counts are shown; a zero count is not proof of zero risk. Lower bounds are idealized transfers of the added bytes, not migration latency.
 
