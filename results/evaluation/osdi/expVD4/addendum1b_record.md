@@ -31,3 +31,26 @@ Verification before the run:
 | `tools/eval/run_vc.py` | `40051108c3dd2f018a8c9b52865c403b80d926b00713be8383362f9a5bc0214a` |
 | `tools/eval/mobility_node.py` | `d786afe937d6dfb0f701e18301159e4cfd63a0a04ad3d8a9d8234a6560442746` |
 | `tools/eval/test_vc.py` | `c6d2df21057838d4ca46f6f19a10630c07b054bba3938fcaeb98f018e1a0f17c` |
+
+## Results (stage 0r, commit 8a671bf9, host D; 2026-10-26)
+
+- `stage0_rows_valid`: **true**. All four A1 runs valid; every required per-row check present and true (prepare rows
+  filled the same slots; meta / final / temporary-Sink positions of every row equal the snapshot); output digests equal
+  the stage-0s A1 run call by call (158 / 158, 158 / 158, 254 / 254, 159 / 159): the added logging changed nothing.
+- `batch_rows_identical`: **false on every cell**. The two stream-batch rows carry different positions:
+
+| cell | differing (layer, row, slot) | slots 0-1 (A1) | slot 2 | slots 3-5 (recent) | layers with equal slot 0-1 positions | (layer, slot) where row 1 needed a different A1 delta |
+|---|---|---|---|---|---|---|
+| dog s1 OT-1 | 52 | 8 | 2 | 42 | 24 / 30 | 8 (row 1 needed 0 where row 0 was rotated: 5) |
+| train s0 OT-1 | 57 | 14 | 2 | 41 | 21 / 30 | 14 (5) |
+| butterfly s0 OT-L | 64 | 17 | 5 | 42 | 18 / 30 | 17 (2; and 1 where row 0 was 0 and row 1 non-zero) |
+| audi s1 OT-1 | 49 | 10 | 1 | 38 | 23 / 30 | 10 (3) |
+
+The full list (every (layer, row, slot) with both values and both deltas) is in `addendum1b_row_differences.md`.
+
+**Decision (section 5 of addendum 1b, pre-registered): rows differ.** Stage 1 does not proceed. The frozen A1
+rotated row 1 of the temporary Sink by row 0's deltas; on 8-17 (layer, slot) pairs per cell this is not the delta row 1
+needed, so the A1 results of stages 0 / 0s / 0r are **A1 as implemented (row-0 deltas on both rows)**, not A1 as
+preregistered. B0, D, R, S3, V0 are unaffected (whole-tensor injections; their per-row position checks now pass).
+Addendum 2 (`addendum2.md`, draft) specifies row-wise deltas; A1 is corrected only after its approval, and the A1
+validity is then re-run.
