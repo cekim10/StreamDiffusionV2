@@ -2,10 +2,10 @@
 
 ## Stage-0 validity (per cell: V0 = REF, B0 = VD-3, oracle checks, positions)
 
-- dog_s1|OT-1: PASS (5 checks; failed none); source positions [0, 1, 6], A1 deltas [0, 0, None], A1 rotation {'rotated_slot_layers': 18, 'round_trip_max_abs': 0.0625}
-- train_s0|OT-1: PASS (5 checks; failed none); source positions [22, 24, 6], A1 deltas [22, 23, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
+- dog_s1|OT-1: PASS (8 checks; failed none); source positions [0, 1, 6], A1 deltas [0, 0, None], A1 rotation {'rotated_slot_layers': 18, 'round_trip_max_abs': 0.0625}
+- train_s0|OT-1: PASS (8 checks; failed none); source positions [22, 24, 6], A1 deltas [22, 23, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
 - butterfly-feeding-slow-motion_s0|OT-L: PASS (5 checks; failed none); source positions [-29, -10, -39], A1 deltas [-29, -11, None], A1 rotation {'rotated_slot_layers': 38, 'round_trip_max_abs': 0.125}
-- audi-snow-trail_s1|OT-1: PASS (5 checks; failed none); source positions [22, 1, 6], A1 deltas [22, 0, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
+- audi-snow-trail_s1|OT-1: PASS (8 checks; failed none); source positions [22, 1, 6], A1 deltas [22, 0, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
 - duplicate controls across sessions: none
 
 ## Stage-0 supplemental validity (addendum 1; separate from the original stage-0 checks above)
@@ -218,6 +218,26 @@ Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sess
 
 | condition | phase | numeric pass (of 12) | visual flags (REF same session) | resolution | bytes added | lower bound 1 / 10 Gbps |
 |---|---|---|---|---|---|---|
+| B0 | P1 | 11 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| B0 | P2a | 6 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| B0 | P2b | 3 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| B0 | P3 | 12 / 12 | 0 (0) | no harm | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P1 | 11 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P2a | 6 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P2b | 3 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P3 | 12 / 12 | 0 (0) | no harm | 0.4 MB | 0.0 / 0.00 s |
+| D | P1 | 10 / 12 | 0 (0) | not inspected | 1888.6 MB | 15.1 / 1.51 s |
+| D | P2a | 6 / 12 | 0 (0) | not inspected | 1888.6 MB | 15.1 / 1.51 s |
+| D | P2b | 3 / 12 | 0 (0) | not inspected | 1888.6 MB | 15.1 / 1.51 s |
+| D | P3 | 12 / 12 | 0 (0) | no harm | 1888.6 MB | 15.1 / 1.51 s |
+| R | P1 | 12 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| R | P2a | 6 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| R | P2b | 2 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| R | P3 | 12 / 12 | 0 (0) | no harm | 1725.6 MB | 13.8 / 1.38 s |
+| DR | P1 | 12 / 12 | 0 (0) | not inspected | 3613.8 MB | 28.9 / 2.89 s |
+| DR | P2a | 6 / 12 | 0 (0) | not inspected | 3613.8 MB | 28.9 / 2.89 s |
+| DR | P2b | 3 / 12 | 0 (0) | not inspected | 3613.8 MB | 28.9 / 2.89 s |
+| DR | P3 | 12 / 12 | 0 (0) | no harm | 3613.8 MB | 28.9 / 2.89 s |
 
 STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEAR: <= REF's + 1. Raw counts are shown; a zero count is not proof of zero risk. Lower bounds are idealized transfers of the added bytes, not migration latency.
 

@@ -17,8 +17,17 @@
   - VD3L-TSin: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD3L-TSinKC: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
   - VD41-A1: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
+  - VD41-A1.stage0: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
   - VD41-B0: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
+  - VD41-D: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
+  - VD41-DR: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
+  - VD41-R: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
   - VD41-S3: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
   - VD41-V0: ok {"calls": 141, "files": 6, "decoded_calls": 141, "digest_ok_calls": 141, "no_output_calls": []}
+  - VD4L-A1: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD4L-B0: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD4L-D: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD4L-DR: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
+  - VD4L-R: ok {"calls": 190, "files": 8, "decoded_calls": 190, "digest_ok_calls": 190, "no_output_calls": []}
 
 VC-1 checks: ALL PASS
