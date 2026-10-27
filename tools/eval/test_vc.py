@@ -381,9 +381,23 @@ def vd4_tests():
         r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--dry", "--insp_dir", str(insp), "--sessions", "stage1", "--out", str(tmp / "res")], cwd=ROOT, capture_output=True, text=True)
         R = json.loads((tmp / "res.json").read_text()) if r_.returncode == 0 else {}
         b0 = (R.get("conditions", {}).get("B0", {}).get("phases", {}).get("P1") or {})
-        check(r_.returncode == 0 and b0.get("visual_flags") == 2 and b0.get("ref_flags_same_session") == 0 and R["gates"]["stage0_valid"]
-              and all(v["pass"] for v in R["validity"]) and set(R["attribution"]) == {"P1", "P2a", "P2b"},
-              f"aggregation: per-session visual flags against REF of the same session, validity rows, attribution per phase, gates {r_.stderr[-200:]}")
+        check(r_.returncode == 0 and b0.get("visual_flags") == 2 and b0.get("ref_flags_same_session") == 0
+              and all(v["pass"] for v in R["validity"]) and set(R["attribution"]) == {"P1", "P2a", "P2b"} and not R["gates"]["duplicate_controls"],
+              f"aggregation: per-cell visual flags against REF of the same cell and session, validity rows, attribution per phase {r_.stderr[-200:]}")
+        check(R["gates"]["stage0_valid"] is False, "stage-0 gate stays closed while any of the four stage-0 cells lacks its V0 / B0 / A1 / S3 validity")
+        for f_ in ("vd4_inspection_form_stage1", "vd4_inspection_stage1", "vd4_stage1_blind_key"):   # the same controls in a second session
+            src = insp / f"_dryrun_{f_}.{'json' if 'key' in f_ else 'md'}"
+            (insp / src.name.replace("stage1", "stage1b")).write_bytes(src.read_bytes())
+        r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--dry", "--insp_dir", str(insp), "--sessions", "stage1,stage1b", "--out", str(tmp / "res2")], cwd=ROOT, capture_output=True, text=True)
+        R2 = json.loads((tmp / "res2.json").read_text()) if r_.returncode == 0 else {"gates": {}}
+        check(bool(R2["gates"].get("duplicate_controls")), "a control inspected in two sessions is reported (never counted twice)")
+        cells_a, cells_b = a4.STAGE1_SESSIONS["stage1a"], a4.STAGE1_SESSIONS["stage1b"]
+        check(sorted(cells_a + cells_b) == sorted(a4.CONFIRM) and not set(cells_a) & set(cells_b)
+              and all({c.split("_s")[0] for c in cs} == {"train", "audi-snow-trail", "dog", "butterfly-feeding-slow-motion"} for cs in (cells_a, cells_b)),
+              "stage-1 inspection split: two sessions of 6 cells partition the 12, every input in both")
+        s0pos = {"dog_s1|OT-1": "aligned [0, 1]", "train_s0|OT-1": "positive [22, 24]", "butterfly-feeding-slow-motion_s0|OT-L": "negative [-29, -10]", "audi-snow-trail_s1|OT-1": "mixed [22, 1]"}
+        check(a4.STAGE0 == list(s0pos) and {c.split("_s")[0] for c in a4.STAGE0} == {"dog", "train", "butterfly-feeding-slow-motion", "audi-snow-trail"},
+              "stage 0: one cell per input covering aligned, positive, negative and mixed sink positions")
         r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd4", "--stage", "1", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd4 refuses before the VD-4 freeze")
     finally:

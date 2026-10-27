@@ -33,7 +33,14 @@ THR = ROOT / "results/evaluation/osdi/expVD3/vd3_thresholds.json"
 THR_SHA_FROZEN = "792a6ac77ffbca24"   # VD-3 freeze (first 16 hex digits); VD-4 reuses it unchanged
 CONFIRM = [f"{u}|OT-{x}" for u in ("train_s0", "audi-snow-trail_s0", "dog_s1", "train_s1", "butterfly-feeding-slow-motion_s1", "audi-snow-trail_s1") for x in ("1", "L")]
 SUBSET4 = ["dog_s1|OT-1", "train_s0|OT-1", "butterfly-feeding-slow-motion_s1|OT-1", "audi-snow-trail_s1|OT-1"]
-STAGE0 = ["dog_s1|OT-1", "train_s0|OT-1"]
+# stage-0 validity cells: one per input, covering the sink-position configurations at the move (source positions of
+# slots 0-1 vs the prepare's 0, 1): aligned (dog [0, 1]), positive deltas (train [22, 24]), negative deltas (butterfly
+# s0 OT-L [-29, -10]) and mixed (audi s1 OT-1 [22, 1])
+STAGE0 = ["dog_s1|OT-1", "train_s0|OT-1", "butterfly-feeding-slow-motion_s0|OT-L", "audi-snow-trail_s1|OT-1"]
+STAGE0_NAMES = ("V0", "B0", "A1", "S3")   # A1 / S3: validity of the rotation and of the oracle Sink writes only; no metrics at stage 0
+# stage-1 inspection split by cell (each input and both schedules in each session; every cell's REF / B0 in one session)
+STAGE1_SESSIONS = {"stage1a": ["train_s0|OT-1", "train_s1|OT-L", "audi-snow-trail_s0|OT-1", "audi-snow-trail_s1|OT-L", "dog_s1|OT-1", "butterfly-feeding-slow-motion_s1|OT-L"],
+                   "stage1b": ["train_s0|OT-L", "train_s1|OT-1", "audi-snow-trail_s0|OT-L", "audi-snow-trail_s1|OT-1", "dog_s1|OT-L", "butterfly-feeding-slow-motion_s1|OT-1"]}
 NAMES = ("B0", "A1", "D", "R", "DR", "S1", "S2", "S3", "A1S1", "A1S2", "Q8", "Q4")
 EXPLORATORY = ("A1S1", "A1S2", "Q8", "Q4")
 PH = ("P1", "P2a", "P2b", "P3")
@@ -97,7 +104,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=str(ROOT / "results/evaluation/expVC"))
     ap.add_argument("--out", default=str(OUT / "vd4_results"))
-    ap.add_argument("--sessions", default="stage1,stage2,stage2b,stage3")
+    ap.add_argument("--sessions", default="stage1a,stage1b,stage2,stage2b,stage3")
     ap.add_argument("--thresholds", default=str(THR))
     ap.add_argument("--insp_dir", default=str(OUT), help="where the inspection forms, records and keys are")
     ap.add_argument("--dry", action="store_true", help="synthetic units (pixel embedder); thresholds SHA not enforced; _dryrun_ session files")
@@ -108,6 +115,24 @@ def main():
         sys.exit("[vd4] the thresholds differ from VD-3's frozen file")
     T = json.loads(tb)
     sessions = {s: inspection(s, pre, Path(a.insp_dir)) for s in a.sessions.split(",") if s}
+    # every (cell, condition) is inspected in exactly one session; its baseline is REF of the same cell in that session
+    where, dup = {}, []
+    for sname, ins in sessions.items():
+        for cell_, names_ in ins.items():
+            for n_ in names_:
+                if n_ in ("REF", "B0") and (cell_, n_) in where:
+                    dup.append((cell_, n_, where[(cell_, n_)], sname))
+                where.setdefault((cell_, n_), sname)
+
+    def flagged(cell_, n_, idx):
+        s_ = where.get((cell_, n_))
+        fl = sessions[s_][cell_][n_] if s_ else None
+        return None if fl is None else any(fl[i] for i in idx)
+
+    def ref_flagged(cell_, n_, idx):
+        s_ = where.get((cell_, n_))
+        fl = (sessions[s_].get(cell_) or {}).get("REF") if s_ else None
+        return bool(fl) and any(fl[i] for i in idx)
     res, validity, numeric = {}, [], {}
     for key in CONFIRM + [k for k in STAGE0 if k not in CONFIRM]:
         unit_name, ot = key.split("|"); x = ot.split("-")[1]
@@ -144,14 +169,12 @@ def main():
     # ---- per condition: numeric, visual, resolution
     for n, cells in numeric.items():
         conf = [k for k in CONFIRM if k in cells]
-        sess = next((s for s, ins in sessions.items() if any(n in cv for cv in ins.values())), None)
-        ins = sessions.get(sess) or {}
-        row = {"cells": len(conf), "exploratory": n in EXPLORATORY, "session": sess, "phases": {}}
+        row = {"cells": len(conf), "exploratory": n in EXPLORATORY, "sessions": sorted({where[(k, n)] for k in conf if (k, n) in where}), "phases": {}}
         for p in PH:
             npass = sum(1 for k in conf if cells[k]["rules"][p])
-            flags = sum(1 for k in conf if any((ins.get(k, {}).get(n) or [False] * 7)[i] for i in VIS[p]))
-            ref_flags = sum(1 for k in conf if any((ins.get(k, {}).get("REF") or [False] * 7)[i] for i in VIS[p]))
-            inspected = sum(1 for k in conf if n in ins.get(k, {}))
+            flags = sum(1 for k in conf if flagged(k, n, VIS[p]))
+            ref_flags = sum(1 for k in conf if (k, n) in where and ref_flagged(k, n, VIS[p]))
+            inspected = sum(1 for k in conf if (k, n) in where)
             status = resolution(npass, len(conf), flags, ref_flags, inspected)
             row["phases"][p] = {"numeric_pass": npass, "of": len(conf), "visual_flags": flags, "ref_flags_same_session": ref_flags, "inspected_cells": inspected, "resolution": status}
         bts = [cells[k].get("bytes") or {} for k in conf]
@@ -173,24 +196,40 @@ def main():
         tab = {"mm": 0, "mp": 0, "pm": 0, "pp": 0}
         for n, cells in numeric.items():
             for k, c in cells.items():
-                for sname, ins in sessions.items():
-                    fl = (ins.get(k, {}) or {}).get(n)
-                    if fl is None:
-                        continue
-                    mf, vf_ = not c["rules"][p], any(fl[i] for i in VIS[p])
-                    tab[("m" if mf else "p") + ("m" if vf_ else "p")] += 1
+                vf_ = flagged(k, n, VIS[p])   # one session per (cell, condition): controls are counted once
+                if vf_ is None:
+                    continue
+                mf = not c["rules"][p]
+                tab[("m" if mf else "p") + ("m" if vf_ else "p")] += 1
         corr[p] = {"metric_fail_visual_flag": tab["mm"], "metric_fail_no_flag": tab["mp"], "metric_pass_visual_flag": tab["pm"], "metric_pass_no_flag": tab["pp"], "kappa": kappa(tab)}
     # ---- gates
     s3 = res.get("S3", {}).get("phases", {})
     s3_resolves = any(s3.get(p, {}).get("resolution") in ("STRICT", "NEAR") for p in ("P2a", "P2b"))
-    gates = {"stage0_valid": all(v["pass"] for v in validity if v["cell"] in STAGE0 and (v["check"].startswith("V0") or v["check"].startswith("B0"))) and
-             sum(1 for v in validity if v["cell"] in STAGE0 and v["check"].startswith("V0")) == len(STAGE0),
+    s0 = [v for v in validity if v["cell"] in STAGE0]
+    gates = {"stage0_valid": bool(s0) and all(v["pass"] for v in s0)
+             and all(any(v["cell"] == c and v["check"].startswith(w) for v in s0) for c in STAGE0 for w in ("V0", "B0 reproduces", "A1:", "S3:")),
+             "duplicate_controls": dup,
              "stage2_inspected": "S3" in res and s3.get("P2a", {}).get("resolution") != "not inspected",
              "s3_resolves_p2": s3_resolves,
              "stage2b_cells": (CONFIRM if s3_resolves else SUBSET4) if ("S3" in res and s3.get("P2a", {}).get("resolution") != "not inspected") else None,
              "stage3_runs": s3_resolves}
     f = lambda v, n=3: "-" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))  # noqa: E731
-    L = ["# VD-4 results (diagnostic; oracle states injected at the reset; not practical migration)", "",
+    pos = {k: {"source_sink_positions": (numeric.get("B0", {}).get(k) or {}).get("source_positions"), "a1_deltas": (numeric.get("A1", {}).get(k) or {}).get("a1_deltas"),
+               "a1_round_trip": (numeric.get("A1", {}).get(k) or {}).get("a1")} for k in STAGE0}
+    for k in STAGE0:   # stage 0 has no metrics: positions and A1 rotation from the summaries
+        unit_name, ot = k.split("|"); x = ot.split("-")[1]
+        for n_, key_ in (("B0", "source_positions_layer0"), ("A1", "a1_deltas_layer0"), ("A1", "a1_rotation")):
+            v4 = (vd4_summary(root / unit_name, f"VD4{x}-{n_}").get("vd4") or {})
+            if v4:
+                pos[k]["source_sink_positions" if key_ == "source_positions_layer0" else ("a1_deltas" if key_ == "a1_deltas_layer0" else "a1_round_trip")] = v4.get(key_)
+    L = ["# VD-4 results (diagnostic; oracle sufficiency at the reset; not necessity, not practical migration)", "",
+         "## Stage-0 validity (per cell: V0 = REF, B0 = VD-3, oracle checks, positions)", ""]
+    for k in STAGE0:
+        rows_ = [v for v in validity if v["cell"] == k]
+        L.append(f"- {k}: {'PASS' if rows_ and all(v['pass'] for v in rows_) else 'FAIL'} ({len(rows_)} checks; failed {[v['check'] for v in rows_ if not v['pass']] or 'none'}); "
+                 f"source positions {pos[k]['source_sink_positions'] and pos[k]['source_sink_positions'][:3]}, A1 deltas {pos[k]['a1_deltas']}, A1 rotation {pos[k]['a1_round_trip']}")
+    L += [f"- duplicate controls across sessions: {dup or 'none'}", ""]
+    L += [
          f"Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 {hashlib.sha256(tb).hexdigest()[:16]}). Sessions recorded: "
          f"{[s for s, i in sessions.items() if i] or 'none'}. Validity problems: {[v for v in validity if not v['pass']] or 'none'}.", "",
          "| condition | phase | numeric pass (of 12) | visual flags (REF same session) | resolution | bytes added | lower bound 1 / 10 Gbps |", "|---|---|---|---|---|---|---|"]
@@ -214,7 +253,7 @@ def main():
           f"both clean {c['metric_pass_no_flag']}; kappa {f(c['kappa'], 2)}" for p, c in corr.items()]
     L += ["", f"## Gates: {json.dumps(gates)}"]
     Path(a.out).with_suffix(".md").write_text("\n".join(L) + "\n")
-    Path(a.out).with_suffix(".json").write_text(json.dumps({"conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "gates": gates}, indent=1, default=str))
+    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "gates": gates}, indent=1, default=str))
     (Path(a.out).parent / f"{pre}vd4_gates.json").write_text(json.dumps(gates, indent=1, default=str))
     print("\n".join(L))
 

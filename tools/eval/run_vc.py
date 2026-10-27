@@ -462,8 +462,8 @@ def vd3(a) -> bool:
 VD4_OUT = "results/evaluation/osdi/expVD4"
 
 
-def vd4_plan(stage: str, gates: dict) -> tuple[dict, tuple | None]:
-    """{unit: [condition ids]} and the inspection session (name, shown conditions, cells) of a VD-4 stage
+def vd4_plan(stage: str, gates: dict) -> tuple[dict, list]:
+    """{unit: [condition ids]} and the inspection sessions [(name, shown conditions, cells)] of a VD-4 stage
     (preregistration section 5). Stage 2b's cells and stage 3's existence come from the aggregated gates."""
     import aggregate_vd4 as a4
 
@@ -474,11 +474,11 @@ def vd4_plan(stage: str, gates: dict) -> tuple[dict, tuple | None]:
             out.setdefault(unit, []).extend(f"VD4{x}-{n}" for n in names)
         return out
     if stage == "0":
-        return plan(a4.STAGE0, ["V0", "B0"]), None
+        return plan(a4.STAGE0, list(a4.STAGE0_NAMES)), []
     if stage == "1":
-        return plan(a4.CONFIRM, ["B0", "DR", "D", "R", "A1"]), ("stage1", ["DR", "D", "R", "A1"], a4.CONFIRM)
+        return plan(a4.CONFIRM, ["B0", "DR", "D", "R", "A1"]), [(sn, ["DR", "D", "R", "A1"], cells) for sn, cells in a4.STAGE1_SESSIONS.items()]
     if stage == "2":
-        return plan(a4.CONFIRM, ["B0", "S3"]), ("stage2", ["S3"], a4.CONFIRM)
+        return plan(a4.CONFIRM, ["B0", "S3"]), [("stage2", ["S3"], a4.CONFIRM)]
     if stage == "2b":
         cells = gates.get("stage2b_cells")
         if not cells:
@@ -486,11 +486,11 @@ def vd4_plan(stage: str, gates: dict) -> tuple[dict, tuple | None]:
         p_ = plan(cells, ["B0", "S1", "S2"])
         for unit, ids in plan(a4.SUBSET4, ["A1S1", "A1S2"]).items():   # exploratory, always on the four-cell subset
             p_.setdefault(unit, []).extend(ids)
-        return p_, ("stage2b", ["S1", "S2", "A1S1", "A1S2"], sorted(set(cells) | set(a4.SUBSET4)))
+        return p_, [("stage2b", ["S1", "S2", "A1S1", "A1S2"], sorted(set(cells) | set(a4.SUBSET4)))]
     if stage == "3":
         if not gates.get("stage3_runs"):
             sys.exit("[vc] stage 3 runs only if S3 resolved a P2 phase (vd4_gates.json)")
-        return plan(a4.SUBSET4, ["B0", "Q8", "Q4"]), ("stage3", ["Q8", "Q4"], a4.SUBSET4)
+        return plan(a4.SUBSET4, ["B0", "Q8", "Q4"]), [("stage3", ["Q8", "Q4"], a4.SUBSET4)]
     sys.exit(f"[vc] unknown VD-4 stage {stage}")
 
 
@@ -504,16 +504,17 @@ def vd4(a) -> bool:
         sys.exit("[vc] VD-4 is not frozen (results/evaluation/osdi/expVD4_freeze.md missing): no run")
     if a.stage != "0" and not a.dry and not gates.get("stage0_valid"):
         sys.exit("[vc] stage 0 validity (V0 = REF, B0 = VD-3) has not passed: no further stage")
-    units, session = vd4_plan(a.stage, gates)
+    units, sessions = vd4_plan(a.stage, gates)
     if a.phase == "key":
-        if session is None:
-            sys.exit("[vc] this stage has no inspection session")
+        names_ = [x[0] for x in sessions]
+        if a.session not in names_:
+            sys.exit(f"[vc] --session must be one of {names_ or 'none (this stage has no inspection)'}")
         import base64
         import gzip
         import hashlib
         import re
 
-        sname = session[0]
+        sname = a.session
         insp = ROOT / VD4_OUT / f"vd4_inspection_{sname}.md"
         if not (insp.exists() and "STATUS: RECORDED" in insp.read_text() and committed(f"{VD4_OUT}/vd4_inspection_{sname}.md")):
             sys.exit(f"[vc] vd4_inspection_{sname}.md is not recorded and committed: the key stays sealed")
@@ -530,15 +531,14 @@ def vd4(a) -> bool:
         py, root, ok = sys.executable, a.dry_root, True
         for unit, ids in units.items():
             inp, sd = unit.rsplit("_s", 1)
-            mids = ",".join(i for i in ids if not i.endswith("-V0"))
+            mids = "" if a.stage == "0" else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
             steps = [[py, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", a.frames_dir, "--out_root", root, "--only", ",".join(ids), "--no_ref_frames", "--skip_done"],
                      [py, "tools/eval/vc_check.py", "--unit", f"{root}/{unit}", "--g3"]]
             if mids:
                 steps.append([py, "tools/eval/vc_metrics.py", "--unit", f"{root}/{unit}", "--embedders", "pixel", "--device", "cpu", "--only", mids, "--merge"])
             for cmd in steps:
                 ok &= subprocess.run(cmd, cwd=ROOT).returncode == 0
-        if session:
-            sname, names, cells = session
+        for sname, names, cells in sessions:
             ok &= subprocess.run([py, "tools/eval/vd4_export_clips.py", "--root", root, "--session", sname, "--names", ",".join(names), "--cells", ",".join(cells),
                                   "--clips_dir", a.clips_dir, "--order_seed", "1", "--form", f"{VD4_OUT}/_dryrun_vd4_inspection_form_{sname}.md"], cwd=ROOT).returncode == 0
         return ok
@@ -550,7 +550,7 @@ def vd4(a) -> bool:
     for unit, ids in units.items():
         inp, sd = unit.rsplit("_s", 1)
         path = f"results/evaluation/expVC/{unit}"
-        mids = ",".join(i for i in ids if not i.endswith("-V0"))
+        mids = "" if a.stage == "0" else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
         steps = [("emulation", [PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--gpu_id", "0", "--frames_dir", a.frames_dir, "--out_root", "results/evaluation/expVC", "--only", ",".join(ids), "--no_ref_frames", "--skip_done"]),
                  ("checks", [PY, "tools/eval/vc_check.py", "--unit", path, "--g3", "--write", "--name", f"vd4_checks_{unit}"])]
         if mids:
@@ -563,8 +563,7 @@ def vd4(a) -> bool:
                 if what != "metrics":
                     break
         fetch_unit(ag, inp, int(sd), f"vd4_checks_{unit}")
-    if ok and session:
-        sname, names, cells = session
+    for sname, names, cells in (sessions if ok else []):
         rc = remote_run(ag, [PY, "tools/eval/vd4_export_clips.py", "--session", sname, "--names", ",".join(names), "--cells", ",".join(cells),
                              "--clips_dir", f"{a.clips_dir}/{sname}", "--order_seed", time.strftime("%Y%m%d")], f"{LOG}/vd4_{stamp}_clips_{sname}.log", timeout=3 * 3600)
         print(f"[vc] VD-4 {sname} clips on {a.host}: rc {rc} -> {a.clips_dir}/{sname} (never committed)", flush=True)
@@ -577,7 +576,7 @@ def vd4(a) -> bool:
     (ROOT / VD4_OUT / f"vd4_isolation_stage{a.stage}.json").write_text(json.dumps({"host": a.host, "nic_bytes": nic}, indent=1))
     if ok:
         subprocess.run([sys.executable, "tools/eval/aggregate_vd4.py"], cwd=ROOT)
-    print(f"[vc] VD-4 stage {a.stage}", "done" + (f" - next: the blinded inspection of {session[0]}, then --phase key" if session else " - gates in vd4_gates.json") if ok else "had failures")
+    print(f"[vc] VD-4 stage {a.stage}", "done" + (f" - next: the blinded inspections {[x[0] for x in sessions]}, then --phase key --session <name>" if sessions else " - gates in vd4_gates.json") if ok else "had failures")
     return ok
 
 
@@ -585,6 +584,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2", "vd3", "vd4"])
     ap.add_argument("--stage", default="0", help="vd4: 0, 1, 2, 2b, 3")
+    ap.add_argument("--session", default="", help="vd4 --phase key: the inspection session (stage1a, stage1b, stage2, stage2b, stage3)")
     ap.add_argument("--dry_root", default="results/evaluation/_dryrun_expVC", help="vd4 --dry: the synthetic units' root")
     ap.add_argument("--phase", choices=["base", "overlap", "cand", "key"], default="base", help="vd3: base (Phase T: REF / controls / distributions / overlap), cand, key")
     ap.add_argument("--clips_dir", default=None, help="vd3 cand / key: clips directory on the VC host's local disk (never committed)")

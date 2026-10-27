@@ -1,7 +1,9 @@
-# Experiment VD-4 - which source-derived temporal state explains the remaining discontinuity: preregistration DRAFT 2 (2026-10-26)
+# Experiment VD-4 - which source-derived temporal state explains the remaining discontinuity: preregistration FINAL (2026-10-26)
 
-Status: **DRAFT 2 (review of draft 1 applied; implementation and dry tests done, `implementation_plan.md`). Not frozen;
-no GPU run.** Diagnostic, emulator only, one GPU (host D). Oracle conditions inject the source's exact state at the
+Status: **FINAL (draft 2 with the revisions of the 2026-10-26 review: expanded stage-0 validity, stage-1 inspection
+split in two sessions). Frozen with `../expVD4_freeze.md`. Only stage 0 is approved to run; stage 1 waits for the review
+of the stage-0 validity results.** VD-4 measures **oracle sufficiency**: not necessity, not practical migration
+feasibility. Diagnostic, emulator only, one GPU (host D). Oracle conditions inject the source's exact state at the
 reset: they show what a state *would* fix (oracle sufficiency), never that it can be migrated in time (practical
 feasibility). M1 / M2 / M3-v2 and every frozen result, including VD-3's artifacts and thresholds, stay as recorded.
 
@@ -40,9 +42,14 @@ do the P2a / P2b metric violations correspond to perceptible artifacts?
   delta is non-zero, and the rotate / rotate-back error is reported (RoPE re-rotation is not bitwise).
 - **Refresh** frozen until the exact Sink binds in every diagnostic condition (as frozen M1 and VD-3); REF's own
   promotions in each Sink-less window are counted to interpret S3.
-- **V0 (hard gate, stage 0)**: every component from the snapshot with refresh unfrozen and no bind must reproduce
-  REF's output digests on every call after the move. **B0** must reproduce VD-3's DR2+TSin digests call by call.
-  VD-4 stops if either fails.
+- **Stage 0 (hard gate)** on one cell per input, chosen to cover the sink-position configurations at the move (source
+  positions of slots 0-1 vs the prepare's 0, 1): **dog s1 OT-1, aligned** [0, 1]; **train s0 OT-1, positive deltas**
+  [22, 24]; **butterfly s0 OT-L, negative deltas** [-29, -10]; **audi s1 OT-1, mixed** [22, 1]. On each: **V0** (every
+  component from the snapshot, refresh unfrozen, no bind) must reproduce REF's output digests on every call after the
+  move; **B0** must reproduce VD-3's DR2+TSin digests call by call; **A1** and **S3** run for their per-component checks
+  only (rotation applied to K with the logged deltas, V untouched, round-trip error; oracle Sink K / V / positions),
+  with no metric computed at stage 0. Every per-component tensor, position and overwrite check must hold. Any failure
+  stops VD-4 (`vd4_gates.json`: `stage0_valid`).
 
 ## 3. Conditions (paired REF, the frozen-M1 control and B0 on every cell)
 
@@ -75,9 +82,12 @@ preregistration.
 - **P3**: VD-3's no-harm rule; visual "new discontinuity at the exact Sink bind".
 - **Bytes and transfer lower bounds** (bytes x 8 / line rate at 1 and 10 Gbps): idealized, never a migration latency.
 
-**Resolution of a phase by a condition (12 confirmation cells; raw counts always reported):**
+**Resolution of a phase by a condition (12 confirmation cells; raw counts always reported).** Each (cell, condition) is
+inspected in exactly one session; its visual baseline is REF of the same cell in that session, and the condition's
+flags and REF's are summed over the 12 cells (controls are never counted twice; a control appearing in two sessions is
+reported as a protocol error).
 - **STRICT**: the phase's numeric rules hold in 12 / 12 cells **and** the condition's clips carry no more flags for the
-  phase than REF's clips in the same inspection session;
+  phase than the corresponding REF clips;
 - **NEAR**: 12 / 12 numeric **and** flags <= REF's + 1;
 - otherwise **not resolved**. A count of zero flags is an observation of one rater on these clips, not proof of zero
   risk.
@@ -92,40 +102,45 @@ statement is **oracle sufficiency**; practical feasibility (whether the state ca
 vs any identity / appearance / color flag and of P2b metric violation vs any flicker / motion flag, with Cohen's kappa;
 descriptive.
 
-## 5. Staged execution (gates fixed now; one blinded inspection session per stage with clips)
+## 5. Staged execution (gates fixed now; blinded inspection sessions per stage)
 
-| stage | conditions x cells | runs | GPU (about 3.3 min / run incl. metrics) | inspection session | gate |
+| stage | conditions x cells | new runs | GPU (about 3.3 min / run) | inspection | gate |
 |---|---|---|---|---|---|
-| 0 | V0, B0 on dog s1 OT-1, train s0 OT-1 | 4 | 0.2 h | - | V0 = REF and B0 = VD-3 digests on both cells, every oracle check true; otherwise stop |
-| 1 | B0 (remaining 10 cells), DR, D, R, A1 on the 12 cells | 58 | 3.2 h | stage1: REF, B0, DR, D, R, A1 (72 clips) | - (D and R are mandatory) |
-| 2 | S3 on the 12 cells | 12 | 0.7 h | stage2: REF, B0, S3 (36 clips) | S3 resolves P2a or P2b (strict or near)? |
+| 0 | V0, B0, A1, S3 on the 4 stage-0 cells (section 2); emulation, oracle checks and G3 only | 16 | 0.8 h | - | stage-0 validity on all 4 cells; otherwise stop. **Review before stage 1** |
+| 1 | B0, DR, D, R, A1 on the 12 confirmation cells (stage-0 streams reused) | 54 | 3.0 h | **stage1a** and **stage1b**: 6 cells each (each input and both schedules in each), REF, B0, DR, D, R, A1 per cell (36 clips per session) | - (D and R mandatory) |
+| 2 | S3 on the 12 cells | 9 | 0.5 h | stage2: REF, B0, S3 (36 clips) | S3 resolves P2a or P2b (strict or near)? |
 | 2b, if S3 resolved | S1, S2 on the 12 cells; A1S1, A1S2 on the 4-cell subset | 32 | 1.8 h | stage2b (56 clips) | - |
 | 2b, if S3 did not resolve | S1, S2, A1S1, A1S2 on the 4-cell subset (non-monotonicity check) | 16 | 0.9 h | stage2b (24 clips) | - |
 | 3, only if S3 resolved | Q8, Q4 on the 4-cell subset | 8 | 0.45 h | stage3 (16 clips) | - |
 
-The 4-cell subset is fixed now: dog s1 OT-1, train s0 OT-1, butterfly s1 OT-1, audi s1 OT-1 (one OT-1 cell per input,
-the realized schedules). Totals: **90 runs, about 5.0 GPU h and 132 clips** (S3 does not resolve P2) to **114 runs,
-about 6.3 GPU h and 180 clips** (it does). Stage 2 does not depend on stage 1's outcome. `run_vc.py vd4` enforces the
-freeze, the stage-0 gate and the stage-2 gate (`vd4_gates.json`, written by `aggregate_vd4.py`).
+Session split of stage 1 (fixed): stage1a = train s0 OT-1, train s1 OT-L, audi s0 OT-1, audi s1 OT-L, dog s1 OT-1,
+butterfly s1 OT-L; stage1b = the other six. The 4-cell subset: dog s1 OT-1, train s0 OT-1, butterfly s1 OT-1, audi s1
+OT-1. Totals: **95 runs, about 5.2 GPU h, 132 clips** (S3 does not resolve P2) to **119 runs, about 6.5 GPU h, 180
+clips** (it does). `run_vc.py vd4` enforces the freeze, the stage-0 gate and the stage-2 gate.
 
 ## 6. Blinded visual assessment (the user; every session)
 
 As VD-3: random codes, randomized cell order and grid positions, M / B markers in every clip including REF, sealed key
 per session with its SHA-256 in the form, form committed before the key is opened (`run_vc.py vd4 --stage N --phase
-key` refuses otherwise). REF and B0 are in every session, so each session has its own false-positive baseline. Fields:
+key --session S` refuses otherwise). Every session contains REF and B0 for each of its cells, so each clip has its own
+session-specific baseline; no control is shown in two sessions. Fields:
 identity (kept / changed / unsure); appearance drift M..B (none / drift); color (no shift / shift); boundary jump at M
 (no visible jump / jump); flicker / jitter M..B (none / flicker); motion consistency M..B (natural / unnatural); new
 discontinuity at the exact Sink bind B (no visible jump / jump); notes.
 
 ## 7. Interpretation limits
 
-P1, P2a and P2b are reported and attributed separately. Oracle sufficiency is distinct from practical feasibility:
+P1, P2a and P2b are reported and attributed separately. VD-4 measures oracle sufficiency: a resolving state is shown to
+suffice when injected exactly; VD-4 does not show that it is necessary (other states may also suffice) and does not show
+practical feasibility:
 the added bytes' lower bounds alone exceed the Sink-less window at 1 Gbps for most states (decoder cache 14.4 s, recent
 KV 13.8 s, one Sink slot 4.6 s vs about 14 s for OT-1). A resolving state motivates a mechanism experiment (what to send
 or reconstruct, and when) with its own preregistration and a testbed validation. One model, four inputs, two seeds,
 emulated schedules (three copied, counterfactual), one rater.
 
-## 8. Open items for review
+## 8. Decisions
 
-The condition table and fixed slot order (section 3), the strict / near definitions and the attribution wording
-(section 4), the stage plan and the 4-cell subset (section 5), the inspection fields (section 6), and the freeze.
+2026-10-26: draft 2 conditionally approved (condition set, slot order, strict / near, attribution, staged design);
+revisions applied: stage-0 coverage of the four inputs and position configurations with V0 / B0 digest gates and the
+per-component checks; stage-1 inspection in two sessions with per-cell REF / B0 controls and no double counting.
+Frozen; stage 0 only; stage 1 after the review of the stage-0 results.

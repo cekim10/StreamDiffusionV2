@@ -1,4 +1,4 @@
-# VD-4 implementation plan and dry-test results (2026-10-26; with preregistration draft 2)
+# VD-4 implementation plan and dry-test results (2026-10-26; final, with the frozen preregistration)
 
 Implemented and dry-tested on the fake runtime; nothing ran on a GPU. The dry tests check the protocol, bookkeeping,
 verification and gates, never an effect.
@@ -45,3 +45,17 @@ fp8 / int4 on bf16 tensors, and V0's digest equality - stage 0 checks them on tw
 | if S3 resolves P2 | 114 | about 6.3 h | 180 (4 sessions) |
 
 Inspection at roughly 15-20 s per clip: about 35-60 min of viewing in total, split over the sessions.
+
+## 5. Revision for the freeze (review of 2026-10-26)
+
+- Stage 0 = V0, B0, A1, S3 (validity only, no metrics) on dog s1 OT-1 (aligned), train s0 OT-1 (positive deltas),
+  butterfly s0 OT-L (negative deltas), audi s1 OT-1 (mixed); `stage0_valid` requires every check on all four cells.
+- Stage-1 inspection in two sessions (`aggregate_vd4.STAGE1_SESSIONS`); each (cell, condition) is judged against REF of
+  the same cell in its session; a control seen in two sessions is reported (`duplicate_controls`), never summed.
+- Tests: `test_vc.py` ALL PASS, **83 checks** (VD-4 section 21: the two above, the closed gate while a stage-0 cell is
+  missing, the duplicate-control report); a dry stage 0 on all four cells opens the gate. `test_xb.py` 87 / 87.
+- VD-3 frozen artifacts verified: preregistration, thresholds, Phase T data, `vc_schedules.json` and
+  `aggregate_vd3.py` byte-identical to the VD-3 freeze record; re-aggregating VD-3 reproduces `vd3_results.{md,json}`
+  byte for byte. The changed code files (`vc_emulate`, `vc_metrics`, `vc_schedules`, `run_vc`, `mobility_node`) carry
+  VD-4 additions and the VD-3 key-fetch fix (2aaaa94).
+- Cost: 95-119 runs (stage 0: 16, about 0.8 h), 5.2-6.5 GPU h, 132-180 clips.
