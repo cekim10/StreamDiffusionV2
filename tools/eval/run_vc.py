@@ -509,6 +509,31 @@ def a4_supp_root(a) -> str:
     return f"{a.dry_root}_vd4s" if a.dry else str(a4.SUPP_ROOT.relative_to(ROOT))
 
 
+def preserve_stage0_a1(root_rel: str, units: dict, exists, read, move) -> list:
+    """Stage 1 (addendum 2 / 2a): the stage-0 A1 runs in the main root were produced by the first implementation (row 0's
+    deltas on every row). They are preserved under `VD4x-A1.stage0` so that stage 1 re-runs A1 with the validated
+    row-wise implementation (vc_emulate's --skip_done would otherwise reuse them). A run that already carries the
+    per-row records (`supp.a1_per_layer_row_slot`) is the corrected one and stays. Returns the moved paths."""
+    import aggregate_vd4 as a4
+
+    moved = []
+    for unit, ids in units.items():
+        for cid in ids:
+            if not cid.endswith("-A1"):
+                continue
+            src = f"{root_rel}/{unit}/{cid}"
+            if not exists(f"{src}/summary.json"):
+                continue
+            s = json.loads(read(f"{src}/summary.json"))
+            if ((s.get("vd4") or {}).get("supp") or {}).get("a1_per_layer_row_slot"):
+                continue
+            dst = f"{src}{a4.STAGE0_A1_SUFFIX}"
+            if exists(f"{dst}/summary.json"):
+                sys.exit(f"[vc] {dst} already exists: refusing to overwrite a preserved stage-0 run")
+            move(src, dst); moved.append(dst)
+    return moved
+
+
 def a4_a1_root(a, n: int = 1) -> str:
     import aggregate_vd4 as a4
 
@@ -574,6 +599,11 @@ def vd4(a) -> bool:
         return True
     if a.dry:
         py, root, ok = sys.executable, out_rel, True
+        if a.stage == "1":
+            import shutil as sh_
+
+            for m_ in preserve_stage0_a1(root, units, lambda p: (ROOT / p).exists(), lambda p: (ROOT / p).read_text(), lambda s_, d_: sh_.move(ROOT / s_, ROOT / d_)):
+                print(f"[vc] stage-0 A1 run preserved as {m_}")
         for unit, ids in units.items():
             inp, sd = unit.rsplit("_s", 1)
             mids = "" if a.stage in ("0", "0s", "0r", "0a", "0a2") else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
@@ -592,6 +622,20 @@ def vd4(a) -> bool:
         return False
     stamp = time.strftime("%Y%m%d-%H%M%S")
     nic0 = nic_bytes(ag); ok = True
+    if a.stage == "1":   # preserve the stage-0 A1 runs on the host (where --skip_done decides) and locally (aggregation, git)
+        import shutil as sh_
+
+        def r_exists(p):
+            return ag.exec(["test", "-e", p], timeout=30).get("rc", 1) == 0
+
+        def r_move(s_, d_):
+            r = ag.exec(["mv", s_, d_], timeout=60)
+            if r.get("rc", 1) != 0:
+                sys.exit(f"[vc] could not preserve {s_} on {a.host}: {r}")
+            if (ROOT / s_).exists():
+                sh_.move(ROOT / s_, ROOT / d_)
+        for m_ in preserve_stage0_a1("results/evaluation/expVC", units, r_exists, lambda p: ag.read(p), r_move):
+            print(f"[vc] stage-0 A1 run preserved as {m_} (host and local)", flush=True)
     for unit, ids in units.items():
         inp, sd = unit.rsplit("_s", 1)
         path = f"{out_rel}/{unit}"

@@ -402,6 +402,19 @@ def vd4_tests():
         s0pos = {"dog_s1|OT-1": "aligned [0, 1]", "train_s0|OT-1": "positive [22, 24]", "butterfly-feeding-slow-motion_s0|OT-L": "negative [-29, -10]", "audi-snow-trail_s1|OT-1": "mixed [22, 1]"}
         check(a4.STAGE0 == list(s0pos) and {c.split("_s")[0] for c in a4.STAGE0} == {"dog", "train", "butterfly-feeding-slow-motion", "audi-snow-trail"},
               "stage 0: one cell per input covering aligned, positive, negative and mixed sink positions")
+        # stage 1 preserves the stage-0 A1 runs (first implementation) as VD4x-A1.stage0 and the aggregator keeps reading them for stage 0
+        pres = Path(tempfile.mkdtemp(prefix="vd4_pres_"))
+        try:
+            for cid, supp in (("VD41-A1", None), ("VD4L-A1", {"a1_per_layer_row_slot": [1]})):
+                (pres / "u_s0" / cid).mkdir(parents=True)
+                (pres / "u_s0" / cid / "summary.json").write_text(json.dumps({"valid": True, "vd4": {"supp": supp}}))
+            import run_vc as rv_
+            mv = rv_.preserve_stage0_a1(str(pres), {"u_s0": ["VD41-A1", "VD41-B0", "VD4L-A1"]}, lambda p: Path(p).exists(), lambda p: Path(p).read_text(), lambda s_, d_: shutil.move(s_, d_))
+            check(mv == [f"{pres}/u_s0/VD41-A1.stage0"] and not (pres / "u_s0" / "VD41-A1").exists() and (pres / "u_s0" / "VD4L-A1" / "summary.json").exists()
+                  and a4.stage0_a1_cid(pres / "u_s0", "1") == "VD41-A1.stage0" and a4.stage0_a1_cid(pres / "u_s0", "L") == "VD4L-A1",
+                  "stage 1 moves a first-implementation A1 run to VD4x-A1.stage0 (a corrected run with per-row records stays); the aggregator reads the preserved run for stage 0")
+        finally:
+            shutil.rmtree(pres, ignore_errors=True)
         r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd4", "--stage", "1", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
         gates_ = json.loads((ROOT / "results/evaluation/osdi/expVD4/vd4_gates.json").read_text()) if (ROOT / "results/evaluation/osdi/expVD4/vd4_gates.json").exists() else {}
         if not (ROOT / "results/evaluation/osdi/expVD4_freeze.md").exists():

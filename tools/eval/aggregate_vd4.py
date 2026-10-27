@@ -74,6 +74,15 @@ FLAG = {"changed", "drift", "shift", "jump", "flicker", "unnatural"}
 RATES = {"1 Gbps": 1e9, "10 Gbps": 10e9}
 
 
+STAGE0_A1_SUFFIX = ".stage0"   # stage 1 (addendum 2 / 2a): the stage-0 A1 runs (row-0 deltas on both rows) are moved to VD4x-A1.stage0 and preserved
+
+
+def stage0_a1_cid(unit: Path, x: str) -> str:
+    """The directory that holds the ORIGINAL stage-0 A1 run of a stage-0 cell: `VD4x-A1.stage0` once stage 1 has re-run
+    A1 with the corrected implementation in `VD4x-A1`, else `VD4x-A1` itself."""
+    return f"VD4{x}-A1{STAGE0_A1_SUFFIX}" if (unit / f"VD4{x}-A1{STAGE0_A1_SUFFIX}" / "summary.json").exists() else f"VD4{x}-A1"
+
+
 def vd4_summary(unit: Path, cid: str) -> dict:
     p = unit / cid / "summary.json"
     return json.loads(p.read_text()) if p.exists() else {}
@@ -162,7 +171,7 @@ def supplemental(root: Path, sroot: Path, dry: bool) -> dict:
                            "deltas_by_slot": {str(sl): sorted({q.get("delta") for q in per if q.get("slot") == sl}, key=lambda d: (d is None, d or 0)) for sl in (0, 1)}}
                 if not dry and r["a1"]["records"] != 2 * max(r["layers"], 1):
                     r["missing"].append(f"a1_per_layer_slot records {r['a1']['records']} (expected {2 * r['layers']})")
-                new, old = digests(sroot / unit_name, cid), digests(root / unit_name, cid)
+                new, old = digests(sroot / unit_name, cid), digests(root / unit_name, stage0_a1_cid(root / unit_name, x))
                 r["digests_equal_stage0"] = bool(new) and bool(old) and new == old
                 r["digest_calls"] = len(new)
                 r["digest_calls_differing"] = sum(1 for c in set(new) | set(old) if new.get(c) != old.get(c))
@@ -380,9 +389,11 @@ def main():
             s = vd4_summary(unit, cid)
             if not s:
                 continue
-            v4 = s.get("vd4") or {}
+            s0 = vd4_summary(unit, stage0_a1_cid(unit, x)) if (key in STAGE0 and n == "A1") else s   # the stage-0 validity row keeps reading the stage-0 run
+            v4 = s0.get("vd4") or {}
             bad = [k_ for k_, ok in (v4.get("checks") or {}).items() if ok is False]
-            validity.append({"cell": key, "check": f"{n}: stream valid and oracle checks", "pass": bool(s.get("valid")) and not bad, "failed": bad})
+            validity.append({"cell": key, "check": f"{n}: stream valid and oracle checks", "pass": bool(s0.get("valid")) and not bad, "failed": bad})
+            v4 = s.get("vd4") or {}
             v = a3.cell(unit, M, cid)
             if v is None or ctrl is None or tol is None:
                 continue
@@ -452,7 +463,7 @@ def main():
     for k in STAGE0:   # stage 0 has no metrics: positions and A1 rotation from the summaries
         unit_name, ot = k.split("|"); x = ot.split("-")[1]
         for n_, key_ in (("B0", "source_positions_layer0"), ("A1", "a1_deltas_layer0"), ("A1", "a1_rotation")):
-            v4 = (vd4_summary(root / unit_name, f"VD4{x}-{n_}").get("vd4") or {})
+            v4 = (vd4_summary(root / unit_name, stage0_a1_cid(root / unit_name, x) if n_ == "A1" else f"VD4{x}-{n_}").get("vd4") or {})
             if v4:
                 pos[k]["source_sink_positions" if key_ == "source_positions_layer0" else ("a1_deltas" if key_ == "a1_deltas_layer0" else "a1_round_trip")] = v4.get(key_)
     L = ["# VD-4 results (diagnostic; oracle sufficiency at the reset; not necessity, not practical migration)", "",
