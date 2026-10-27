@@ -43,6 +43,11 @@ STAGE0_NAMES = ("V0", "B0", "A1", "S3")   # A1 / S3: validity of the rotation an
 # checks, and the oracle decoder (D) and recent-KV (R) writes on one cell
 SUPP_ROOT = ROOT / "results/evaluation/expVD4s"
 SUPP_DR_CELL = "train_s0|OT-1"
+# addendum 1b (expVD4/addendum1b.md): A1 again on the four stage-0 cells with per-(layer, batch row, slot) position
+# logging and checks; output digests must equal the stage-0s A1 run; whether the batch rows carry identical positions
+# is a recorded finding (the decision gate), never a validity requirement
+ROWS_ROOT = ROOT / "results/evaluation/expVD4r"
+ROWS_REQUIRED = ("prepare_rows_filled_identical", "meta_positions_rows_equal_snapshot", "positions_rows_final_equal_snapshot", "ts_positions_rows_equal_snapshot")
 SUPP_REQUIRED = {   # check names that must be present and true (frozen "checks" / supplemental "checks_supp")
     "A1": (("meta_positions_equal_snapshot", "ts_k_as_written", "ts_v_unrotated"),
            ("positions_final_equal_snapshot", "ts_k_as_written_per_layer_slot", "ts_v_unrotated_per_layer_slot", "ts_positions_equal_snapshot_per_layer_slot")),
@@ -167,6 +172,56 @@ def supplemental(root: Path, sroot: Path, dry: bool) -> dict:
     return {"root": str(sroot), "runs": runs, "valid": bool(runs) and ok}
 
 
+def batch_rows(sroot: Path, rroot: Path, dry: bool) -> dict:
+    """Addendum 1b: per stage-0 cell the A1 rerun's validity (stream valid, required per-row checks present and true, output
+    digests equal the stage-0s A1 run) and the recorded finding: every (layer, row, slot) whose source position differs
+    from row 0's, the per-row A1 deltas, and whether they equal row 0's."""
+    runs, ok, same = [], True, True
+    for key in STAGE0:
+        unit_name, ot = key.split("|"); x = ot.split("-")[1]
+        cid = f"VD4{x}-A1"
+        s = vd4_summary(rroot / unit_name, cid)
+        r = {"cell": key, "present": bool(s)}
+        if s:
+            v4 = s.get("vd4") or {}
+            ck, cs, sp = v4.get("checks") or {}, v4.get("checks_supp") or {}, v4.get("supp") or {}
+            r["missing"] = [f"supp:{c}" for c in ROWS_REQUIRED if c not in cs]
+            r["failed"] = [c for c, v in ck.items() if v is False] + [f"supp:{c}" for c, v in cs.items() if v is False]
+            r["stream_valid"] = bool(s.get("valid"))
+            new, old = digests(rroot / unit_name, cid), digests(sroot / unit_name, cid)
+            r["digests_equal_stage0s"] = bool(new) and bool(old) and new == old
+            r["digest_calls"] = len(new); r["digest_calls_differing"] = sum(1 for c in set(new) | set(old) if new.get(c) != old.get(c))
+            r["batch_rows"] = sp.get("batch_rows")
+            r["rows_differ"] = sp.get("rows_differ")
+            r["identical"] = sp.get("batch_rows_identical")
+            r["a1_row_deltas_equal_row0"] = sp.get("a1_row_deltas_equal_row0")
+            r["pass"] = r["stream_valid"] and not r["missing"] and not r["failed"] and r["digests_equal_stage0s"] and r["rows_differ"] is not None and r["batch_rows"] == 2
+            same &= bool(r["identical"] and r["identical"].get("all")) and bool(r["a1_row_deltas_equal_row0"])
+        else:
+            r["pass"] = False; same = False
+        ok &= r["pass"]
+        runs.append(r)
+    return {"root": str(rroot), "runs": runs, "valid": bool(runs) and ok, "identical": bool(runs) and ok and same}
+
+
+def rows_lines(rows: dict) -> list:
+    L = ["## Batch-row positions (addendum 1b; recorded finding, separate from the checks above)", ""]
+    if not any(r["present"] for r in rows["runs"]):
+        return L + ["- not run", ""]
+    for r in rows["runs"]:
+        if not r["present"]:
+            L.append(f"- {r['cell']} A1: FAIL (missing)"); continue
+        d = r["rows_differ"] or []
+        L.append(f"- {r['cell']} A1: {'PASS' if r['pass'] else 'FAIL'}; stream valid {r['stream_valid']}; failed {r['failed'] or 'none'}; missing {r['missing'] or 'none'}; "
+                 f"output digests = stage-0s A1 {r['digests_equal_stage0s']} ({r['digest_calls']} calls, {r['digest_calls_differing']} differ); batch rows {r['batch_rows']}; "
+                 f"rows identical {r['identical']}; A1 row deltas = row 0's {r['a1_row_deltas_equal_row0']}; (layer, row, slot) differing {len(d)}")
+        for q in d[:40]:
+            L.append(f"  - layer {q['layer']} row {q['row']} slot {q['slot']}: row 0 {q['row0']}, row {q['row']} {q['value']}")
+        if len(d) > 40:
+            L.append(f"  - ... {len(d) - 40} more")
+    return L + [f"- rows validation gate: {rows['valid']}; batch rows identical on every cell: {rows['identical']}", ""]
+
+
 def supp_lines(supp: dict) -> list:
     L = ["## Stage-0 supplemental validity (addendum 1; separate from the original stage-0 checks above)", ""]
     if not any(r["present"] for r in supp["runs"]):
@@ -199,6 +254,7 @@ def main():
     ap.add_argument("--thresholds", default=str(THR))
     ap.add_argument("--insp_dir", default=str(OUT), help="where the inspection forms, records and keys are")
     ap.add_argument("--supp_root", default=str(SUPP_ROOT), help="addendum 1: the supplemental stage-0 units")
+    ap.add_argument("--rows_root", default=str(ROWS_ROOT), help="addendum 1b: the batch-row validation units")
     ap.add_argument("--dry", action="store_true", help="synthetic units (pixel embedder); thresholds SHA not enforced; _dryrun_ session files")
     a = ap.parse_args()
     root, pre = Path(a.root), ("_dryrun_" if a.dry else "")
@@ -307,6 +363,9 @@ def main():
              "stage3_runs": s3_resolves}
     supp = supplemental(root, Path(a.supp_root), a.dry)
     gates["stage0_supp_valid"] = supp["valid"]
+    rows = batch_rows(Path(a.supp_root), Path(a.rows_root), a.dry)
+    gates["stage0_rows_valid"] = rows["valid"]
+    gates["batch_rows_identical"] = rows["identical"]
     f = lambda v, n=3: "-" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))  # noqa: E731
     pos = {k: {"source_sink_positions": (numeric.get("B0", {}).get(k) or {}).get("source_positions"), "a1_deltas": (numeric.get("A1", {}).get(k) or {}).get("a1_deltas"),
                "a1_round_trip": (numeric.get("A1", {}).get(k) or {}).get("a1")} for k in STAGE0}
@@ -324,6 +383,7 @@ def main():
                  f"source positions {pos[k]['source_sink_positions'] and pos[k]['source_sink_positions'][:3]}, A1 deltas {pos[k]['a1_deltas']}, A1 rotation {pos[k]['a1_round_trip']}")
     L += [f"- duplicate controls across sessions: {dup or 'none'}", ""]
     L += supp_lines(supp)
+    L += rows_lines(rows)
     L += [
          f"Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 {hashlib.sha256(tb).hexdigest()[:16]}). Sessions recorded: "
          f"{[s for s, i in sessions.items() if i] or 'none'}. Validity problems: {[v for v in validity if not v['pass']] or 'none'}.", "",
@@ -348,7 +408,7 @@ def main():
           f"both clean {c['metric_pass_no_flag']}; kappa {f(c['kappa'], 2)}" for p, c in corr.items()]
     L += ["", f"## Gates: {json.dumps(gates)}"]
     Path(a.out).with_suffix(".md").write_text("\n".join(L) + "\n")
-    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "gates": gates}, indent=1, default=str))
+    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "batch_rows": rows, "gates": gates}, indent=1, default=str))
     (Path(a.out).parent / f"{pre}vd4_gates.json").write_text(json.dumps(gates, indent=1, default=str))
     print("\n".join(L))
 

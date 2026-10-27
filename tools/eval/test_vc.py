@@ -131,6 +131,7 @@ def main():
         vd3_tests(tmp, out, vc)
         vd4_tests()
         vd4_supp_tests()
+        vd4_rows_tests()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
@@ -405,6 +406,8 @@ def vd4_tests():
             check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd4 refuses before the VD-4 freeze")
         elif not gates_.get("stage0_supp_valid"):   # frozen, stage 0 passed: stage 1 still waits for addendum 1's supplemental validation
             check(r_.returncode != 0 and "supplemental stage-0 validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the supplemental stage-0 validation (addendum 1) passed")
+        elif not (gates_.get("stage0_rows_valid") and gates_.get("batch_rows_identical")):   # addendum 1b: batch-row positions not yet validated, or the rows differ
+            check(r_.returncode != 0 and "batch-row position validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the batch-row validation (addendum 1b) passed with identical rows")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -509,5 +512,95 @@ def vd4_supp_tests():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def vd4_rows_tests():
+    """VD-4 addendum 1b (dry): the stage-0r plan, per-(layer, row, slot) records and checks, a differing row recorded as a
+    finding (not a validity failure), a prepare whose rows filled different slots caught, the gates."""
+    import csv as csv_
+
+    import aggregate_vd4 as a4
+    import mobility_node as mn
+    import run_vc as rv
+    import vc_emulate as ve
+
+    print("- 9 VD-4 addendum 1b (dry)")
+    units, sess = rv.vd4_plan("0r", {})
+    check(units == {"dog_s1": ["VD41-A1"], "train_s0": ["VD41-A1"], "butterfly-feeding-slow-motion_s0": ["VD4L-A1"], "audi-snow-trail_s1": ["VD41-A1"]} and sess == [],
+          f"stage 0r: A1 on the four stage-0 cells, no inspection ({units})")
+    margs = mn.parse_args(["--label", "T", "--dry_run", "--dry_sink_mb", "4", "--dry_service_s", "0.0005", "--migration_chunk", "0", "--post_chunks", "10"])
+
+    def reset(cls, cond):
+        rt = cls(margs); rt.provision()
+        log = {"cost_s": {}, "checks": {}, "bytes": {}}
+        ve.vd4_reset(rt, 5, cond, {}, [], True, log, None, [])
+        return log
+    lg = reset(mn.FakeRuntime, {"dec": "dr2", "ts": "in_aligned"})
+    sp, cs = lg["supp"], lg["checks_supp"]
+    check(all(cs.get(c) for c in a4.ROWS_REQUIRED) and sp["batch_rows"] == 2 and len(sp["source_positions_rows"]) == 30 and len(sp["source_positions_rows"][0]) == 2
+          and sp["rows_differ"] == [] and sp["batch_rows_identical"] == {"sink": True, "recent": True, "all": True} and sp["a1_row_deltas_equal_row0"] is True
+          and len(sp["a1_row_deltas"]) == 30 and len(sp["a1_row_deltas"][0]) == 2,
+          "A1: per-(layer, row, slot) positions logged (30 x 2 x 6), every row check true, no differing row, row deltas equal row 0's")
+
+    class Row1(mn.FakeRuntime):   # the second row's slot 1 (a sink slot) and slot 4 (recent) differ in layer 3, consistently live and snapshot
+        def positions_all(self, slots, snap=None):
+            out = super().positions_all(slots, snap)
+            out[3][1] = [v + (5 if s_ in (1, 4) else 0) for s_, v in zip(slots, out[3][1])]
+            return out
+    lg = reset(Row1, {"dec": "dr2", "oracle_recent": True, "ts": "in_aligned", "oracle_sink_slots": [2]})
+    sp, cs = lg["supp"], lg["checks_supp"]
+    bad = [k for k, v in lg["checks"].items() if v is False] + [f"supp:{k}" for k, v in cs.items() if v is False]
+    check(not bad and sp["rows_differ"] == [{"layer": 3, "row": 1, "slot": 1, "row0": 1, "value": 6}, {"layer": 3, "row": 1, "slot": 4, "row0": 32, "value": 37}]
+          and sp["batch_rows_identical"] == {"sink": False, "recent": False, "all": False} and sp["a1_row_deltas_equal_row0"] is False,
+          f"a differing batch row is recorded exactly (layer, row, slot, both values) and flagged, without failing validity ({bad})")
+
+    class PrepRows(mn.FakeRuntime):   # the prepare filled different slots in the two rows
+        def temp_sink_prepare(self, images, c):
+            saved, dt = super().temp_sink_prepare(images, c)
+            import numpy as np_
+
+            class P:
+                def __init__(self, a): self.a = a
+                def __getitem__(self, i): return P(self.a[i])
+                def tolist(self): return self.a.tolist()
+            return [("k", "v", P(np_.array([[0, 1, -(1 << 30)], [0, -(1 << 30), -(1 << 30)]])))], dt
+    check(reset(PrepRows, {"dec": "dr2", "ts": "in"})["checks_supp"].get("prepare_rows_filled_identical") is False, "a prepare whose rows filled different slots fails prepare_rows_filled_identical")
+    tmp = Path(tempfile.mkdtemp(prefix="vd4r_test_"))
+    try:
+        root, sroot, rroot, frames = tmp / "expVC", tmp / "expVD4s", tmp / "expVD4r", tmp / "frames"
+        s0, _ = rv.vd4_plan("0", {})
+        for unit, ids in s0.items():
+            inp, sd = unit.rsplit("_s", 1)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", "OT-1,OT-L,VD31-DR2+TSin,VD3L-DR2+TSin"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / unit), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
+        us, _ = rv.vd4_plan("0s", {})
+        for stage_units, out in ((us, sroot), (units, rroot)):
+            for unit, ids in stage_units.items():
+                inp, sd = unit.rsplit("_s", 1)
+                subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(out), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+
+        def agg(tag):
+            r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--supp_root", str(sroot), "--rows_root", str(rroot), "--dry", "--sessions", "", "--out", str(tmp / tag)], cwd=ROOT, capture_output=True, text=True)
+            return (json.loads((tmp / f"{tag}.json").read_text()) if r_.returncode == 0 else {"gates": {}}), r_
+        R, r_ = agg("r_ok")
+        check(R["gates"].get("stage0_supp_valid") is True and R["gates"].get("stage0_rows_valid") is True and R["gates"].get("batch_rows_identical") is True
+              and "Batch-row positions (addendum 1b" in (tmp / "r_ok.md").read_text(), f"rows gate opens on a complete dry stage 0r with identical rows and digests equal stage 0s {r_.stderr[-300:]}")
+        p_ = rroot / "dog_s1" / "VD41-A1" / "summary.json"
+        sj = json.loads(p_.read_text()); sj["vd4"]["supp"]["rows_differ"] = [{"layer": 0, "row": 1, "slot": 0, "row0": 0, "value": 3}]; sj["vd4"]["supp"]["batch_rows_identical"] = {"sink": False, "recent": True, "all": False}
+        p_.write_text(json.dumps(sj))
+        R, _ = agg("r_diff")
+        check(R["gates"].get("stage0_rows_valid") is True and R["gates"].get("batch_rows_identical") is False and "layer 0 row 1 slot 0: row 0 0, row 1 3" in (tmp / "r_diff.md").read_text(),
+              "a differing row keeps the validation gate open but closes batch_rows_identical, and is listed")
+        p_ = rroot / "train_s0" / "VD41-A1" / "calls.csv"
+        rows = list(csv_.DictReader(open(p_, newline="")))
+        rows[-1]["frame_digest"] = "0" * 16
+        with open(p_, "w", newline="") as fh:
+            w = csv_.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
+        R, _ = agg("r_dig")
+        check(R["gates"].get("stage0_rows_valid") is False and R["gates"].get("stage0_supp_valid") is True, "one A1 output digest differing from stage 0s closes the rows gate (the earlier gates are untouched)")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     main()
+

@@ -475,6 +475,8 @@ def vd4_plan(stage: str, gates: dict) -> tuple[dict, list]:
         return out
     if stage == "0":
         return plan(a4.STAGE0, list(a4.STAGE0_NAMES)), []
+    if stage == "0r":   # addendum 1b: A1 again on the four stage-0 cells with per-row position logging / verification (own root)
+        return plan(a4.STAGE0, ["A1"]), []
     if stage == "0s":   # addendum 1: A1 again on the four stage-0 cells, D and R on one cell (own root; stage-0 results untouched)
         p_ = plan(a4.STAGE0, ["A1"])
         for unit, ids in plan([a4.SUPP_DR_CELL], ["D", "R"]).items():
@@ -505,6 +507,12 @@ def a4_supp_root(a) -> str:
     return f"{a.dry_root}_vd4s" if a.dry else str(a4.SUPP_ROOT.relative_to(ROOT))
 
 
+def a4_rows_root(a) -> str:
+    import aggregate_vd4 as a4
+
+    return f"{a.dry_root}_vd4r" if a.dry else str(a4.ROWS_ROOT.relative_to(ROOT))
+
+
 def vd4(a) -> bool:
     """Experiment VD-4 (osdi/expVD4/preregistration.md): one stage per call; each refuses before the freeze and before
     its gate (vd4_gates.json from aggregate_vd4.py); a stage with an inspection session ends with the blinded clips and
@@ -515,12 +523,16 @@ def vd4(a) -> bool:
         sys.exit("[vc] VD-4 is not frozen (results/evaluation/osdi/expVD4_freeze.md missing): no run")
     if a.stage != "0" and not a.dry and not gates.get("stage0_valid"):
         sys.exit("[vc] stage 0 validity (V0 = REF, B0 = VD-3) has not passed: no further stage")
-    if a.stage not in ("0", "0s") and not a.dry and not gates.get("stage0_supp_valid"):
+    if a.stage not in ("0", "0s", "0r") and not a.dry and not gates.get("stage0_supp_valid"):
         sys.exit("[vc] the supplemental stage-0 validation (addendum 1: --stage 0s) has not passed: no further stage")
+    if a.stage not in ("0", "0s", "0r") and not a.dry and not (gates.get("stage0_rows_valid") and gates.get("batch_rows_identical")):
+        sys.exit("[vc] the batch-row position validation (addendum 1b: --stage 0r) has not passed, or the rows differ (addendum 2 needed): no further stage")
     if a.stage == "0s" and not a.dry and not (ROOT / VD4_OUT / "addendum1.md").exists():
         sys.exit("[vc] addendum 1 (results/evaluation/osdi/expVD4/addendum1.md) is missing: no run")
-    out_rel = a4_supp_root(a) if a.stage == "0s" else ("results/evaluation/expVC" if not a.dry else a.dry_root)
-    chk_name = "vd4s_checks_" if a.stage == "0s" else "vd4_checks_"
+    if a.stage == "0r" and not a.dry and not (ROOT / VD4_OUT / "addendum1b.md").exists():
+        sys.exit("[vc] addendum 1b (results/evaluation/osdi/expVD4/addendum1b.md) is missing: no run")
+    out_rel = {"0s": a4_supp_root(a), "0r": a4_rows_root(a)}.get(a.stage, "results/evaluation/expVC" if not a.dry else a.dry_root)
+    chk_name = {"0s": "vd4s_checks_", "0r": "vd4r_checks_"}.get(a.stage, "vd4_checks_")
     units, sessions = vd4_plan(a.stage, gates)
     if a.phase == "key":
         names_ = [x[0] for x in sessions]
@@ -548,7 +560,7 @@ def vd4(a) -> bool:
         py, root, ok = sys.executable, out_rel, True
         for unit, ids in units.items():
             inp, sd = unit.rsplit("_s", 1)
-            mids = "" if a.stage in ("0", "0s") else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
+            mids = "" if a.stage in ("0", "0s", "0r") else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
             steps = [[py, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", a.frames_dir, "--out_root", root, "--only", ",".join(ids), "--no_ref_frames", "--skip_done"],
                      [py, "tools/eval/vc_check.py", "--unit", f"{root}/{unit}", "--g3"]]
             if mids:
@@ -567,7 +579,7 @@ def vd4(a) -> bool:
     for unit, ids in units.items():
         inp, sd = unit.rsplit("_s", 1)
         path = f"{out_rel}/{unit}"
-        mids = "" if a.stage in ("0", "0s") else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
+        mids = "" if a.stage in ("0", "0s", "0r") else ",".join(i for i in ids if not i.endswith("-V0"))   # stage 0: validity only, no metrics
         steps = [("emulation", [PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--gpu_id", "0", "--frames_dir", a.frames_dir, "--out_root", out_rel, "--only", ",".join(ids), "--no_ref_frames", "--skip_done"]),
                  ("checks", [PY, "tools/eval/vc_check.py", "--unit", path, "--g3", "--write", "--name", f"{chk_name}{unit}"])]
         if mids:
@@ -600,7 +612,7 @@ def vd4(a) -> bool:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2", "vd3", "vd4"])
-    ap.add_argument("--stage", default="0", help="vd4: 0, 0s (addendum 1), 1, 2, 2b, 3")
+    ap.add_argument("--stage", default="0", help="vd4: 0, 0s (addendum 1), 0r (addendum 1b), 1, 2, 2b, 3")
     ap.add_argument("--session", default="", help="vd4 --phase key: the inspection session (stage1a, stage1b, stage2, stage2b, stage3)")
     ap.add_argument("--dry_root", default="results/evaluation/_dryrun_expVC", help="vd4 --dry: the synthetic units' root")
     ap.add_argument("--phase", choices=["base", "overlap", "cand", "key"], default="base", help="vd3: base (Phase T: REF / controls / distributions / overlap), cand, key")
@@ -616,7 +628,7 @@ def main():
         sys.exit("--frames_dir (a directory on the VC host's local disk, outside the repository) is required")
     if a.what == "vd3" and a.phase in ("cand", "key") and not a.clips_dir:
         sys.exit("--clips_dir (on the VC host's local disk, outside the repository) is required for vd3 cand / key")
-    if a.what == "vd4" and not a.clips_dir and (a.phase == "key" or a.stage not in ("0", "0s")):
+    if a.what == "vd4" and not a.clips_dir and (a.phase == "key" or a.stage not in ("0", "0s", "0r")):
         sys.exit("--clips_dir (on the VC host's local disk, outside the repository) is required for vd4 stages with an inspection")
     ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1, "fetch": fetch, "vd2": vd2, "vd3": vd3, "vd4": vd4}[a.what](a)
     sys.exit(0 if ok else 1)

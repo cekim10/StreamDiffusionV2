@@ -706,6 +706,12 @@ class GpuRuntime:
         src = [r["pos"] for r in snap["ring"]] if snap is not None else [layer["pos"] for layer in self.sa.kv_layers(self.pl)]
         return [[int(p[0, s_].item()) for s_ in slots] for p in src]
 
+    def positions_all(self, slots: list, snap: dict | None = None) -> list:
+        """Addendum 1b: per layer, per batch row, the recorded position of each slot (live or snapshot). `positions`
+        (row 0 only) is kept as frozen for the original checks."""
+        src = [r["pos"] for r in snap["ring"]] if snap is not None else [layer["pos"] for layer in self.sa.kv_layers(self.pl)]
+        return [[[int(p[b, s_].item()) for s_ in slots] for b in range(p.shape[0])] for p in src]
+
     def dec_state_from_snap(self, snap: dict) -> dict:
         fm = snap["vae"].get("_feat_map") or []
         return {"tensors": [t for t in fm if isinstance(t, self.torch.Tensor)],
@@ -977,6 +983,9 @@ class FakeRuntime:
 
     def positions(self, slots, snap=None):
         return [[[0, 1, 6, 31, 32, 33][s_] for s_ in slots] for _ in range(30)]
+
+    def positions_all(self, slots, snap=None):
+        return [[[[0, 1, 6, 31, 32, 33][s_] for s_ in slots] for _ in range(2)] for _ in range(30)]
 
     def dec_state_from_snap(self, snap):
         return {"tensors": [0], "attrs": {}}

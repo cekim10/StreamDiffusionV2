@@ -194,6 +194,9 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
         temp, cost["ts_prepare_s"] = rt.temp_sink_prepare(images, c)
         log["prepare_positions_layer0"] = [int(p) for p in (temp[0][2][0, :sink].tolist() if not dry else [0, 1, -(1 << 30)])]
         sup["prepare_positions"] = [[int(p) for p in t_[2][0, :sink].tolist()] for t_ in temp] if not dry else []
+        sup["prepare_positions_rows"] = [[[int(p) for p in row] for row in t_[2][:, :sink].tolist()] if hasattr(t_[2], "tolist") else [[0, 1, -(1 << 30)]] * 2 for t_ in temp]
+        # addendum 1b: write_sink_slots selects the filled slots from row 0; every row must have filled the same slots
+        chs["prepare_rows_filled_identical"] = all(all([p != -(1 << 30) for p in row] == [p != -(1 << 30) for p in L_[0]] for row in L_) for L_ in sup["prepare_positions_rows"])
     for h, pl in fast_pl:
         rt.unpack(dict(h), pl)
     rt.restore_fast()
@@ -202,6 +205,14 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
     log["source_positions_layer0"] = src_pos[0]
     sup["source_positions"] = src_pos   # every layer, every slot
     chk["meta_positions_equal_snapshot"] = live_pos == src_pos
+    # addendum 1b: every batch row (the frozen `positions` reads row 0 only)
+    src_rows, live_rows = rt.positions_all(list(range(n_slots)), snap), rt.positions_all(list(range(n_slots)))
+    sup["source_positions_rows"] = src_rows
+    sup["batch_rows"] = len(src_rows[0]) if src_rows else 0
+    chs["meta_positions_rows_equal_snapshot"] = live_rows == src_rows
+    diffs = [{"layer": li, "row": b, "slot": s_, "row0": rows[0][s_], "value": rows[b][s_]} for li, rows in enumerate(src_rows) for b in range(1, len(rows)) for s_ in range(n_slots) if rows[b][s_] != rows[0][s_]]
+    sup["rows_differ"] = diffs   # recorded, never required: the decision gate of addendum 1b
+    sup["batch_rows_identical"] = {"sink": not any(d["slot"] < sink for d in diffs), "recent": not any(d["slot"] >= sink for d in diffs), "all": not diffs}
     if rec:
         rt.write_snap_slots(snap, list(range(sink, n_slots)))
         log["bytes"]["oracle_recent"] = rt.kv_nbytes(list(range(sink, n_slots)))
@@ -216,6 +227,14 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
             for li, (k_, v_, pos_) in enumerate(temp):
                 pp = pos_[0, :sink].tolist() if not dry else [0, 1, EMPTY]
                 deltas.append([None if pp[s_] == EMPTY else live_pos[li][s_] - int(pp[s_]) for s_ in range(sink)])
+            # addendum 1b: the deltas every row would need (recorded; the frozen A1 applies row 0's deltas to every row)
+            row_deltas = []
+            for li in range(len(live_rows)):   # every layer (the fake prepare returns one entry; rows then take the dry prepare positions)
+                pos_ = temp[li][2] if li < len(temp) else None
+                rows_pp = pos_[:, :sink].tolist() if hasattr(pos_, "tolist") else [[0, 1, EMPTY]] * len(live_rows[li])
+                row_deltas.append([[None if int(rows_pp[b][s_]) == EMPTY else live_rows[li][b][s_] - int(rows_pp[b][s_]) for s_ in range(sink)] for b in range(len(rows_pp))])
+            sup["a1_row_deltas"] = row_deltas
+            sup["a1_row_deltas_equal_row0"] = all(row == rows[0] for rows in row_deltas for row in rows)
             temp_w, log["a1_rotation"] = rt.rotate_temp(temp, deltas)
             log["a1_deltas_layer0"] = deltas[0]
             sup["a1_deltas"] = deltas
@@ -268,6 +287,13 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
     fin = rt.positions(list(range(n_slots)))
     sup["final_positions"] = fin
     chs["positions_final_equal_snapshot"] = fin == src_pos
+    fin_rows = rt.positions_all(list(range(n_slots)))
+    sup["final_positions_rows"] = fin_rows
+    chs["positions_rows_final_equal_snapshot"] = fin_rows == src_rows   # addendum 1b: every (layer, row, slot) after the last reset operation
+    if rec:
+        chs["recent_positions_rows_equal"] = all(rows[b][s_] == src_rows[li][b][s_] for li, rows in enumerate(fin_rows) for b in range(len(rows)) for s_ in range(sink, n_slots))
+    if slots:
+        chs["sink_positions_rows_equal"] = all(rows[b][s_] == src_rows[li][b][s_] for li, rows in enumerate(fin_rows) for b in range(len(rows)) for s_ in slots)
     if rec:
         rs = list(range(sink, n_slots))
         for part in ("k", "v"):
@@ -283,6 +309,7 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
         chs["ts_k_as_written_per_layer_slot"], chs["ts_v_unrotated_per_layer_slot"] = all(all(r) for r in ke), all(all(r) for r in ve)
         pos_ok = [[fin[li][s_] == src_pos[li][s_] for s_ in left_ts] for li in range(len(fin))]
         chs["ts_positions_equal_snapshot_per_layer_slot"] = all(all(r) for r in pos_ok)
+        chs["ts_positions_rows_equal_snapshot"] = all(rows[b][s_] == src_rows[li][b][s_] for li, rows in enumerate(fin_rows) for b in range(len(rows)) for s_ in left_ts)
         if ts == "in_aligned":
             by = {(r["layer"], r["slot"]): r for r in sup.get("a1_per_layer_slot", [])}
             sup["a1_per_layer_slot"] = [{**by.get((li, s_), {"layer": li, "slot": s_}), "k_as_expected": ke[li][j], "v_unrotated": ve[li][j], "position_equal_snapshot": pos_ok[li][j],
