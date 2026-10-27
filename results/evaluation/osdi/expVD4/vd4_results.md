@@ -196,6 +196,15 @@
   - ... 9 more
 - rows validation gate: True; batch rows identical on every cell: False
 
+## Corrected A1 (addendum 2; row-wise deltas; validity and descriptive records)
+
+- dog_s1|OT-1 A1: FAIL; stream valid False; pre-move = REF True; failed ['supp:a1_k_within_1ulp_of_independent_reference']; missing none; (layer, row, slot) records 120 / 120; non-zero deltas 13 (per row {'0': 9, '1': 4}), layers whose rows needed different deltas 6, K changed where non-zero 13 (min fraction 0.2928927951388889), K changed at zero delta 0, round-trip max 0.0625; independent reference: within 1 ulp False, max abs 20.0625, bitwise-equal element fraction 0.9645008993556357, bitwise-equal (layer, row, slot) 107 / 120; output digests vs stage 0r: pre-move differing 0, post-move differing 124 / 124 (first at call 34)
+- train_s0|OT-1 A1: FAIL; stream valid False; pre-move = REF True; failed ['supp:a1_k_within_1ulp_of_independent_reference']; missing none; (layer, row, slot) records 120 / 120; non-zero deltas 29 (per row {'0': 17, '1': 12}), layers whose rows needed different deltas 9, K changed where non-zero 29 (min fraction 0.2935096153846154), K changed at zero delta 0, round-trip max 0.0625; independent reference: within 1 ulp False, max abs 40.75, bitwise-equal element fraction 0.9208102373519854, bitwise-equal (layer, row, slot) 91 / 120; output digests vs stage 0r: pre-move differing 0, post-move differing 124 / 124 (first at call 34)
+- butterfly-feeding-slow-motion_s0|OT-L A1: FAIL; stream valid False; pre-move = REF True; failed ['supp:a1_k_within_1ulp_of_independent_reference']; missing none; (layer, row, slot) records 120 / 120; non-zero deltas 37 (per row {'0': 19, '1': 18}), layers whose rows needed different deltas 12, K changed where non-zero 37 (min fraction 0.26515299479166665), K changed at zero delta 0, round-trip max 0.125; independent reference: within 1 ulp False, max abs 39.375, bitwise-equal element fraction 0.8990402421652421, bitwise-equal (layer, row, slot) 83 / 120; output digests vs stage 0r: pre-move differing 0, post-move differing 174 / 174 (first at call 80)
+- audi-snow-trail_s1|OT-1 A1: FAIL; stream valid False; pre-move = REF True; failed ['supp:a1_k_within_1ulp_of_independent_reference']; missing none; (layer, row, slot) records 120 / 120; non-zero deltas 31 (per row {'0': 17, '1': 14}), layers whose rows needed different deltas 7, K changed where non-zero 31 (min fraction 0.28964760283119656), K changed at zero delta 0, round-trip max 0.0625; independent reference: within 1 ulp False, max abs 41.0, bitwise-equal element fraction 0.9153573251925303, bitwise-equal (layer, row, slot) 89 / 120; output digests vs stage 0r: pre-move differing 0, post-move differing 125 / 125 (first at call 34)
+- corrected-A1 gate: False
+Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.
+
 Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sessions recorded: none. Validity problems: none.
 
 | condition | phase | numeric pass (of 12) | visual flags (REF same session) | resolution | bytes added | lower bound 1 / 10 Gbps |
@@ -215,4 +224,4 @@ STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEA
 - P2a: metric fail & flagged 0, metric fail & not flagged 0, metric pass & flagged 0, both clean 0; kappa -
 - P2b: metric fail & flagged 0, metric fail & not flagged 0, metric pass & flagged 0, both clean 0; kappa -
 
-## Gates: {"stage0_valid": true, "duplicate_controls": [], "stage2_inspected": false, "s3_resolves_p2": false, "stage2b_cells": null, "stage3_runs": false, "stage0_supp_valid": true, "stage0_rows_valid": true, "batch_rows_identical": false}
+## Gates: {"stage0_valid": true, "duplicate_controls": [], "stage2_inspected": false, "s3_resolves_p2": false, "stage2b_cells": null, "stage3_runs": false, "stage0_supp_valid": true, "stage0_rows_valid": true, "batch_rows_identical": false, "stage0_a1_rows_valid": false}

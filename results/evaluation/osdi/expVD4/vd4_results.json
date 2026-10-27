@@ -2343,6 +2343,172 @@
   "valid": true,
   "identical": false
  },
+ "a1_rows": {
+  "root": "/home/ckim151/StreamDiffusionV2/results/evaluation/expVD4a",
+  "runs": [
+   {
+    "cell": "dog_s1|OT-1",
+    "present": true,
+    "missing": [],
+    "failed": [
+     "supp:a1_k_within_1ulp_of_independent_reference"
+    ],
+    "stream_valid": false,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 13,
+     "k_changed_where_nonzero": 13,
+     "min_changed_fraction": 0.2928927951388889,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.0625,
+     "per_row_nonzero": {
+      "0": 9,
+      "1": 4
+     },
+     "rows_with_different_deltas": 6
+    },
+    "reference": {
+     "max_abs": 20.0625,
+     "bitwise_equal_fraction": 0.9645008993556357,
+     "within_ulp": false,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 107,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 158,
+     "post_move_calls": 124,
+     "post_move_differing": 124,
+     "pre_move_differing": 0,
+     "first_differing_call": 34
+    },
+    "pass": false
+   },
+   {
+    "cell": "train_s0|OT-1",
+    "present": true,
+    "missing": [],
+    "failed": [
+     "supp:a1_k_within_1ulp_of_independent_reference"
+    ],
+    "stream_valid": false,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 29,
+     "k_changed_where_nonzero": 29,
+     "min_changed_fraction": 0.2935096153846154,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.0625,
+     "per_row_nonzero": {
+      "0": 17,
+      "1": 12
+     },
+     "rows_with_different_deltas": 9
+    },
+    "reference": {
+     "max_abs": 40.75,
+     "bitwise_equal_fraction": 0.9208102373519854,
+     "within_ulp": false,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 91,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 158,
+     "post_move_calls": 124,
+     "post_move_differing": 124,
+     "pre_move_differing": 0,
+     "first_differing_call": 34
+    },
+    "pass": false
+   },
+   {
+    "cell": "butterfly-feeding-slow-motion_s0|OT-L",
+    "present": true,
+    "missing": [],
+    "failed": [
+     "supp:a1_k_within_1ulp_of_independent_reference"
+    ],
+    "stream_valid": false,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 37,
+     "k_changed_where_nonzero": 37,
+     "min_changed_fraction": 0.26515299479166665,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.125,
+     "per_row_nonzero": {
+      "0": 19,
+      "1": 18
+     },
+     "rows_with_different_deltas": 12
+    },
+    "reference": {
+     "max_abs": 39.375,
+     "bitwise_equal_fraction": 0.8990402421652421,
+     "within_ulp": false,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 83,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 254,
+     "post_move_calls": 174,
+     "post_move_differing": 174,
+     "pre_move_differing": 0,
+     "first_differing_call": 80
+    },
+    "pass": false
+   },
+   {
+    "cell": "audi-snow-trail_s1|OT-1",
+    "present": true,
+    "missing": [],
+    "failed": [
+     "supp:a1_k_within_1ulp_of_independent_reference"
+    ],
+    "stream_valid": false,
+    "prefix_identical_to_reference": true,
+    "records": 120,
+    "records_expected": 120,
+    "rotation": {
+     "nonzero_delta": 31,
+     "k_changed_where_nonzero": 31,
+     "min_changed_fraction": 0.28964760283119656,
+     "zero_delta_k_changed": 0,
+     "round_trip_max_abs": 0.0625,
+     "per_row_nonzero": {
+      "0": 17,
+      "1": 14
+     },
+     "rows_with_different_deltas": 7
+    },
+    "reference": {
+     "max_abs": 41.0,
+     "bitwise_equal_fraction": 0.9153573251925303,
+     "within_ulp": false,
+     "n_ulp": 1,
+     "bitwise_equal_slots": 89,
+     "slots": 120
+    },
+    "digests_vs_stage0r": {
+     "calls": 159,
+     "post_move_calls": 125,
+     "post_move_differing": 125,
+     "pre_move_differing": 0,
+     "first_differing_call": 34
+    },
+    "pass": false
+   }
+  ],
+  "valid": false
+ },
  "gates": {
   "stage0_valid": true,
   "duplicate_controls": [],
@@ -2352,6 +2518,7 @@
   "stage3_runs": false,
   "stage0_supp_valid": true,
   "stage0_rows_valid": true,
-  "batch_rows_identical": false
+  "batch_rows_identical": false,
+  "stage0_a1_rows_valid": false
  }
 }
