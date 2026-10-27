@@ -601,6 +601,115 @@ class GpuRuntime:
                     n += 1
         return n
 
+    # ---- Experiment VD-4 (emulator-only oracle diagnostics; none is used by a frozen path)
+    def _slot(self, s_):
+        return slice(s_ * self.fsl, (s_ + 1) * self.fsl)
+
+    def n_slots(self) -> int:
+        return int(self.sa.kv_layers(self.pl)[0]["pos"].shape[1])
+
+    def restore_all_from(self, snap: dict):
+        """V0: every component from the source snapshot, refresh unfrozen (the Phase 1 full path on that snapshot)."""
+        self.sa.restore_state(self.pl, self.pm, self.session, snap, set(self.sa.STATE_COMPONENTS))
+        for block in self.pl.generator.model.blocks:
+            block.self_attn.adapt_sink_thr = self.cfg_thr
+        self._sync()
+
+    def write_snap_slots(self, snap: dict, slots: list, kv_override: dict | None = None) -> int:
+        """Oracle: write the snapshot's K and V of `slots` into every live layer (positions are not written: the live
+        meta came from the same snapshot; checked separately). kv_override {slot: [(k, v) per layer]} replaces the
+        snapshot's values (quantized Sink)."""
+        layers = self.sa.kv_layers(self.pl)
+        assert len(layers) == len(snap["kv"]), "layer count differs from the snapshot"
+        for li, layer in enumerate(layers):
+            for s_ in slots:
+                k, v = kv_override[s_][li] if kv_override else (snap["kv"][li]["k"][:, self._slot(s_)], snap["kv"][li]["v"][:, self._slot(s_)])
+                layer["k"][:, self._slot(s_)] = k
+                layer["v"][:, self._slot(s_)] = v
+        self._sync()
+        return len(layers)
+
+    def kv_digest(self, slots: list, part: str, snap: dict | None = None, kv_override: dict | None = None) -> str:
+        """SHA-256 over every layer of K or V of `slots`: live (snap None), the snapshot's, or an override's."""
+        import hashlib
+
+        h = hashlib.sha256()
+        layers = self.sa.kv_layers(self.pl) if snap is None else snap["kv"]
+        for li, layer in enumerate(layers):
+            for s_ in slots:
+                if kv_override is not None:
+                    t = kv_override[s_][li][0 if part == "k" else 1]
+                else:
+                    t = layer[part][:, self._slot(s_)]
+                h.update(t.detach().contiguous().view(self.torch.uint8).cpu().numpy().tobytes())
+        return h.hexdigest()
+
+    def temp_digest(self, saved: list, slots: list, part: str) -> str:
+        """SHA-256 over every layer of K or V of `slots` in a saved temporary Sink [(k, v, pos) per layer]."""
+        import hashlib
+
+        h = hashlib.sha256()
+        for k, v, _pos in saved:
+            for s_ in slots:
+                h.update((k if part == "k" else v)[:, self._slot(s_)].detach().contiguous().view(self.torch.uint8).cpu().numpy().tobytes())
+        return h.hexdigest()
+
+    def kv_nbytes(self, slots: list) -> int:
+        layers = self.sa.kv_layers(self.pl)
+        return int(sum(2 * layer["k"][:, self._slot(s_)].numel() * layer["k"].element_size() for layer in layers for s_ in slots))
+
+    def positions(self, slots: list, snap: dict | None = None) -> list:
+        """Per layer, the recorded position of each slot (live or snapshot)."""
+        src = [r["pos"] for r in snap["ring"]] if snap is not None else [layer["pos"] for layer in self.sa.kv_layers(self.pl)]
+        return [[int(p[0, s_].item()) for s_ in slots] for p in src]
+
+    def dec_state_from_snap(self, snap: dict) -> dict:
+        fm = snap["vae"].get("_feat_map") or []
+        return {"tensors": [t for t in fm if isinstance(t, self.torch.Tensor)],
+                "attrs": {a: (list(snap["vae"][a]) if isinstance(snap["vae"].get(a), list) else snap["vae"].get(a)) for a in self._DEC_ATTRS}}
+
+    def rotate_temp(self, saved: list, deltas: list) -> tuple[list, dict]:
+        """A1: the temporary Sink's keys re-rotated per layer and slot by deltas[layer][slot] (values untouched).
+        Returns the rotated copy and the round-trip error (rotate by -delta and compare with the original keys)."""
+        from models.wan.causal_model import _shift_temporal_rope
+
+        freqs = self.pl.generator.model.freqs.to(self.device)
+        out, worst, n_rot = [], 0.0, 0
+        for (k, v, pos), dl in zip(saved, deltas):
+            k2 = k.clone()
+            for s_, d in enumerate(dl):
+                if d is None or d == 0:
+                    continue
+                for b in range(k.shape[0]):
+                    r = _shift_temporal_rope(k[b, self._slot(s_)], freqs, int(d))
+                    back = _shift_temporal_rope(r, freqs, -int(d))
+                    worst = max(worst, float((back.float() - k[b, self._slot(s_)].float()).abs().max().item()))
+                    k2[b, self._slot(s_)] = r
+                    n_rot += 1
+            out.append((k2, v, pos))
+        return out, {"rotated_slot_layers": n_rot, "round_trip_max_abs": worst}
+
+    def quantize_slots(self, snap: dict, slots: list, mode: str) -> tuple[dict, int]:
+        """Exploratory: the snapshot's K / V of `slots` quantized and dequantized. fp8: e4m3 with a per-tensor scale;
+        int4: symmetric, groups of 64 along the last dimension. Returns {slot: [(k, v) per layer]} and the payload bytes."""
+        torch = self.torch
+
+        def q(t):
+            x = t.float()
+            if mode == "fp8":
+                sc = x.abs().amax().clamp(min=1e-12) / 448.0
+                return (x / sc).to(torch.float8_e4m3fn).float().mul(sc).to(t.dtype), x.numel() + 4
+            g = x.reshape(*x.shape[:-1], x.shape[-1] // 64, 64)
+            sc = g.abs().amax(-1, keepdim=True).clamp(min=1e-12) / 7.0
+            return (torch.round(g / sc).clamp(-8, 7) * sc).reshape(x.shape).to(t.dtype), x.numel() // 2 + sc.numel() * 2
+        out, nb = {}, 0
+        for s_ in slots:
+            out[s_] = []
+            for li in range(len(snap["kv"])):
+                kq, bk = q(snap["kv"][li]["k"][:, self._slot(s_)]); vq, bv = q(snap["kv"][li]["v"][:, self._slot(s_)])
+                out[s_].append((kq, vq)); nb += bk + bv
+        return out, int(nb)
+
     def restore_inputs(self):
         """Undo write_inputs (lossy sensitivity runs) so the next run starts from the original input."""
         if not getattr(self, "_written", None):
@@ -790,6 +899,37 @@ class FakeRuntime:
 
     def temp_slots_left(self, saved):
         return 0
+
+    # Experiment VD-4 doubles (deterministic strings; no state)
+    def n_slots(self):
+        return 6
+
+    def restore_all_from(self, snap):
+        self.full = True; self.bound = True
+
+    def write_snap_slots(self, snap, slots, kv_override=None):
+        return 30
+
+    def kv_digest(self, slots, part, snap=None, kv_override=None):
+        return f"fake-{part}-{'-'.join(map(str, slots))}"
+
+    def temp_digest(self, saved, slots, part):
+        return f"fake-{part}-{'-'.join(map(str, slots))}"
+
+    def kv_nbytes(self, slots):
+        return 575078880 * len(slots)
+
+    def positions(self, slots, snap=None):
+        return [[[0, 1, 6, 31, 32, 33][s_] for s_ in slots] for _ in range(30)]
+
+    def dec_state_from_snap(self, snap):
+        return {"tensors": [0], "attrs": {}}
+
+    def rotate_temp(self, saved, deltas):
+        return saved, {"rotated_slot_layers": 0, "round_trip_max_abs": 0.0}
+
+    def quantize_slots(self, snap, slots, mode):
+        return {s_: [] for s_ in slots}, 1000
 
     def input_history(self):
         if getattr(self, "_hist", None) is None:

@@ -233,7 +233,7 @@ def windows(cond: dict, k: int) -> dict:
     else:
         b = cond["binds"][-1]
     sinkless = set()
-    if cond["kind"] in ("ot", "vd", "vd2", "vd3"):
+    if cond["kind"] in ("ot", "vd", "vd2", "vd3", "vd4"):
         sinkless = set(range(first, b))
     resume = cond["cold_call"] + k - 1 if cond["kind"] == "cold" else first
     sl = sorted(sinkless)
@@ -415,6 +415,8 @@ def run_unit(unit: Path, only: list[str], emb_names: str, device: str) -> dict:
     for cid in conds:
         s = json.loads((unit / cid / "summary.json").read_text())
         cond = s["condition"]
+        if cond.get("v0"):   # VD-4 validity gate (digest equality with REF), not a metric condition
+            continue
         O = vf.read_calls(Path(s["frames"]))
         idx = {e["call"]: e for e in vf.load_index(Path(s["frames"]))["calls"]}
         I = {c: getI(idx[c]["out_input_call"]) for c in O}

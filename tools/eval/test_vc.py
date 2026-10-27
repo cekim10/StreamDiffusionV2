@@ -129,6 +129,7 @@ def main():
         r_ = subprocess.run([PY, "tools/eval/aggregate_vd.py", "--root", str(tmp / "expVCt"), "--dry"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode == 0 and "VD-H2" in r_.stdout and "dog | OT-1" in r_.stdout, f"VD aggregation (main effects, verdicts) {r_.stderr[-300:]}")
         vd3_tests(tmp, out, vc)
+        vd4_tests()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
@@ -262,8 +263,9 @@ def vd3_tests(tmp: Path, out: dict, vc):
     r_ = subprocess.run([PY, "tools/eval/vd3_overlap.py", "--dry_run", "--reps", "2", "--out", str(tmp / "ov.json")], cwd=ROOT, capture_output=True, text=True)
     ov = json.loads((tmp / "ov.json").read_text()) if r_.returncode == 0 else {}
     check(set(ov.get("checks", {})) == {"a_digests_equal", "b_contention_within_10pct", "c_first_output_earlier"} and len(ov["trials"]) == 4, "overlap measurement: alternating serial / overlap trials and the three checks (dry)")
-    r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd3", "--phase", "cand", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
-    check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd3 refuses candidate conditions before the freeze")
+    if not (ROOT / "results/evaluation/osdi/expVD3_freeze.md").exists():   # VD-3 was frozen on 2026-10-25: this check applies only before that
+        r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd3", "--phase", "cand", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd3 refuses candidate conditions before the freeze")
     if not (ROOT / "results/evaluation/osdi/expVD3_phaseT_approval.md").exists():
         r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd3", "--phase", "base", "--frames_dir", "/x"], cwd=ROOT, capture_output=True, text=True)
         check(r_.returncode != 0 and "Phase T is not approved" in (r_.stdout + r_.stderr), "run_vc vd3 refuses Phase T without its approval record")
@@ -295,6 +297,97 @@ def vd3_tests(tmp: Path, out: dict, vc):
     r1 = ag.exec(["git", "pull", "--ff-only"])
     done, kept = dr._resolve_identical(ag, r1["stderr"] + r1["stdout"])
     check(r1["rc"] != 0 and not done and kept == ["results/z.txt"] and (g / "b" / "results" / "z.txt").read_text() == "mine\n", "a differing local result file is left untouched and reported")
+
+
+def vd4_tests():
+    """Experiment VD-4 (dry): schedules overlay (frozen file untouched), conditions, oracle verification incl. negative
+    cases, resolution classes, kappa, clips, aggregation and the stage gates."""
+    import hashlib
+    import re
+
+    import aggregate_vd4 as a4
+    import mobility_node as mn
+    import vc_emulate as ve
+    import vc_schedules as vs
+
+    print("- 7 VD-4 (dry)")
+    frozen = re.search(r"vc_schedules.json` \| `([0-9a-f]{64})`", (ROOT / "results/evaluation/osdi/expVD3_freeze.md").read_text()).group(1)
+    check(hashlib.sha256((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_bytes()).hexdigest() == frozen,
+          "the frozen vc_schedules.json is byte-identical to the VD-3 freeze record (VD-4 lives in an overlay)")
+    S = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())
+    v4 = [c for c in vs.unit_sched(S, "train_s0")["conditions"] if c["kind"] == "vd4"]
+    v0 = next(c for c in v4 if c["id"] == "VD41-V0")
+    check(len(v4) == 26 and v0["binds"] == [] and next(c for c in v4 if c["id"] == "VD41-S2")["oracle_sink_slots"] == [2, 1]
+          and next(c for c in v4 if c["id"] == "VD41-A1S1")["exploratory"], "overlay: 13 VD-4 conditions per schedule; V0 without a bind; S2 = slots 2, 1; A1S1 exploratory")
+    tmp = Path(tempfile.mkdtemp(prefix="vd4_test_"))
+    try:
+        root, frames = tmp / "expVC", tmp / "frames"
+        for inp, sd in (("dog", 1), ("train", 0)):
+            ids = [c["id"] for c in vs.unit_sched(S, f"{inp}_s{sd}")["conditions"] if c["kind"] == "vd4"]
+            r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", str(sd), "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", "OT-1,OT-L"], cwd=ROOT, capture_output=True, text=True)
+            r2 = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", str(sd), "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+            check(r2.returncode == 0 and r2.stdout.count("valid True") == 26, f"{inp} seed {sd}: 26 VD-4 streams emulated, all valid")
+        import vc_check
+
+        ok, why, info = vc_check.g3(root / "train_s0", S)
+        check(ok and "VD41-V0" in info, f"G3 on the VD-4 streams including V0 (no bind) {why[:2]}")
+        lg = json.loads((root / "train_s0" / "VD41-A1S2" / "summary.json").read_text())["vd4"]
+        check(lg["checks"].get("sink_k_equal") and lg["checks"].get("ts_v_unrotated") and lg["checks"].get("meta_positions_equal_snapshot") and lg["checks"]["layers"] == 30
+              and lg["source_positions_layer0"] and lg["prepare_positions_layer0"],
+              "A1S2: oracle slots verified (K, V, positions), the remaining TS slot's V unrotated, source / prepare positions logged")
+        # negative cases on the fake runtime: a digest mismatch, and a later reset step overwriting an injected slot
+        margs = mn.parse_args(["--label", "T", "--dry_run", "--dry_sink_mb", "4", "--dry_service_s", "0.0005", "--migration_chunk", "0", "--post_chunks", "10"])
+
+        class Bad(mn.FakeRuntime):
+            def kv_digest(self, slots, part, snap=None, kv_override=None):
+                return "snapshot" if (kv_override is not None or snap is not None) else "live"
+
+        class Overwrite(mn.FakeRuntime):
+            hit = False
+
+            def decode_latents(self, lats):
+                self.hit = True; return 0.001
+
+            def kv_digest(self, slots, part, snap=None, kv_override=None):
+                return "changed" if (self.hit and snap is None and kv_override is None) else "same"
+        for cls, cond, key_, what in ((Bad, {"dec": "dr2", "ts": "in", "oracle_sink_slots": [2]}, "sink_k_equal", "an oracle Sink slot whose live K differs from the snapshot"),
+                                      (Overwrite, {"dec": "dr2", "oracle_recent": True, "ts": "in"}, "recent_k_equal", "a later reset step (DR-2 decode) overwriting the injected recent KV")):
+            rt = cls(margs); rt.provision()
+            log = {"cost_s": {}, "checks": {}, "bytes": {}}
+            ve.vd4_reset(rt, 5, cond, {}, [], True, log, None, [])
+            check(log["checks"].get(key_) is False, f"oracle verification catches {what} ({[k for k, v in log['checks'].items() if v is False]})")
+        check(a4.resolution(12, 12, 1, 1, 12) == "STRICT" and a4.resolution(12, 12, 2, 1, 12) == "NEAR" and a4.resolution(12, 12, 3, 1, 12) == "not resolved"
+              and a4.resolution(11, 12, 0, 1, 12) == "not resolved" and a4.resolution(12, 12, 0, 0, 0) == "not inspected" and a4.resolution(12, 12, 0, 0, 12) == "STRICT",
+              "resolution: STRICT (flags <= REF), NEAR (REF + 1), not resolved (more flags, or any numeric failure), not inspected; 0 flags is still only a count")
+        check(abs(a4.kappa({"mm": 10, "mp": 0, "pm": 0, "pp": 10}) - 1.0) < 1e-9 and abs(a4.kappa({"mm": 5, "mp": 5, "pm": 5, "pp": 5})) < 1e-9, "Cohen's kappa: 1 for perfect agreement, 0 for chance")
+        # clips, a synthetic recorded session, aggregation
+        insp = tmp / "insp"; insp.mkdir()
+        for inp, sd in (("dog", 1), ("train", 0)):
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", str(sd), "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", "VD31-DR2+TSin,VD3L-DR2+TSin", "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / f"{inp}_s{sd}"), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
+        r_ = subprocess.run([PY, "tools/eval/vd4_export_clips.py", "--root", str(root), "--session", "stage1", "--names", "DR,D,R,A1", "--cells", "dog_s1|OT-1,train_s0|OT-1",
+                             "--clips_dir", str(tmp / "clips"), "--order_seed", "3", "--form", str(insp / "_dryrun_vd4_inspection_form_stage1.md")], cwd=ROOT, capture_output=True, text=True)
+        ftxt = (insp / "_dryrun_vd4_inspection_form_stage1.md").read_text() if r_.returncode == 0 else ""
+        kb = (tmp / "clips" / "sealed" / "vd4_stage1_blind_key.json").read_bytes() if r_.returncode == 0 else b""
+        check(r_.returncode == 0 and len(re.findall(r"^\| [0-9A-F]{6} \|", ftxt, flags=re.M)) == 12 and hashlib.sha256(kb).hexdigest() in ftxt
+              and "flicker / jitter" in ftxt and not any(w in re.sub(r"[0-9A-F]{6}|[0-9a-f]{64}", "", ftxt) for w in ("B0", "DR", "A1", "REF")),
+              "VD-4 session clips: 2 cells x 6 codes, key SHA-256 in the form, flicker / motion fields, no condition names")
+        (insp / "_dryrun_vd4_stage1_blind_key.json").write_bytes(kb)
+        key = json.loads(kb)["key"]
+        def fill(m):
+            n = key[m.group(1)]["name"]
+            return f"| {m.group(1)} | kept | none | no shift | {'jump' if n == 'B0' else 'no visible jump'} | none | natural | no visible jump | dry |"
+        (insp / "_dryrun_vd4_inspection_stage1.md").write_text(re.sub(r"^\| ([0-9A-F]{6}) \|( \|)+$", fill, ftxt.replace("STATUS: NOT RECORDED", "STATUS: RECORDED"), flags=re.M))
+        r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--dry", "--insp_dir", str(insp), "--sessions", "stage1", "--out", str(tmp / "res")], cwd=ROOT, capture_output=True, text=True)
+        R = json.loads((tmp / "res.json").read_text()) if r_.returncode == 0 else {}
+        b0 = (R.get("conditions", {}).get("B0", {}).get("phases", {}).get("P1") or {})
+        check(r_.returncode == 0 and b0.get("visual_flags") == 2 and b0.get("ref_flags_same_session") == 0 and R["gates"]["stage0_valid"]
+              and all(v["pass"] for v in R["validity"]) and set(R["attribution"]) == {"P1", "P2a", "P2b"},
+              f"aggregation: per-session visual flags against REF of the same session, validity rows, attribution per phase, gates {r_.stderr[-200:]}")
+        r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd4", "--stage", "1", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
+        check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd4 refuses before the VD-4 freeze")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":

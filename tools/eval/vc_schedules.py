@@ -68,11 +68,60 @@ def vd3_conditions(ot: dict) -> list[dict]:
             for name, dr, ts, kc, src in VD3_CELLS]
 
 
+# Experiment VD-4 (osdi/expVD4/preregistration.md): oracle source-state diagnostics on top of VD-3's DR2+TSin (B0).
+# name: (decoder "dr2" | "oracle", oracle recent KV, temporary Sink "in" | "in_aligned" | None, oracle Sink slots,
+#        quantization, exploratory, V0 full injection)
+VD4_CELLS = [("B0", "dr2", False, "in", [], None, False, False), ("A1", "dr2", False, "in_aligned", [], None, False, False),
+             ("D", "oracle", False, "in", [], None, False, False), ("R", "dr2", True, "in", [], None, False, False),
+             ("DR", "oracle", True, "in", [], None, False, False),
+             ("S1", "dr2", False, "in", [2], None, False, False), ("S2", "dr2", False, "in", [2, 1], None, False, False),
+             ("S3", "dr2", False, None, [2, 1, 0], None, False, False),
+             ("A1S1", "dr2", False, "in_aligned", [2], None, True, False), ("A1S2", "dr2", False, "in_aligned", [2, 1], None, True, False),
+             ("Q8", "dr2", False, None, [2, 1, 0], "fp8", True, False), ("Q4", "dr2", False, None, [2, 1, 0], "int4", True, False),
+             ("V0", None, False, None, [], None, False, True)]
+
+
+def vd4_conditions(ot: dict) -> list[dict]:
+    x = ot["id"].split("-")[1]
+    out = []
+    for name, dec, rec, ts, slots, q, expl, v0 in VD4_CELLS:
+        c = {**ot, "id": f"VD4{x}-{name}", "kind": "vd4", "dec": dec, "oracle_recent": rec, "ts": ts, "oracle_sink_slots": slots, "quant": q,
+             "exploratory": expl, "v0": v0, "vd4_of": ot["id"],
+             "label": f"VD-4 {name} at the {ot['id']} schedule (oracle diagnostic; not a practical migration)"}
+        if v0:   # full-state injection with refresh unfrozen: no Sink is withheld, so there is no bind
+            c["binds"] = []
+        out.append(c)
+    return out
+
+
+VD4_FILE = ROOT / "results/evaluation/osdi/expVD4/vd4_schedules.json"   # overlay: vc_schedules.json is frozen (VD-3 freeze record)
+_VD4 = None
+
+
+def vd4_overlay() -> dict:
+    global _VD4
+    if _VD4 is None:
+        _VD4 = json.loads(VD4_FILE.read_text())["units"] if VD4_FILE.exists() else {}
+    return _VD4
+
+
 def unit_sched(sched: dict, unit_name: str) -> dict:
-    """The schedule of a unit directory name '<input>_s<seed>' (seed 0 units are the 'inputs' entries)."""
-    if unit_name in sched.get("units", {}):
-        return sched["units"][unit_name]
-    return sched["inputs"][unit_name.rsplit("_s", 1)[0]]
+    """The schedule of a unit directory name '<input>_s<seed>' (seed 0 units are the 'inputs' entries), with the VD-4
+    overlay's conditions appended (they live in their own file so the frozen vc_schedules.json stays byte-identical)."""
+    base = sched["units"][unit_name] if unit_name in sched.get("units", {}) else sched["inputs"][unit_name.rsplit("_s", 1)[0]]
+    ov = vd4_overlay().get(unit_name)
+    return {**base, "conditions": base["conditions"] + ov} if ov else base
+
+
+def build_vd4(out: dict) -> dict:
+    units = {}
+    for inp, u in out["inputs"].items():
+        ot = {c["id"]: c for c in u["conditions"] if c["id"] in ("OT-1", "OT-L")}
+        units[f"{inp}_s0"] = vd4_conditions(ot["OT-1"]) + vd4_conditions(ot["OT-L"])
+    for name, u in out["units"].items():
+        ot = {c["id"]: c for c in u["conditions"] if c["id"] in ("OT-1", "OT-L")}
+        units[name] = vd4_conditions(ot["OT-1"]) + vd4_conditions(ot["OT-L"])
+    return {"note": "Experiment VD-4 conditions (overlay of the frozen vc_schedules.json)", "units": units}
 
 
 def seed1_units(out: dict) -> dict:
@@ -251,11 +300,16 @@ def build() -> dict:
 def check(out: dict) -> list[str]:
     """Every extracted schedule against its source run's recorded moves and binds (as test_rd.py does for RD Phase 0)."""
     bad = []
-    for inp, u in list(out["inputs"].items()) + list(out.get("units", {}).items()):
+    items = list(out["inputs"].items()) + list(out.get("units", {}).items())
+    items += [(k, {"conditions": v, "N": (out.get("units", {}).get(k) or out["inputs"][k.rsplit("_s", 1)[0]])["N"]}) for k, v in (out.get("vd4") or {}).items()]
+    for inp, u in items:
         for c in u["conditions"]:
             s = json.load(open(ROOT / c["sources"][0] / "summary.json"))
             moves = [int(m["call"]) for m in s["moves"]]
-            if c["kind"] in ("ot", "vd", "vd2", "vd3"):
+            if c["kind"] == "vd4" and c.get("v0"):
+                if c["resets"] != moves or c["binds"] != []:
+                    bad.append(f"{inp} {c['id']}: V0 {c['resets']} / {c['binds']} vs run moves {moves}")
+            elif c["kind"] in ("ot", "vd", "vd2", "vd3", "vd4"):
                 if c["resets"] != moves or c["binds"] != [int(s["final"]["bind_call"])]:
                     bad.append(f"{inp} {c['id']}: {c['resets']} / {c['binds']} vs run moves {moves} bind {s['final']['bind_call']}")
             elif c["kind"] == "wfs":
@@ -270,9 +324,16 @@ def check(out: dict) -> list[str]:
 
 def main():
     out = build()
-    bad = check(out)
+    vd4 = build_vd4(out)
+    bad = check({**out, "vd4": vd4["units"]})
     p = ROOT / "results/evaluation/osdi/expVC/vc_schedules.json"
-    p.write_text(json.dumps(out, indent=1))
+    txt = json.dumps(out, indent=1)
+    if p.exists() and p.read_text() != txt:
+        bad.append("vc_schedules.json would change: it is frozen (VD-3 freeze record); not written")
+    else:
+        p.write_text(txt)
+    VD4_FILE.parent.mkdir(parents=True, exist_ok=True)
+    VD4_FILE.write_text(json.dumps(vd4, indent=1))
     for inp, u in list(out["inputs"].items()) + list(out["units"].items()):
         print(f"{inp}: N {u['N']}")
         for c in u["conditions"]:

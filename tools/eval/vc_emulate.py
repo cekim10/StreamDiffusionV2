@@ -172,6 +172,91 @@ def vd3_reset(rt, c: int, cond: dict, fast_pl: list, dry: bool, log: dict, src_l
     return temp
 
 
+def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log: dict, src_last_image, src_latents):
+    """Experiment VD-4 (osdi/expVD4/preregistration.md section 3): the M1 reset at call c with oracle state from the ONE
+    snapshot taken at the reset (the same instant the fast path and the withheld Sink were packed).
+    V0: every component from the snapshot, refresh unfrozen, no bind (validity gate: must equal REF).
+    Otherwise: [TS-in prepare] -> frozen fast path (meta + in-flight; KV / VAE zero) -> [oracle recent KV] ->
+    [temporary-Sink K / V; A1: K re-rotated to the source positions] -> [oracle Sink slots, fixed order 2, 1, 0;
+    quantized if requested] -> [decoder: oracle cache | DR-2 decode] -> refresh frozen -> verification of every
+    injected component (bytes, digests, positions) after the last reset operation, i.e. nothing later overwrote it."""
+    cost, chk = log["cost_s"], log["checks"]
+    if cond.get("v0"):
+        rt.restore_all_from(snap)
+        log["v0"] = True
+        return None
+    sink, n_slots = int(getattr(rt, "sink", 3)), rt.n_slots()
+    ts, dec, rec, slots, quant = cond.get("ts"), cond.get("dec"), bool(cond.get("oracle_recent")), list(cond.get("oracle_sink_slots") or []), cond.get("quant")
+    temp = None
+    if ts:
+        images = None if dry else rt.torch.cat([src_last_image, rt.runner.frames_for_call(c)], dim=2)
+        temp, cost["ts_prepare_s"] = rt.temp_sink_prepare(images, c)
+        log["prepare_positions_layer0"] = [int(p) for p in (temp[0][2][0, :sink].tolist() if not dry else [0, 1, -(1 << 30)])]
+    for h, pl in fast_pl:
+        rt.unpack(dict(h), pl)
+    rt.restore_fast()
+    src_pos = rt.positions(list(range(n_slots)), snap)
+    live_pos = rt.positions(list(range(n_slots)))
+    log["source_positions_layer0"] = src_pos[0]
+    chk["meta_positions_equal_snapshot"] = live_pos == src_pos
+    if rec:
+        rt.write_snap_slots(snap, list(range(sink, n_slots)))
+        log["bytes"]["oracle_recent"] = rt.kv_nbytes(list(range(sink, n_slots)))
+    ts_written, expect_k = [], None
+    if temp is not None:
+        if ts == "in_aligned":
+            EMPTY = -(1 << 30)
+            deltas = []
+            for li, (k_, v_, pos_) in enumerate(temp):
+                pp = pos_[0, :sink].tolist() if not dry else [0, 1, EMPTY]
+                deltas.append([None if pp[s_] == EMPTY else live_pos[li][s_] - int(pp[s_]) for s_ in range(sink)])
+            temp_w, log["a1_rotation"] = rt.rotate_temp(temp, deltas)
+            log["a1_deltas_layer0"] = deltas[0]
+        else:
+            temp_w = temp
+        log["ts_slots_written"] = rt.write_sink_slots(temp_w)
+        ts_written = [s_ for s_ in range(log["ts_slots_written"])]
+        expect_k = temp_w
+    kv_over = None
+    if slots:
+        if quant:
+            kv_over, log["bytes"]["oracle_sink_payload"] = rt.quantize_slots(snap, slots, quant)
+        rt.write_snap_slots(snap, slots, kv_over)
+        log["bytes"]["oracle_sink"] = rt.kv_nbytes(slots)
+    if dec == "oracle":
+        st = rt.dec_state_from_snap(snap) if not dry else rt.vae_dec_state_copy()
+        log["oracle_dec_copy_s"], live_dg = rt.vae_dec_state_write(st)
+        log["bytes"]["oracle_decoder"] = int(sum(t.numel() * t.element_size() for t in st["tensors"])) if not dry else 1800000000
+        log["dec_snapshot_digest"] = rt.dec_digest(st["tensors"]) if not dry else live_dg
+    elif dec == "dr2":
+        if not dry:
+            log["latent_shapes"] = [list(z.shape) for z in src_latents]
+        cost["dr_decode_s"] = rt.decode_latents(src_latents)
+        log["bytes"]["dr2_latents"] = 2 * 16 * 60 * 104 * 2
+    rt.freeze_refresh()
+    cost["total_serial_s"] = float(sum(v for v in cost.values() if v is not None))
+    # ---- verification after the last reset operation (bytes, digests, positions; K and V separately)
+    if rec:
+        rs = list(range(sink, n_slots))
+        chk["recent_k_equal"] = rt.kv_digest(rs, "k") == rt.kv_digest(rs, "k", snap=snap)
+        chk["recent_v_equal"] = rt.kv_digest(rs, "v") == rt.kv_digest(rs, "v", snap=snap)
+        chk["recent_positions_equal"] = rt.positions(rs) == rt.positions(rs, snap)
+    if slots:
+        chk["sink_k_equal"] = rt.kv_digest(slots, "k") == rt.kv_digest(slots, "k", snap=snap, kv_override=kv_over)
+        chk["sink_v_equal"] = rt.kv_digest(slots, "v") == rt.kv_digest(slots, "v", snap=snap, kv_override=kv_over)
+        chk["sink_positions_equal"] = rt.positions(slots) == rt.positions(slots, snap)
+    left_ts = [s_ for s_ in ts_written if s_ not in slots]
+    if left_ts:
+        chk["ts_k_as_written"] = rt.kv_digest(left_ts, "k") == rt.temp_digest(expect_k, left_ts, "k")
+        chk["ts_v_unrotated"] = rt.kv_digest(left_ts, "v") == rt.temp_digest(temp, left_ts, "v")
+        if ts == "in_aligned" and not dry and any(d for d in log.get("a1_deltas_layer0", []) if d):
+            chk["a1_k_rotated"] = rt.kv_digest(left_ts, "k") != rt.temp_digest(temp, left_ts, "k")   # the rotation was applied to K
+    if dec == "oracle":
+        chk["decoder_equal"] = rt.dec_digest() == log["dec_snapshot_digest"]
+    chk["layers"] = len(rt.positions([0]))
+    return temp
+
+
 def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameStore, k: int, hw) -> tuple[list[dict], dict]:
     resets, binds = set(cond["resets"]), set(cond["binds"])
     cc = cond.get("cold_call")
@@ -188,11 +273,13 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
     dr, rp, ts = int(cond.get("dr") or 0), bool(cond.get("rp")), cond.get("ts")
     vd2_log = {"dr": dr, "rp": rp, "ts": ts, "cost_s": {}, "fidelity": None, "latent_shapes": None, "replayed": None} if vd2 else None
     vd3 = cond.get("kind") == "vd3"
+    vd4 = cond.get("kind") == "vd4"
+    vd4_log = {"cost_s": {}, "checks": {}, "bytes": {}, "condition": {k_: cond.get(k_) for k_ in ("dec", "oracle_recent", "ts", "oracle_sink_slots", "quant", "v0")}} if vd4 else None
     vd3_log = {"dr": dr, "ts": ts, "keep_cache": bool(cond.get("keep_cache")), "dr_source": cond.get("dr_source"), "cost_s": {}} if vd3 else None
     stale_calls = [cond["resets"][0] - 18, cond["resets"][0] - 17] if (vd3 and cond.get("dr_source") == "stale") else []   # DR-2's pair (m-2, m-1) 16 calls earlier
     stale_latents, temp_sink = [], None
     recent_frames = []   # the source's last output frames (TS-out), kept as uint8
-    if (vd2 or vd3) and not dry:
+    if (vd2 or vd3 or vd4) and not dry:
         rt.capture_latents = True
     if dry:
         rt.provision(); rt.bound = True
@@ -215,6 +302,10 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
                 log.append({"call": c, "op": "reset_inside_episode", "sink": "kept", "sha": withheld[2][:16]})
             fast_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in fast]
             kept_pl = [(dict(h), payload_of(h, bufs)) for h, bufs in kept]
+            vd4_snap = snap if vd4 else None   # VD-4: every oracle component comes from this one snapshot
+            if vd4:
+                src_last_image = None if dry else snap["session"]["last_image"].detach().clone()
+                src_latents = list(rt.last_latents)[-2:] if not dry else []
             if vd2 or vd3:
                 src_last_image = None if dry else snap["session"]["last_image"].detach().clone()
                 src_dec_cache = rt.vae_dec_cache_copy() if (dr or cond.get("keep_cache")) else None
@@ -224,6 +315,10 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             if vd2:
                 vd2_reset(rt, c, cond, fast_pl, dry, vd2_log, src_last_image, src_dec_cache, src_latents, recent_frames)
                 shift += 25 + 10 * dr + (30 if rp else 0) + (50 if ts else 0)
+            elif vd4:
+                temp_sink = vd4_reset(rt, c, cond, vd4_snap, fast_pl, dry, vd4_log, src_last_image, src_latents)
+                del vd4_snap
+                shift += 25 + (10 if cond.get("dec") else 0) + (50 if cond.get("ts") else 0) + 5 * len(cond.get("oracle_sink_slots") or []) + (9 if cond.get("oracle_recent") else 0) + (99 if cond.get("v0") else 0)
             elif vd3:
                 temp_sink = vd3_reset(rt, c, cond, fast_pl, dry, vd3_log, src_last_image, src_latents, stale_latents, int(rt.args.seed))
                 if src_dec_cache is not None:
@@ -250,6 +345,8 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             shifted = rt.bind()
             if vd3 and temp_sink is not None:
                 vd3_log["temp_slots_left_after_bind"] = rt.temp_slots_left(temp_sink)
+            if vd4 and temp_sink is not None:
+                vd4_log["temp_slots_left_after_bind"] = rt.temp_slots_left(temp_sink)
             bound_sha.append({"call": c, "sha": s_, "packed_at": at})
             log.append({"call": c, "op": "bind", "sha": s_[:16], "packed_at": at, "slots_rerotated": shifted, "bind_s": time.perf_counter() - t0})
             withheld = None
@@ -308,10 +405,23 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
         if vd3_log.get("keep_cache") and vd3_log.get("kc_digest_equal") is False:
             valid = False; vd3_log["invalid"] = "TSinKC: the live decoder cache differs from the prepare's"
         vd3_log["stale_calls"] = stale_calls
-    if (vd2 or vd3) and not dry:
+    if vd4:
+        if cond.get("v0") and not dry:   # validity gate: every output after the move equals REF
+            post = [r for r in rows if r["call"] >= t1 and r["produced"]]
+            vd4_log["v0_identical_calls"] = sum(1 for r in post if r["frame_digest"] == base_record[r["call"]]["frame_digest"])
+            vd4_log["v0_calls"] = len(post)
+            vd4_log["v0_pass"] = vd4_log["v0_identical_calls"] == len(post) and len(post) > 0
+            if not vd4_log["v0_pass"]:
+                valid = False; vd4_log["invalid"] = f"V0: {vd4_log['v0_identical_calls']} of {len(post)} post-move outputs equal REF"
+        bad = [k_ for k_, v in vd4_log["checks"].items() if v is False]
+        if bad:
+            valid = False; vd4_log["invalid"] = f"oracle checks failed: {bad}"
+        if vd4_log.get("ts_slots_written") not in (None, 2) or (vd4_log.get("temp_slots_left_after_bind") or 0) != 0:
+            valid = False; vd4_log["invalid"] = f"temporary Sink slots written {vd4_log.get('ts_slots_written')}, left after the bind {vd4_log.get('temp_slots_left_after_bind')}"
+    if (vd2 or vd3 or vd4) and not dry:
         rt.capture_latents = False; rt.last_latents.clear()
     summary = {"condition": {k_: v for k_, v in cond.items() if k_ != "timeline"}, "t_first_op": t1, "events": log, "vd": vd_log if cond.get("kind") == "vd" else None,
-               "vd2": vd2_log, "vd3": vd3_log, "bound_sink": bound_sha, "realized": realized,
+               "vd2": vd2_log, "vd3": vd3_log, "vd4": vd4_log, "bound_sink": bound_sha, "realized": realized,
                "prefix_identical_to_reference": None if dry else prefix_ok, "valid": valid, "elapsed_s": time.time() - t_run}
     rt.release()
     return rows, summary
@@ -331,12 +441,14 @@ def main():
     ap.add_argument("--no_ref_frames", action="store_true", help="do not store REF frames (checks that need none)")
     ap.add_argument("--skip_done", action="store_true", help="skip a condition whose summary.json in out_root is valid (re-runs after a failure)")
     a = ap.parse_args()
+    import vc_schedules as vs
+
     allsched = json.loads(Path(a.schedules).read_text())
-    sched = allsched.get("units", {}).get(f"{a.input}_s{a.seed}") or allsched["inputs"][a.input]   # VD-3 seed-1 units
+    sched = vs.unit_sched(allsched, f"{a.input}_s{a.seed}")   # seed-1 units (VD-3) and the VD-4 overlay
     if a.seed != 0 and f"{a.input}_s{a.seed}" not in allsched.get("units", {}):
         sys.exit(f"no schedule unit {a.input}_s{a.seed}")
     only = set(a.only.split(",")) if a.only else None
-    conds = [c for c in sched["conditions"] if ((c["id"] in only) if only else (c.get("kind") not in ("vd2", "vd3")))]   # VD-2 / VD-3 conditions only on request
+    conds = [c for c in sched["conditions"] if ((c["id"] in only) if only else (c.get("kind") not in ("vd2", "vd3", "vd4")))]   # VD-2 / VD-3 / VD-4 conditions only on request
     from expw_w1 import workload_paths
     import mobility_node as mn
 
