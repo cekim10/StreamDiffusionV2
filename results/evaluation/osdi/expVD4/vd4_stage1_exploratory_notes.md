@@ -72,9 +72,9 @@ is unresolved between the blinded note and an unblinded re-watch.
 Numeric stage-2 outcome (frozen rules): S3 P1 10 / 12, P2a 11 / 12, P2b 11 / 12, P3 12 / 12. Two consequences of
 the frozen design are recorded here before the inspection so that they are not read as post-hoc interpretation:
 
-- **The frozen resolution rule needs 12 / 12 numeric passes.** S3's P2a (fails butterfly s1 OT-L on R3: X_late
-  +0.022 > t_DINO 0.027? no - late D_c -0.028 < -0.027) and P2b (fails dog s1 OT-1 on the warp clause: eO - eR
-  +0.59 > 0.27) each miss by one cell, so by the frozen rule S3 cannot be STRICT or NEAR for P2a or P2b whatever the
+- **The frozen resolution rule needs 12 / 12 numeric passes.** S3's P2a (fails butterfly s1 OT-L on R3's late-window
+  clause: late D_c -0.028 < -t_DINO -0.027; X_late +0.022 passes) and P2b (fails dog s1 OT-1 on the warp clause:
+  eO - eR +0.59 > 0.10 x eR = 0.27) each miss by one cell, so by the frozen rule S3 cannot be STRICT or NEAR for P2a or P2b whatever the
   inspection shows; `s3_resolves_p2` will be false and stage 2b takes its "S3 did not resolve" form (S1, S2, A1S1,
   A1S2 on the four-cell subset) and stage 3 does not run. The rule is not changed; 11 / 12 is reported descriptively.
 - **The stage-2 session shows REF and B0 again (preregistration section 5: "stage2: REF, B0, S3").** The aggregator
