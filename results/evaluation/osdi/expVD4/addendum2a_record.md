@@ -42,3 +42,17 @@ Verification (before any run):
 | `tools/eval/run_vc.py` | `03c080d5eccc8cd3a94e3c4c27e54c5cf125c38e43e4a4b83cf956e70f2de697` |
 | `tools/eval/mobility_node.py` | `eca40f9657143493679a4a972df3d07a99e02132d16e26b81e5fdfe494e0a0f3` |
 | `tools/eval/test_vc.py` | `2516302e8a8ea50c353b43124c697b233b2593d1736357b678b499f62ddcae5f` |
+
+## Results (stage 0a2, commit 19067e3a, host D, code 0b9a3073; 2026-10-27)
+
+Gate `stage0_a1_rows_valid`: **true** on all four cells. Per cell: stream valid; pre-move outputs equal REF; every
+frozen, addendum-1, 1b and 2 check present and true (14 supplemental checks); 120 / 120 (layer, row, slot) records;
+V unrotated and the positions of every row equal the snapshot after the restore and after the last reset operation;
+rotated K **bitwise equal** to the corrected independent reference (max abs 0.0, bitwise-equal element fraction 1.0,
+120 / 120 entries) - no numerical discrepancy; output digests equal the stage-0a first run call by call (0 of 158 /
+158 / 254 / 159 differ), i.e. the rotation did not change between the two runs; G3 passes. The per-row rotation
+counts, K-changed fractions and round-trip errors are those of stage 0a (dog 13 = 9 / 4, train 29 = 17 / 12, butterfly
+37 = 19 / 18, audi 31 = 17 / 14 non-zero deltas; round-trip max 0.0625, butterfly 0.125). Post-move digests differ
+from stage 0r on every post-move call (descriptive: row 1 is rotated by its own deltas now; not a quality statement).
+The stage-0a first run stays reported as a failed validity run. A1 as implemented now matches its preregistered
+definition on every batch row.
