@@ -1,7 +1,11 @@
-# VD-4 preregistration addendum 2a (DRAFT, not approved, nothing run): the independent reference's RoPE angle
+# VD-4 preregistration addendum 2a: the independent reference's RoPE angle
 
-Status: **draft for review** (2026-10-26), written after the stage-0a result (52a1c461). Stage 1 stays blocked.
-No GPU run until this addendum is approved.
+Status: **approved by the user on 2026-10-27** (draft 1b1b2306). Stage 1 stays blocked until stage 0a2 has run and its
+results have been reviewed. The user's approval notes: preserve the failed stage-0a results and report them as a
+failed validity run; change only the independent reference and its tests, not the row-wise A1 rotation; run stage 0a2
+on the same four cells; require every validity check, complete (layer, row, slot) records, the rotated K equal to the
+corrected reference, V and position metadata unchanged, pre-move outputs equal REF, and **stage-0a2 output digests
+equal to stage 0a call by call** (added to the gate: `digests_vs_first_run.differing == 0`).
 
 ## 1. What stage 0a showed
 
@@ -56,8 +60,9 @@ The same four runs as stage 0a (the corrected A1 on dog s1 OT-1, train s0 OT-1, 
 `results/evaluation/expVD4a2/`, checks `osdi/expVC/vd4a2_checks_<unit>.*`, no metrics, no clips; about 20 min on host
 D. The gate `stage0_a1_rows_valid` is computed from this root with addendum 2's rule unchanged (every check, pre-move =
 REF, complete records). Expected if the diagnosis is right: the rotated keys equal the reference bitwise (the
-within-1-ulp check passes with bitwise fraction 1.0) and the output digests equal the stage-0a run call by call (the
-rotation itself did not change; recorded, descriptive). `run_vc.py vd4 --stage 0a` now refuses to run again, so the
+within-1-ulp check passes with bitwise fraction 1.0). The output digests **must** equal the stage-0a run call by call
+(the rotation itself did not change): this is part of the gate (`digests_vs_first_run.differing == 0`), so a changed
+rotation would be caught. `run_vc.py vd4 --stage 0a` now refuses to run again, so the
 first run is never overwritten; stages 1 and later require the gate from stage 0a2.
 
 ## 5. What does not change

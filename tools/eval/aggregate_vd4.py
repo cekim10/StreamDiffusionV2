@@ -211,11 +211,12 @@ def batch_rows(sroot: Path, rroot: Path, dry: bool) -> dict:
     return {"root": str(rroot), "runs": runs, "valid": bool(runs) and ok, "identical": bool(runs) and ok and same}
 
 
-def a1_rows(rroot: Path, aroot: Path, dry: bool) -> dict:
+def a1_rows(rroot: Path, aroot: Path, dry: bool, prev: Path | None = None) -> dict:
     """Addendum 2: per stage-0 cell the corrected A1 run's validity (stream valid, pre-move outputs equal REF, every required
     check present and true, complete (layer, row, slot) records) and descriptive records: per-row deltas / rotations /
     round-trip errors, the independent-reference comparison, and the post-move output digests that differ from the
-    stage-0r A1 run (expected wherever a row-1 delta changed; not a quality statement)."""
+    stage-0r A1 run (expected wherever a row-1 delta changed; not a quality statement). With `prev` (addendum 2a: the
+    stage-0a first run), the output digests must equal that run's call by call - the reference changed, the rotation did not."""
     runs, ok = [], True
     for key in STAGE0:
         unit_name, ot = key.split("|"); x = ot.split("-")[1]
@@ -247,8 +248,12 @@ def a1_rows(rroot: Path, aroot: Path, dry: bool) -> dict:
             r["digests_vs_stage0r"] = {"calls": len(new), "post_move_calls": len(post), "post_move_differing": sum(1 for c in post if new.get(c) != old.get(c)),
                                        "pre_move_differing": sum(1 for c in new if move is not None and c < move and new.get(c) != old.get(c)),
                                        "first_differing_call": next((c for c in sorted(new) if new.get(c) != old.get(c)), None)}
+            if prev is not None:
+                first = digests(prev / unit_name, cid)
+                r["digests_vs_first_run"] = {"calls": len(new), "first_run_calls": len(first), "differing": sum(1 for c in set(new) | set(first) if new.get(c) != first.get(c))}
             r["pass"] = (r["stream_valid"] and r["prefix_identical_to_reference"] is not False and not r["missing"] and not r["failed"]
-                         and r["records"] == r["records_expected"] and bool(new) and (dry or bool(old)))
+                         and r["records"] == r["records_expected"] and bool(new) and (dry or bool(old))
+                         and (prev is None or (bool(first) and r["digests_vs_first_run"]["differing"] == 0)))
         else:
             r["pass"] = False
         ok &= r["pass"]
@@ -269,7 +274,8 @@ def a1_lines(a1r: dict, what: str = "") -> list:
                  f"layers whose rows needed different deltas {ro['rows_with_different_deltas']}, K changed where non-zero {ro['k_changed_where_nonzero']} (min fraction {ro['min_changed_fraction']}), "
                  f"K changed at zero delta {ro['zero_delta_k_changed']}, round-trip max {ro['round_trip_max_abs']}; independent reference: within {rf.get('n_ulp')} ulp {rf.get('within_ulp')}, "
                  f"max abs {rf.get('max_abs')}, bitwise-equal element fraction {rf.get('bitwise_equal_fraction')}, bitwise-equal (layer, row, slot) {rf.get('bitwise_equal_slots')} / {rf.get('slots')}; "
-                 f"output digests vs stage 0r: pre-move differing {dg['pre_move_differing']}, post-move differing {dg['post_move_differing']} / {dg['post_move_calls']} (first at call {dg['first_differing_call']})")
+                 f"output digests vs stage 0r: pre-move differing {dg['pre_move_differing']}, post-move differing {dg['post_move_differing']} / {dg['post_move_calls']} (first at call {dg['first_differing_call']})"
+                 + (f"; output digests vs the stage-0a first run: {r['digests_vs_first_run']['differing']} of {r['digests_vs_first_run']['calls']} calls differ (first run {r['digests_vs_first_run']['first_run_calls']} calls; must be 0)" if "digests_vs_first_run" in r else ""))
     return L + [f"- corrected-A1 {'gate' if 'gate' in what or not what else 'validity (not the gate)'}: {a1r['valid']}", "Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.", ""]
 
 
@@ -438,7 +444,7 @@ def main():
     gates["stage0_rows_valid"] = rows["valid"]
     gates["batch_rows_identical"] = rows["identical"]
     a1r = a1_rows(Path(a.rows_root), Path(a.a1_root), a.dry)
-    a1r2 = a1_rows(Path(a.rows_root), Path(a.a1_root2), a.dry)
+    a1r2 = a1_rows(Path(a.rows_root), Path(a.a1_root2), a.dry, prev=Path(a.a1_root))
     gates["stage0_a1_rows_valid"] = a1r2["valid"]
     f = lambda v, n=3: "-" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))  # noqa: E731
     pos = {k: {"source_sink_positions": (numeric.get("B0", {}).get(k) or {}).get("source_positions"), "a1_deltas": (numeric.get("A1", {}).get(k) or {}).get("a1_deltas"),

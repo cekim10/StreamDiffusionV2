@@ -687,7 +687,18 @@ def vd4_a1_tests():
         pa = aroot / "dog_s1" / "VD41-A1" / "summary.json"
         sa = json.loads(pa.read_text()); sa["vd4"]["checks_supp"]["a1_k_within_1ulp_of_independent_reference"] = False; pa.write_text(json.dumps(sa))
         R, _ = agg("a_first")
-        check(R["gates"].get("stage0_a1_rows_valid") is True and R.get("a1_rows", {}).get("valid") is False, "a failed first run (stage 0a) is reported and does not decide the gate; the rerun does")
+        check(R["gates"].get("stage0_a1_rows_valid") is True and R.get("a1_rows", {}).get("valid") is False
+              and all(r["digests_vs_first_run"]["differing"] == 0 for r in R["a1_rows_rerun"]["runs"]), "a failed first run (stage 0a) is reported and does not decide the gate; the rerun does, and its digests equal the first run's")
+        pf = aroot / "train_s0" / "VD41-A1" / "calls.csv"
+        rows_f = list(csv_.DictReader(open(pf, newline="")))
+        rows_f[-1]["frame_digest"] = "f" * 16
+        with open(pf, "w", newline="") as fh:
+            w = csv_.DictWriter(fh, fieldnames=list(rows_f[0].keys())); w.writeheader(); w.writerows(rows_f)
+        R, _ = agg("a_firstdig")
+        check(R["gates"].get("stage0_a1_rows_valid") is False, "a rerun whose output digests differ from the stage-0a first run closes the gate (the rotation must not have changed)")
+        rows_f[-1]["frame_digest"] = list(csv_.DictReader(open(aroot2 / "train_s0" / "VD41-A1" / "calls.csv", newline="")))[-1]["frame_digest"]
+        with open(pf, "w", newline="") as fh:
+            w = csv_.DictWriter(fh, fieldnames=list(rows_f[0].keys())); w.writeheader(); w.writerows(rows_f)
         p_ = aroot2 / "dog_s1" / "VD41-A1" / "summary.json"
         sj = json.loads(p_.read_text()); sj["vd4"]["checks_supp"]["a1_k_within_1ulp_of_independent_reference"] = False; p_.write_text(json.dumps(sj))
         R, _ = agg("a_ref")
