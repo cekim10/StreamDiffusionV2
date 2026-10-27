@@ -47,6 +47,12 @@ SUPP_DR_CELL = "train_s0|OT-1"
 # logging and checks; output digests must equal the stage-0s A1 run; whether the batch rows carry identical positions
 # is a recorded finding (the decision gate), never a validity requirement
 ROWS_ROOT = ROOT / "results/evaluation/expVD4r"
+# addendum 2 (expVD4/addendum2.md): the corrected row-wise A1 on the four stage-0 cells; every frozen / addendum-1 / 1b /
+# 2 check must hold; post-move digest differences from the stage-0r A1 run are reported descriptively
+A1_ROOT = ROOT / "results/evaluation/expVD4a"
+A1_REQUIRED = ("a1_deltas_applied_per_row", "a1_deltas_equal_independent", "ts_k_as_written_rows", "ts_v_unrotated_rows", "a1_zero_delta_rows_unchanged",
+               "a1_k_within_1ulp_of_independent_reference", "prepare_rows_filled_identical", "meta_positions_rows_equal_snapshot", "positions_rows_final_equal_snapshot",
+               "ts_positions_rows_equal_snapshot", "positions_final_equal_snapshot", "ts_k_as_written_per_layer_slot", "ts_v_unrotated_per_layer_slot")
 ROWS_REQUIRED = ("prepare_rows_filled_identical", "meta_positions_rows_equal_snapshot", "positions_rows_final_equal_snapshot", "ts_positions_rows_equal_snapshot")
 SUPP_REQUIRED = {   # check names that must be present and true (frozen "checks" / supplemental "checks_supp")
     "A1": (("meta_positions_equal_snapshot", "ts_k_as_written", "ts_v_unrotated"),
@@ -204,6 +210,68 @@ def batch_rows(sroot: Path, rroot: Path, dry: bool) -> dict:
     return {"root": str(rroot), "runs": runs, "valid": bool(runs) and ok, "identical": bool(runs) and ok and same}
 
 
+def a1_rows(rroot: Path, aroot: Path, dry: bool) -> dict:
+    """Addendum 2: per stage-0 cell the corrected A1 run's validity (stream valid, pre-move outputs equal REF, every required
+    check present and true, complete (layer, row, slot) records) and descriptive records: per-row deltas / rotations /
+    round-trip errors, the independent-reference comparison, and the post-move output digests that differ from the
+    stage-0r A1 run (expected wherever a row-1 delta changed; not a quality statement)."""
+    runs, ok = [], True
+    for key in STAGE0:
+        unit_name, ot = key.split("|"); x = ot.split("-")[1]
+        cid = f"VD4{x}-A1"
+        s = vd4_summary(aroot / unit_name, cid)
+        r = {"cell": key, "present": bool(s)}
+        if s:
+            v4 = s.get("vd4") or {}
+            ck, cs, sp = v4.get("checks") or {}, v4.get("checks_supp") or {}, v4.get("supp") or {}
+            need_f = ("meta_positions_equal_snapshot", "ts_k_as_written", "ts_v_unrotated") + (("a1_k_rotated",) if any(d for d in (v4.get("a1_deltas_layer0") or []) if d) else ())
+            r["missing"] = [c for c in need_f if c not in ck] + [f"supp:{c}" for c in A1_REQUIRED if c not in cs]
+            r["failed"] = [c for c, v in ck.items() if v is False] + [f"supp:{c}" for c, v in cs.items() if v is False]
+            r["stream_valid"] = bool(s.get("valid"))
+            r["prefix_identical_to_reference"] = s.get("prefix_identical_to_reference")
+            per = sp.get("a1_per_layer_row_slot") or []
+            rows_n = sp.get("batch_rows") or 0
+            nz = [q for q in per if q.get("delta")]
+            r["records"] = len(per); r["records_expected"] = 30 * rows_n * 2 if not dry else len(per)
+            r["rotation"] = {"nonzero_delta": len(nz), "k_changed_where_nonzero": sum(1 for q in nz if q.get("k_elements_changed", 0) > 0),
+                             "min_changed_fraction": min((q["k_elements_changed"] / q["k_elements"] for q in nz if q.get("k_elements")), default=None),
+                             "zero_delta_k_changed": sum(1 for q in per if not q.get("delta") and q.get("k_elements_changed", 0) > 0),
+                             "round_trip_max_abs": max((q.get("round_trip_max_abs", 0.0) for q in per), default=None),
+                             "per_row_nonzero": {str(b): sum(1 for q in nz if q.get("row") == b) for b in range(rows_n)},
+                             "rows_with_different_deltas": sum(1 for rows in (sp.get("a1_row_deltas") or []) if any(row[:2] != rows[0][:2] for row in rows))}
+            r["reference"] = {**(sp.get("a1_k_vs_reference") or {}), "bitwise_equal_slots": sp.get("a1_k_bitwise_equal_reference_slots"), "slots": sp.get("a1_k_reference_slots")}
+            new, old = digests(aroot / unit_name, cid), digests(rroot / unit_name, cid)
+            move = (s.get("condition") or {}).get("resets", [None])[0]
+            post = [c for c in new if move is not None and c >= move]
+            r["digests_vs_stage0r"] = {"calls": len(new), "post_move_calls": len(post), "post_move_differing": sum(1 for c in post if new.get(c) != old.get(c)),
+                                       "pre_move_differing": sum(1 for c in new if move is not None and c < move and new.get(c) != old.get(c)),
+                                       "first_differing_call": next((c for c in sorted(new) if new.get(c) != old.get(c)), None)}
+            r["pass"] = (r["stream_valid"] and r["prefix_identical_to_reference"] is not False and not r["missing"] and not r["failed"]
+                         and r["records"] == r["records_expected"] and bool(new) and (dry or bool(old)))
+        else:
+            r["pass"] = False
+        ok &= r["pass"]
+        runs.append(r)
+    return {"root": str(aroot), "runs": runs, "valid": bool(runs) and ok}
+
+
+def a1_lines(a1r: dict) -> list:
+    L = ["## Corrected A1 (addendum 2; row-wise deltas; validity and descriptive records)", ""]
+    if not any(r["present"] for r in a1r["runs"]):
+        return L + ["- not run", ""]
+    for r in a1r["runs"]:
+        if not r["present"]:
+            L.append(f"- {r['cell']} A1: FAIL (missing)"); continue
+        ro, rf, dg = r["rotation"], r["reference"], r["digests_vs_stage0r"]
+        L.append(f"- {r['cell']} A1: {'PASS' if r['pass'] else 'FAIL'}; stream valid {r['stream_valid']}; pre-move = REF {r['prefix_identical_to_reference']}; failed {r['failed'] or 'none'}; "
+                 f"missing {r['missing'] or 'none'}; (layer, row, slot) records {r['records']} / {r['records_expected']}; non-zero deltas {ro['nonzero_delta']} (per row {ro['per_row_nonzero']}), "
+                 f"layers whose rows needed different deltas {ro['rows_with_different_deltas']}, K changed where non-zero {ro['k_changed_where_nonzero']} (min fraction {ro['min_changed_fraction']}), "
+                 f"K changed at zero delta {ro['zero_delta_k_changed']}, round-trip max {ro['round_trip_max_abs']}; independent reference: within {rf.get('n_ulp')} ulp {rf.get('within_ulp')}, "
+                 f"max abs {rf.get('max_abs')}, bitwise-equal element fraction {rf.get('bitwise_equal_fraction')}, bitwise-equal (layer, row, slot) {rf.get('bitwise_equal_slots')} / {rf.get('slots')}; "
+                 f"output digests vs stage 0r: pre-move differing {dg['pre_move_differing']}, post-move differing {dg['post_move_differing']} / {dg['post_move_calls']} (first at call {dg['first_differing_call']})")
+    return L + [f"- corrected-A1 gate: {a1r['valid']}", "Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.", ""]
+
+
 def rows_lines(rows: dict) -> list:
     L = ["## Batch-row positions (addendum 1b; recorded finding, separate from the checks above)", ""]
     if not any(r["present"] for r in rows["runs"]):
@@ -255,6 +323,7 @@ def main():
     ap.add_argument("--insp_dir", default=str(OUT), help="where the inspection forms, records and keys are")
     ap.add_argument("--supp_root", default=str(SUPP_ROOT), help="addendum 1: the supplemental stage-0 units")
     ap.add_argument("--rows_root", default=str(ROWS_ROOT), help="addendum 1b: the batch-row validation units")
+    ap.add_argument("--a1_root", default=str(A1_ROOT), help="addendum 2: the corrected-A1 validation units")
     ap.add_argument("--dry", action="store_true", help="synthetic units (pixel embedder); thresholds SHA not enforced; _dryrun_ session files")
     a = ap.parse_args()
     root, pre = Path(a.root), ("_dryrun_" if a.dry else "")
@@ -366,6 +435,8 @@ def main():
     rows = batch_rows(Path(a.supp_root), Path(a.rows_root), a.dry)
     gates["stage0_rows_valid"] = rows["valid"]
     gates["batch_rows_identical"] = rows["identical"]
+    a1r = a1_rows(Path(a.rows_root), Path(a.a1_root), a.dry)
+    gates["stage0_a1_rows_valid"] = a1r["valid"]
     f = lambda v, n=3: "-" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))  # noqa: E731
     pos = {k: {"source_sink_positions": (numeric.get("B0", {}).get(k) or {}).get("source_positions"), "a1_deltas": (numeric.get("A1", {}).get(k) or {}).get("a1_deltas"),
                "a1_round_trip": (numeric.get("A1", {}).get(k) or {}).get("a1")} for k in STAGE0}
@@ -384,6 +455,7 @@ def main():
     L += [f"- duplicate controls across sessions: {dup or 'none'}", ""]
     L += supp_lines(supp)
     L += rows_lines(rows)
+    L += a1_lines(a1r)
     L += [
          f"Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 {hashlib.sha256(tb).hexdigest()[:16]}). Sessions recorded: "
          f"{[s for s, i in sessions.items() if i] or 'none'}. Validity problems: {[v for v in validity if not v['pass']] or 'none'}.", "",
@@ -408,7 +480,7 @@ def main():
           f"both clean {c['metric_pass_no_flag']}; kappa {f(c['kappa'], 2)}" for p, c in corr.items()]
     L += ["", f"## Gates: {json.dumps(gates)}"]
     Path(a.out).with_suffix(".md").write_text("\n".join(L) + "\n")
-    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "batch_rows": rows, "gates": gates}, indent=1, default=str))
+    Path(a.out).with_suffix(".json").write_text(json.dumps({"stage0_positions": pos, "conditions": res, "numeric": numeric, "attribution": attrib, "correspondence": corr, "validity": validity, "supplemental_stage0": supp, "batch_rows": rows, "a1_rows": a1r, "gates": gates}, indent=1, default=str))
     (Path(a.out).parent / f"{pre}vd4_gates.json").write_text(json.dumps(gates, indent=1, default=str))
     print("\n".join(L))
 

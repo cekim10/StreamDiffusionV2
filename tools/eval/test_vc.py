@@ -132,6 +132,8 @@ def main():
         vd4_tests()
         vd4_supp_tests()
         vd4_rows_tests()
+        vd4_a1_tests()
+        vd4_a1_torch_tests()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
@@ -406,8 +408,10 @@ def vd4_tests():
             check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd4 refuses before the VD-4 freeze")
         elif not gates_.get("stage0_supp_valid"):   # frozen, stage 0 passed: stage 1 still waits for addendum 1's supplemental validation
             check(r_.returncode != 0 and "supplemental stage-0 validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the supplemental stage-0 validation (addendum 1) passed")
-        elif not (gates_.get("stage0_rows_valid") and gates_.get("batch_rows_identical")):   # addendum 1b: batch-row positions not yet validated, or the rows differ
-            check(r_.returncode != 0 and "batch-row position validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the batch-row validation (addendum 1b) passed with identical rows")
+        elif not gates_.get("stage0_rows_valid"):   # addendum 1b: batch-row positions not yet validated
+            check(r_.returncode != 0 and "batch-row position validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the batch-row validation (addendum 1b) passed")
+        elif not gates_.get("stage0_a1_rows_valid"):   # addendum 2: the corrected A1 not yet validated
+            check(r_.returncode != 0 and "corrected A1 validation" in (r_.stdout + r_.stderr), "run_vc vd4 refuses stage 1 until the corrected-A1 validation (addendum 2) passed")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -437,8 +441,8 @@ def vd4_supp_tests():
     ok_a = reset(mn.FakeRuntime, {"dec": "dr2", "ts": "in_aligned"})
     check(all(ok_d["checks_supp"].get(c) for c in a4.SUPP_REQUIRED["D"][1]) and all(ok_r["checks_supp"].get(c) for c in a4.SUPP_REQUIRED["R"][1])
           and all(ok_a["checks_supp"].get(c) for c in a4.SUPP_REQUIRED["A1"][1]) and len(ok_a["supp"]["source_positions"]) == 30 and len(ok_a["supp"]["final_positions"]) == 30
-          and len(ok_a["supp"]["a1_per_layer_slot"]) == 60,
-          "D / R / A1: every supplemental check present and true; positions logged for every layer; 30 x 2 A1 (layer, slot) records")
+          and len(ok_a["supp"]["a1_per_layer_row_slot"]) == 120,
+          "D / R / A1: every supplemental check present and true; positions logged for every layer; 30 x 2 x 2 A1 (layer, row, slot) records (addendum 2)")
 
     class DecOverwrite(mn.FakeRuntime):   # the decoder equals the snapshot at the write (the fake write's digest), a later step changes it
         def dec_digest(self, tensors=None):
@@ -599,6 +603,171 @@ def vd4_rows_tests():
         check(R["gates"].get("stage0_rows_valid") is False and R["gates"].get("stage0_supp_valid") is True, "one A1 output digest differing from stage 0s closes the rows gate (the earlier gates are untouched)")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def vd4_a1_tests():
+    """VD-4 addendum 2 (dry, fake runtime): row-wise deltas passed to rotate_temp, the regression guard, the zero-delta rule,
+    the stage-0a plan, gate and digest reporting."""
+    import csv as csv_
+
+    import aggregate_vd4 as a4
+    import mobility_node as mn
+    import run_vc as rv
+    import vc_emulate as ve
+
+    print("- 10 VD-4 addendum 2 (dry)")
+    units, sess = rv.vd4_plan("0a", {})
+    check(units == {"dog_s1": ["VD41-A1"], "train_s0": ["VD41-A1"], "butterfly-feeding-slow-motion_s0": ["VD4L-A1"], "audi-snow-trail_s1": ["VD41-A1"]} and sess == [], "stage 0a: the corrected A1 on the four stage-0 cells")
+    margs = mn.parse_args(["--label", "T", "--dry_run", "--dry_sink_mb", "4", "--dry_service_s", "0.0005", "--migration_chunk", "0", "--post_chunks", "10"])
+
+    def reset(cls, cond):
+        rt = cls(margs); rt.provision()
+        log = {"cost_s": {}, "checks": {}, "bytes": {}}
+        ve.vd4_reset(rt, 5, cond, {}, [], True, log, None, [])
+        return rt, log
+
+    class Rows(mn.FakeRuntime):   # row 1's slot 0 sits 5 frames later in layer 3; rotate_temp records what it received
+        got = None
+
+        def positions_all(self, slots, snap=None):
+            out = super().positions_all(slots, snap)
+            out[3][1] = [v + (5 if s_ == 0 else 0) for s_, v in zip(slots, out[3][1])]
+            return out
+
+        def rotate_temp(self, saved, deltas):
+            self.got = deltas
+            return super().rotate_temp(saved, deltas)
+    rt, lg = reset(Rows, {"dec": "dr2", "ts": "in_aligned"})
+    sp, cs = lg["supp"], lg["checks_supp"]
+    check(rt.got is not None and len(rt.got) == 30 and len(rt.got[3]) == 2 and rt.got[3][0] == [0, 0, None] and rt.got[3][1] == [5, 0, None] and rt.got[0] == [[0, 0, None], [0, 0, None]]
+          and cs.get("a1_deltas_applied_per_row") is True and cs.get("a1_zero_delta_rows_unchanged") is True and cs.get("ts_k_as_written_rows") is True and cs.get("ts_v_unrotated_rows") is True
+          and len(sp["a1_per_layer_row_slot"]) == 120 and lg["a1_deltas_layer0"] == [0, 0, None] and [k for k, v in cs.items() if v is False] == [],
+          f"rotate_temp receives per-(layer, row, slot) deltas (row 1 of layer 3 = [5, 0, None], row 0 = [0, 0, None]); 30 x 2 x 2 records; frozen layer-0 field = row 0 ({rt.got and rt.got[3]})")
+
+    class WrongDelta(Rows):   # rotate_temp reports a delta other than the one it should have applied
+        def rotate_temp(self, saved, deltas):
+            out, info = super().rotate_temp(saved, deltas)
+            info["per_layer_row_slot"][7]["delta"] = 99
+            return out, info
+    _, lg = reset(WrongDelta, {"dec": "dr2", "ts": "in_aligned"})
+    check(lg["checks_supp"].get("a1_deltas_applied_per_row") is False, "a delta applied that differs from the computed per-row delta fails a1_deltas_applied_per_row")
+
+    class ZeroChanged(Rows):   # a zero-delta (layer, row, slot) whose live K no longer equals the prepare's
+        def slot_equal_rows(self, slots, part, saved=None, tensors=None):
+            out = super().slot_equal_rows(slots, part, saved, tensors)
+            if part == "k" and saved is not None and saved is not getattr(self, "_expect", None):
+                out[2][1][0] = False
+            return out
+    tmp = Path(tempfile.mkdtemp(prefix="vd4a_test_"))
+    try:
+        S = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())
+        root, sroot, rroot, aroot, frames = tmp / "expVC", tmp / "expVD4s", tmp / "expVD4r", tmp / "expVD4a", tmp / "frames"
+        s0, _ = rv.vd4_plan("0", {})
+        for unit, ids in s0.items():
+            inp, sd = unit.rsplit("_s", 1)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", "OT-1,OT-L,VD31-DR2+TSin,VD3L-DR2+TSin"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / unit), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
+        us, _ = rv.vd4_plan("0s", {})
+        for stage_units, out in ((us, sroot), (units, rroot), (units, aroot)):
+            for unit, ids in stage_units.items():
+                inp, sd = unit.rsplit("_s", 1)
+                subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(out), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
+
+        def agg(tag):
+            r_ = subprocess.run([PY, "tools/eval/aggregate_vd4.py", "--root", str(root), "--supp_root", str(sroot), "--rows_root", str(rroot), "--a1_root", str(aroot), "--dry", "--sessions", "", "--out", str(tmp / tag)], cwd=ROOT, capture_output=True, text=True)
+            return (json.loads((tmp / f"{tag}.json").read_text()) if r_.returncode == 0 else {"gates": {}}), r_
+        R, r_ = agg("a_ok")
+        a1 = R.get("a1_rows", {}).get("runs", [])
+        check(R["gates"].get("stage0_a1_rows_valid") is True and len(a1) == 4 and all(r["digests_vs_stage0r"]["pre_move_differing"] == 0 for r in a1)
+              and "Corrected A1 (addendum 2" in (tmp / "a_ok.md").read_text(), f"corrected-A1 gate opens on a complete dry stage 0a; digest differences vs stage 0r reported {r_.stderr[-300:]}")
+        p_ = aroot / "dog_s1" / "VD41-A1" / "summary.json"
+        sj = json.loads(p_.read_text()); sj["vd4"]["checks_supp"]["a1_k_within_1ulp_of_independent_reference"] = False; p_.write_text(json.dumps(sj))
+        R, _ = agg("a_ref")
+        check(R["gates"].get("stage0_a1_rows_valid") is False and R["gates"].get("stage0_rows_valid") is True, "a rotated K outside 1 ulp of the independent reference closes the corrected-A1 gate (earlier gates untouched)")
+        sj["vd4"]["checks_supp"]["a1_k_within_1ulp_of_independent_reference"] = True; sj["prefix_identical_to_reference"] = False; p_.write_text(json.dumps(sj))
+        R, _ = agg("a_pre")
+        check(R["gates"].get("stage0_a1_rows_valid") is False, "pre-move outputs differing from REF close the corrected-A1 gate")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def vd4_a1_torch_tests():
+    """VD-4 addendum 2 (CPU torch, when torch is importable): the real rotate_temp and the independent reference on
+    synthetic bf16 keys - batch indexing, row isolation, per-row deltas, V unchanged, zero-delta rows unchanged, and
+    the rotated K against the independently built expectation."""
+    try:
+        import torch
+    except ImportError:
+        print("- 11 VD-4 addendum 2 (torch): SKIPPED - torch not importable in this environment"); return
+    import re
+    import types
+
+    print("- 11 VD-4 addendum 2 (torch)")
+    src = (ROOT / "models/wan/causal_model.py").read_text()
+    fn = re.search(r"def _shift_temporal_rope\(.*?\n(?=\n\n)", src, re.S).group(0)
+    mod = types.ModuleType("models.wan.causal_model"); mod.torch = torch; exec(fn, mod.__dict__); mod.KV_POS_EMPTY = -(1 << 30)
+    saved_mods = {n: sys.modules.get(n) for n in ("models", "models.wan", "models.wan.causal_model")}
+    for name in ("models", "models.wan"):
+        sys.modules[name] = types.ModuleType(name)
+    sys.modules["models.wan.causal_model"] = mod
+    try:
+        import mobility_node as mn
+        G = mn.GpuRuntime
+        H, D, fsl, L, NS, B = 2, 16, 3, 4, 6, 2
+        c = D // 2
+        inv = 1.0 / (10000 ** (torch.arange(0, c, dtype=torch.float64) / c))
+        freqs = torch.polar(torch.ones(1024, c, dtype=torch.float64), torch.outer(torch.arange(1024, dtype=torch.float64), inv))
+        torch.manual_seed(0)
+        # per-layer source positions = the prepare's (0, 1) plus the deltas below; slot 2 is empty in the prepare
+        POS = [[[22, 24, 6, 33, 34, 35], [34, 24, 6, 32, 33, 31]], [[0, 1, 6, 33, 34, 35], [7, 1, 6, 32, 33, 31]],
+               [[-29, 1, 6, 33, 34, 35], [0, 21, 6, 32, 33, 31]], [[1, 1, 6, 33, 34, 35], [1, 1, 6, 32, 33, 31]]]
+        layers = [{"k": (torch.randn(B, NS * fsl, H, D) * 8).to(torch.bfloat16), "v": torch.randn(B, NS * fsl, H, D).to(torch.bfloat16),
+                   "pos": torch.tensor(POS[l_])} for l_ in range(L)]
+
+        class SA:
+            @staticmethod
+            def kv_layers(pl): return layers
+        rt = types.SimpleNamespace(torch=torch, device="cpu", fsl=fsl, sink=3, sa=SA, pl=types.SimpleNamespace(generator=types.SimpleNamespace(model=types.SimpleNamespace(freqs=freqs))))
+        for m in ("_slot", "rotate_temp", "a1_reference", "slot_equal_rows", "within_ulp"):
+            setattr(rt, m, types.MethodType(getattr(G, m), rt))
+        temp = [(l["k"][:, :3 * fsl].clone(), l["v"][:, :3 * fsl].clone(), torch.tensor([[0, 1, -(1 << 30)], [0, 1, -(1 << 30)]])) for l in layers]
+        snap = {"ring": [{"pos": l["pos"].clone()} for l in layers]}
+        deltas = [[[22, 23, None], [34, 23, None]], [[0, 0, None], [7, 0, None]], [[-29, 0, None], [0, 20, None]], [[1, 0, None], [1, 0, None]]]
+        out, info = rt.rotate_temp(temp, deltas)
+        per = {(q["layer"], q["row"], q["slot"]): q for q in info["per_layer_row_slot"]}
+        check(len(per) == L * B * 3 and info["rotated_slot_layers"] == 9 and per[(1, 0, 0)]["k_elements_changed"] == 0 and per[(1, 1, 0)]["k_elements_changed"] > 0
+              and per[(2, 0, 0)]["k_elements_changed"] > 0 and per[(2, 1, 0)]["k_elements_changed"] == 0 and per[(2, 1, 1)]["k_elements_changed"] > 0 and per[(2, 0, 1)]["k_elements_changed"] == 0,
+              "rotate_temp: 4 x 2 x 3 records, 9 rotations, each (layer, row, slot) rotated by its own delta (layer 1: row 1 only; layer 2: row 0 slot 0 and row 1 slot 1)")
+        eq = lambda a, b: bool(torch.equal(a.view(torch.int16), b.view(torch.int16)))  # noqa: E731
+        check(eq(out[1][0][0], temp[1][0][0]) and not eq(out[1][0][1], temp[1][0][1]) and eq(out[1][0][1, 3 * fsl - fsl:], temp[1][0][1, 2 * fsl:])
+              and not eq(out[2][0][0, :fsl], temp[2][0][0, :fsl]) and eq(out[2][0][1, :fsl], temp[2][0][1, :fsl]) and eq(out[2][0][0, fsl:2 * fsl], temp[2][0][0, fsl:2 * fsl]) and not eq(out[2][0][1, fsl:2 * fsl], temp[2][0][1, fsl:2 * fsl]),
+              "row isolation: rotating row 1 of layer 1 leaves row 0 bitwise unchanged; in layer 2 row 0 slot 0 and row 1 slot 1 change, the other row / slot of each does not; the empty slot 2 is untouched")
+        check(all(eq(o[1], t[1]) for o, t in zip(out, temp)) and all(torch.equal(o[2], t[2]) for o, t in zip(out, temp)), "V and the prepare's positions are unchanged for every row")
+        # different row deltas give different rotations: row 0 of layer 0 by 22 equals a direct rotation by 22, row 1 by 34 equals a direct rotation by 34
+        sh = mod._shift_temporal_rope
+        check(eq(out[0][0][0, :fsl], sh(temp[0][0][0, :fsl], freqs, 22)) and eq(out[0][0][1, :fsl], sh(temp[0][0][1, :fsl], freqs, 34)) and not eq(out[0][0][1, :fsl], sh(temp[0][0][1, :fsl], freqs, 22)),
+              "different row deltas (22 vs 34) produce the rotation of each row's own delta, not row 0's")
+        # independent reference from the raw tensors (the snapshot's pos minus the prepare's pos)
+        ref_k, ref_d = rt.a1_reference(temp, snap)
+        check(ref_d == deltas, f"the independent reference derives the same per-(layer, row, slot) deltas from the position tensors ({ref_d[0]})")
+        for l_, o in zip(layers, out):
+            l_["k"][:, :3 * fsl] = o[0]
+        w = rt.within_ulp([0, 1], ref_k, 1)
+        eqr = rt.slot_equal_rows([0, 1], "k", tensors=ref_k)
+        check(w["within_ulp"] and w["max_abs"] <= 0.25 and all(all(r) for rows in eqr for r in rows) and w["bitwise_equal_fraction"] == 1.0,
+              f"the rotated K equals the independently built expectation (bitwise on CPU; max abs {w['max_abs']})")
+        ku = rt.slot_equal_rows([0, 1], "k", saved=temp)
+        check(ku[1][0] == [True, True] and ku[1][1] == [False, True] and ku[3][0] == [False, True] and ku[3][1] == [False, True], "zero-delta (layer, row, slot) entries keep the prepare's K bitwise; rotated ones differ")
+        layers[0]["k"][1, 0, 0, 0] += 1.0   # one element off in row 1
+        w2 = rt.within_ulp([0, 1], ref_k, 1)
+        check(not w2["within_ulp"] and w2["bitwise_equal_fraction"] < 1.0, "a one-element deviation beyond 1 ulp is caught by the reference comparison")
+    finally:
+        for n, m in saved_mods.items():
+            if m is None:
+                sys.modules.pop(n, None)
+            else:
+                sys.modules[n] = m
 
 
 if __name__ == "__main__":

@@ -718,31 +718,100 @@ class GpuRuntime:
                 "attrs": {a: (list(snap["vae"][a]) if isinstance(snap["vae"].get(a), list) else snap["vae"].get(a)) for a in self._DEC_ATTRS}}
 
     def rotate_temp(self, saved: list, deltas: list) -> tuple[list, dict]:
-        """A1: the temporary Sink's keys re-rotated per layer and slot by deltas[layer][slot] (values untouched).
-        Returns the rotated copy and the round-trip error (rotate by -delta and compare with the original keys)."""
+        """A1 (addendum 2): the temporary Sink's keys re-rotated per (layer, batch row, slot) by deltas[layer][row][slot]
+        (None = the prepare left the slot empty; values untouched; row b's rotation touches row b only). Returns the
+        rotated copy and, per (layer, row, slot): the delta applied, the K elements changed and the round-trip error."""
         from models.wan.causal_model import _shift_temporal_rope
 
         freqs = self.pl.generator.model.freqs.to(self.device)
+        bits = {1: self.torch.uint8, 2: self.torch.int16, 4: self.torch.int32}
         out, worst, n_rot, per = [], 0.0, 0, []
-        for li, ((k, v, pos), dl) in enumerate(zip(saved, deltas)):
+        for li, ((k, v, pos), rows) in enumerate(zip(saved, deltas)):
+            assert len(rows) == k.shape[0], f"layer {li}: {len(rows)} delta rows for {k.shape[0]} batch rows"
             k2 = k.clone()
-            for s_, d in enumerate(dl):
-                rec = {"layer": li, "slot": s_, "delta": d, "k_elements_changed": 0, "k_elements": int(k[:, self._slot(s_)].numel()), "round_trip_max_abs": 0.0}
-                per.append(rec)   # addendum 1: per layer and slot (slots the prepare left empty carry delta None)
-                if d is None or d == 0:
-                    continue
-                for b in range(k.shape[0]):
+            for b, dl in enumerate(rows):
+                for s_, d in enumerate(dl):
+                    rec = {"layer": li, "row": b, "slot": s_, "delta": d, "k_elements_changed": 0, "k_elements": int(k[b, self._slot(s_)].numel()), "round_trip_max_abs": 0.0}
+                    per.append(rec)
+                    if d is None or d == 0:
+                        continue
                     r = _shift_temporal_rope(k[b, self._slot(s_)], freqs, int(d))
                     back = _shift_temporal_rope(r, freqs, -int(d))
                     err = float((back.float() - k[b, self._slot(s_)].float()).abs().max().item())
-                    worst = max(worst, err)
-                    rec["round_trip_max_abs"] = max(rec["round_trip_max_abs"], err)
-                    bits = {1: self.torch.uint8, 2: self.torch.int16, 4: self.torch.int32}[k.element_size()]   # bitwise, one integer per element
-                    rec["k_elements_changed"] += int((r.contiguous().view(bits) != k[b, self._slot(s_)].contiguous().view(bits)).sum().item())
+                    worst = max(worst, err); rec["round_trip_max_abs"] = err
+                    rec["k_elements_changed"] = int((r.contiguous().view(bits[k.element_size()]) != k[b, self._slot(s_)].contiguous().view(bits[k.element_size()])).sum().item())
                     k2[b, self._slot(s_)] = r
                     n_rot += 1
             out.append((k2, v, pos))
-        return out, {"rotated_slot_layers": n_rot, "round_trip_max_abs": worst, "per_layer_slot": per}
+        return out, {"rotated_slot_layers": n_rot, "round_trip_max_abs": worst, "per_layer_row_slot": per}
+
+    def a1_reference(self, saved: list, snap: dict) -> tuple[list, list]:
+        """Addendum 2: the expected A1 keys built independently of rotate_temp, from the ORIGINAL prepare tensors and the
+        snapshot's position tensors: delta[l][b][s] = ring pos[l][b, s] - prepare pos[l][b, s] (tensor arithmetic);
+        the temporal RoPE channels (the first c - 2 * (c // 3) complex pairs, as the model's rope_apply splits them)
+        of row b, slot s are multiplied by exp(i * delta * theta_j) with theta_j = 10000 ** (-2 j / c) recomputed here
+        (rope_params' formula), in float64 as the model does, then cast to the key dtype. Returns (expected K per
+        layer, deltas per (layer, row, slot))."""
+        torch = self.torch
+        from models.wan.causal_model import KV_POS_EMPTY
+
+        exp_k, deltas = [], []
+        for li, (k, v, pos) in enumerate(saved):
+            src = snap["ring"][li]["pos"][:, :pos.shape[1]].to(pos.device)
+            d_t = src - pos                                   # [rows, slots], integer tensor
+            empty = pos == KV_POS_EMPTY
+            k_exp = k.clone()
+            rows, slots = pos.shape
+            c = k.shape[-1] // 2
+            n_t = c - 2 * (c // 3)
+            theta = 1.0 / torch.pow(10000.0, torch.arange(0, k.shape[-1], 2, dtype=torch.float64, device=k.device) / k.shape[-1])[:n_t]
+            for b in range(rows):
+                for s_ in range(slots):
+                    if bool(empty[b, s_]):
+                        continue
+                    d = int(d_t[b, s_].item())
+                    if d == 0:
+                        continue
+                    blk = k[b, self._slot(s_)].to(torch.float64)            # [tokens, heads, dim]
+                    x = torch.view_as_complex(blk.reshape(blk.shape[0], blk.shape[1], -1, 2).contiguous())
+                    mult = torch.polar(torch.ones(n_t, dtype=torch.float64, device=k.device), d * theta)
+                    y = x.clone(); y[..., :n_t] = x[..., :n_t] * mult
+                    k_exp[b, self._slot(s_)] = torch.view_as_real(y).flatten(2).to(k.dtype)
+            exp_k.append(k_exp)
+            deltas.append([[None if bool(empty[b, s_]) else int(d_t[b, s_].item()) for s_ in range(slots)] for b in range(rows)])
+        return exp_k, deltas
+
+    def slot_equal_rows(self, slots: list, part: str, saved: list | None = None, tensors: list | None = None) -> list:
+        """Addendum 2: per (layer, row, slot), whether the live K or V is bitwise equal to a saved temporary Sink's
+        (`saved`: [(k, v, pos)]) or to a list of per-layer tensors (`tensors`)."""
+        torch = self.torch
+        out = []
+        for li, layer in enumerate(self.sa.kv_layers(self.pl)):
+            ref_l = tensors[li] if tensors is not None else saved[li][0 if part == "k" else 1]
+            out.append([[bool(torch.equal(layer[part][b, self._slot(s_)].contiguous().view(torch.uint8), ref_l[b, self._slot(s_)].contiguous().view(torch.uint8))) for s_ in slots]
+                        for b in range(layer[part].shape[0])])
+        return out
+
+    def within_ulp(self, slots: list, tensors: list, n_ulp: int = 1) -> dict:
+        """Addendum 2: the live K of `slots` against per-layer reference tensors: max abs difference, the fraction of
+        bitwise-equal elements, and whether every element is within n_ulp units in the last place of its own
+        magnitude (the key dtype's precision)."""
+        torch = self.torch
+        mant = {torch.bfloat16: 7, torch.float16: 10, torch.float32: 23}
+        worst, eq, tot, ok = 0.0, 0, 0, True
+        for li, layer in enumerate(self.sa.kv_layers(self.pl)):
+            for s_ in slots:
+                a, b = layer["k"][:, self._slot(s_)], tensors[li][:, self._slot(s_)]
+                af, bf = a.float(), b.float()
+                diff = (af - bf).abs()
+                worst = max(worst, float(diff.max().item()))
+                bits = {1: torch.uint8, 2: torch.int16, 4: torch.int32}[a.element_size()]
+                eq += int((a.contiguous().view(bits) == b.contiguous().view(bits)).sum().item())
+                tot += a.numel()
+                mag = torch.maximum(af.abs(), bf.abs()).clamp(min=2.0 ** -126)
+                ulp = torch.exp2(torch.floor(torch.log2(mag)) - mant.get(a.dtype, 7))
+                ok &= bool((diff <= n_ulp * ulp).all().item())
+        return {"max_abs": worst, "bitwise_equal_fraction": eq / max(tot, 1), "within_ulp": ok, "n_ulp": n_ulp}
 
     def quantize_slots(self, snap: dict, slots: list, mode: str) -> tuple[dict, int]:
         """Exploratory: the snapshot's K / V of `slots` quantized and dequantized. fp8: e4m3 with a per-tensor scale;
@@ -991,7 +1060,19 @@ class FakeRuntime:
         return {"tensors": [0], "attrs": {}}
 
     def rotate_temp(self, saved, deltas):
-        return saved, {"rotated_slot_layers": 0, "round_trip_max_abs": 0.0}
+        per = [{"layer": li, "row": b, "slot": s_, "delta": d, "k_elements_changed": 0 if not d else 1, "k_elements": 1, "round_trip_max_abs": 0.0}
+               for li, rows in enumerate(deltas) for b, dl in enumerate(rows) for s_, d in enumerate(dl)]
+        return saved, {"rotated_slot_layers": sum(1 for q in per if q["delta"]), "round_trip_max_abs": 0.0, "per_layer_row_slot": per}
+
+    def a1_reference(self, saved, snap):
+        rows = self.positions_all([0, 1, 2])   # the dry prepare sits at (0, 1, empty) in every row
+        return saved, [[[r[0] - 0, r[1] - 1, None] for r in layer_rows] for layer_rows in rows]
+
+    def slot_equal_rows(self, slots, part, saved=None, tensors=None):
+        return [[[True] * len(slots) for _ in range(2)] for _ in range(30)]
+
+    def within_ulp(self, slots, tensors, n_ulp=1):
+        return {"max_abs": 0.0, "bitwise_equal_fraction": 1.0, "within_ulp": True, "n_ulp": n_ulp}
 
     def quantize_slots(self, snap, slots, mode):
         return {s_: [] for s_ in slots}, 1000

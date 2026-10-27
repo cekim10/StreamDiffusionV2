@@ -223,22 +223,28 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
     if temp is not None:
         if ts == "in_aligned":
             EMPTY = -(1 << 30)
-            deltas = []
-            for li, (k_, v_, pos_) in enumerate(temp):
-                pp = pos_[0, :sink].tolist() if not dry else [0, 1, EMPTY]
-                deltas.append([None if pp[s_] == EMPTY else live_pos[li][s_] - int(pp[s_]) for s_ in range(sink)])
-            # addendum 1b: the deltas every row would need (recorded; the frozen A1 applies row 0's deltas to every row)
+            # addendum 2: deltas per (layer, batch row, slot) = source position - the prepare's position, from the per-row
+            # positions (live = the snapshot's meta after restore_fast; checked above) and the prepare's position tensors
             row_deltas = []
             for li in range(len(live_rows)):   # every layer (the fake prepare returns one entry; rows then take the dry prepare positions)
                 pos_ = temp[li][2] if li < len(temp) else None
                 rows_pp = pos_[:, :sink].tolist() if hasattr(pos_, "tolist") else [[0, 1, EMPTY]] * len(live_rows[li])
                 row_deltas.append([[None if int(rows_pp[b][s_]) == EMPTY else live_rows[li][b][s_] - int(rows_pp[b][s_]) for s_ in range(sink)] for b in range(len(rows_pp))])
             sup["a1_row_deltas"] = row_deltas
-            sup["a1_row_deltas_equal_row0"] = all(row == rows[0] for rows in row_deltas for row in rows)
-            temp_w, log["a1_rotation"] = rt.rotate_temp(temp, deltas)
+            sup["a1_row_deltas_equal_row0"] = all(row == rows[0] for rows in row_deltas for row in rows)   # recorded (addendum 1b finding)
+            deltas = [rows[0] for rows in row_deltas]   # row 0 (the frozen logging fields keep their meaning)
+            temp_w, log["a1_rotation"] = rt.rotate_temp(temp, row_deltas)
             log["a1_deltas_layer0"] = deltas[0]
             sup["a1_deltas"] = deltas
-            sup["a1_per_layer_slot"] = log["a1_rotation"].pop("per_layer_slot", [])   # delta, K changed (elements), round-trip error
+            sup["a1_per_layer_row_slot"] = log["a1_rotation"].pop("per_layer_row_slot", [])   # delta applied, K changed (elements), round-trip error
+            # the deltas rotate_temp reports must be the ones computed here (a regression guard, not the independent check)
+            chs["a1_deltas_applied_per_row"] = [[[q["delta"] for q in sup["a1_per_layer_row_slot"] if q["layer"] == li and q["row"] == b] for b in range(len(rows))]
+                                                for li, rows in enumerate(row_deltas)] == row_deltas
+            # addendum 2, independent oracle: expected keys and deltas from the ORIGINAL prepare tensors and the snapshot's
+            # position tensors, without rotate_temp (own delta arithmetic, own RoPE multiplier); the fake double in dry runs
+            ref_k, ref_deltas = rt.a1_reference(temp, snap)
+            chs["a1_deltas_equal_independent"] = ref_deltas == row_deltas
+            sup["a1_reference_k"] = ref_k   # consumed by the verification below, then dropped
         else:
             temp_w = temp
         log["ts_slots_written"] = rt.write_sink_slots(temp_w)
@@ -311,9 +317,26 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
         chs["ts_positions_equal_snapshot_per_layer_slot"] = all(all(r) for r in pos_ok)
         chs["ts_positions_rows_equal_snapshot"] = all(rows[b][s_] == src_rows[li][b][s_] for li, rows in enumerate(fin_rows) for b in range(len(rows)) for s_ in left_ts)
         if ts == "in_aligned":
-            by = {(r["layer"], r["slot"]): r for r in sup.get("a1_per_layer_slot", [])}
-            sup["a1_per_layer_slot"] = [{**by.get((li, s_), {"layer": li, "slot": s_}), "k_as_expected": ke[li][j], "v_unrotated": ve[li][j], "position_equal_snapshot": pos_ok[li][j],
-                                         "position": fin[li][s_]} for li in range(len(ke)) for j, s_ in enumerate(left_ts)]
+            # addendum 2: per (layer, row, slot) - K as written (rotated per row), V unrotated per row, zero-delta rows unchanged,
+            # and the rotated K against the independent reference (bitwise fraction recorded; within 1 ulp required)
+            ke_r, ve_r, ku_r = rt.slot_equal_rows(left_ts, "k", saved=expect_k), rt.slot_equal_rows(left_ts, "v", saved=temp), rt.slot_equal_rows(left_ts, "k", saved=temp)
+            chs["ts_k_as_written_rows"] = all(all(r) for rows in ke_r for r in rows)
+            chs["ts_v_unrotated_rows"] = all(all(r) for rows in ve_r for r in rows)
+            rd_ = sup.get("a1_row_deltas") or []
+            zero_ok = [ku_r[li][b][j] for li in range(len(ku_r)) for b in range(len(ku_r[li])) for j, s_ in enumerate(left_ts) if rd_ and not rd_[li][b][s_]]
+            chs["a1_zero_delta_rows_unchanged"] = all(zero_ok)
+            by = {(q["layer"], q["row"], q["slot"]): q for q in sup.get("a1_per_layer_row_slot", [])}
+            sup["a1_per_layer_row_slot"] = [{**by.get((li, b, s_), {"layer": li, "row": b, "slot": s_}), "k_as_written": ke_r[li][b][j], "v_unrotated": ve_r[li][b][j],
+                                             "k_equal_unrotated": ku_r[li][b][j], "position": fin_rows[li][b][s_], "position_equal_snapshot": fin_rows[li][b][s_] == src_rows[li][b][s_]}
+                                            for li in range(len(ke_r)) for b in range(len(ke_r[li])) for j, s_ in enumerate(left_ts)]
+            ref_k = sup.pop("a1_reference_k", None)
+            if ref_k is not None:
+                eq_ref = rt.slot_equal_rows(left_ts, "k", tensors=ref_k)
+                sup["a1_k_equals_reference_rows"] = eq_ref
+                sup["a1_k_vs_reference"] = rt.within_ulp(left_ts, ref_k, 1)
+                chs["a1_k_within_1ulp_of_independent_reference"] = bool(sup["a1_k_vs_reference"]["within_ulp"])
+                sup["a1_k_bitwise_equal_reference_slots"] = sum(1 for rows in eq_ref for r in rows for v in r if v)
+                sup["a1_k_reference_slots"] = sum(len(r) for rows in eq_ref for r in rows)
     if dec == "oracle":
         lay = rt.dec_layout(snap)
         sup["decoder_layout"] = lay
