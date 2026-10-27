@@ -6,7 +6,7 @@
 - train_s0|OT-1: PASS (8 checks; failed none); source positions [22, 24, 6], A1 deltas [22, 23, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
 - butterfly-feeding-slow-motion_s0|OT-L: PASS (5 checks; failed none); source positions [-29, -10, -39], A1 deltas [-29, -11, None], A1 rotation {'rotated_slot_layers': 38, 'round_trip_max_abs': 0.125}
 - audi-snow-trail_s1|OT-1: PASS (8 checks; failed none); source positions [22, 1, 6], A1 deltas [22, 0, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
-- duplicate controls across sessions: none
+- duplicate controls across sessions: [('butterfly-feeding-slow-motion_s1|OT-L', 'REF', 'stage1a', 'stage2'), ('butterfly-feeding-slow-motion_s1|OT-L', 'B0', 'stage1a', 'stage2'), ('dog_s1|OT-1', 'B0', 'stage1a', 'stage2'), ('dog_s1|OT-1', 'REF', 'stage1a', 'stage2'), ('train_s1|OT-1', 'B0', 'stage1b', 'stage2'), ('train_s1|OT-1', 'REF', 'stage1b', 'stage2'), ('dog_s1|OT-L', 'B0', 'stage1b', 'stage2'), ('dog_s1|OT-L', 'REF', 'stage1b', 'stage2'), ('train_s0|OT-L', 'B0', 'stage1b', 'stage2'), ('train_s0|OT-L', 'REF', 'stage1b', 'stage2'), ('audi-snow-trail_s1|OT-1', 'REF', 'stage1b', 'stage2'), ('audi-snow-trail_s1|OT-1', 'B0', 'stage1b', 'stage2'), ('train_s1|OT-L', 'B0', 'stage1a', 'stage2'), ('train_s1|OT-L', 'REF', 'stage1a', 'stage2'), ('butterfly-feeding-slow-motion_s1|OT-1', 'REF', 'stage1b', 'stage2'), ('butterfly-feeding-slow-motion_s1|OT-1', 'B0', 'stage1b', 'stage2'), ('audi-snow-trail_s0|OT-L', 'REF', 'stage1b', 'stage2'), ('audi-snow-trail_s0|OT-L', 'B0', 'stage1b', 'stage2'), ('audi-snow-trail_s1|OT-L', 'REF', 'stage1a', 'stage2'), ('audi-snow-trail_s1|OT-L', 'B0', 'stage1a', 'stage2'), ('train_s0|OT-1', 'REF', 'stage1a', 'stage2'), ('train_s0|OT-1', 'B0', 'stage1a', 'stage2'), ('audi-snow-trail_s0|OT-1', 'B0', 'stage1a', 'stage2'), ('audi-snow-trail_s0|OT-1', 'REF', 'stage1a', 'stage2')]
 
 ## Stage-0 supplemental validity (addendum 1; separate from the original stage-0 checks above)
 
@@ -214,7 +214,7 @@ Digest differences from stage 0r are descriptive: the rows were rotated differen
 - corrected-A1 gate: True
 Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.
 
-Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sessions recorded: ['stage1a', 'stage1b']. Validity problems: none.
+Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sessions recorded: ['stage1a', 'stage1b', 'stage2']. Validity problems: none.
 
 | condition | phase | numeric pass (of 12) | visual flags (REF same session) | resolution | bytes added | lower bound 1 / 10 Gbps |
 |---|---|---|---|---|---|---|
@@ -238,9 +238,9 @@ Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sess
 | DR | P2a | 6 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P2b | 3 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P3 | 12 / 12 | 0 (0) | no harm | 3613.8 MB | 28.9 / 2.89 s |
-| S3 | P1 | 10 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
-| S3 | P2a | 11 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
-| S3 | P2b | 11 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| S3 | P1 | 10 / 12 | 7 (1) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
+| S3 | P2a | 11 / 12 | 0 (0) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
+| S3 | P2b | 11 / 12 | 0 (0) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
 | S3 | P3 | 12 / 12 | 0 (0) | no harm | 1725.6 MB | 13.8 / 1.38 s |
 
 STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEAR: <= REF's + 1. Raw counts are shown; a zero count is not proof of zero risk. Lower bounds are idealized transfers of the added bytes, not migration latency.
@@ -254,7 +254,7 @@ STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEA
 
 ## Metric violations vs perceptible artifacts
 
-- P2a: metric fail & flagged 0, metric fail & not flagged 30, metric pass & flagged 0, both clean 30; kappa 0.00
-- P2b: metric fail & flagged 0, metric fail & not flagged 46, metric pass & flagged 0, both clean 14; kappa 0.00
+- P2a: metric fail & flagged 0, metric fail & not flagged 31, metric pass & flagged 0, both clean 41; kappa 0.00
+- P2b: metric fail & flagged 0, metric fail & not flagged 47, metric pass & flagged 0, both clean 25; kappa 0.00
 
-## Gates: {"stage0_valid": true, "duplicate_controls": [], "stage2_inspected": false, "s3_resolves_p2": false, "stage2b_cells": null, "stage3_runs": false, "stage0_supp_valid": true, "stage0_rows_valid": true, "batch_rows_identical": false, "stage0_a1_rows_valid": true}
+## Gates: {"stage0_valid": true, "duplicate_controls": [["butterfly-feeding-slow-motion_s1|OT-L", "REF", "stage1a", "stage2"], ["butterfly-feeding-slow-motion_s1|OT-L", "B0", "stage1a", "stage2"], ["dog_s1|OT-1", "B0", "stage1a", "stage2"], ["dog_s1|OT-1", "REF", "stage1a", "stage2"], ["train_s1|OT-1", "B0", "stage1b", "stage2"], ["train_s1|OT-1", "REF", "stage1b", "stage2"], ["dog_s1|OT-L", "B0", "stage1b", "stage2"], ["dog_s1|OT-L", "REF", "stage1b", "stage2"], ["train_s0|OT-L", "B0", "stage1b", "stage2"], ["train_s0|OT-L", "REF", "stage1b", "stage2"], ["audi-snow-trail_s1|OT-1", "REF", "stage1b", "stage2"], ["audi-snow-trail_s1|OT-1", "B0", "stage1b", "stage2"], ["train_s1|OT-L", "B0", "stage1a", "stage2"], ["train_s1|OT-L", "REF", "stage1a", "stage2"], ["butterfly-feeding-slow-motion_s1|OT-1", "REF", "stage1b", "stage2"], ["butterfly-feeding-slow-motion_s1|OT-1", "B0", "stage1b", "stage2"], ["audi-snow-trail_s0|OT-L", "REF", "stage1b", "stage2"], ["audi-snow-trail_s0|OT-L", "B0", "stage1b", "stage2"], ["audi-snow-trail_s1|OT-L", "REF", "stage1a", "stage2"], ["audi-snow-trail_s1|OT-L", "B0", "stage1a", "stage2"], ["train_s0|OT-1", "REF", "stage1a", "stage2"], ["train_s0|OT-1", "B0", "stage1a", "stage2"], ["audi-snow-trail_s0|OT-1", "B0", "stage1a", "stage2"], ["audi-snow-trail_s0|OT-1", "REF", "stage1a", "stage2"]], "stage2_inspected": true, "s3_resolves_p2": false, "stage2b_cells": ["dog_s1|OT-1", "train_s0|OT-1", "butterfly-feeding-slow-motion_s1|OT-1", "audi-snow-trail_s1|OT-1"], "stage3_runs": false, "stage0_supp_valid": true, "stage0_rows_valid": true, "batch_rows_identical": false, "stage0_a1_rows_valid": true}
