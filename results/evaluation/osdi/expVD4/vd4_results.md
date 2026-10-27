@@ -214,43 +214,43 @@ Digest differences from stage 0r are descriptive: the rows were rotated differen
 - corrected-A1 gate: True
 Digest differences from stage 0r are descriptive: the rows were rotated differently; they say nothing about quality.
 
-Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sessions recorded: none. Validity problems: none.
+Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sessions recorded: ['stage1a', 'stage1b']. Validity problems: none.
 
 | condition | phase | numeric pass (of 12) | visual flags (REF same session) | resolution | bytes added | lower bound 1 / 10 Gbps |
 |---|---|---|---|---|---|---|
-| B0 | P1 | 11 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
-| B0 | P2a | 6 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
-| B0 | P2b | 3 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| B0 | P1 | 11 / 12 | 3 (0) | not resolved | 0.4 MB | 0.0 / 0.00 s |
+| B0 | P2a | 6 / 12 | 0 (0) | not resolved | 0.4 MB | 0.0 / 0.00 s |
+| B0 | P2b | 3 / 12 | 0 (0) | not resolved | 0.4 MB | 0.0 / 0.00 s |
 | B0 | P3 | 12 / 12 | 0 (0) | no harm | 0.4 MB | 0.0 / 0.00 s |
-| A1 | P1 | 11 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
-| A1 | P2a | 6 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
-| A1 | P2b | 3 / 12 | 0 (0) | not inspected | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P1 | 11 / 12 | 4 (0) | not resolved | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P2a | 6 / 12 | 0 (0) | not resolved | 0.4 MB | 0.0 / 0.00 s |
+| A1 | P2b | 3 / 12 | 0 (0) | not resolved | 0.4 MB | 0.0 / 0.00 s |
 | A1 | P3 | 12 / 12 | 0 (0) | no harm | 0.4 MB | 0.0 / 0.00 s |
-| D | P1 | 10 / 12 | 0 (0) | not inspected | 1888.6 MB | 15.1 / 1.51 s |
-| D | P2a | 6 / 12 | 0 (0) | not inspected | 1888.6 MB | 15.1 / 1.51 s |
-| D | P2b | 3 / 12 | 0 (0) | not inspected | 1888.6 MB | 15.1 / 1.51 s |
+| D | P1 | 10 / 12 | 3 (0) | not resolved | 1888.6 MB | 15.1 / 1.51 s |
+| D | P2a | 6 / 12 | 0 (0) | not resolved | 1888.6 MB | 15.1 / 1.51 s |
+| D | P2b | 3 / 12 | 0 (0) | not resolved | 1888.6 MB | 15.1 / 1.51 s |
 | D | P3 | 12 / 12 | 0 (0) | no harm | 1888.6 MB | 15.1 / 1.51 s |
-| R | P1 | 12 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
-| R | P2a | 6 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
-| R | P2b | 2 / 12 | 0 (0) | not inspected | 1725.6 MB | 13.8 / 1.38 s |
+| R | P1 | 12 / 12 | 0 (0) | STRICT | 1725.6 MB | 13.8 / 1.38 s |
+| R | P2a | 6 / 12 | 0 (0) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
+| R | P2b | 2 / 12 | 0 (0) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
 | R | P3 | 12 / 12 | 0 (0) | no harm | 1725.6 MB | 13.8 / 1.38 s |
-| DR | P1 | 12 / 12 | 0 (0) | not inspected | 3613.8 MB | 28.9 / 2.89 s |
-| DR | P2a | 6 / 12 | 0 (0) | not inspected | 3613.8 MB | 28.9 / 2.89 s |
-| DR | P2b | 3 / 12 | 0 (0) | not inspected | 3613.8 MB | 28.9 / 2.89 s |
+| DR | P1 | 12 / 12 | 0 (0) | STRICT | 3613.8 MB | 28.9 / 2.89 s |
+| DR | P2a | 6 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
+| DR | P2b | 3 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P3 | 12 / 12 | 0 (0) | no harm | 3613.8 MB | 28.9 / 2.89 s |
 
 STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEAR: <= REF's + 1. Raw counts are shown; a zero count is not proof of zero risk. Lower bounds are idealized transfers of the added bytes, not migration latency.
 
 ## Attribution (P1, P2a, P2b separately)
 
-- P1: sufficient single states none; decoder + recent jointly sufficient: False; not explained by the tested states: True
+- P1: sufficient single states ['R']; decoder + recent jointly sufficient: False; not explained by the tested states: False
 - P2a: sufficient single states none; decoder + recent jointly sufficient: False; not explained by the tested states: True
 - P2b: sufficient single states none; decoder + recent jointly sufficient: False; not explained by the tested states: True
 - A Sink-slot effect is reported per slot set (S1 = slot 2; S2 = slots 2, 1; S3 = all); it is not attributed to the number of true slots alone.
 
 ## Metric violations vs perceptible artifacts
 
-- P2a: metric fail & flagged 0, metric fail & not flagged 0, metric pass & flagged 0, both clean 0; kappa -
-- P2b: metric fail & flagged 0, metric fail & not flagged 0, metric pass & flagged 0, both clean 0; kappa -
+- P2a: metric fail & flagged 0, metric fail & not flagged 30, metric pass & flagged 0, both clean 30; kappa 0.00
+- P2b: metric fail & flagged 0, metric fail & not flagged 46, metric pass & flagged 0, both clean 14; kappa 0.00
 
 ## Gates: {"stage0_valid": true, "duplicate_controls": [], "stage2_inspected": false, "s3_resolves_p2": false, "stage2b_cells": null, "stage3_runs": false, "stage0_supp_valid": true, "stage0_rows_valid": true, "batch_rows_identical": false, "stage0_a1_rows_valid": true}
