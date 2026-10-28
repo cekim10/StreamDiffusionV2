@@ -1,0 +1,308 @@
+{
+ "host": "elves-02",
+ "gpu": "NVIDIA L40S",
+ "commit": "2c31a5980573968db828d01e091f758d096e3181",
+ "workload": {
+  "video": "examples/original.mp4",
+  "seed": "1"
+ },
+ "c0": 31,
+ "M1": 64,
+ "M2": 124,
+ "interval_calls": 60,
+ "B_built_as_E5_destination": {
+  "sink_digest_equal_A_at_M1": true
+ },
+ "retained": {
+  "bytes": 1725235200,
+  "where": "host memory (CPU copy at the M1 boundary)",
+  "d2h_s": 0.16888931393623352
+ },
+ "interval": {
+  "refresh_writes": 2,
+  "refreshed_entries_distinct": 2,
+  "refresh_calls": [
+   78,
+   82
+  ],
+  "shift_calls": [
+   93,
+   94
+  ],
+  "shift_events": 75,
+  "shifted_entries": 75,
+  "refreshed_and_shifted_entries": 2,
+  "blocks_differing_from_retained": 77,
+  "B_step_s_median": 0.5634460095316172,
+  "tracking_s_median": 0.0007581328973174095
+ },
+ "block_bytes": 4792320,
+ "fresh_sink_base_bytes": 1725236640,
+ "strategies": [
+  {
+   "strategy": "ordered",
+   "digest_equal": true,
+   "blocks_equal": 360,
+   "blocks_total": 360,
+   "mismatched_blocks": [],
+   "n_mismatched": 0,
+   "apply_s": 0.006876084022223949,
+   "retained_h2d_s": 0.0749275078997016,
+   "update_bytes": 19171920,
+   "update_items": {
+    "writes": 2,
+    "shift_events": 75
+   }
+  },
+  {
+   "strategy": "current_values",
+   "digest_equal": true,
+   "blocks_equal": 360,
+   "blocks_total": 360,
+   "mismatched_blocks": [],
+   "n_mismatched": 0,
+   "apply_s": 0.00811772421002388,
+   "retained_h2d_s": 0.07457726448774338,
+   "update_bytes": 19171920,
+   "update_items": {
+    "refreshed_entries": 2
+   }
+  },
+  {
+   "strategy": "summed_shift",
+   "digest_equal": true,
+   "blocks_equal": 360,
+   "blocks_total": 360,
+   "mismatched_blocks": [],
+   "n_mismatched": 0,
+   "apply_s": 0.008090302348136902,
+   "retained_h2d_s": 0.07458734139800072,
+   "update_bytes": 19171920,
+   "update_items": {
+    "refreshed_entries": 2
+   }
+  },
+  {
+   "strategy": "last_written",
+   "digest_equal": false,
+   "blocks_equal": 358,
+   "blocks_total": 360,
+   "mismatched_blocks": [
+    [
+     4,
+     "k",
+     1,
+     0
+    ],
+    [
+     5,
+     "k",
+     1,
+     0
+    ]
+   ],
+   "n_mismatched": 2,
+   "apply_s": 0.008171245455741882,
+   "retained_h2d_s": 0.07451693341135979,
+   "update_bytes": 19171920,
+   "update_items": {
+    "refreshed_entries": 2
+   }
+  },
+  {
+   "strategy": "patches_only",
+   "digest_equal": false,
+   "blocks_equal": 287,
+   "blocks_total": 360,
+   "mismatched_blocks": [
+    [
+     0,
+     "k",
+     0,
+     2
+    ],
+    [
+     0,
+     "k",
+     1,
+     2
+    ],
+    [
+     1,
+     "k",
+     0,
+     0
+    ],
+    [
+     1,
+     "k",
+     0,
+     1
+    ],
+    [
+     1,
+     "k",
+     0,
+     2
+    ],
+    [
+     1,
+     "k",
+     1,
+     0
+    ],
+    [
+     1,
+     "k",
+     1,
+     2
+    ],
+    [
+     2,
+     "k",
+     0,
+     0
+    ],
+    [
+     2,
+     "k",
+     0,
+     1
+    ],
+    [
+     2,
+     "k",
+     0,
+     2
+    ],
+    [
+     2,
+     "k",
+     1,
+     0
+    ],
+    [
+     2,
+     "k",
+     1,
+     2
+    ],
+    [
+     3,
+     "k",
+     0,
+     0
+    ],
+    [
+     3,
+     "k",
+     0,
+     2
+    ],
+    [
+     3,
+     "k",
+     1,
+     0
+    ],
+    [
+     3,
+     "k",
+     1,
+     2
+    ],
+    [
+     4,
+     "k",
+     0,
+     0
+    ],
+    [
+     4,
+     "k",
+     0,
+     2
+    ],
+    [
+     4,
+     "k",
+     1,
+     2
+    ],
+    [
+     5,
+     "k",
+     0,
+     0
+    ],
+    [
+     5,
+     "k",
+     0,
+     1
+    ],
+    [
+     5,
+     "k",
+     0,
+     2
+    ],
+    [
+     5,
+     "k",
+     1,
+     1
+    ],
+    [
+     5,
+     "k",
+     1,
+     2
+    ],
+    [
+     6,
+     "k",
+     0,
+     2
+    ],
+    [
+     6,
+     "k",
+     1,
+     2
+    ],
+    [
+     7,
+     "k",
+     0,
+     2
+    ],
+    [
+     7,
+     "k",
+     1,
+     2
+    ],
+    [
+     8,
+     "k",
+     0,
+     0
+    ],
+    [
+     8,
+     "k",
+     0,
+     2
+    ]
+   ],
+   "n_mismatched": 73,
+   "apply_s": 0.0012574531137943268,
+   "retained_h2d_s": 0.07450571656227112,
+   "update_bytes": 19170720,
+   "update_items": {
+    "refreshed_entries": 2
+   }
+  }
+ ]
+}
