@@ -381,7 +381,9 @@ def session(d: Path, check_git: bool) -> dict | None:
     ia, ib, fa, kp = d / "e2_inspection_A.md", d / "e2_inspection_B.md", d / "e2_inspection_form_A.md", d / "e2_blind_key.json"
     if not all(p.exists() for p in (ia, ib, fa, kp)):
         return None
-    if not all(re.search(r"^STATUS: RECORDED\s*$", p.read_text(), re.M) for p in (ia, ib)):
+    # a line starting "STATUS: RECORDED" (the instruction text after it may remain; "NOT RECORDED" never matches);
+    # the substantive guard is `complete`: every row filled with the allowed words (deviation noted in e2_record.md)
+    if not all(re.search(r"^STATUS: RECORDED\b", p.read_text(), re.M) for p in (ia, ib)):
         return None
     kb = kp.read_bytes()
     if hashlib.sha256(kb).hexdigest() != re.search(r"SHA-256 `([0-9a-f]{64})`", fa.read_text()).group(1):

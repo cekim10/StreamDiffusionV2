@@ -46,5 +46,15 @@ Reference: RS3's recent KV 1.73 GB = 13.8 s at 1 Gbps, 1.38 s at 10 Gbps (ideali
 
 **Most promising window (selection rule): Replay-12** (order [12, 6, 3])
 
-**Recommendation (e2_plan.md section 6): pending the blinded inspection (numeric part: met)**
+## Blinded inspection (REF, V0, S3, RS3, Replay-w* on the six VD-5 cells)
+
+Session: {'complete': True, 'procedure': {'checked': True, 'block_A_commit': '5d2d8acea2b1da2883c5f938842a0808daedc306', 'block_B_commit': 'd5419e131256b697a6452219505775f090100624', 'key_commit': 'aadab236fccc702a24529232e47968a556ae4280', 'A_before_B': True, 'B_before_key': True, 'ok': True}, 'vocabulary_errors': []}
+
+Rater calibration: {'v0_flags_per_field': [0, 0, 0, 0, 0, 0, 0], 'ref_flags_per_field': [0, 0, 0, 0, 0, 0, 0], 'v0_ok': True, 'catch_ok': 2, 'catch': 2, 'repeats_identical': 4, 'repeats': 4, 'pass': True}
+
+Flags on the six cells per phase: {'REF': {'P1': 0, 'P2a': 0, 'P2b': 0, 'P3': 0}, 'V0': {'P1': 0, 'P2a': 0, 'P2b': 0, 'P3': 0}, 'S3': {'P1': 5, 'P2a': 0, 'P2b': 0, 'P3': 0}, 'RS3': {'P1': 1, 'P2a': 0, 'P2b': 0, 'P3': 0}, 'LW': {'P1': 0, 'P2a': 0, 'P2b': 0, 'P3': 0}}
+
+Block B: {'LW vs RS3 at M': {'LW better': 0, 'no difference': 6, 'LW worse': 0}, 'LW vs RS3 closer': {'LW better': 0, 'no difference': 6, 'LW worse': 0}, 'LW vs S3 at M': {'LW better': 1, 'no difference': 5, 'LW worse': 0}, 'LW vs S3 closer': {'LW better': 0, 'no difference': 6, 'LW worse': 0}}
+
+**Recommendation (e2_plan.md section 6): log-only replay**
 
