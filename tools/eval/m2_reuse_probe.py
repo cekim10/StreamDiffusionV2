@@ -205,6 +205,22 @@ def main():
         n_ent = len(refreshed)
         res_strat.append(compare(name, t_apply, h2d, n_ent * 2 * blk + meta_bytes + (0 if sm == "none" else 16 * n_shift_ev), {"refreshed_entries": n_ent}))
     sink_base_bytes = int(rt.pack(rt.serialize_live(), "sink")[0]["nbytes"])
+    # E8: per-entry event statistics (repeated refreshes, multiple shifts) and the latest-value-only update size
+    from collections import Counter
+    ref_count = Counter(k for ev in events for k in ev["writes"])
+    shift_count = Counter((li, b, s_) for ev in events for li, b, s_, _ in ev["shifts"])
+    unrefreshed_shift_count = Counter({k: v for k, v in shift_count.items() if k not in refreshed})
+    stats = {"refresh_events": sum(ref_count.values()), "distinct_refreshed_entries": len(ref_count),
+             "repeated_refreshes": sum(v - 1 for v in ref_count.values()), "refreshes_per_entry_hist": dict(sorted(Counter(ref_count.values()).items())),
+             "max_refreshes_one_entry": max(ref_count.values(), default=0),
+             "shift_events": sum(shift_count.values()), "shifted_entries": len(shift_count), "shifts_per_entry_hist": dict(sorted(Counter(shift_count.values()).items())),
+             "unrefreshed_entries_shifted_2plus": sum(1 for v in unrefreshed_shift_count.values() if v >= 2),
+             "realign_calls": shift_calls,
+             "latest_value_bytes": len(ref_count) * 2 * blk, "all_refresh_events_bytes": sum(ref_count.values()) * 2 * blk,
+             "shift_metadata_bytes": 16 * sum(shift_count.values()), "position_metadata_bytes": meta_bytes,
+             "latest_value_update_bytes": len(ref_count) * 2 * blk + 16 * sum(shift_count.values()) + meta_bytes,
+             "max_entries": L * B2["k"][0].shape[0] * S}
+    stats["savings_vs_fresh_base"] = 1.0 - stats["latest_value_update_bytes"] / sink_base_bytes
     res = {"host": platform.node(), "gpu": torch.cuda.get_device_name(dev), "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip(),
            "workload": {"video": a.video, "seed": a.seed}, "c0": a.c0, "M1": M1, "M2": M2, "interval_calls": a.interval,
            "B_built_as_E5_destination": {"sink_digest_equal_A_at_M1": B_equal_A_at_M1},
@@ -213,9 +229,9 @@ def main():
                         "shift_calls": shift_calls, "shift_events": n_shift_ev, "shifted_entries": len(shifted_entries),
                         "refreshed_and_shifted_entries": len(shifted_entries & set(refreshed)), "blocks_differing_from_retained": diff_blocks,
                         "B_step_s_median": float(sorted(step_s)[len(step_s) // 2]), "tracking_s_median": float(sorted(track_s)[len(track_s) // 2])},
-           "block_bytes": blk, "fresh_sink_base_bytes": sink_base_bytes, "strategies": res_strat}
+           "block_bytes": blk, "fresh_sink_base_bytes": sink_base_bytes, "entry_stats": stats, "strategies": res_strat}
     Path(a.out).write_text(json.dumps(res, indent=1, default=str))
-    print(json.dumps({k: res[k] for k in ("B_built_as_E5_destination", "retained", "interval", "fresh_sink_base_bytes")}, indent=1, default=str))
+    print(json.dumps({k: res[k] for k in ("B_built_as_E5_destination", "retained", "interval", "fresh_sink_base_bytes", "entry_stats")}, indent=1, default=str))
     for r_ in res_strat:
         print(r_["strategy"], "digest_equal", r_["digest_equal"], "blocks", r_["blocks_equal"], "/", r_["blocks_total"], "bytes", r_["update_bytes"], "apply_s", round(r_["apply_s"], 4), "h2d", round(r_["retained_h2d_s"], 3))
 
