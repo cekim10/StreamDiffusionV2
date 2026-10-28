@@ -1680,7 +1680,10 @@ class Node:
 
                 st_ = vf.FrameStore(dmp["root"], "REF")
                 n = 0
-                for c in range(int(dmp["lo"]), int(dmp["hi"]) + 1):
+                # the reference over the span this node generated, from 16 calls before its first output (pre-move window)
+                ref_lo = max(int(dmp["lo"]), int(dmp["first"]) - 16) if dmp.get("first") is not None else int(dmp["lo"])
+                ref_hi = min(int(dmp["hi"]), int(dmp["last"])) if dmp.get("last") is not None else int(dmp["hi"])
+                for c in range(ref_lo, ref_hi + 1):
                     fr = base.get(c)
                     if fr is not None:
                         st_.add(c, fr, phase="ref", out_input_call=c - (self.rt.k - 1)); n += 1
@@ -1927,6 +1930,7 @@ class Node:
             if st_ is None:
                 st_ = vf.FrameStore(dmp["root"], f"OUT_{self.label}")
             st_.add(c, fr, phase="owner", out_input_call=c - (self.rt.k - 1)); dmp["n"] = dmp.get("n", 0) + 1
+            dmp["first"] = c if dmp.get("first") is None else min(dmp["first"], c); dmp["last"] = c if dmp.get("last") is None else max(dmp["last"], c)
         if st_ is not None:
             dmp["out_dir"] = str(st_.close({"node": self.label, "kind": "owner output"}))
 

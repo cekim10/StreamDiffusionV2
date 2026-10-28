@@ -46,10 +46,10 @@ rate, chunk-boundary switchover). The policy is `precopy_sink` with replay added
 | workload | dog, seed 1 (unit dog_s1; frozen VD-3 thresholds dog_s1, OT-1) |
 | link | 1 Gbps emulated (per-task token bucket), MSS cap as in XB |
 | trigger | call 30 |
-| horizon | 100 calls after the switchover |
+| horizon | 100 calls after the switchover; reference window 1500 calls (as XB, for the long precopy_full rounds) |
 | methods | `precopy_replay` (W 12, lag 1, Sink rounds thr 16, rl 1); `precopy_sink` (M1 baseline for a predicted move: Sink pre-copied, zero recent, fast path); `precopy_full` (exact-state migration: Llumnix-style rounds of every component; frozen thr 256, rl 10) |
 | reps | 1 each |
-| frames | the destination dumps its output and the reference frames of calls [14, 230] (host-local, never committed) |
+| frames | the destination dumps its output frames and the reference frames from 16 calls before its first output to its last call (host-local, never committed) |
 
 ## 3. What is measured and reported
 
