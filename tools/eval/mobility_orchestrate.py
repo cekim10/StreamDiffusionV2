@@ -62,7 +62,7 @@ from restore_planner import maxmin as maxmin_caps  # noqa: E402
 EDGES = ["A", "B", "C", "D"]
 POLICIES = ["restart", "relay", "relay_pipe", "split", "direct"]
 FRESH = ("split_va", "restart_fresh")
-XB = ("precopy_full", "precopy_sink", "recompute_full", "recompute_win")   # osdi/expXB: re-implemented external baselines
+XB = ("precopy_full", "precopy_sink", "recompute_full", "recompute_win", "precopy_replay")   # osdi/expXB baselines; precopy_replay = M1 input-log replay (osdi/m1_continuity/e3_plan.md)
 FRAME_BYTES = 3 * 480 * 832   # one uint8 camera frame (raw upper bound; the recompute baselines send codec output, --xb_codec)
 XB_LOSSLESS = ("raw", "zlib1", "zlib6", "png", "ffv1", "x264rgb_qp0")   # tools/eval/xb_codec.py
 CHUNK_FRAMES, FIRST_FRAMES = 4, 5   # Version-aware Continuity Wavefront v0 (expM2/vacw_v0_design.md): fresh snapshots by bound owners, hash reuse
@@ -75,7 +75,8 @@ POLICY_LABEL = {"restart": "Restart", "relay": "Relay", "relay_pipe": "Pipelined
                 "precopy_full": "Llumnix-style pre-copy, full state (source keeps serving; rounds; atomic switchover)",
                 "precopy_sink": "Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover)",
                 "recompute_full": "ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up)",
-                "recompute_win": "ServerlessLLM-style approximate recomputation of the last W chunks"}
+                "recompute_win": "ServerlessLLM-style approximate recomputation of the last W chunks",
+                "precopy_replay": "M1 input-log replay (Sink pre-copy as precopy_sink; per-call input log; destination shadow replay of the recent KV; switch when caught up)"}
 AWARE = ("reuse_aware_in", "reuse_dyn", "reuse_dyn2")
 EXEC_MODE = {"full": "full", "cold": "cold", **{p: "xb" for p in XB}}   # every other policy: "fast" (M1)
 REJOIN_DB = 35.0
@@ -1095,7 +1096,9 @@ class Run:
             self.node(target).call("XB_PREPARE", task=task["id"], provision=False)
             self.node(src).call("PRECOPY_START", task=task["id"], to=target, to_host=nd["host"], to_port=nd["data"], variant=self.policy.split("_")[1],
                                 frag_bytes=self.a.frag_bytes, threshold_bytes=int(self.a.xb_threshold_mib * MB), round_limit=self.a.xb_round_limit,
-                                min_shrink=self.a.xb_min_shrink, rate_bps=rate)
+                                min_shrink=self.a.xb_min_shrink, rate_bps=rate,
+                                **({"replay_window": self.a.replay_window, "replay_lag": self.a.replay_lag, "replay_verify": bool(self.a.replay_verify),
+                                    "replay_max_wait_s": self.a.replay_max_wait_s} if self.policy == "precopy_replay" else {}))
         else:
             variant = self.policy.split("_")[1]
             c = self._xb_src_call(src)
@@ -1215,6 +1218,67 @@ class Run:
                 "bytes_sent": tot("bytes_sent"), "raw_bytes": tot("raw_bytes"), "bytes_abandoned_targets": sum(v["bytes_sent"] for v in per.values() if v["outcome"] == "cancelled"),
                 "enc_cpu_s": tot("enc_cpu_s"), "decode_cpu_s": tot("decode_cpu_s")}
 
+    def cutover_timing(self) -> dict:
+        """Pre-copy family (precopy_full / precopy_sink / precopy_replay), first switchover: the user-visible interruption
+        (destination's first output minus the source's last output), switch decision / source stop to first output, the
+        trigger to first output, and the bytes on the network before and at the switch."""
+        ev = self.node_events
+        sw = next((e for e in ev if e["event"] == "xb_precopy_switch" and e["node"] == "A"), None)
+        dst = self.xb_switches[0]["dst"] if self.xb_switches else self.edges[1]
+        fo = next((e for e in ev if e["event"] == "first_output" and e["node"] == dst), None)
+        src_t = [m["t_out_rel"] for m in self.metrics if m["owner"] == "A"]
+        rounds = [e for e in ev if e["event"] == "xb_precopy_round" and e["node"] == "A"]
+        out = {"M": sw and sw.get("call"), "rounds": len(rounds), "round_bytes": [int(e.get("dirty_bytes") or 0) for e in rounds], "final_bytes": sw and sw.get("final_bytes"),
+               "switch_reason": sw and sw.get("reason"), "t_switch_sent_rel": sw and self.rel_t(sw["t"]), "t_first_output_rel": fo and self.rel_t(fo["t"]),
+               "interruption_s": (self.rel_t(fo["t"]) - max(src_t)) if (fo and src_t) else None,
+               "switch_decision_to_first_output_s": (fo["t"] - (sw["t"] - float(sw["req_to_sent_s"]))) if (fo and sw and sw.get("req_to_sent_s") is not None) else None,
+               "source_stop_to_first_output_s": (fo["t"] - (sw["t"] - float(sw["stop_to_sent_s"]))) if (fo and sw and sw.get("stop_to_sent_s") is not None) else None,
+               "trigger_to_first_output_s": fo and self.rel_t(fo["t"])}
+        out["bytes_before_switch"] = sum(out["round_bytes"]) + int((sw or {}).get("log_bytes") or 0)
+        out["bytes_at_switch"] = int((sw or {}).get("final_bytes") or 0)
+        return out
+
+    def replay_accounting(self) -> dict:
+        """M1 input-log replay (osdi/m1_continuity/e3_plan.md): order and state checks, timing of the switchover path,
+        bytes per channel, replay progress, post-run comparison of the replayed recent KV."""
+        ev = self.node_events
+        last = lambda name, node=None: next((e for e in reversed(ev) if e["event"] == name and (node is None or e["node"] == node)), None)  # noqa: E731
+        sw_src = last("xb_precopy_switch", "A")
+        dst = self.xb_switches[0]["dst"] if self.xb_switches else self.edges[1]
+        base, caught, resume, verify = last("replay_base", dst), last("replay_caught_up", dst), last("resume", dst), last("replay_verify", dst)
+        refused = [e for e in ev if e["event"] == "replay_switch_refused"]
+        M = int(sw_src["call"]) if sw_src and sw_src.get("call") is not None else None
+        src_calls = sorted(int(m["call"]) for m in self.metrics if m["owner"] == "A")
+        dst_calls = sorted(int(m["call"]) for m in self.metrics if m["owner"] == dst)
+        src_ref = [m.get("ref_match") for m in self.metrics if m["owner"] == "A"]
+        t_last_src = max((m["t_out_rel"] for m in self.metrics if m["owner"] == "A"), default=None)   # orchestrator clock, relative to t0
+        fo = next((e for e in ev if e["event"] == "first_output" and e["node"] == dst), None)
+        applied = [e for e in ev if e["event"] == "replay_applied" and e["node"] == dst]
+        rounds = [e for e in ev if e["event"] == "xb_precopy_round" and e["node"] == "A"]
+        v = {"replay_base_verified": bool(base and base.get("verified")), "replay_conditioning_equal": bool(base and base.get("cond_equal")),
+             "replay_order_ok": bool(caught and caught.get("order_ok")), "replay_post_meta_all_equal": bool(caught and caught.get("n_post_ok") == caught.get("n_applied")),
+             "replay_meta_consistent_at_switch": bool(resume and resume.get("meta_consistent")), "replay_switch_refused": len(refused),
+             "replay_no_lost_or_duplicated_calls": M is not None and bool(src_calls) and bool(dst_calls) and src_calls[-1] == M - 1 and dst_calls[0] == M
+                                                   and len(src_calls) == len(set(src_calls)) and len(dst_calls) == len(set(dst_calls)) and src_calls == list(range(src_calls[0], M))
+                                                   and dst_calls == list(range(M, dst_calls[-1] + 1)),
+             "replay_source_unchanged_vs_reference": bool(src_ref) and all(x is True for x in src_ref), "replay_ready_timeout": bool(sw_src and sw_src.get("ready_timeout"))}
+        timing = {"trigger_to_switch_call_s": None if not sw_src else self.rel_t(sw_src["t"]), "M": M, "c0": sw_src and sw_src.get("c0"),
+                  "replayed_calls": caught and caught.get("n_applied"), "ready_wait_s": sw_src and sw_src.get("ready_wait_s"),
+                  "wait_boundary_s": sw_src and sw_src.get("wait_boundary_s"), "log_flush_s": sw_src and sw_src.get("log_flush_s"),
+                  "replay_wait_at_switch_s": resume and resume.get("replay_wait_s"), "restore_s": resume and resume.get("restore_s"), "dr2_s": resume and resume.get("dr2_s"),
+                  "t_resume_rel": resume and self.rel_t(resume["t"]), "t_first_output_rel": fo and self.rel_t(fo["t"]),
+                  "interruption_s": (self.rel_t(fo["t"]) - t_last_src) if (fo and t_last_src is not None) else None,
+                  "switch_request_to_first_output_s": (fo["t"] - (sw_src["t"] - float(sw_src["req_to_sent_s"]))) if (fo and sw_src and sw_src.get("req_to_sent_s") is not None) else None,
+                  "stop_to_first_output_s": (fo["t"] - (sw_src["t"] - float(sw_src["stop_to_sent_s"]))) if (fo and sw_src and sw_src.get("stop_to_sent_s") is not None) else None,
+                  "replay_s_median": caught and caught.get("replay_s_median"), "replay_s_total": caught and caught.get("replay_s_total"),
+                  "replay_lag_max_queue_s": caught and caught.get("queue_s_max"), "source_gen_service_s_median": float(np.median([m["chunk_s"] for m in self.metrics if m["owner"] == "A"])) if src_calls else None,
+                  "dst_service_s_median": float(np.median([m["chunk_s"] for m in self.metrics if m["owner"] == dst][1:])) if len(dst_calls) > 1 else None}
+        bytes_ = {"sink_round_bytes": [int(e.get("dirty_bytes") or 0) for e in rounds], "final_bytes": sw_src and sw_src.get("final_bytes"),
+                  "log_bytes": sw_src and sw_src.get("log_bytes"), "log_calls": sw_src and sw_src.get("log_calls"), "dr2_bytes": sw_src and sw_src.get("dr2_bytes")}
+        bytes_["total_before_switch"] = sum(bytes_["sink_round_bytes"]) + int(bytes_["log_bytes"] or 0)
+        return {"validation": v, "timing": timing, "bytes": bytes_, "progress": [{"call": e.get("call"), "t_rel": self.rel_t(e["t"]), "replay_s": e.get("replay_s"), "ok": e.get("ok")} for e in applied],
+                "verify": None if not verify else {"recent_rel": verify.get("recent_rel"), "bitwise": verify.get("bitwise")}, "base": base, "caught_up": caught}
+
     def execute_xb(self):
         """Pre-copy / recompute baselines: the source keeps generating and serving after the trigger; the user moves on the
         same schedule as every other policy; the method's transfer targets the user's current edge (restarted on a move,
@@ -1226,8 +1290,10 @@ class Run:
         for lb in self.nodes_used:
             # exact_check: per-call output digest vs the reference; delivery: estimated remote delivery bytes (H.264 CRF 23 / 28)
             # of every chunk a node serves while the user is at another edge (the user is at edges[1] from the trigger on)
+            dump = ({"dir": a.dump_frames, "lo": max(0, a.migration_chunk - 16), "hi": a.migration_chunk + a.dump_calls, "ref": True}
+                    if (a.dump_frames and lb != "A") else None)   # M1 replay validation: destination output + reference frames
             self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=self.run_id, t0=None, exact_check=True,
-                               delivery=list(xc.DELIVERY_CRFS), user_edge=self.edges[1])
+                               delivery=list(xc.DELIVERY_CRFS), user_edge=self.edges[1], **({"dump": dump} if dump else {}))
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
         self.manifest = prep["manifest"]
         # measured LAN round-trip time between every pair of hosts of the run (TCP echo on the data plane; untimed)
@@ -1289,7 +1355,14 @@ class Run:
         if self.running:
             self.node(self.running).call("EXEC_STOP")
         self.drain(1.0)
-        ends = {lb: self.node(lb).call("RUN_END", timeout=300) for lb in self.nodes_used}
+        if self.policy == "precopy_replay" and a.replay_verify and self.xb_switches:
+            # untimed: after generation stopped, the source sends its recent slots at the switch for the comparison
+            dst = self.xb_switches[0]["dst"]; nd = self.o.node_spec[dst]
+            self.node("A").call("REPLAY_VERIFY", to_host=nd["host"], to_port=nd["data"], timeout=900)
+            t_v = time.time()
+            while time.time() - t_v < 300 and not any(e["event"] == "replay_verify" for e in self.node_events):
+                self.drain(0.2)
+        ends = {lb: self.node(lb).call("RUN_END", timeout=900) for lb in self.nodes_used}
         self.drain(0.5)
         for lb, e in ends.items():
             if e.get("network_csv"):
@@ -1313,6 +1386,9 @@ class Run:
         sv = [e for e in self.node_events if e["event"] == "xb_recompute_state_verified"]
         if sv:
             validation["recompute_state_verified"] = all(e.get("ok") in (True, "True") for e in sv)
+        replay = self.replay_accounting() if self.policy == "precopy_replay" else None
+        if replay is not None:
+            validation.update(replay["validation"])
         inputs = self.xb_input_accounting()
         if inputs is not None:
             validation["input_check"] = all(v is True for v in self.input_check.values())
@@ -1325,7 +1401,8 @@ class Run:
                    "rtt_measured_lan": self.rtt, "codecs": codecs,
                    "moves": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in m.items()} for m in self.moves],
                    "tasks": [{k: (self.rel_t(v) if k.startswith("t_") and v is not None else v) for k, v in t.items()} for t in self.xb_tasks],
-                   "switchovers": [{**sw, "t": self.rel_t(sw["t"])} for sw in self.xb_switches], "inputs": inputs,
+                   "switchovers": [{**sw, "t": self.rel_t(sw["t"])} for sw in self.xb_switches], "inputs": inputs, "replay": replay,
+                   "cutover": self.cutover_timing() if self.policy.startswith("precopy") else None,
                    "validation": validation, "node_end": {lb: {k: v for k, v in e.items() if k not in ("network_csv", "baseline_record")} for lb, e in ends.items()},
                    "source_prep": {k: v for k, v in prep.items() if k != "manifest"}}
         self.metric_csv.close()
@@ -1927,6 +2004,12 @@ def main():
     ap.add_argument("--xb_grid", type=str, default="", help="XB calibration: settings run one after the other in this invocation, ';'-separated, each 'thr=16:rl=3' / 'lag=1:rl=6' / 'W=3' / 'codec=h264_crf23'")
     ap.add_argument("--xb_codec", type=str, default="ffv1", help="XB recompute: input-history codec (tools/eval/xb_codec.py; ffv1 = primary lossless, h264_crf23 / h264_crf28 = lossy sensitivity, raw = upper bound)")
     ap.add_argument("--xb_horizon", type=int, default=100, help="XB: calls generated at the final edge after its switchover before the run ends")
+    ap.add_argument("--replay_window", type=int, default=12, help="M1 replay: the destination replays at least this many calls before the switchover")
+    ap.add_argument("--replay_lag", type=int, default=1, help="M1 replay: switch when the destination's replay is within this many calls of the source")
+    ap.add_argument("--replay_max_wait_s", type=float, default=300.0, help="M1 replay: give up waiting for the replay to catch up (recorded as a timeout)")
+    ap.add_argument("--replay_verify", action="store_true", help="M1 replay: after the run, compare the replayed recent KV with the source's (untimed)")
+    ap.add_argument("--dump_frames", type=str, default="", help="M1 replay validation: destination output + reference frames under this host-local directory")
+    ap.add_argument("--dump_calls", type=int, default=200, help="M1 replay validation: dump calls [trigger - 16, trigger + dump_calls]")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
     ap.add_argument("--prepos", type=str, default="", help="placement policy before the move (none, oracle, top1, greedy, proportional, coverage); needs --path A,<dest>")
     ap.add_argument("--probs", type=str, default="0.6,0.3,0.1", help="predicted probabilities for B, C, D")

@@ -77,6 +77,15 @@ def meta_diff(torch, a: dict, b: dict) -> list:
     return bad
 
 
+def meta_digest(torch, meta: dict) -> str:
+    """SHA-256 of a ring metadata record (positions, end indices, current_step, eviction queues): one device-to-host
+    copy; the same function on the source (logged after each call) and the destination (after each replayed call)."""
+    flat = torch.cat([t.reshape(-1).to(torch.int64) for key in ("pos", "gi", "li") for t in meta[key]]).cpu().numpy().tobytes()
+    h = hashlib.sha256(flat)
+    h.update(json.dumps([meta["cs"], meta["ev"]], default=int).encode())
+    return h.hexdigest()
+
+
 def snapshot(pl, host: str = "cpu") -> dict:
     return {"k": [l_["k"].to(host, copy=True) for l_ in pl.kv_cache1], "v": [l_["v"].to(host, copy=True) for l_ in pl.kv_cache1], "meta": meta_of(pl)}
 

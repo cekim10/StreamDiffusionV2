@@ -49,7 +49,11 @@ for p in (REPO_ROOT, REPO_ROOT / "tools", REPO_ROOT / "tools" / "eval"):
 import numpy as np  # noqa: E402
 
 from common import DEFAULT_MSS, MSS_WARNINGS, CsvLog, EventLog, ResourceSampler, Throttle, clock_sync_server, effective_mss, host_info, tcp_accept, tcp_connect, tcp_listen  # noqa: E402
-from proto_handoff import MB, RecvPool, _pool, component_digest, estimate_sink_bytes, payload_slices, recv_exact, recv_msg, send_msg  # noqa: E402
+from proto_handoff import MB, RecvPool, _pool, bytes_to_tensor, component_digest, estimate_sink_bytes, payload_slices, recv_exact, recv_msg, send_msg, tensor_to_bytes  # noqa: E402
+
+import contextlib  # noqa: E402
+
+_NOLOCK = contextlib.nullcontext()   # stands in for a send lock where a connection has a single writer
 
 REJOIN_DB = 35.0
 # Node identity reported in HELLO and checked by the orchestrator (osdi/audi_s0_w2_provenance.md): what the node
@@ -855,6 +859,119 @@ class GpuRuntime:
         gc.collect(); self.torch.cuda.empty_cache()
         self.mem("after release")
 
+    # ---- M1 input-log replay (osdi/m1_continuity/e3_plan.md). Source: log capture; destination: shadow replay.
+    def rlog_arm(self):
+        """Source: record every generator call from now on (tools/eval/m1_replay.Recorder; read-only, no effect on generation)
+        and keep the decoder inputs of the last calls (DR-2 latents at the switch)."""
+        import m1_replay as mr
+
+        if getattr(self, "_rlog_rec", None) is None:
+            self._rlog_rec = mr.Recorder(self.torch, self.pl, self.sink, self.device, self._sync, keep_slots=False)
+        self._rlog_rec.reset()
+        self.capture_latents = True
+
+    def rlog_disarm(self):
+        if getattr(self, "_rlog_rec", None) is not None:
+            self._rlog_rec.reset()
+        self.capture_latents = False; self.last_latents.clear()
+
+    def rlog_begin(self, c: int):
+        self._rlog_rec.call, self._rlog_rec.active = c, True
+
+    def rlog_end(self, c: int):
+        """The logged generator call of source call c as (header, [buffers]): its inputs exactly as fed (both Stream-Batch
+        rows), timesteps, row starts / ends, the forced cache decisions (refresh slot per layer and row) and the digest of
+        the ring metadata after the call. None if the call made no generator call."""
+        import m1_replay as mr
+        from proto_handoff import tensor_to_bytes
+
+        rec = self._rlog_rec
+        rec.call, rec.active = None, False
+        e = rec.entries.pop(c, None); rec.inputs.pop(c, None)
+        if e is None:
+            return None
+        tens, bufs, off = [], [], 0
+        for name in ("x", "t", "s", "e"):
+            m, b = tensor_to_bytes(e[name])
+            tens.append({"name": name, "offset": off, "nbytes": int(b.nbytes), **m}); bufs.append(b); off += int(b.nbytes)
+        return {"call": c, "refresh": [list(x) for x in e["refresh"]], "post_digest": mr.meta_digest(self.torch, e["post"]), "tensors": tens, "nbytes": off,
+                "gen_s": e["gen_s"]}, bufs
+
+    def cond_digest(self) -> str:
+        """Prompt conditioning (prompt embeddings and the cross-attention cache): equal on source and destination."""
+        from proto_handoff import tensor_to_bytes
+
+        h = hashlib.sha256()
+        for t in [self.pl.conditional_dict["prompt_embeds"]] + [x for e in self.pl.crossattn_cache for x in (e["k"], e["v"])]:
+            h.update(tensor_to_bytes(t)[1].tobytes())
+        return h.hexdigest()
+
+    def shadow_base(self) -> float:
+        """Destination: the shadow ring = the source's ring at the base boundary (Sink and metadata from the received
+        components, recent slots zero); refresh decisions are forced from the log (adaptive refresh off)."""
+        self._sync(); t0 = time.perf_counter()
+        self.sa.restore_state(self.pl, self.pm, self.session, self.snap, {"meta", "sink"})
+        for b in self.pl.generator.model.blocks:
+            b.self_attn.adapt_sink_thr = -1
+        self._sync()
+        return time.perf_counter() - t0
+
+    def rlog_apply(self, hdr: dict, payload) -> tuple[bool, float]:
+        """Destination: replay one logged call on the shadow ring (generator only, output discarded). Returns (the ring
+        metadata after the call equals the source's, seconds)."""
+        import m1_replay as mr
+        from proto_handoff import bytes_to_tensor
+
+        view = memoryview(payload)
+        T = {t["name"]: bytes_to_tensor(t, view[t["offset"]:t["offset"] + t["nbytes"]], self.device) for t in hdr["tensors"]}
+        pl = self.pl
+        for li, i, s_ in hdr["refresh"]:
+            pl.generator.model.blocks[li].self_attn.evict_idx[i].insert(0, (s_ + 1) * self.fsl)
+        self._sync(); t0 = time.perf_counter()
+        with self.torch.no_grad():
+            pl.generator(noisy_image_or_video=T["x"], conditional_dict=pl.conditional_dict, timestep=T["t"], kv_cache=pl.kv_cache1,
+                         crossattn_cache=pl.crossattn_cache, current_start=T["s"], current_end=T["e"])
+        self._sync(); dt = time.perf_counter() - t0
+        return mr.meta_digest(self.torch, mr.meta_of(pl)) == hdr["post_digest"], dt
+
+    def replay_switch(self) -> dict:
+        """Destination at the switch, after the final inflight / meta components were unpacked into self.snap: compare the
+        shadow ring's metadata with the source's final metadata, keep the replayed recent slots, run the M1 fast restore
+        (which zeroes the ring) and write the replayed recent slots back. The Sink is bound by the caller."""
+        import m1_replay as mr
+
+        snap, pl, sink, fsl = self.snap, self.pl, self.sink, self.fsl
+        ref = {"pos": [r["pos"] for r in snap["ring"]], "gi": [r["global_end_index"] for r in snap["ring"]], "li": [r["local_end_index"] for r in snap["ring"]],
+               "cs": [r["current_step"] for r in snap["ring"]], "ev": [None if e is None else [list(x) for x in e] for e in snap["evict"]]}
+        diff = mr.meta_diff(self.torch, mr.meta_of(pl), ref)
+        self._sync(); t0 = time.perf_counter()
+        self._replayed = ([l_["k"][:, sink * fsl:].clone() for l_ in pl.kv_cache1], [l_["v"][:, sink * fsl:].clone() for l_ in pl.kv_cache1])
+        self.restore_fast()
+        for l_, k_, v_ in zip(pl.kv_cache1, *self._replayed):
+            l_["k"][:, sink * fsl:] = k_; l_["v"][:, sink * fsl:] = v_
+        self._sync()
+        return {"meta_consistent": not diff, "meta_diff": diff[:12], "restore_s": time.perf_counter() - t0}
+
+    def replay_verify(self, hdr: dict, payload) -> dict:
+        """After the run: the source's recent slots at the switch (received now, untimed) against the replayed ones."""
+        self.unpack(hdr, payload)
+        sink, fsl = self.sink, self.fsl
+        out = {"per_layer": {"k": [], "v": []}}
+        acc = {"k": [0.0, 0.0], "v": [0.0, 0.0]}
+        bit = True
+        for li, l_ in enumerate(self.snap["kv"]):
+            for j, key in enumerate(("k", "v")):
+                a, b = self._replayed[j][li], l_[key][:, sink * fsl:]
+                bit = bit and bool(self.torch.equal(a, b))
+                d = a.float() - b.float()
+                dd, bb = float((d * d).sum()), float((b.float() ** 2).sum())
+                acc[key][0] += dd; acc[key][1] += bb
+                out["per_layer"][key].append((dd / bb) ** 0.5 if bb else None)
+        out["recent_rel"] = {k_: (v[0] / v[1]) ** 0.5 if v[1] else None for k_, v in acc.items()}
+        out["bitwise"] = bit
+        self._replayed = None
+        return out
+
 
 class FakeRuntime:
     """Protocol test double (no torch): fixed-size random Sink, sleep-based generation, PSNR marker values.
@@ -979,6 +1096,38 @@ class FakeRuntime:
         else:
             ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
         return True, float(ps), 0.9 if self.bound else 0.6, self.args.dry_service_s, [0, 1, 6]
+
+    # M1 input-log replay doubles (protocol test only)
+    def rlog_arm(self):
+        self.capture_latents = True
+
+    def rlog_disarm(self):
+        self.capture_latents = False
+
+    def rlog_begin(self, c):
+        pass
+
+    def rlog_end(self, c):
+        b = np.zeros(400_000, dtype=np.uint8)
+        return {"call": c, "refresh": [], "post_digest": f"dry{c}", "tensors": [{"name": "x", "offset": 0, "nbytes": len(b), "shape": [len(b)], "dtype": "bf16"}],
+                "nbytes": len(b), "gen_s": 0.0}, [b]
+
+    def cond_digest(self):
+        return "dry"
+
+    def shadow_base(self):
+        return 0.0
+
+    def rlog_apply(self, hdr, payload):
+        time.sleep(self.args.dry_service_s * 0.25)
+        return hdr["post_digest"] == f"dry{hdr['call']}", self.args.dry_service_s * 0.25
+
+    def replay_switch(self):
+        self.replayed = True
+        return {"meta_consistent": True, "meta_diff": [], "restore_s": 0.0}
+
+    def replay_verify(self, hdr, payload):
+        return {"recent_rel": {"k": 0.01, "v": 0.02}, "per_layer": {"k": [], "v": []}, "bitwise": False}
 
     # Experiment VD-2 doubles (sleep-based; no state)
     last_latents = []
@@ -1192,6 +1341,14 @@ class Node:
                     "last_fp": None, "bind_at": None, "promotions": [], "snapshots": [], "versions": set(), "await_manifest": False, "unpacked_version": None,
                     "xb": None, "xb_snap_req": None, "xb_store": None, "xb_rc": None, "wait_sink": False,
                     "exact_check": bool(h.get("exact_check")), "delivery": h.get("delivery"), "user_edge": h.get("user_edge"), "deliv_q": None, "deliv_thread": None}
+        if h.get("dump"):
+            # M1 replay validation (osdi/m1_continuity/e3_plan.md): this node's output frames of the calls it generates in
+            # [lo, hi] and, at the run end, the same-seed reference frames of [lo, hi]; written by a background thread
+            import queue
+
+            dmp = dict(h["dump"]); dmp["q"] = queue.Queue(); dmp["root"] = Path(dmp["dir"]) / h["run_id"]
+            dmp["thread"] = threading.Thread(target=self._dump_worker, args=(dmp,), daemon=True); dmp["thread"].start()
+            self.run["dump"] = dmp
         if self.run["delivery"]:
             import queue
 
@@ -1513,6 +1670,27 @@ class Node:
             with r["xb_rc"]["cv"]:
                 r["xb_rc"]["cv"].notify_all()
         self.rt.restore_inputs()
+        dump_out = None
+        if r.get("dump") is not None:
+            dmp = r["dump"]; dmp["q"].put(None); dmp["thread"].join(timeout=600)
+            dump_out = {"out": dmp.get("out_dir"), "out_calls": dmp.get("n", 0), "ref": None}
+            base = getattr(self.rt, "base", None)
+            if dmp.get("ref") and base is not None and not self.a.dry_run:
+                import vc_frames as vf
+
+                st_ = vf.FrameStore(dmp["root"], "REF")
+                n = 0
+                for c in range(int(dmp["lo"]), int(dmp["hi"]) + 1):
+                    fr = base.get(c)
+                    if fr is not None:
+                        st_.add(c, fr, phase="ref", out_input_call=c - (self.rt.k - 1)); n += 1
+                dump_out["ref"] = str(st_.close({"node": self.label, "run_id": r["id"], "kind": "reference"})); dump_out["ref_calls"] = n
+        if r.get("xb") is not None and r["xb"].get("replay") is not None:
+            if "step" in vars(self.rt):
+                del self.rt.step
+            r["xb"]["replay"].pop("verify_snap", None)
+        if hasattr(self.rt, "rlog_disarm"):
+            self.rt.rlog_disarm()
         if r.get("deliv_q") is not None:
             r["deliv_q"].put(None); r["deliv_thread"].join(timeout=120)
         r["full_pack"] = None
@@ -1522,6 +1700,8 @@ class Node:
                "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb(),
                "baseline_record": getattr(self.rt, "base_record", None) if self.a.sink_fp else None, "promotion_calls": list(r["promotions"])}
         out["snapshots"] = list(r["snapshots"]); out["versions_seen"] = sorted(r["versions"])
+        if dump_out is not None:
+            out["dump"] = dump_out
         self.rt.release()
         r["sink"] = None; r.pop("live_snap", None)
         self.run = None
@@ -1611,8 +1791,9 @@ class Node:
                     return sent, headers, digests
                 if comp not in whole and task["held"].get((comp, f["id"])) == hsh:
                     continue
-                send_msg(conn, "PFRAG", {"task": task["id"], "comp": comp, "fragment_id": f["id"], "byte_offset": f["off"], "length": f["len"], "sha256": hsh,
-                                         "comp_nbytes": len(buf)}, mv[f["off"]:f["off"] + f["len"]], task["throttle"])
+                with task.get("send_lock") or _NOLOCK:   # M1 replay: the log stream shares this connection
+                    send_msg(conn, "PFRAG", {"task": task["id"], "comp": comp, "fragment_id": f["id"], "byte_offset": f["off"], "length": f["len"], "sha256": hsh,
+                                             "comp_nbytes": len(buf)}, mv[f["off"]:f["off"] + f["len"]], task["throttle"])
                 task["held"][(comp, f["id"])] = hsh; sent += f["len"]
             del mv, buf
         return sent, headers, digests
@@ -1624,6 +1805,13 @@ class Node:
         task = {"id": h["task"], "to": h["to"], "host": h["to_host"], "port": int(h["to_port"]), "variant": h["variant"], "frag_bytes": int(h["frag_bytes"]),
                 "threshold": int(h["threshold_bytes"]), "round_limit": int(h["round_limit"]), "min_shrink": float(h["min_shrink"]),
                 "throttle": Throttle(float(h["rate_bps"])) if float(h["rate_bps"]) > 0 else None, "cancel": False, "switching": False, "held": {}, "rounds": [], "done": False}
+        if task["variant"] == "replay":
+            # M1 input-log replay (osdi/m1_continuity/e3_plan.md): Sink pre-copy as precopy_sink, plus the base metadata, the
+            # per-call input log and the destination's shadow replay; switchover only when the replay is caught up
+            task["replay"] = {"W": int(h.get("replay_window", 12)), "lag": int(h.get("replay_lag", 1)), "max_wait_s": float(h.get("replay_max_wait_s", 300.0)),
+                              "verify": bool(h.get("replay_verify")), "c0": None, "c0_set": threading.Event(), "frontier": None, "acks": [], "sent_upto": None,
+                              "sent_calls": 0, "sent_bytes": 0, "dropped_pre_base": 0, "missing": [], "q": None}
+            task["send_lock"] = threading.Lock()
         r["xb"] = task
         task["thread"] = threading.Thread(target=self._precopy, args=(task,), daemon=True); task["thread"].start()
         return {}
@@ -1637,11 +1825,23 @@ class Node:
         except Exception as exc:  # noqa: BLE001
             self.event("xb_precopy_failed", task=task["id"], error=repr(exc)); return
         prev = None
+        rp = task.get("replay")
+        if rp is not None:
+            task["conn"] = conn
+            self._rlog_start(task)   # armed before the first snapshot request: the base boundary's call is always logged
         while not task["cancel"]:
             t0 = time.time()
             c, snap = self._xb_snapshot()
             t1 = time.time()
-            sent, _, _ = self._xb_send_dirty(task, conn, snap, comps)
+            if rp is not None and rp["c0"] is None:
+                # round 1 = the replay base: the Sink and the ring metadata of this boundary; the log starts at call c
+                rp["c0"] = c; rp["c0_set"].set()
+                sent, headers, digests = self._xb_send_dirty(task, conn, snap, ("sink", "meta"), whole=("meta",))
+                with task["send_lock"]:
+                    send_msg(conn, "PROUND", {"task": task["id"], "round": 1, "call": c, "headers": headers, "digests": digests, "cond_digest": self.rt.cond_digest(),
+                                              "W": rp["W"]}, b"", None)
+            else:
+                sent, _, _ = self._xb_send_dirty(task, conn, snap, comps)
             del snap
             rnd = {"round": len(task["rounds"]) + 1, "boundary_call": c, "dirty_bytes": sent, "snapshot_s": t1 - t0, "send_s": time.time() - t1}
             task["rounds"].append(rnd)
@@ -1653,7 +1853,21 @@ class Node:
             prev = sent
             if reason:
                 task["switch_reason"] = reason; break
+        if rp is not None and not task["cancel"]:
+            # M1 replay: switch only when the destination has replayed >= W calls and is within `lag` calls of the source
+            t_w0 = time.time()
+            while not task["cancel"]:
+                fr, last = rp["frontier"], r["call"] - 1
+                if fr is not None and fr - rp["c0"] + 1 >= rp["W"] and last - fr <= rp["lag"]:
+                    break
+                if time.time() - t_w0 > rp["max_wait_s"]:
+                    rp["ready_timeout"] = True; break
+                time.sleep(0.01)
+            rp["ready_wait_s"] = time.time() - t_w0
+            rp["frontier_at_ready"] = rp["frontier"]; rp["source_call_at_ready"] = r["call"] - 1
         if task["cancel"]:
+            if rp is not None:
+                self._rlog_stop(task)
             conn.close(); self.event("xb_precopy_cancelled", task=task["id"], rounds=len(task["rounds"])); return
         # atomic switchover at a chunk boundary: stop after the current call, serialize, send the final dirty set
         task["switching"] = True
@@ -1663,16 +1877,220 @@ class Node:
         r["owner"] = False
         t_stop = time.time()
         c = r["call"]
+        extra = {}
+        if rp is not None:
+            # every call before the switch is logged and sent before the final components (ordered on this connection)
+            t_f = time.time()
+            while rp["sent_upto"] is None or rp["sent_upto"] < c - 1:
+                if time.time() - t_f > 120:
+                    break
+                time.sleep(0.002)
+            extra["log_flush_s"] = time.time() - t_f
         snap = self.rt.serialize_live()
         whole = () if task["variant"] == "full" else ("inflight", "meta")
         final_comps = comps if task["variant"] == "full" else ("sink", "inflight", "meta")
         sent, headers, digests = self._xb_send_dirty(task, conn, snap, final_comps, whole=whole)
+        if rp is not None:
+            if rp["verify"]:
+                rp["verify_snap"] = snap   # the source's state at the switch, for the untimed post-run comparison only
+            lats = list(self.rt.last_latents)[-2:] if not self.a.dry_run else []
+            tens, bufs, off = [], [], 0
+            for i, z in enumerate(lats):
+                m, b = tensor_to_bytes(z)
+                tens.append({"name": f"z{i}", "offset": off, "nbytes": int(b.nbytes), **m}); bufs.append(b); off += int(b.nbytes)
+            with task["send_lock"]:
+                send_msg(conn, "RDR2", {"task": task["id"], "tensors": tens, "nbytes": off}, bufs, task["throttle"])
+            sent += off
+            extra.update({"dr2_bytes": off, "log_calls": rp["sent_calls"], "log_bytes": rp["sent_bytes"], "c0": rp["c0"], "last_log": rp["sent_upto"],
+                          "ready_wait_s": rp.get("ready_wait_s"), "ready_timeout": bool(rp.get("ready_timeout")), "frontier_at_ready": rp.get("frontier_at_ready"),
+                          "source_call_at_ready": rp.get("source_call_at_ready"), "missing_log_calls": rp["missing"], "dropped_pre_base": rp["dropped_pre_base"]})
         del snap
-        send_msg(conn, "PSWITCH", {"task": task["id"], "from": self.label, "call": c, "variant": task["variant"], "headers": headers, "digests": digests, "t_go": time.time()}, b"", None)
+        with task.get("send_lock") or _NOLOCK:
+            send_msg(conn, "PSWITCH", {"task": task["id"], "from": self.label, "call": c, "variant": task["variant"], "headers": headers, "digests": digests, "t_go": time.time(),
+                                       **({"c0": rp["c0"], "last_log": rp["sent_upto"]} if rp is not None else {})}, b"", None)
+        if rp is not None:
+            self._rlog_stop(task)
         conn.close()
         task["done"] = True
         self.event("xb_precopy_switch", task=task["id"], call=c, final_bytes=sent, reason=task.get("switch_reason"), wait_boundary_s=t_stop - t_req,
-                   rounds=len(task["rounds"]), t_sent=time.time())
+                   rounds=len(task["rounds"]), t_sent=time.time(), req_to_sent_s=time.time() - t_req, stop_to_sent_s=time.time() - t_stop, **extra)
+
+    def _dump_worker(self, dmp: dict):
+        import vc_frames as vf
+
+        st_ = None
+        while True:
+            it = dmp["q"].get()
+            if it is None:
+                break
+            c, fr = it
+            if st_ is None:
+                st_ = vf.FrameStore(dmp["root"], f"OUT_{self.label}")
+            st_.add(c, fr, phase="owner", out_input_call=c - (self.rt.k - 1)); dmp["n"] = dmp.get("n", 0) + 1
+        if st_ is not None:
+            dmp["out_dir"] = str(st_.close({"node": self.label, "kind": "owner output"}))
+
+    # ---- M1 input-log replay: source side (log capture, ordered sender, progress reader, post-run verification)
+    def _rlog_start(self, task: dict):
+        """Arm the log and wrap this runtime's step: every generator call of the source is recorded (read-only) and queued
+        in call order; one sender thread ships the entries on the pre-copy connection; one reader thread receives the
+        destination's progress acknowledgements on the same connection."""
+        import queue
+
+        rp, rt = task["replay"], self.rt
+        rp["q"] = queue.Queue()
+        rt.rlog_arm()
+        orig = type(rt).step.__get__(rt)
+
+        def step(c, override=None, skip=False):
+            rt.rlog_begin(c)
+            try:
+                return orig(c, override, skip)
+            finally:
+                item = rt.rlog_end(c)
+                if item is not None:
+                    rp["q"].put((time.time(), item))
+        rt.step = step
+        rp["sender"] = threading.Thread(target=self._rlog_sender, args=(task,), daemon=True); rp["sender"].start()
+        rp["reader"] = threading.Thread(target=self._rlog_ack_reader, args=(task,), daemon=True); rp["reader"].start()
+
+    def _rlog_sender(self, task: dict):
+        rp, conn = task["replay"], task["conn"]
+        rp["c0_set"].wait()
+        expect = rp["c0"]
+        while True:
+            it = rp["q"].get()
+            if it is None:
+                break
+            t_rec, (hdr, bufs) = it
+            c = int(hdr["call"])
+            if c < rp["c0"]:
+                rp["dropped_pre_base"] += 1; continue
+            if c != expect:
+                rp["missing"].append([expect, c])
+            expect = c + 1
+            try:
+                with task["send_lock"]:
+                    send_msg(conn, "RLOG", {"task": task["id"], **hdr, "t_rec": t_rec}, bufs, task["throttle"])
+            except OSError as exc:
+                rp["send_error"] = repr(exc); break
+            rp["sent_upto"] = c; rp["sent_calls"] += 1; rp["sent_bytes"] += int(hdr["nbytes"])
+
+    def _rlog_ack_reader(self, task: dict):
+        rp, conn = task["replay"], task["conn"]
+        try:
+            while True:
+                hdr, _ = recv_msg(conn)
+                if hdr.get("kind") == "RACK":
+                    rp["frontier"] = int(hdr["call"]); rp["acks"].append([time.time(), int(hdr["call"]), hdr.get("ok")])
+        except (ConnectionError, OSError, ValueError):
+            pass
+
+    def _rlog_stop(self, task: dict):
+        rp = task["replay"]
+        if rp.get("q") is not None:
+            rp["q"].put(None)
+        if rp.get("sender") is not None:
+            rp["sender"].join(timeout=60)
+        if "step" in vars(self.rt):
+            del self.rt.step   # the class method again (no further logging)
+
+    def cmd_replay_verify(self, h):
+        """Source, after the run (untimed): send the recent slots of its state at the switch for the comparison with the
+        destination's replayed recent slots."""
+        task = (self.run or {}).get("xb") or {}
+        rp = task.get("replay") or {}
+        snap = rp.pop("verify_snap", None)
+        if snap is None:
+            return {"sent": False}
+        hdr, bufs = self.rt.pack(snap, "recent")
+        del snap
+        conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
+        send_msg(conn, "RVERIFY", {"from": self.label, "task": task.get("id"), **hdr}, bufs, None)
+        conn.close()
+        return {"sent": True, "bytes": int(hdr["nbytes"])}
+
+    # ---- M1 input-log replay: destination side (base, ordered log, shadow replay worker, verification)
+    def _replay_state(self) -> dict:
+        r = self.run
+        if r.get("replay_dst") is None:
+            r["replay_dst"] = {"entries": {}, "cv": threading.Condition(), "base_ready": threading.Event(), "c0": None, "frontier": None, "applied": [], "n_ok": 0,
+                               "recv_calls": 0, "recv_bytes": 0, "last_recv": None, "dups": 0, "gaps": [], "stop": False, "worker": None, "conn": None,
+                               "send_lock": threading.Lock(), "dr2": None, "base": None}
+        return r["replay_dst"]
+
+    def _replay_base(self, conn, hdr: dict):
+        """Round 1 of the replay pre-copy is complete: verify the Sink and metadata of the base boundary against the
+        source's digests, build the shadow ring from them (recent slots zero) and start the replay worker."""
+        self._thread_init()
+        r = self.run
+        rs, st = self._replay_state(), r["xb_store"]
+        t0 = time.time()
+        ok = {}
+        for comp, dg in hdr["digests"].items():
+            c = (st or {}).get("comps", {}).get(comp)
+            ok[comp] = c is not None and component_digest(payload_slices(hdr["headers"][comp], c["buf"])) == dg
+        good = bool(ok) and all(ok.values())
+        t1 = time.time()
+        cond_ok = base_s = None
+        if good:
+            for comp in ("meta", "sink"):
+                self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
+            base_s = self.rt.shadow_base()
+            cond_ok = self.rt.cond_digest() == hdr["cond_digest"]
+        rs["c0"], rs["conn"] = int(hdr["call"]), conn
+        rs["base"] = {"verified": good, "components_ok": ok, "cond_equal": cond_ok, "verify_s": t1 - t0, "base_s": base_s, "t": time.time()}
+        self.event("replay_base", task=hdr["task"], call=rs["c0"], verified=good, components_ok=ok, cond_equal=cond_ok, verify_s=t1 - t0, base_s=base_s)
+        if good and cond_ok:
+            rs["base_ready"].set()
+            if rs["worker"] is None:
+                rs["worker"] = threading.Thread(target=self._replay_worker, args=(rs,), daemon=True); rs["worker"].start()
+
+    def _replay_enqueue(self, conn, hdr: dict, payload):
+        rs = self._replay_state()
+        c = int(hdr["call"])
+        hdr["_t_recv"] = time.time()
+        with rs["cv"]:
+            if c in rs["entries"] or (rs["frontier"] is not None and c <= rs["frontier"]):
+                rs["dups"] += 1
+            else:
+                if rs["last_recv"] is not None and c != rs["last_recv"] + 1:
+                    rs["gaps"].append([rs["last_recv"], c])
+                rs["last_recv"] = c; rs["entries"][c] = (hdr, payload); rs["recv_calls"] += 1; rs["recv_bytes"] += int(hdr.get("nbytes") or 0)
+            if rs["conn"] is None:
+                rs["conn"] = conn
+            rs["cv"].notify_all()
+
+    def _replay_worker(self, rs: dict):
+        """Apply the logged calls strictly in order from the base call; acknowledge each to the source."""
+        self._thread_init()
+        nxt = rs["c0"]
+        while True:
+            with rs["cv"]:
+                while not rs["stop"] and nxt not in rs["entries"]:
+                    rs["cv"].wait(0.05)
+                if rs["stop"]:
+                    break
+                hdr, payload = rs["entries"].pop(nxt)
+            t0 = time.time()
+            ok, dt = self.rt.rlog_apply(hdr, payload)
+            t1 = time.time()
+            rs["applied"].append({"call": nxt, "ok": bool(ok), "replay_s": dt, "t": t1, "queue_s": t0 - hdr["_t_recv"], "lag_from_source_s": t1 - float(hdr.get("t_rec") or t1)})
+            rs["n_ok"] += bool(ok)
+            with rs["cv"]:
+                rs["frontier"] = nxt; rs["cv"].notify_all()
+            try:
+                with rs["send_lock"]:
+                    send_msg(rs["conn"], "RACK", {"call": nxt, "ok": bool(ok)}, b"", None)
+            except (OSError, AttributeError):
+                pass
+            self.event("replay_applied", t1, call=nxt, ok=bool(ok), replay_s=dt, queue_s=t0 - hdr["_t_recv"])
+            nxt += 1
+
+    def _replay_verify(self, hdr: dict, payload):
+        self._thread_init()
+        out = self.rt.replay_verify(hdr, payload)
+        self.event("replay_verify", recent_rel=out["recent_rel"], bitwise=out["bitwise"], per_layer=out["per_layer"])
 
     def cmd_precopy_cancel(self, h):
         task = (self.run or {}).get("xb")
@@ -1689,6 +2107,11 @@ class Node:
         """Destination of a pre-copy task: fresh buffers (warm, untimed) and an empty receive store."""
         r = self.run
         r["xb_store"] = {"task": h["task"], "comps": {}}
+        if r.get("replay_dst") is not None:
+            old = r["replay_dst"]
+            with old["cv"]:
+                old["stop"] = True; old["cv"].notify_all()
+        r["replay_dst"] = None
         if h.get("provision", True):
             self.rt.provision()
         if h.get("inputs"):
@@ -1729,6 +2152,8 @@ class Node:
         self.event("xb_switch_verified", t1, task=hdr["task"], ok=all_ok, components_ok=ok, verify_s=t1 - t0, call=hdr["call"], variant=hdr["variant"])
         if not all_ok:
             return   # never resume on an unverified state (the run is then incomplete and invalid)
+        if hdr["variant"] == "replay":
+            return self._replay_switch(hdr, st, t1)
         if hdr["variant"] == "full":
             for comp in FULL_COMPS:
                 self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
@@ -1742,6 +2167,52 @@ class Node:
             shifted = self.rt.bind()
         r["xb_store"] = None
         self._xb_become_owner(int(hdr["call"]), hdr["from"], hdr["t_go"], "precopy_" + hdr["variant"], restore_s=time.time() - t1, slots_rerotated=shifted)
+
+    def _replay_switch(self, hdr: dict, st: dict, t_verified: float):
+        """M1 replay switchover at call M: wait until every logged call before M is applied, check order and metadata,
+        keep the replayed recent slots through the M1 fast restore, bind the exact Sink, DR-2, resume."""
+        r = self.run
+        rs = self._replay_state()
+        need = int(hdr["call"]) - 1
+        t_w = time.time()
+        with rs["cv"]:
+            while rs["base_ready"].is_set() and (rs["frontier"] is None or rs["frontier"] < need) and time.time() - t_w < 600:
+                rs["cv"].wait(0.02)
+            rs["stop"] = True; rs["cv"].notify_all()
+        wait_s = time.time() - t_w
+        if rs["worker"] is not None:
+            rs["worker"].join(timeout=120)
+        ap = rs["applied"]
+        rt_s = [a_["replay_s"] for a_ in ap]
+        summ = {"c0": rs["c0"], "frontier": rs["frontier"], "need": need, "caught_up": rs["frontier"] == need, "replay_wait_s": wait_s, "n_applied": len(ap),
+                "n_post_ok": rs["n_ok"], "gaps": rs["gaps"], "dups": rs["dups"], "left_unapplied": sorted(rs["entries"]), "recv_calls": rs["recv_calls"],
+                "recv_bytes": rs["recv_bytes"], "base": rs["base"], "last_log_src": hdr.get("last_log"), "c0_src": hdr.get("c0"),
+                "replay_s_median": float(np.median(rt_s)) if rt_s else None, "replay_s_total": float(sum(rt_s)),
+                "queue_s_max": max((a_["queue_s"] for a_ in ap), default=None)}
+        order_ok = (summ["caught_up"] and summ["n_post_ok"] == len(ap) and not rs["gaps"] and not rs["dups"] and not rs["entries"]
+                    and rs["c0"] == hdr.get("c0") and hdr.get("last_log") == need and len(ap) == need - rs["c0"] + 1)
+        self.event("replay_caught_up", order_ok=order_ok, **summ)
+        if not order_ok:
+            self.event("replay_switch_refused", reason="replay incomplete or out of order", call=int(hdr["call"]))
+            return   # never resume on an inconsistent replayed state
+        for comp in ("inflight", "meta"):
+            self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
+        chk = self.rt.replay_switch()
+        if not chk["meta_consistent"]:
+            self.event("replay_switch_refused", reason="shadow metadata differs from the source's", call=int(hdr["call"]), meta_diff=chk["meta_diff"])
+            return
+        self.rt.unpack(dict(hdr["headers"]["sink"]), st["comps"]["sink"]["buf"])
+        shifted = self.rt.bind()
+        dr2_s = None
+        dr2 = rs.get("dr2")
+        if dr2 is not None and dr2[0].get("tensors") and not self.a.dry_run:
+            mv = memoryview(dr2[1])
+            lats = [bytes_to_tensor(t, mv[t["offset"]:t["offset"] + t["nbytes"]], self.rt.device) for t in dr2[0]["tensors"]]
+            dr2_s = self.rt.decode_latents(lats)
+        r["xb_store"] = None
+        self._xb_become_owner(int(hdr["call"]), hdr["from"], hdr["t_go"], "precopy_replay", restore_s=time.time() - t_verified, slots_rerotated=shifted,
+                              replay_wait_s=wait_s, meta_consistent=chk["meta_consistent"], ring_restore_s=chk["restore_s"], dr2_s=dr2_s,
+                              dr2_latents=len((dr2 or ({}, b""))[0].get("tensors") or []), n_replayed=len(ap), c0=rs["c0"])
 
     def _xb_become_owner(self, call: int, src: str, t_go: float, mode: str, **extra):
         r = self.run
@@ -2064,6 +2535,16 @@ class Node:
                     if pl:
                         recv_exact(conn, pl)
                     self._xb_switch(hdr)
+                elif kind == "PROUND":
+                    if pl:
+                        recv_exact(conn, pl)
+                    self._replay_base(conn, hdr)
+                elif kind == "RLOG":
+                    self._replay_enqueue(conn, hdr, recv_exact(conn, pl) if pl else b"")
+                elif kind == "RDR2":
+                    self._replay_state()["dr2"] = (hdr, bytes(recv_exact(conn, pl)) if pl else b"")
+                elif kind == "RVERIFY":
+                    self._replay_verify(hdr, recv_exact(conn, pl))
                 elif kind == "PINPUT":
                     payload = bytes(recv_exact(conn, pl)) if pl else b""
                     rc = r["xb_rc"]
@@ -2270,6 +2751,9 @@ class Node:
             t_out = time.time()
             if produced and r["first_out_t"] is None:
                 r["first_out_t"] = t_out; self.event("first_output", t_out, call=c)
+            dmp = r.get("dump")
+            if dmp is not None and produced and dmp["lo"] <= c <= dmp["hi"] and getattr(self.rt, "last_frames", None) is not None:
+                dmp["q"].put((c, self.rt.last_frames))
             if r["bound_call"] is not None and r["rejoin_call"] is None and ps is not None and ps >= REJOIN_DB:
                 r["rejoin_call"] = c; self.event("rejoin", t_out, call=c, calls_after_bind=c - r["bound_call"], psnr=ps)
             dec = list(self.rt.decodes)
