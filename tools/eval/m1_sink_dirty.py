@@ -72,7 +72,7 @@ def main():
     sync = lambda: torch.cuda.synchronize(dev)  # noqa: E731
     S, fsl = rt.sink, rt.fsl
     rec = mr.Recorder(torch, pl, S, dev, sync, keep_slots=False)
-    session = rt.runner.start()
+    session = rt.session = rt.runner.start()   # serialize_live reads the runtime's session
     for c in range(a.c0):
         rt.runner.step(session, c)
     sync()
