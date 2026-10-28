@@ -1,0 +1,676 @@
+{
+ "host": "elves-02",
+ "gpu": "NVIDIA L40S",
+ "commit": "adbe9fe9c9840551fe8a15ca04649139059033b7",
+ "workload": {
+  "video": "data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4",
+  "seed": "1"
+ },
+ "c0": 31,
+ "M1": 64,
+ "M2": 164,
+ "interval_calls": 100,
+ "B_built_as_E5_destination": {
+  "sink_digest_equal_A_at_M1": true
+ },
+ "retained": {
+  "bytes": 1725235200,
+  "where": "host memory (CPU copy at the M1 boundary)",
+  "d2h_s": 0.16691871359944344
+ },
+ "interval": {
+  "refresh_writes": 130,
+  "refreshed_entries_distinct": 41,
+  "refresh_calls": [
+   66,
+   67,
+   68,
+   69,
+   71,
+   74,
+   76,
+   77,
+   78,
+   79,
+   80,
+   82,
+   83,
+   84,
+   85,
+   86,
+   87,
+   89,
+   90,
+   92,
+   93,
+   94,
+   95,
+   98,
+   101,
+   102,
+   103,
+   106,
+   108,
+   110,
+   111,
+   113,
+   114,
+   116,
+   118,
+   119,
+   121,
+   122,
+   124,
+   125,
+   126,
+   127,
+   128,
+   130,
+   133,
+   134,
+   135,
+   137,
+   138,
+   140,
+   142,
+   143,
+   146,
+   148,
+   149,
+   150,
+   151,
+   153,
+   154,
+   157,
+   158,
+   159,
+   160,
+   161,
+   162,
+   163
+  ],
+  "shift_calls": [
+   93,
+   94,
+   138,
+   139
+  ],
+  "shift_events": 197,
+  "shifted_entries": 100,
+  "refreshed_and_shifted_entries": 41,
+  "blocks_differing_from_retained": 141,
+  "B_step_s_median": 0.5635995622724295,
+  "tracking_s_median": 0.0007041208446025848
+ },
+ "block_bytes": 4792320,
+ "fresh_sink_base_bytes": 1725236640,
+ "entry_stats": {
+  "refresh_events": 130,
+  "distinct_refreshed_entries": 41,
+  "repeated_refreshes": 89,
+  "refreshes_per_entry_hist": {
+   "1": 14,
+   "2": 8,
+   "3": 7,
+   "4": 3,
+   "5": 1,
+   "6": 1,
+   "7": 2,
+   "8": 3,
+   "9": 2
+  },
+  "max_refreshes_one_entry": 9,
+  "shift_events": 197,
+  "shifted_entries": 100,
+  "shifts_per_entry_hist": {
+   "1": 3,
+   "2": 97
+  },
+  "unrefreshed_entries_shifted_2plus": 59,
+  "realign_calls": [
+   93,
+   94,
+   138,
+   139
+  ],
+  "latest_value_bytes": 392970240,
+  "all_refresh_events_bytes": 1246003200,
+  "shift_metadata_bytes": 3152,
+  "position_metadata_bytes": 1440,
+  "latest_value_update_bytes": 392974832,
+  "max_entries": 180,
+  "savings_vs_fresh_base": 0.7722197506772173
+ },
+ "strategies": [
+  {
+   "strategy": "ordered",
+   "digest_equal": true,
+   "blocks_equal": 360,
+   "blocks_total": 360,
+   "mismatched_blocks": [],
+   "n_mismatched": 0,
+   "apply_s": 0.019230294972658157,
+   "retained_h2d_s": 0.07541428972035646,
+   "update_bytes": 1246007792,
+   "update_items": {
+    "writes": 130,
+    "shift_events": 197
+   }
+  },
+  {
+   "strategy": "current_values",
+   "digest_equal": true,
+   "blocks_equal": 360,
+   "blocks_total": 360,
+   "mismatched_blocks": [],
+   "n_mismatched": 0,
+   "apply_s": 0.013554277829825878,
+   "retained_h2d_s": 0.07552380487322807,
+   "update_bytes": 392974832,
+   "update_items": {
+    "refreshed_entries": 41
+   }
+  },
+  {
+   "strategy": "summed_shift",
+   "digest_equal": false,
+   "blocks_equal": 301,
+   "blocks_total": 360,
+   "mismatched_blocks": [
+    [
+     0,
+     "k",
+     0,
+     0
+    ],
+    [
+     0,
+     "k",
+     0,
+     2
+    ],
+    [
+     0,
+     "k",
+     1,
+     0
+    ],
+    [
+     0,
+     "k",
+     1,
+     2
+    ],
+    [
+     1,
+     "k",
+     0,
+     0
+    ],
+    [
+     1,
+     "k",
+     0,
+     1
+    ],
+    [
+     1,
+     "k",
+     0,
+     2
+    ],
+    [
+     2,
+     "k",
+     0,
+     0
+    ],
+    [
+     3,
+     "k",
+     0,
+     0
+    ],
+    [
+     3,
+     "k",
+     0,
+     1
+    ],
+    [
+     3,
+     "k",
+     0,
+     2
+    ],
+    [
+     3,
+     "k",
+     1,
+     2
+    ],
+    [
+     4,
+     "k",
+     0,
+     0
+    ],
+    [
+     4,
+     "k",
+     0,
+     2
+    ],
+    [
+     4,
+     "k",
+     1,
+     2
+    ],
+    [
+     6,
+     "k",
+     0,
+     2
+    ],
+    [
+     6,
+     "k",
+     1,
+     2
+    ],
+    [
+     7,
+     "k",
+     0,
+     2
+    ],
+    [
+     7,
+     "k",
+     1,
+     0
+    ],
+    [
+     7,
+     "k",
+     1,
+     2
+    ],
+    [
+     8,
+     "k",
+     0,
+     1
+    ],
+    [
+     9,
+     "k",
+     0,
+     2
+    ],
+    [
+     9,
+     "k",
+     1,
+     2
+    ],
+    [
+     10,
+     "k",
+     0,
+     2
+    ],
+    [
+     10,
+     "k",
+     1,
+     2
+    ],
+    [
+     11,
+     "k",
+     0,
+     2
+    ],
+    [
+     11,
+     "k",
+     1,
+     2
+    ],
+    [
+     12,
+     "k",
+     0,
+     2
+    ],
+    [
+     12,
+     "k",
+     1,
+     2
+    ],
+    [
+     13,
+     "k",
+     0,
+     2
+    ]
+   ],
+   "n_mismatched": 59,
+   "apply_s": 0.008618256077170372,
+   "retained_h2d_s": 0.0755377970635891,
+   "update_bytes": 392974832,
+   "update_items": {
+    "refreshed_entries": 41
+   }
+  },
+  {
+   "strategy": "last_written",
+   "digest_equal": false,
+   "blocks_equal": 344,
+   "blocks_total": 360,
+   "mismatched_blocks": [
+    [
+     0,
+     "k",
+     0,
+     1
+    ],
+    [
+     1,
+     "k",
+     1,
+     0
+    ],
+    [
+     2,
+     "k",
+     0,
+     1
+    ],
+    [
+     2,
+     "k",
+     1,
+     0
+    ],
+    [
+     2,
+     "k",
+     1,
+     2
+    ],
+    [
+     3,
+     "k",
+     1,
+     1
+    ],
+    [
+     9,
+     "k",
+     0,
+     0
+    ],
+    [
+     9,
+     "k",
+     1,
+     0
+    ],
+    [
+     20,
+     "k",
+     1,
+     1
+    ],
+    [
+     21,
+     "k",
+     0,
+     0
+    ],
+    [
+     21,
+     "k",
+     1,
+     0
+    ],
+    [
+     26,
+     "k",
+     1,
+     2
+    ],
+    [
+     28,
+     "k",
+     0,
+     0
+    ],
+    [
+     28,
+     "k",
+     1,
+     0
+    ],
+    [
+     29,
+     "k",
+     0,
+     1
+    ],
+    [
+     29,
+     "k",
+     1,
+     2
+    ]
+   ],
+   "n_mismatched": 16,
+   "apply_s": 0.013592706061899662,
+   "retained_h2d_s": 0.07541753444820642,
+   "update_bytes": 392974832,
+   "update_items": {
+    "refreshed_entries": 41
+   }
+  },
+  {
+   "strategy": "patches_only",
+   "digest_equal": false,
+   "blocks_equal": 301,
+   "blocks_total": 360,
+   "mismatched_blocks": [
+    [
+     0,
+     "k",
+     0,
+     0
+    ],
+    [
+     0,
+     "k",
+     0,
+     2
+    ],
+    [
+     0,
+     "k",
+     1,
+     0
+    ],
+    [
+     0,
+     "k",
+     1,
+     2
+    ],
+    [
+     1,
+     "k",
+     0,
+     0
+    ],
+    [
+     1,
+     "k",
+     0,
+     1
+    ],
+    [
+     1,
+     "k",
+     0,
+     2
+    ],
+    [
+     2,
+     "k",
+     0,
+     0
+    ],
+    [
+     3,
+     "k",
+     0,
+     0
+    ],
+    [
+     3,
+     "k",
+     0,
+     1
+    ],
+    [
+     3,
+     "k",
+     0,
+     2
+    ],
+    [
+     3,
+     "k",
+     1,
+     2
+    ],
+    [
+     4,
+     "k",
+     0,
+     0
+    ],
+    [
+     4,
+     "k",
+     0,
+     2
+    ],
+    [
+     4,
+     "k",
+     1,
+     2
+    ],
+    [
+     6,
+     "k",
+     0,
+     2
+    ],
+    [
+     6,
+     "k",
+     1,
+     2
+    ],
+    [
+     7,
+     "k",
+     0,
+     2
+    ],
+    [
+     7,
+     "k",
+     1,
+     0
+    ],
+    [
+     7,
+     "k",
+     1,
+     2
+    ],
+    [
+     8,
+     "k",
+     0,
+     1
+    ],
+    [
+     9,
+     "k",
+     0,
+     2
+    ],
+    [
+     9,
+     "k",
+     1,
+     2
+    ],
+    [
+     10,
+     "k",
+     0,
+     2
+    ],
+    [
+     10,
+     "k",
+     1,
+     2
+    ],
+    [
+     11,
+     "k",
+     0,
+     2
+    ],
+    [
+     11,
+     "k",
+     1,
+     2
+    ],
+    [
+     12,
+     "k",
+     0,
+     2
+    ],
+    [
+     12,
+     "k",
+     1,
+     2
+    ],
+    [
+     13,
+     "k",
+     0,
+     2
+    ]
+   ],
+   "n_mismatched": 59,
+   "apply_s": 0.0029168790206313133,
+   "retained_h2d_s": 0.07541171554476023,
+   "update_bytes": 392971680,
+   "update_items": {
+    "refreshed_entries": 41
+   }
+  }
+ ]
+}
