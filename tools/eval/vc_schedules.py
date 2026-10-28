@@ -107,10 +107,44 @@ def vd4_overlay() -> dict:
 
 def unit_sched(sched: dict, unit_name: str) -> dict:
     """The schedule of a unit directory name '<input>_s<seed>' (seed 0 units are the 'inputs' entries), with the VD-4
-    overlay's conditions appended (they live in their own file so the frozen vc_schedules.json stays byte-identical)."""
+    and VD-5 overlays' conditions appended (they live in their own files so the frozen vc_schedules.json and
+    vd4_schedules.json stay byte-identical)."""
     base = sched["units"][unit_name] if unit_name in sched.get("units", {}) else sched["inputs"][unit_name.rsplit("_s", 1)[0]]
-    ov = vd4_overlay().get(unit_name)
+    ov = (vd4_overlay().get(unit_name) or []) + (vd5_overlay().get(unit_name) or [])
     return {**base, "conditions": base["conditions"] + ov} if ov else base
+
+
+# Experiment VD-5 (osdi/expVD5/preregistration.md): RS3 = the source recent KV (VD-4's R) and the exact source Sink
+# slots 2, 1, 0 (VD-4's S3) restored together at the reset, from the same snapshot, with VD-4's reset semantics (frozen
+# fast path, DR-2 decoder, no temporary Sink, refresh frozen until the bind). It runs through vc_emulate.vd4_reset
+# (kind "vd4"); `vd5` adds the joint-restoration checks. B0, R, S3 and V0 are VD-4's conditions, reused.
+VD5_FILE = ROOT / "results/evaluation/osdi/expVD5/vd5_schedules.json"
+VD5_UNITS = ("train_s0", "audi-snow-trail_s0", "dog_s1", "train_s1", "butterfly-feeding-slow-motion_s1", "audi-snow-trail_s1")   # the 12 confirmation cells
+_VD5 = None
+
+
+def vd5_overlay() -> dict:
+    global _VD5
+    if _VD5 is None:
+        _VD5 = json.loads(VD5_FILE.read_text())["units"] if VD5_FILE.exists() else {}
+    return _VD5
+
+
+def vd5_conditions(ot: dict) -> list[dict]:
+    x = ot["id"].split("-")[1]
+    return [{**ot, "id": f"VD5{x}-RS3", "kind": "vd4", "dec": "dr2", "oracle_recent": True, "ts": None, "oracle_sink_slots": [2, 1, 0], "quant": None,
+             "exploratory": False, "v0": False, "vd5": True, "vd4_of": ot["id"],
+             "label": f"VD-5 RS3 (source recent KV + exact source Sink) at the {ot['id']} schedule (oracle diagnostic; not a practical migration)"}]
+
+
+def build_vd5(sched: dict) -> dict:
+    """From the frozen vc_schedules.json only (no source run is re-read): RS3 at OT-1 and OT-L of each confirmation unit."""
+    units = {}
+    for u in VD5_UNITS:
+        base = sched["units"][u] if u in sched.get("units", {}) else sched["inputs"][u.rsplit("_s", 1)[0]]
+        ot = {c["id"]: c for c in base["conditions"] if c["id"] in ("OT-1", "OT-L")}
+        units[u] = vd5_conditions(ot["OT-1"]) + vd5_conditions(ot["OT-L"])
+    return {"note": "Experiment VD-5 conditions (overlay of the frozen vc_schedules.json; VD-4's overlay untouched)", "units": units}
 
 
 def build_vd4(out: dict) -> dict:
@@ -323,6 +357,12 @@ def check(out: dict) -> list[str]:
 
 
 def main():
+    if "--vd5" in sys.argv:   # VD-5 overlay only: built from the frozen vc_schedules.json; nothing else is rebuilt or written
+        sched = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())
+        VD5_FILE.parent.mkdir(parents=True, exist_ok=True)
+        VD5_FILE.write_text(json.dumps(build_vd5(sched), indent=1))
+        print(f"VD-5 overlay written: {VD5_FILE}")
+        return
     out = build()
     vd4 = build_vd4(out)
     bad = check({**out, "vd4": vd4["units"]})

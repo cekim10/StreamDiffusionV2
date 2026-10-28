@@ -669,9 +669,153 @@ def vd4(a) -> bool:
     return ok
 
 
+VD5_OUT = "results/evaluation/osdi/expVD5"
+
+
+def vd5_plan() -> tuple[dict, dict]:
+    """(reuse-gate units, run units) of VD-5 (preregistration sections 2, 5, 8): the gate re-runs VD-4's B0, R, S3 on
+    dog s1 OT-1 in its own root; the run adds RS3 on the 12 confirmation cells and V0 on the visual cells that lack it."""
+    import aggregate_vd5 as a5
+
+    gate = {a5.GATE_UNIT: [f"VD41-{n}" for n in a5.GATE_NAMES]}
+    run = {}
+    for k in a5.CONFIRM:
+        unit, ot = k.split("|"); x = ot.split("-")[1]
+        run.setdefault(unit, []).append(f"VD5{x}-RS3")
+    for k in a5.VISUAL:
+        unit, ot = k.split("|"); x = ot.split("-")[1]
+        if f"VD4{x}-V0" not in run[unit]:
+            run[unit].append(f"VD4{x}-V0")   # VD-4's V0 definition; --skip_done keeps the existing stage-0 V0 runs
+    return gate, run
+
+
+def vd5_gate_eval(root: str, gate_root: str) -> dict:
+    import aggregate_vd5 as a5
+    import aggregate_vd4 as a4
+
+    runs = {}
+    for n in a5.GATE_NAMES:
+        new, old = a4.digests(ROOT / gate_root / a5.GATE_UNIT, f"VD41-{n}"), a4.digests(ROOT / root / a5.GATE_UNIT, f"VD41-{n}")
+        runs[n] = {"calls": len(new), "stored_calls": len(old), "differing": sum(1 for c in set(new) | set(old) if new.get(c) != old.get(c))}
+    return {"runs": runs, "pass": all(r["calls"] > 0 and r["calls"] == r["stored_calls"] and r["differing"] == 0 for r in runs.values())}
+
+
+def vd5(a) -> bool:
+    """Experiment VD-5 (osdi/expVD5/preregistration.md): one call runs the reuse gate (stops if it fails), RS3 on the
+    12 cells and the missing V0 runs, checks, metrics, the blinded clips and both forms, and the aggregate.
+    --phase key copies the sealed key once BOTH inspection blocks are recorded and committed, block A in an earlier
+    commit than block B."""
+    import aggregate_vd5 as a5
+
+    if not a.dry and not (ROOT / "results/evaluation/osdi/expVD5_freeze.md").exists():
+        sys.exit("[vc] VD-5 is not frozen (results/evaluation/osdi/expVD5_freeze.md missing): no run")
+    gate_units, run_units = vd5_plan()
+    pre = "_dryrun_" if a.dry else ""
+    if a.phase == "key":
+        import base64
+        import gzip
+        import hashlib
+        import re
+
+        ia, ib = f"{VD5_OUT}/vd5_inspection_A.md", f"{VD5_OUT}/vd5_inspection_B.md"
+        for p_ in (ia, ib):
+            if not ((ROOT / p_).exists() and "STATUS: RECORDED" in (ROOT / p_).read_text() and committed(p_)):
+                sys.exit(f"[vc] {p_} is not recorded and committed: the key stays sealed")
+        ca = subprocess.run(["git", "log", "-1", "--format=%H", "--", ia], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        cb = subprocess.run(["git", "log", "-1", "--format=%H", "--", ib], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        if ca == cb or subprocess.run(["git", "merge-base", "--is-ancestor", ca, cb], cwd=ROOT).returncode != 0:
+            sys.exit("[vc] block A must be committed in an earlier commit than block B (preregistration section 6): the key stays sealed")
+        ag = agent(a)
+        r = ag.exec(["bash", "-c", f"gzip -c {a.clips_dir}/sealed/vd5_blind_key.json | base64 -w0"], timeout=60)
+        kb = gzip.decompress(base64.b64decode(r["stdout"].strip()))
+        want = re.search(r"SHA-256 `([0-9a-f]{64})`", (ROOT / VD5_OUT / "vd5_inspection_form_A.md").read_text()).group(1)
+        if hashlib.sha256(kb).hexdigest() != want:
+            sys.exit("[vc] key SHA-256 differs from the form's: not saved")
+        (ROOT / VD5_OUT / "vd5_blind_key.json").write_bytes(kb)
+        print("[vc] VD-5 key copied (SHA-256 = the forms') - next: aggregate_vd5.py")
+        return True
+    root = a.dry_root if a.dry else "results/evaluation/expVC"
+    groot = f"{a.dry_root}_vd5g" if a.dry else str(a5.GATE_ROOT.relative_to(ROOT))
+    cells = ",".join(a5.VISUAL)
+    if a.dry:
+        py, ok = sys.executable, True
+
+        def emulate(unit, ids, out_root, metrics):
+            inp, sd = unit.rsplit("_s", 1)
+            steps = [[py, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", a.frames_dir, "--out_root", out_root, "--only", ",".join(ids), "--no_ref_frames", "--skip_done"],
+                     [py, "tools/eval/vc_check.py", "--unit", f"{out_root}/{unit}", "--g3"]]
+            mids = ",".join(i for i in ids if not i.endswith("-V0"))
+            if metrics and mids:
+                steps.append([py, "tools/eval/vc_metrics.py", "--unit", f"{out_root}/{unit}", "--embedders", "pixel", "--device", "cpu", "--only", mids, "--merge"])
+            return all(subprocess.run(cmd, cwd=ROOT).returncode == 0 for cmd in steps)
+        for unit, ids in gate_units.items():
+            ok &= emulate(unit, ids, groot, False)
+        g = vd5_gate_eval(root, groot)
+        print(f"[vc] VD-5 reuse gate (dry): {g}")
+        if not g["pass"]:
+            return False
+        for unit, ids in run_units.items():
+            ok &= emulate(unit, ids, root, True)
+        ok &= subprocess.run([py, "tools/eval/vd5_export_clips.py", "--root", root, "--cells", cells, "--clips_dir", a.clips_dir, "--order_seed", "1",
+                              "--form_a", f"{VD5_OUT}/{pre}vd5_inspection_form_A.md", "--form_b", f"{VD5_OUT}/{pre}vd5_inspection_form_B.md"], cwd=ROOT).returncode == 0
+        return ok
+    ag = agent(a)
+    if not preflight(a):
+        return False
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    nic0 = nic_bytes(ag); ok = True
+
+    def unit_steps(unit, ids, out_root, chk, metrics):
+        inp, sd = unit.rsplit("_s", 1)
+        steps = [("emulation", [PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--gpu_id", "0", "--frames_dir", a.frames_dir, "--out_root", out_root, "--only", ",".join(ids), "--no_ref_frames", "--skip_done"]),
+                 ("checks", [PY, "tools/eval/vc_check.py", "--unit", f"{out_root}/{unit}", "--g3", "--write", "--name", f"{chk}{unit}"])]
+        mids = ",".join(i for i in ids if not i.endswith("-V0"))
+        if metrics and mids:
+            steps.append(("metrics", [PY, "tools/eval/vc_metrics.py", "--unit", f"{out_root}/{unit}", "--embedders", "dino,dinov2,clip", "--device", "cuda:0", "--only", mids, "--merge"]))
+        good = True
+        for what, cmd in steps:
+            rc = remote_run(ag, cmd, f"{LOG}/vd5_{stamp}_{unit}_{what}.log")
+            print(f"[vc] VD-5 {unit} {what} on {a.host}: rc {rc}", flush=True)
+            if rc != 0:
+                good = False
+                if what != "metrics":
+                    break
+        fetch_unit(ag, inp, int(sd), f"{chk}{unit}", root=out_root)
+        return good
+    # 1. reuse gate: VD-4's B0, R, S3 on dog s1 OT-1 again at this commit, in their own root; output digests must equal the stored runs
+    for unit, ids in gate_units.items():
+        ok &= unit_steps(unit, ids, groot, "vd5g_checks_", False)
+    g = vd5_gate_eval(root, groot)
+    (ROOT / VD5_OUT / "vd5_reuse_gate.json").write_text(json.dumps({**g, "host": a.host, "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()}, indent=1))
+    print(f"[vc] VD-5 reuse gate: {'PASS' if g['pass'] else 'FAIL'} {g['runs']}", flush=True)
+    if not (ok and g["pass"]):
+        print("[vc] VD-5 stops: the reuse gate failed (preregistration section 5: the controls would have to be re-run; that needs a decision)")
+        return False
+    # 2. RS3 on the 12 cells and V0 on the visual cells that lack it; checks; metrics
+    for unit, ids in run_units.items():
+        ok &= unit_steps(unit, ids, root, "vd5_checks_", True)
+    # 3. blinded clips and both forms (on the host; clips never committed)
+    if ok:
+        rc = remote_run(ag, [PY, "tools/eval/vd5_export_clips.py", "--cells", cells, "--clips_dir", a.clips_dir, "--order_seed", time.strftime("%Y%m%d")],
+                        f"{LOG}/vd5_{stamp}_clips.log", timeout=3 * 3600)
+        print(f"[vc] VD-5 clips on {a.host}: rc {rc} -> {a.clips_dir} (never committed)", flush=True)
+        for fn in ("vd5_inspection_form_A.md", "vd5_inspection_form_B.md"):
+            try:
+                (ROOT / VD5_OUT / fn).write_text(ag.read(f"{VD5_OUT}/{fn}"))
+            except RuntimeError as exc:
+                print(f"[vc] {fn} not copied: {exc}"); ok = False
+    nic1 = nic_bytes(ag)
+    nic = {k: {"rx": nic1[k]["rx"] - nic0[k]["rx"], "tx": nic1[k]["tx"] - nic0[k]["tx"]} for k in nic1 if k in nic0}
+    (ROOT / VD5_OUT / "vd5_isolation.json").write_text(json.dumps({"host": a.host, "nic_bytes": nic}, indent=1))
+    if ok:
+        subprocess.run([sys.executable, "tools/eval/aggregate_vd5.py"], cwd=ROOT)
+    print("[vc] VD-5", "done - next: block A of the blinded inspection (commit), then block B (commit), then --phase key" if ok else "had failures")
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2", "vd3", "vd4"])
+    ap.add_argument("what", choices=["preflight", "models", "vc0", "vc1", "fetch", "vd2", "vd3", "vd4", "vd5"])
     ap.add_argument("--stage", default="0", help="vd4: 0, 0s (addendum 1), 0r (addendum 1b), 0a (addendum 2), 0a2 (addendum 2a), 1, 2, 2b, 3")
     ap.add_argument("--session", default="", help="vd4 --phase key: the inspection session (stage1a, stage1b, stage2, stage2b, stage3)")
     ap.add_argument("--dry_root", default="results/evaluation/_dryrun_expVC", help="vd4 --dry: the synthetic units' root")
@@ -684,13 +828,15 @@ def main():
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--inputs", default="", help="vc1: comma list of inputs (default all four)")
     a = ap.parse_args()
-    if a.what in ("preflight", "vc0", "vc1", "vd2") and not a.frames_dir or (a.what in ("vd3", "vd4") and a.phase not in ("key",) and not a.frames_dir):
+    if a.what in ("preflight", "vc0", "vc1", "vd2") and not a.frames_dir or (a.what in ("vd3", "vd4", "vd5") and a.phase not in ("key",) and not a.frames_dir):
         sys.exit("--frames_dir (a directory on the VC host's local disk, outside the repository) is required")
     if a.what == "vd3" and a.phase in ("cand", "key") and not a.clips_dir:
         sys.exit("--clips_dir (on the VC host's local disk, outside the repository) is required for vd3 cand / key")
     if a.what == "vd4" and not a.clips_dir and (a.phase == "key" or a.stage not in ("0", "0s", "0r", "0a", "0a2")):
         sys.exit("--clips_dir (on the VC host's local disk, outside the repository) is required for vd4 stages with an inspection")
-    ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1, "fetch": fetch, "vd2": vd2, "vd3": vd3, "vd4": vd4}[a.what](a)
+    if a.what == "vd5" and not a.clips_dir:
+        sys.exit("--clips_dir (on the VC host's local disk, outside the repository) is required for vd5")
+    ok = {"preflight": preflight, "models": models, "vc0": vc0, "vc1": vc1, "fetch": fetch, "vd2": vd2, "vd3": vd3, "vd4": vd4, "vd5": vd5}[a.what](a)
     sys.exit(0 if ok else 1)
 
 

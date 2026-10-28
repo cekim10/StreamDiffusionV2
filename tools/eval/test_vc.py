@@ -134,6 +134,7 @@ def main():
         vd4_rows_tests()
         vd4_a1_tests()
         vd4_a1_torch_tests()
+        vd5_tests()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PASS" if not FAILS else f"\nFAILURES ({len(FAILS)}):\n  " + "\n  ".join(FAILS))
@@ -319,7 +320,7 @@ def vd4_tests():
     check(hashlib.sha256((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_bytes()).hexdigest() == frozen,
           "the frozen vc_schedules.json is byte-identical to the VD-3 freeze record (VD-4 lives in an overlay)")
     S = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())
-    v4 = [c for c in vs.unit_sched(S, "train_s0")["conditions"] if c["kind"] == "vd4"]
+    v4 = [c for c in vs.unit_sched(S, "train_s0")["conditions"] if c["kind"] == "vd4" and c["id"].startswith("VD4")]   # VD-5's RS3 (kind vd4) lives in its own overlay
     v0 = next(c for c in v4 if c["id"] == "VD41-V0")
     check(len(v4) == 26 and v0["binds"] == [] and next(c for c in v4 if c["id"] == "VD41-S2")["oracle_sink_slots"] == [2, 1]
           and next(c for c in v4 if c["id"] == "VD41-A1S1")["exploratory"], "overlay: 13 VD-4 conditions per schedule; V0 without a bind; S2 = slots 2, 1; A1S1 exploratory")
@@ -327,7 +328,7 @@ def vd4_tests():
     try:
         root, frames = tmp / "expVC", tmp / "frames"
         for inp, sd in (("dog", 1), ("train", 0)):
-            ids = [c["id"] for c in vs.unit_sched(S, f"{inp}_s{sd}")["conditions"] if c["kind"] == "vd4"]
+            ids = [c["id"] for c in vs.unit_sched(S, f"{inp}_s{sd}")["conditions"] if c["kind"] == "vd4" and c["id"].startswith("VD4")]
             r_ = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", str(sd), "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", "OT-1,OT-L"], cwd=ROOT, capture_output=True, text=True)
             r2 = subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", str(sd), "--dry_run", "--frames_dir", str(frames), "--out_root", str(root), "--only", ",".join(ids), "--no_ref_frames"], cwd=ROOT, capture_output=True, text=True)
             check(r2.returncode == 0 and r2.stdout.count("valid True") == 26, f"{inp} seed {sd}: 26 VD-4 streams emulated, all valid")
@@ -809,6 +810,130 @@ def vd4_a1_torch_tests():
                 sys.modules.pop(n, None)
             else:
                 sys.modules[n] = m
+
+
+def vd5_tests():
+    """Experiment VD-5 (dry): the RS3 overlay (frozen schedules untouched), the joint-restoration checks incl. negative
+    cases (a ring slot differing from the snapshot; a bind that writes a recent slot), the reuse gate, the two-block
+    blinded material, and the aggregation (formal resolution, rater calibration, RS3 vs R / S3, interaction)."""
+    import hashlib
+    import re
+
+    import aggregate_vd5 as a5
+    import mobility_node as mn
+    import vc_emulate as ve
+    import vc_frames as vf_
+    import vc_schedules as vs
+
+    print("- 12 VD-5 (dry)")
+    fz = ROOT / "results/evaluation/osdi/expVD5_freeze.md"
+    if fz.exists():
+        for f_, want in re.findall(r"\| `([^`]+)` \| `([0-9a-f]{64})` \|", fz.read_text()):
+            if f_.endswith((".json",)) or "expVD5/preregistration" in f_:
+                check(hashlib.sha256((ROOT / f_).read_bytes()).hexdigest() == want, f"{f_} equals the VD-5 freeze record")
+    vd4_frozen = re.search(r"vd4_schedules.json` \| `([0-9a-f]{64})`", (ROOT / "results/evaluation/osdi/expVD4_freeze.md").read_text()).group(1)
+    check(hashlib.sha256((ROOT / "results/evaluation/osdi/expVD4/vd4_schedules.json").read_bytes()).hexdigest() == vd4_frozen,
+          "VD-4's overlay is byte-identical to its freeze record (RS3 lives in the VD-5 overlay)")
+    S = json.loads((ROOT / "results/evaluation/osdi/expVC/vc_schedules.json").read_text())
+    rs3 = {(u, c["id"]): c for u in vs.VD5_UNITS for c in vs.unit_sched(S, u)["conditions"] if c["id"].startswith("VD5")}
+    ok = len(rs3) == 12
+    for (u, i_), c in rs3.items():
+        x = i_.split("-")[0][-1]
+        cs = {c_["id"]: c_ for c_ in vs.unit_sched(S, u)["conditions"]}
+        r_, s3 = cs[f"VD4{x}-R"], cs[f"VD4{x}-S3"]
+        ok &= (c["kind"] == "vd4" and c["vd5"] and c["oracle_recent"] is True and c["oracle_sink_slots"] == [2, 1, 0] and c["ts"] is None and c["dec"] == "dr2"
+               and all(c[k] == r_[k] == s3[k] for k in ("resets", "binds", "end", "sources", "frames_from", "frames_to")))
+    check(ok, "overlay: RS3 on the 12 confirmation cells = R's recent KV + S3's slots 2, 1, 0, no temporary Sink, DR-2, same schedule as R and S3")
+    margs = mn.parse_args(["--label", "T", "--dry_run", "--dry_sink_mb", "4", "--dry_service_s", "0.0005", "--migration_chunk", "0", "--post_chunks", "70"])
+    cond = next(c for (u, i_), c in rs3.items() if u == "dog_s1" and i_ == "VD51-RS3")
+
+    class RingOff(mn.FakeRuntime):
+        def slot_equal(self, slots, part, snap=None, saved=None, override=None):
+            out = [[True] * len(slots) for _ in range(30)]
+            if snap is not None and len(slots) == 6 and part == "k":
+                out[7][4] = False   # one recent slot of one layer differs from the snapshot after the reset
+            return out
+
+    class BindWritesRecent(mn.FakeRuntime):
+        nb = 0
+
+        def bind(self):
+            self.nb += 1; return super().bind()
+
+        def kv_digest(self, slots, part, snap=None, kv_override=None):
+            return f"fake-{part}-{'-'.join(map(str, slots))}" + (f"-b{self.nb}" if (3 in slots and snap is None) else "")
+    tmp = Path(tempfile.mkdtemp(prefix="vd5_test_"))
+    try:
+        for cls, key_, what in ((RingOff, "vd5_ring_k_equal_snapshot", "a ring slot whose K differs from the snapshot after the reset"),
+                                (BindWritesRecent, "vd5_bind_recent_k_unchanged", "a bind that writes a recent slot")):
+            rt = cls(margs); rt.baseline(0, cond["end"] + 1, keep_frames=True, write_ref=False)
+            rows, summ = ve.run_condition(rt, cond, rt.base_record, True, vf_.FrameStore(tmp / "fr", f"{cls.__name__}"), int(rt.k), (96, 160))
+            cs = summ["vd4"]["checks_supp"]
+            check(cs.get(key_) is False and summ["valid"] is False, f"joint-restoration checks catch {what}; the run is invalid ({summ['vd4'].get('invalid', '')[:80]})")
+        rt = mn.FakeRuntime(margs); rt.baseline(0, cond["end"] + 1, keep_frames=True, write_ref=False)
+        rows, summ = ve.run_condition(rt, cond, rt.base_record, True, vf_.FrameStore(tmp / "fr", "ok"), int(rt.k), (96, 160))
+        cs = summ["vd4"]["checks_supp"]
+        check(summ["valid"] and all(cs.get(c) is True for c in a5.VD5_REQUIRED) and summ["vd4"]["supp"]["vd5_written"] == {"sink": [0, 1, 2], "recent": [3, 4, 5], "temporary_sink": []},
+              "RS3 on the fake runtime: every joint-restoration check present and true; Sink {0,1,2} and recent {3,4,5} written, no temporary Sink")
+        # full dry pipeline: controls, run_vc vd5 --dry (gate, RS3, V0, clips), synthetic inspection, aggregation
+        root, frames, clips = tmp / "expVC", tmp / "frames", tmp / "clips"
+        for u in vs.VD5_UNITS:
+            inp, sd = u.rsplit("_s", 1)
+            subprocess.run([PY, "tools/eval/vc_emulate.py", "--input", inp, "--seed", sd, "--dry_run", "--frames_dir", str(frames), "--out_root", str(root),
+                            "--only", "OT-1,OT-L,VD41-B0,VD4L-B0,VD41-R,VD4L-R,VD41-S3,VD4L-S3"], cwd=ROOT, capture_output=True, text=True)
+            subprocess.run([PY, "tools/eval/vc_metrics.py", "--unit", str(root / u), "--embedders", "pixel", "--device", "cpu"], cwd=ROOT, capture_output=True, text=True)
+        r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd5", "--dry", "--dry_root", str(root), "--frames_dir", str(frames), "--clips_dir", str(clips)], cwd=ROOT, capture_output=True, text=True)
+        out_ = r_.stdout + r_.stderr
+        check(r_.returncode == 0 and "'pass': True" in out_ and "block A 40 clips in 7 groups, block B 14 trials" in out_,
+              f"run_vc vd5 --dry: reuse gate passes, RS3 + V0 run, block A 40 clips (6 x 6 + 4 repeats), block B 14 trials {out_[-300:] if r_.returncode else ''}")
+        K = json.loads((clips / "sealed" / "vd5_blind_key.json").read_text()) if r_.returncode == 0 else {"block_a": {}, "block_b": {}}
+        reps = [v for v in K["block_a"].values() if v["repeat"]]
+        check(sorted(v["name"] for v in reps) == ["B0", "B0", "R", "R"] and len({v["cell"] for v in reps}) == 2
+              and sum(1 for v in K["block_b"].values() if v["kind"] == "catch") == 2 and all(set((v["left"], v["right"])) in ({"RS3", "R"}, {"RS3", "S3"}, {"REF", "V0"}) for v in K["block_b"].values()),
+              "key: repeats are B0 and R of two cells; block B = RS3 vs R and RS3 vs S3 per cell + two REF / V0 catch trials")
+        fa = (ROOT / "results/evaluation/osdi/expVD5/_dryrun_vd5_inspection_form_A.md").read_text()
+        fb = (ROOT / "results/evaluation/osdi/expVD5/_dryrun_vd5_inspection_form_B.md").read_text()
+
+        def fill(mode):
+            d = tmp / f"insp_{mode}"; d.mkdir()
+
+            def ra(m):
+                n = K["block_a"][m.group(1)]["name"]
+                j = {"REF": "none", "V0": "strong" if mode == "badcal" else "none", "B0": "strong", "R": "none", "S3": "mild", "RS3": "none"}[n]
+                return f"| {m.group(1)} | {j} | none | none | kept | none | none | {'jmp' if mode == 'vocab' and n == 'RS3' else 'none'} | |"
+
+            def rb(m):
+                t = K["block_b"][m.group(1)]
+                v = "no difference" if t["kind"] == "catch" else ("left" if t["left"] == "RS3" else "right")
+                return f"| {m.group(1)} | {v} | {v} | |"
+            (d / "_dryrun_vd5_inspection_A.md").write_text(re.sub(r"^\| ([0-9A-F]{6}) \|( \|)+$", ra, fa.replace("STATUS: NOT RECORDED", "STATUS: RECORDED"), flags=re.M))
+            (d / "_dryrun_vd5_inspection_B.md").write_text(re.sub(r"^\| (T\d\d) \|( \|)+$", rb, fb.replace("STATUS: NOT RECORDED", "STATUS: RECORDED"), flags=re.M))
+            (d / "_dryrun_vd5_inspection_form_A.md").write_text(fa)
+            (d / "_dryrun_vd5_blind_key.json").write_bytes((clips / "sealed" / "vd5_blind_key.json").read_bytes())
+            r2 = subprocess.run([PY, "tools/eval/aggregate_vd5.py", "--root", str(root), "--gate_root", f"{root}_vd5g", "--dry", "--insp_dir", str(d), "--out", str(d / "res")],
+                                cwd=ROOT, capture_output=True, text=True)
+            return json.loads((d / "res.json").read_text()) if r2.returncode == 0 else {"err": r2.stderr[-300:]}
+        g = fill("good")
+        check(g.get("valid") and g["reuse_gate"]["pass"] and g["calibration"]["pass"] and g["session_complete"] and not g["vocabulary_errors"]
+              and g["resolution"]["RS3"]["phases"]["P1"]["visual_flags"] == 0 and g["resolution"]["S3"]["phases"]["P1"]["visual_flags"] == 6
+              and g["resolution"]["B0"]["phases"]["P1"]["visual_flags"] == 6 and g["comparisons"]["RS3 vs R"]["block_B_at_M"]["RS3 better"] == 6
+              and len(g["interaction"]) == 12 and g["interaction_reading"],
+              f"aggregation: validity, reuse gate, calibration pass; flags per condition against REF of the session (mild and strong both count); block B tallies; interaction on 12 cells {g.get('err', '')}")
+        b = fill("badcal")
+        check(b.get("calibration") and not b["calibration"]["pass"] and b["calibration"]["v0_flags_per_field"][0] == 6 and b["primary"].startswith("numeric only"),
+              "rater calibration fails when V0 (= REF) is flagged more than REF + 1: the primary answer falls back to the numeric rule")
+        v = fill("vocab")
+        check(bool(v.get("vocabulary_errors")), "a word outside the form's vocabulary is reported")
+        check(a5.badness({"v1_reset": 1.0, "P": {"sinkless": {"D_c": -0.05, "C_c": 0.2, "dE_cross": 1.0, "eO": 3.0, "eR": 2.5, "dO": 1.1, "dR": 1.0}, "sl_late": {"D_c": -0.02}}})
+              == {"V1": 1.0, "D_c": 0.05, "late D_c": 0.02, "C_c": 0.2, "dE_cross": 1.0, "warp excess": 0.5, "frame-diff ratio": abs(1.1 / 1.0 - 1.0)},
+              "interaction metrics in the lower-is-closer form")
+        if not fz.exists():
+            r_ = subprocess.run([PY, "tools/eval/run_vc.py", "vd5", "--frames_dir", "/x", "--clips_dir", "/y"], cwd=ROOT, capture_output=True, text=True)
+            check(r_.returncode != 0 and "not frozen" in (r_.stdout + r_.stderr), "run_vc vd5 refuses before the VD-5 freeze")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        for f_ in ("_dryrun_vd5_inspection_form_A.md", "_dryrun_vd5_inspection_form_B.md"):
+            (ROOT / "results/evaluation/osdi/expVD5" / f_).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -343,7 +343,36 @@ def vd4_reset(rt, c: int, cond: dict, snap: dict, fast_pl: list, dry: bool, log:
         chs["decoder_layout_equal"] = bool(lay.get("layout_ok"))
         chs["decoder_tensors_equal_per_entry"] = bool(lay.get("tensors_equal"))
         chs["decoder_attrs_equal"] = bool(lay.get("attrs_equal"))
+    if cond.get("vd5"):
+        vd5_reset_checks(rt, snap, slots, rec, sink, n_slots, ts_written, log)
     return temp
+
+
+def vd5_reset_checks(rt, snap: dict, slots: list, rec: bool, sink: int, n_slots: int, ts_written: list, log: dict):
+    """Experiment VD-5 (osdi/expVD5/preregistration.md section 5): after the last reset operation of RS3, the two oracle
+    writes are disjoint and cover the ring, nothing else was written, and the WHOLE live ring (K, V and positions of
+    every layer, batch row and slot) equals the snapshot's - the KV state V0 restores. Recorded as supplemental checks
+    (a False one makes the run invalid)."""
+    chs, sup = log.setdefault("checks_supp", {}), log.setdefault("supp", {})
+    recent = list(range(sink, n_slots)) if rec else []
+    sup["vd5_written"] = {"sink": sorted(slots), "recent": recent, "temporary_sink": list(ts_written)}
+    chs["vd5_slot_sets_disjoint"] = not (set(slots) & set(recent))
+    chs["vd5_slot_sets_cover_ring"] = sorted(set(slots) | set(recent)) == list(range(n_slots))
+    chs["vd5_no_temporary_sink"] = not ts_written
+    ring = list(range(n_slots))
+    for part in ("k", "v"):
+        eq = rt.slot_equal(ring, part, snap=snap)
+        sup[f"vd5_ring_{part}_equal_per_layer_slot"] = eq
+        chs[f"vd5_ring_{part}_equal_snapshot"] = bool(eq) and all(all(r) for r in eq)
+    chs["vd5_ring_positions_rows_equal_snapshot"] = rt.positions_all(ring) == rt.positions_all(ring, snap)
+
+
+def vd5_bind_state(rt) -> dict:
+    """Experiment VD-5: digests of the recent and Sink slots (K and V) and every slot's positions (all rows)."""
+    sink, n_slots = int(getattr(rt, "sink", 3)), rt.n_slots()
+    rs, ss = list(range(sink, n_slots)), list(range(sink))
+    return {"recent_k": rt.kv_digest(rs, "k"), "recent_v": rt.kv_digest(rs, "v"), "sink_k": rt.kv_digest(ss, "k"), "sink_v": rt.kv_digest(ss, "v"),
+            "positions": rt.positions_all(list(range(n_slots)))}
 
 
 def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameStore, k: int, hw) -> tuple[list[dict], dict]:
@@ -431,7 +460,17 @@ def run_condition(rt, cond: dict, base_record: list, dry: bool, store: vf.FrameS
             if cond.get("mask"):
                 vd_log["mask_violations"] += set_sink_mask(rt, False, dry)   # the true Sink is bound: attention over all slots again
             rt.unpack(dict(h), pl)
+            pre_bind = vd5_bind_state(rt) if (vd4 and cond.get("vd5")) else None
             shifted = rt.bind()
+            if pre_bind is not None:
+                post_bind = vd5_bind_state(rt)
+                cs_ = vd4_log.setdefault("checks_supp", {})
+                cs_["vd5_bind_recent_k_unchanged"] = post_bind["recent_k"] == pre_bind["recent_k"]
+                cs_["vd5_bind_recent_v_unchanged"] = post_bind["recent_v"] == pre_bind["recent_v"]
+                cs_["vd5_bind_positions_unchanged"] = post_bind["positions"] == pre_bind["positions"]
+                vd4_log.setdefault("supp", {})["vd5_bind"] = {"call": c, "slots_rerotated": shifted, "packed_at": at, "sha": s_,
+                                                              "sink_k_equal_before_bind": post_bind["sink_k"] == pre_bind["sink_k"],
+                                                              "sink_v_equal_before_bind": post_bind["sink_v"] == pre_bind["sink_v"]}
             if vd3 and temp_sink is not None:
                 vd3_log["temp_slots_left_after_bind"] = rt.temp_slots_left(temp_sink)
             if vd4 and temp_sink is not None:
