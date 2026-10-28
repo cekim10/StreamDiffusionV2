@@ -1,0 +1,276 @@
+{
+ "run_id": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=16_rl=1_rep=1_20261028-133230",
+ "policy": "precopy_sink",
+ "policy_label": "Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover)",
+ "bw_mbps": 1000.0,
+ "tm_s": 1000000000.0,
+ "rho": null,
+ "rep": 1,
+ "path": [
+  "A",
+  "B"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02"
+ },
+ "t0_wall": 1793219570.9942968,
+ "migration_chunk": 30,
+ "xb_params": {
+  "threshold_mib": 16.0,
+  "round_limit": 1,
+  "min_shrink": 0.1,
+  "lag": 1,
+  "W": 3,
+  "horizon": 100,
+  "codec": "ffv1",
+  "verify_state": false
+ },
+ "rtt_measured_lan": {
+  "A-B": {
+   "median_ms": 0.3717094659805298,
+   "p95_ms": 1.5530586242675781,
+   "min_ms": 0.2509504556655884,
+   "n": 20
+  }
+ },
+ "codecs": {
+  "A": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  },
+  "B": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  }
+ },
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0,
+   "t_stop": null,
+   "t_fg_sent": null,
+   "call": 30,
+   "fg_bytes": 0,
+   "mode": "xb"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "x1",
+   "kind": "precopy_sink",
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.005754709243774414,
+   "state": "done",
+   "rounds": 1,
+   "t_end": 24.206809282302856,
+   "outcome": "switched",
+   "switch": {
+    "call": 56,
+    "final_bytes": 725597392,
+    "reason": "round_limit",
+    "rounds": 1
+   },
+   "verified": true,
+   "components_ok": {
+    "sink": true,
+    "inflight": true,
+    "meta": true
+   }
+  }
+ ],
+ "switchovers": [
+  {
+   "task": "x1",
+   "dst": "B",
+   "t": 24.206809282302856,
+   "call": 56,
+   "mode": "precopy_sink"
+  }
+ ],
+ "inputs": null,
+ "replay": null,
+ "cutover": {
+  "M": 56,
+  "rounds": 1,
+  "round_bytes": [
+   1725236640
+  ],
+  "final_bytes": 725597392,
+  "switch_reason": "round_limit",
+  "t_switch_sent_rel": 23.98432731628418,
+  "t_first_output_rel": 24.937207460403442,
+  "interruption_s": 8.052318334579468,
+  "switch_decision_to_first_output_s": 8.12560772895813,
+  "source_stop_to_first_output_s": 8.046272993087769,
+  "trigger_to_first_output_s": 24.937207460403442,
+  "bytes_before_switch": 1725236640,
+  "bytes_at_switch": 725597392
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "gpu0_before_run": {
+   "A": {
+    "util_pct": 0.0,
+    "mem_used_mib": 17886.0,
+    "others_mib": 0,
+    "others": []
+   },
+   "B": {
+    "util_pct": 0.0,
+    "mem_used_mib": 17975.0,
+    "others_mib": 0,
+    "others": []
+   }
+  },
+  "gpu0_idle_before_run": true,
+  "switchovers_verified": true,
+  "n_switchovers": 1,
+  "final_edge_served": true,
+  "stop_reason": "horizon",
+  "source_served_after_trigger": 26,
+  "source_served_until_switch": true,
+  "codecs_ok": true
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1793219657.3422484,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A15",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 30,
+   "rejoin_call": 30,
+   "gpu_mem_alloc_mb": 20135.31298828125,
+   "peak_allocated_mb": 28715.7490234375,
+   "peak_reserved_mb": 29842.0,
+   "promotion_calls": [],
+   "snapshots": [
+    {
+     "k": 0,
+     "digest": "f6640f7285df8d2920fd2b29e4bc57f89482cee188787975c6822abac9fb6cee",
+     "sink_version": "f6640f7285df8d29",
+     "t": 1793219569.6436334,
+     "call": 30
+    }
+   ],
+   "versions_seen": [
+    "f6640f7285df8d29"
+   ],
+   "t_recv_start": 1793219657.3428378,
+   "t_recv": 1793219657.34284
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1793219661.7702732,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B10",
+   "ok": true,
+   "have": 0,
+   "n_frags": 0,
+   "sink_verified": null,
+   "bound_call": 56,
+   "rejoin_call": 64,
+   "gpu_mem_alloc_mb": 26389.20166015625,
+   "peak_allocated_mb": 28600.6279296875,
+   "peak_reserved_mb": 30322.0,
+   "promotion_calls": [],
+   "snapshots": [],
+   "versions_seen": [],
+   "dump": {
+    "out": "/home/ckim151/m1r_frames/policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=16_rl=1_rep=1_20261028-133230/OUT_B",
+    "out_calls": 101,
+    "ref": "/home/ckim151/m1r_frames/policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=16_rl=1_rep=1_20261028-133230/REF",
+    "ref_calls": 117
+   },
+   "t_recv_start": 1793219661.771268,
+   "t_recv": 1793219661.7712705
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1793219569.6446047,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A10",
+  "ok": true,
+  "t_prepared": 1793219569.6436334,
+  "t_recv_start": 1793219569.6469195,
+  "t_recv": 1793219569.6469204
+ },
+ "delivery": {
+  "ttfo_local": [
+   {
+    "edge": "B",
+    "t_change": 0.0,
+    "ttfo_local_s": 24.937207460403442,
+    "first_call": 56
+   }
+  ],
+  "ttfo_local_final_s": 24.937207460403442,
+  "delivery_gap_s": 8.052318334579468,
+  "delivery_gap_at_s": 16.884889125823975,
+  "delivered_chunks": 127,
+  "t_last_delivery_s": 84.79759335517883,
+  "remote_chunks": 26,
+  "remote_content_s": 6.5,
+  "remote_wall_s": 16.884889125823975,
+  "remote_stretches": [
+   {
+    "serving": "A",
+    "edge": "B",
+    "t_start": 0.0,
+    "t_last": 16.884889125823975,
+    "chunks": 26
+   }
+  ],
+  "remote_delivery_bytes_ESTIMATED": {
+   "crf23": 1233134,
+   "crf28": 567512,
+   "remote_chunks_not_encoded": 0,
+   "note": "H.264 encoded size of remotely served output; not transmitted on the testbed"
+  },
+  "delivery_encode_cpu_s": 1.1979792341589928,
+  "rtt_measured_lan": {
+   "A-B": {
+    "median_ms": 0.3717094659805298,
+    "p95_ms": 1.5530586242675781,
+    "min_ms": 0.2509504556655884,
+    "n": 20
+   }
+  },
+  "output_equivalence": [
+   {
+    "node": "B",
+    "resume_call": 56,
+    "mode": "precopy_sink",
+    "calls": 101,
+    "checked": 101,
+    "matching": 0,
+    "first_call_match": false,
+    "first_mismatch_call": 56
+   }
+  ],
+  "trajectory_final": {
+   "edge": "B",
+   "calls": 101,
+   "first_ge35_idx": 8,
+   "sustained10_idx": 8,
+   "terminal_median_psnr": 49.6172503934431,
+   "median_psnr": 48.3629209785275
+  }
+ }
+}
