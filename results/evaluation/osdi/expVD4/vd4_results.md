@@ -2,10 +2,10 @@
 
 ## Stage-0 validity (per cell: V0 = REF, B0 = VD-3, oracle checks, positions)
 
-- dog_s1|OT-1: PASS (8 checks; failed none); source positions [0, 1, 6], A1 deltas [0, 0, None], A1 rotation {'rotated_slot_layers': 18, 'round_trip_max_abs': 0.0625}
-- train_s0|OT-1: PASS (8 checks; failed none); source positions [22, 24, 6], A1 deltas [22, 23, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
+- dog_s1|OT-1: PASS (12 checks; failed none); source positions [0, 1, 6], A1 deltas [0, 0, None], A1 rotation {'rotated_slot_layers': 18, 'round_trip_max_abs': 0.0625}
+- train_s0|OT-1: PASS (12 checks; failed none); source positions [22, 24, 6], A1 deltas [22, 23, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
 - butterfly-feeding-slow-motion_s0|OT-L: PASS (5 checks; failed none); source positions [-29, -10, -39], A1 deltas [-29, -11, None], A1 rotation {'rotated_slot_layers': 38, 'round_trip_max_abs': 0.125}
-- audi-snow-trail_s1|OT-1: PASS (8 checks; failed none); source positions [22, 1, 6], A1 deltas [22, 0, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
+- audi-snow-trail_s1|OT-1: PASS (12 checks; failed none); source positions [22, 1, 6], A1 deltas [22, 0, None], A1 rotation {'rotated_slot_layers': 34, 'round_trip_max_abs': 0.0625}
 - duplicate controls across sessions: [('butterfly-feeding-slow-motion_s1|OT-L', 'REF', 'stage1a', 'stage2'), ('butterfly-feeding-slow-motion_s1|OT-L', 'B0', 'stage1a', 'stage2'), ('dog_s1|OT-1', 'B0', 'stage1a', 'stage2'), ('dog_s1|OT-1', 'REF', 'stage1a', 'stage2'), ('train_s1|OT-1', 'B0', 'stage1b', 'stage2'), ('train_s1|OT-1', 'REF', 'stage1b', 'stage2'), ('dog_s1|OT-L', 'B0', 'stage1b', 'stage2'), ('dog_s1|OT-L', 'REF', 'stage1b', 'stage2'), ('train_s0|OT-L', 'B0', 'stage1b', 'stage2'), ('train_s0|OT-L', 'REF', 'stage1b', 'stage2'), ('audi-snow-trail_s1|OT-1', 'REF', 'stage1b', 'stage2'), ('audi-snow-trail_s1|OT-1', 'B0', 'stage1b', 'stage2'), ('train_s1|OT-L', 'B0', 'stage1a', 'stage2'), ('train_s1|OT-L', 'REF', 'stage1a', 'stage2'), ('butterfly-feeding-slow-motion_s1|OT-1', 'REF', 'stage1b', 'stage2'), ('butterfly-feeding-slow-motion_s1|OT-1', 'B0', 'stage1b', 'stage2'), ('audi-snow-trail_s0|OT-L', 'REF', 'stage1b', 'stage2'), ('audi-snow-trail_s0|OT-L', 'B0', 'stage1b', 'stage2'), ('audi-snow-trail_s1|OT-L', 'REF', 'stage1a', 'stage2'), ('audi-snow-trail_s1|OT-L', 'B0', 'stage1a', 'stage2'), ('train_s0|OT-1', 'REF', 'stage1a', 'stage2'), ('train_s0|OT-1', 'B0', 'stage1a', 'stage2'), ('audi-snow-trail_s0|OT-1', 'B0', 'stage1a', 'stage2'), ('audi-snow-trail_s0|OT-1', 'REF', 'stage1a', 'stage2')]
 
 ## Stage-0 supplemental validity (addendum 1; separate from the original stage-0 checks above)
@@ -238,10 +238,26 @@ Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24). Sess
 | DR | P2a | 6 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P2b | 3 / 12 | 0 (0) | not resolved | 3613.8 MB | 28.9 / 2.89 s |
 | DR | P3 | 12 / 12 | 0 (0) | no harm | 3613.8 MB | 28.9 / 2.89 s |
+| S1 | P1 | 4 / 4 | 0 (0) | not inspected | 575.5 MB | 4.6 / 0.46 s |
+| S1 | P2a | 3 / 4 | 0 (0) | not inspected | 575.5 MB | 4.6 / 0.46 s |
+| S1 | P2b | 1 / 4 | 0 (0) | not inspected | 575.5 MB | 4.6 / 0.46 s |
+| S1 | P3 | 4 / 4 | 0 (0) | no harm | 575.5 MB | 4.6 / 0.46 s |
+| S2 | P1 | 4 / 4 | 0 (0) | not inspected | 1150.6 MB | 9.2 / 0.92 s |
+| S2 | P2a | 4 / 4 | 0 (0) | not inspected | 1150.6 MB | 9.2 / 0.92 s |
+| S2 | P2b | 1 / 4 | 0 (0) | not inspected | 1150.6 MB | 9.2 / 0.92 s |
+| S2 | P3 | 4 / 4 | 0 (0) | no harm | 1150.6 MB | 9.2 / 0.92 s |
 | S3 | P1 | 10 / 12 | 7 (1) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
 | S3 | P2a | 11 / 12 | 0 (0) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
 | S3 | P2b | 11 / 12 | 0 (0) | not resolved | 1725.6 MB | 13.8 / 1.38 s |
 | S3 | P3 | 12 / 12 | 0 (0) | no harm | 1725.6 MB | 13.8 / 1.38 s |
+| A1S1 (exploratory) | P1 | 4 / 4 | 0 (0) | not inspected | 575.5 MB | 4.6 / 0.46 s |
+| A1S1 (exploratory) | P2a | 3 / 4 | 0 (0) | not inspected | 575.5 MB | 4.6 / 0.46 s |
+| A1S1 (exploratory) | P2b | 1 / 4 | 0 (0) | not inspected | 575.5 MB | 4.6 / 0.46 s |
+| A1S1 (exploratory) | P3 | 4 / 4 | 0 (0) | no harm | 575.5 MB | 4.6 / 0.46 s |
+| A1S2 (exploratory) | P1 | 4 / 4 | 0 (0) | not inspected | 1150.6 MB | 9.2 / 0.92 s |
+| A1S2 (exploratory) | P2a | 4 / 4 | 0 (0) | not inspected | 1150.6 MB | 9.2 / 0.92 s |
+| A1S2 (exploratory) | P2b | 1 / 4 | 0 (0) | not inspected | 1150.6 MB | 9.2 / 0.92 s |
+| A1S2 (exploratory) | P3 | 4 / 4 | 0 (0) | no harm | 1150.6 MB | 9.2 / 0.92 s |
 
 STRICT: all 12 numeric passes and visual flags <= REF's in the same session; NEAR: <= REF's + 1. Raw counts are shown; a zero count is not proof of zero risk. Lower bounds are idealized transfers of the added bytes, not migration latency.
 
