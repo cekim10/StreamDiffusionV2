@@ -53,6 +53,27 @@ def main():
         tx.check(bool(sw) and sw[-1]["detail"].get("last_log") == t["M"] - 1, "precopy_replay: the last logged call is M - 1")
         rounds = [e for e in ev if e["event"] == "A:xb_precopy_round"]
         tx.check(len(rounds) >= 1 and float(sw[-1]["detail"].get("ready_wait_s") or 0) >= 0, f"precopy_replay: {len(rounds)} Sink round(s), ready wait {sw[-1]['detail'].get('ready_wait_s')}")
+    # replay-aware Sink synchronization (osdi/m1_continuity/e5_plan.md): digest-equal path and forced-mismatch fallback
+    for exp, extra, want in (("_m1ss_test", ["--replay_sink_sync"], "SINKOK"), ("_m1ssmm_test", ["--replay_sink_sync", "--replay_sink_sync_test_mismatch"], "SINKNO")):
+        R2 = tx.run(exp, "precopy_replay", 1, "1e9", ["--xb_policy_settings", "precopy_replay@thr=16:rl=1", "--replay_window", "12", "--replay_verify"] + extra)
+        d = R2.get("precopy_replay")
+        tx.check(d is not None, f"{exp}: run written")
+        if d is None:
+            continue
+        s = json.load(open(d / "summary.json"))
+        v, ss, c = s["validation"], s["replay"]["sink_sync"], s["cutover"]
+        tx.check("_sinksync" in d.name, f"{exp}: run id marks the Sink synchronization ({d.name[:60]}...)")
+        tx.check(v.get("replay_sink_sync") is True and ss is not None and ss["verdict"] == want, f"{exp}: verdict {ss and ss['verdict']} (want {want})")
+        tx.check(v.get("replay_order_ok") is True and v.get("replay_patches_all_applied_in_order") is True and v.get("replay_resumed_on_digest_equal_sink_or_fallback") is True,
+                 f"{exp}: order, patches, resumed on the matching Sink or the fallback")
+        if want == "SINKOK":
+            tx.check(v.get("replay_sink_digest_match") is True and v.get("replay_fallback_used") is False, f"{exp}: digests equal, no fallback")
+            tx.check(c["final_bytes"] is not None and c["final_bytes"] < 4 << 20, f"{exp}: no Sink bytes at the switch (final {c['final_bytes']} B)")
+        else:
+            tx.check(v.get("replay_sink_digest_match") is False and v.get("replay_fallback_used") is True, f"{exp}: mismatch detected, fallback used")
+            ev = tx.events(d)
+            tx.check(any(e["event"] == "B:sink_fallback_verified" and e["detail"].get("ok") for e in ev), f"{exp}: fallback Sink verified before the resume")
+        tx.check(tx.first_after_switch(d, s) is not None, f"{exp}: destination generated after the switchover")
     print("ALL PASS" if not tx.FAILS else f"FAILED: {tx.FAILS}")
     sys.exit(1 if tx.FAILS else 0)
 

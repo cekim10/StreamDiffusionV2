@@ -279,7 +279,8 @@ class Run:
         self.candidates = [e for e in EDGES if e != "A"] if prepos else []
         self.nodes_used = list(dict.fromkeys(self.edges + self.candidates))
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}{('_rs=' + str(self.recent_slots)) if self.recent_slots else ''}_{stamp}"
+        ss = "_sinksync" + ("_testmismatch" if self.a.replay_sink_sync_test_mismatch else "") if (policy == "precopy_replay" and self.a.replay_sink_sync) else ""
+        self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}{('_rs=' + str(self.recent_slots)) if self.recent_slots else ''}{ss}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
             self.caps = {(d, n): bw_mbps * 1e6 for d in ("out", "in") for n in EDGES}
@@ -1098,7 +1099,8 @@ class Run:
                                 frag_bytes=self.a.frag_bytes, threshold_bytes=int(self.a.xb_threshold_mib * MB), round_limit=self.a.xb_round_limit,
                                 min_shrink=self.a.xb_min_shrink, rate_bps=rate,
                                 **({"replay_window": self.a.replay_window, "replay_lag": self.a.replay_lag, "replay_verify": bool(self.a.replay_verify),
-                                    "replay_max_wait_s": self.a.replay_max_wait_s} if self.policy == "precopy_replay" else {}))
+                                    "replay_max_wait_s": self.a.replay_max_wait_s, "replay_sink_sync": bool(self.a.replay_sink_sync),
+                                    "replay_sink_sync_test_mismatch": bool(self.a.replay_sink_sync_test_mismatch)} if self.policy == "precopy_replay" else {}))
         else:
             variant = self.policy.split("_")[1]
             c = self._xb_src_call(src)
@@ -1262,6 +1264,14 @@ class Run:
                                                    and len(src_calls) == len(set(src_calls)) and len(dst_calls) == len(set(dst_calls)) and src_calls == list(range(src_calls[0], M))
                                                    and dst_calls == list(range(M, dst_calls[-1] + 1)),
              "replay_source_unchanged_vs_reference": bool(src_ref) and all(x is True for x in src_ref), "replay_ready_timeout": bool(sw_src and sw_src.get("ready_timeout"))}
+        ssc = last("sink_sync_check", dst)
+        if sw_src and sw_src.get("sink_sync"):
+            # replay-aware Sink synchronization (osdi/m1_continuity/e5_plan.md)
+            v.update({"replay_sink_sync": True, "replay_sink_digest_match": bool(ssc and ssc.get("match")),
+                      "replay_fallback_used": bool(sw_src.get("verdict") == "SINKNO"), "replay_verdict": sw_src.get("verdict"),
+                      "replay_patches_all_applied_in_order": bool(caught and caught.get("patch_slots_ok") and caught.get("patches_applied") == caught.get("patches_sent_src")),
+                      "replay_resumed_on_digest_equal_sink_or_fallback": bool(resume) and ((resume.get("sink_match") is True and resume.get("fallback") is False) or
+                                                                                        (sw_src.get("verdict") == "SINKNO" and resume.get("fallback") is True))})
         timing = {"trigger_to_switch_call_s": None if not sw_src else self.rel_t(sw_src["t"]), "M": M, "c0": sw_src and sw_src.get("c0"),
                   "replayed_calls": caught and caught.get("n_applied"), "ready_wait_s": sw_src and sw_src.get("ready_wait_s"),
                   "wait_boundary_s": sw_src and sw_src.get("wait_boundary_s"), "log_flush_s": sw_src and sw_src.get("log_flush_s"),
@@ -1273,10 +1283,14 @@ class Run:
                   "replay_s_median": caught and caught.get("replay_s_median"), "replay_s_total": caught and caught.get("replay_s_total"),
                   "replay_lag_max_queue_s": caught and caught.get("queue_s_max"), "source_gen_service_s_median": float(np.median([m["chunk_s"] for m in self.metrics if m["owner"] == "A"])) if src_calls else None,
                   "dst_service_s_median": float(np.median([m["chunk_s"] for m in self.metrics if m["owner"] == dst][1:])) if len(dst_calls) > 1 else None}
+        sync = {"sink_ck_s_source": sw_src and sw_src.get("sink_ck_s"), "verdict": sw_src and sw_src.get("verdict"), "verdict_wait_s": sw_src and sw_src.get("verdict_wait_s"),
+                "fallback_bytes": sw_src and sw_src.get("fallback_bytes"), "patches": sw_src and sw_src.get("patches"), "patch_bytes": sw_src and sw_src.get("patch_bytes"),
+                "check": None if not ssc else {k: ssc.get(k) for k in ("match", "n_block_mismatch", "mismatched_blocks", "positions_equal", "ck_s")},
+                "patch_calls": caught and caught.get("patch_calls")} if (sw_src and sw_src.get("sink_sync")) else None
         bytes_ = {"sink_round_bytes": [int(e.get("dirty_bytes") or 0) for e in rounds], "final_bytes": sw_src and sw_src.get("final_bytes"),
                   "log_bytes": sw_src and sw_src.get("log_bytes"), "log_calls": sw_src and sw_src.get("log_calls"), "dr2_bytes": sw_src and sw_src.get("dr2_bytes")}
         bytes_["total_before_switch"] = sum(bytes_["sink_round_bytes"]) + int(bytes_["log_bytes"] or 0)
-        return {"validation": v, "timing": timing, "bytes": bytes_, "progress": [{"call": e.get("call"), "t_rel": self.rel_t(e["t"]), "replay_s": e.get("replay_s"), "ok": e.get("ok")} for e in applied],
+        return {"validation": v, "timing": timing, "bytes": bytes_, "sink_sync": sync, "progress": [{"call": e.get("call"), "t_rel": self.rel_t(e["t"]), "replay_s": e.get("replay_s"), "ok": e.get("ok")} for e in applied],
                 "verify": None if not verify else {"recent_rel": verify.get("recent_rel"), "bitwise": verify.get("bitwise")}, "base": base, "caught_up": caught}
 
     def execute_xb(self):
@@ -2008,6 +2022,8 @@ def main():
     ap.add_argument("--replay_lag", type=int, default=1, help="M1 replay: switch when the destination's replay is within this many calls of the source")
     ap.add_argument("--replay_max_wait_s", type=float, default=300.0, help="M1 replay: give up waiting for the replay to catch up (recorded as a timeout)")
     ap.add_argument("--replay_verify", action="store_true", help="M1 replay: after the run, compare the replayed recent KV with the source's (untimed)")
+    ap.add_argument("--replay_sink_sync", action="store_true", help="M1 replay: replay-aware Sink synchronization (refresh patches in the log; Sink digest at the switch; fallback resend)")
+    ap.add_argument("--replay_sink_sync_test_mismatch", action="store_true", help="protocol test only: corrupt the source's Sink digest to exercise the fallback")
     ap.add_argument("--dump_frames", type=str, default="", help="M1 replay validation: destination output + reference frames under this host-local directory")
     ap.add_argument("--dump_calls", type=int, default=200, help="M1 replay validation: dump calls [trigger - 16, trigger + dump_calls]")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")

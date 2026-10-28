@@ -860,11 +860,13 @@ class GpuRuntime:
         self.mem("after release")
 
     # ---- M1 input-log replay (osdi/m1_continuity/e3_plan.md). Source: log capture; destination: shadow replay.
-    def rlog_arm(self):
+    def rlog_arm(self, patches: bool = False):
         """Source: record every generator call from now on (tools/eval/m1_replay.Recorder; read-only, no effect on generation)
-        and keep the decoder inputs of the last calls (DR-2 latents at the switch)."""
+        and keep the decoder inputs of the last calls (DR-2 latents at the switch). patches: attach the exact K / V of every
+        Sink entry the call refreshed (replay-aware Sink synchronization, osdi/m1_continuity/e5_plan.md)."""
         import m1_replay as mr
 
+        self._rlog_patches = bool(patches)
         if getattr(self, "_rlog_rec", None) is None:
             self._rlog_rec = mr.Recorder(self.torch, self.pl, self.sink, self.device, self._sync, keep_slots=False)
         self._rlog_rec.reset()
@@ -894,8 +896,16 @@ class GpuRuntime:
         for name in ("x", "t", "s", "e"):
             m, b = tensor_to_bytes(e[name])
             tens.append({"name": name, "offset": off, "nbytes": int(b.nbytes), **m}); bufs.append(b); off += int(b.nbytes)
+        patches, pbytes = [], 0
+        if getattr(self, "_rlog_patches", False):
+            # the exact K / V of each refreshed Sink entry as the call left it (the ring is not written again in this step)
+            for j, (li, i, s_) in enumerate(e["refresh"]):
+                for key in ("k", "v"):
+                    m, b = tensor_to_bytes(self.pl.kv_cache1[li][key][i, s_ * self.fsl:(s_ + 1) * self.fsl])
+                    tens.append({"name": f"p{j}{key}", "offset": off, "nbytes": int(b.nbytes), **m}); bufs.append(b); off += int(b.nbytes); pbytes += int(b.nbytes)
+                patches.append([li, i, s_])
         return {"call": c, "refresh": [list(x) for x in e["refresh"]], "post_digest": mr.meta_digest(self.torch, e["post"]), "tensors": tens, "nbytes": off,
-                "gen_s": e["gen_s"]}, bufs
+                "gen_s": e["gen_s"], "patches": patches, "patch_bytes": pbytes}, bufs
 
     def cond_digest(self) -> str:
         """Prompt conditioning (prompt embeddings and the cross-attention cache): equal on source and destination."""
@@ -916,9 +926,10 @@ class GpuRuntime:
         self._sync()
         return time.perf_counter() - t0
 
-    def rlog_apply(self, hdr: dict, payload) -> tuple[bool, float]:
-        """Destination: replay one logged call on the shadow ring (generator only, output discarded). Returns (the ring
-        metadata after the call equals the source's, seconds)."""
+    def rlog_apply(self, hdr: dict, payload) -> tuple[bool, float, list]:
+        """Destination: replay one logged call on the shadow ring (generator only, output discarded), then overwrite each
+        refreshed Sink entry with the source's exact patch before the next call. Returns (the ring metadata after the call
+        equals the source's, seconds, per patch: the replay wrote this call's frame into that very slot)."""
         import m1_replay as mr
         from proto_handoff import bytes_to_tensor
 
@@ -932,9 +943,38 @@ class GpuRuntime:
             pl.generator(noisy_image_or_video=T["x"], conditional_dict=pl.conditional_dict, timestep=T["t"], kv_cache=pl.kv_cache1,
                          crossattn_cache=pl.crossattn_cache, current_start=T["s"], current_end=T["e"])
         self._sync(); dt = time.perf_counter() - t0
-        return mr.meta_digest(self.torch, mr.meta_of(pl)) == hdr["post_digest"], dt
+        pinfo = []
+        for j, (li, i, s_) in enumerate(hdr.get("patches") or []):
+            pinfo.append(int(pl.kv_cache1[li]["pos"][i, s_]) == int(T["s"][i]) // self.fsl)
+            pl.kv_cache1[li]["k"][i, s_ * self.fsl:(s_ + 1) * self.fsl] = T[f"p{j}k"]
+            pl.kv_cache1[li]["v"][i, s_ * self.fsl:(s_ + 1) * self.fsl] = T[f"p{j}v"]
+        if pinfo:
+            self._sync()
+        return mr.meta_digest(self.torch, mr.meta_of(pl)) == hdr["post_digest"], dt, pinfo
 
-    def replay_switch(self) -> dict:
+    def sink_checksums(self) -> dict:
+        """Digest of the live Sink: per (layer, K / V, row, slot) an order-sensitive int64 checksum of the bf16 block (int16
+        view x fixed pseudo-random int64 weights, wrapping integer arithmetic: identical on every host), plus the Sink
+        positions. One device-to-host copy."""
+        torch, fsl, S = self.torch, self.fsl, self.sink
+        if not hasattr(self, "_ck_w"):
+            g = torch.Generator(device="cpu").manual_seed(20261020)
+            self._ck_w = torch.randint(-(1 << 62), 1 << 62, (fsl * self.pl.generator.model.blocks[0].self_attn.k.out_features,), generator=g, dtype=torch.int64).to(self.device)
+        self._sync(); t0 = time.perf_counter()
+        out = []
+        for layer in self.pl.kv_cache1:
+            for key in ("k", "v"):
+                x = layer[key][:, :S * fsl].reshape(layer[key].shape[0], S, -1).contiguous().view(torch.int16).to(torch.int64)
+                out.append((x * self._ck_w[: x.shape[-1]]).sum(-1))
+        blocks = torch.stack(out).cpu().tolist()
+        pos = torch.stack([l_["pos"][:, :S] for l_ in self.pl.kv_cache1]).cpu().tolist()
+        return {"blocks": blocks, "pos": pos, "s": time.perf_counter() - t0}
+
+    def unfreeze_refresh(self):
+        for b in self.pl.generator.model.blocks:
+            b.self_attn.adapt_sink_thr = self.cfg_thr
+
+    def replay_switch(self, keep_sink: bool = False) -> dict:
         """Destination at the switch, after the final inflight / meta components were unpacked into self.snap: compare the
         shadow ring's metadata with the source's final metadata, keep the replayed recent slots, run the M1 fast restore
         (which zeroes the ring) and write the replayed recent slots back. The Sink is bound by the caller."""
@@ -946,9 +986,16 @@ class GpuRuntime:
         diff = mr.meta_diff(self.torch, mr.meta_of(pl), ref)
         self._sync(); t0 = time.perf_counter()
         self._replayed = ([l_["k"][:, sink * fsl:].clone() for l_ in pl.kv_cache1], [l_["v"][:, sink * fsl:].clone() for l_ in pl.kv_cache1])
+        sk = ([l_["k"][:, :sink * fsl].clone() for l_ in pl.kv_cache1], [l_["v"][:, :sink * fsl].clone() for l_ in pl.kv_cache1]) if keep_sink else None
         self.restore_fast()
         for l_, k_, v_ in zip(pl.kv_cache1, *self._replayed):
             l_["k"][:, sink * fsl:] = k_; l_["v"][:, sink * fsl:] = v_
+        if sk is not None:
+            # replay-aware Sink synchronization: the shadow Sink (digest-equal to the source's) stays; refresh resumes
+            for l_, k_, v_ in zip(pl.kv_cache1, *sk):
+                l_["k"][:, :sink * fsl] = k_; l_["v"][:, :sink * fsl] = v_
+            del sk
+            self.unfreeze_refresh()
         self._sync()
         return {"meta_consistent": not diff, "meta_diff": diff[:12], "restore_s": time.perf_counter() - t0}
 
@@ -1098,7 +1145,7 @@ class FakeRuntime:
         return True, float(ps), 0.9 if self.bound else 0.6, self.args.dry_service_s, [0, 1, 6]
 
     # M1 input-log replay doubles (protocol test only)
-    def rlog_arm(self):
+    def rlog_arm(self, patches=False):
         self.capture_latents = True
 
     def rlog_disarm(self):
@@ -1110,7 +1157,7 @@ class FakeRuntime:
     def rlog_end(self, c):
         b = np.zeros(400_000, dtype=np.uint8)
         return {"call": c, "refresh": [], "post_digest": f"dry{c}", "tensors": [{"name": "x", "offset": 0, "nbytes": len(b), "shape": [len(b)], "dtype": "bf16"}],
-                "nbytes": len(b), "gen_s": 0.0}, [b]
+                "nbytes": len(b), "gen_s": 0.0, "patches": [], "patch_bytes": 0}, [b]
 
     def cond_digest(self):
         return "dry"
@@ -1120,9 +1167,15 @@ class FakeRuntime:
 
     def rlog_apply(self, hdr, payload):
         time.sleep(self.args.dry_service_s * 0.25)
-        return hdr["post_digest"] == f"dry{hdr['call']}", self.args.dry_service_s * 0.25
+        return hdr["post_digest"] == f"dry{hdr['call']}", self.args.dry_service_s * 0.25, []
 
-    def replay_switch(self):
+    def sink_checksums(self):
+        return {"blocks": [[[int(self.sink_bytes[:64].sum())]]], "pos": [[[0, 1, 2]]], "s": 0.0}
+
+    def unfreeze_refresh(self):
+        pass
+
+    def replay_switch(self, keep_sink=False):
         self.replayed = True
         return {"meta_consistent": True, "meta_diff": [], "restore_s": 0.0}
 
@@ -1813,7 +1866,10 @@ class Node:
             # per-call input log and the destination's shadow replay; switchover only when the replay is caught up
             task["replay"] = {"W": int(h.get("replay_window", 12)), "lag": int(h.get("replay_lag", 1)), "max_wait_s": float(h.get("replay_max_wait_s", 300.0)),
                               "verify": bool(h.get("replay_verify")), "c0": None, "c0_set": threading.Event(), "frontier": None, "acks": [], "sent_upto": None,
-                              "sent_calls": 0, "sent_bytes": 0, "dropped_pre_base": 0, "missing": [], "q": None}
+                              "sent_calls": 0, "sent_bytes": 0, "dropped_pre_base": 0, "missing": [], "q": None,
+                              # replay-aware Sink synchronization (osdi/m1_continuity/e5_plan.md): refresh patches in the log, Sink digest at the switch
+                              "sink_sync": bool(h.get("replay_sink_sync")), "test_mismatch": bool(h.get("replay_sink_sync_test_mismatch")),
+                              "patches": 0, "patch_bytes": 0, "verdict": None, "verdict_ev": threading.Event(), "verdict_detail": None}
             task["send_lock"] = threading.Lock()
         r["xb"] = task
         task["thread"] = threading.Thread(target=self._precopy, args=(task,), daemon=True); task["thread"].start()
@@ -1891,10 +1947,17 @@ class Node:
             extra["log_flush_s"] = time.time() - t_f
         snap = self.rt.serialize_live()
         whole = () if task["variant"] == "full" else ("inflight", "meta")
-        final_comps = comps if task["variant"] == "full" else ("sink", "inflight", "meta")
+        sync = rp is not None and rp["sink_sync"]
+        final_comps = comps if task["variant"] == "full" else (("inflight", "meta") if sync else ("sink", "inflight", "meta"))
+        sink_ck = None
+        if sync:
+            # the Sink is NOT resent: its digest at M goes with the switch; the destination compares its shadow Sink
+            sink_ck = self.rt.sink_checksums(); extra["sink_ck_s"] = sink_ck.pop("s")
+            if rp["test_mismatch"]:
+                sink_ck["blocks"][0][0][0] = int(sink_ck["blocks"][0][0][0]) + 1   # protocol test of the fallback only
         sent, headers, digests = self._xb_send_dirty(task, conn, snap, final_comps, whole=whole)
         if rp is not None:
-            if rp["verify"]:
+            if rp["verify"] and not sync:
                 rp["verify_snap"] = snap   # the source's state at the switch, for the untimed post-run comparison only
             lats = list(self.rt.last_latents)[-2:] if not self.a.dry_run else []
             tens, bufs, off = [], [], 0
@@ -1906,11 +1969,29 @@ class Node:
             sent += off
             extra.update({"dr2_bytes": off, "log_calls": rp["sent_calls"], "log_bytes": rp["sent_bytes"], "c0": rp["c0"], "last_log": rp["sent_upto"],
                           "ready_wait_s": rp.get("ready_wait_s"), "ready_timeout": bool(rp.get("ready_timeout")), "frontier_at_ready": rp.get("frontier_at_ready"),
-                          "source_call_at_ready": rp.get("source_call_at_ready"), "missing_log_calls": rp["missing"], "dropped_pre_base": rp["dropped_pre_base"]})
-        del snap
+                          "source_call_at_ready": rp.get("source_call_at_ready"), "missing_log_calls": rp["missing"], "dropped_pre_base": rp["dropped_pre_base"],
+                          "sink_sync": sync, "patches": rp["patches"], "patch_bytes": rp["patch_bytes"]})
+        if not sync:
+            del snap
         with task.get("send_lock") or _NOLOCK:
             send_msg(conn, "PSWITCH", {"task": task["id"], "from": self.label, "call": c, "variant": task["variant"], "headers": headers, "digests": digests, "t_go": time.time(),
-                                       **({"c0": rp["c0"], "last_log": rp["sent_upto"]} if rp is not None else {})}, b"", None)
+                                       **({"c0": rp["c0"], "last_log": rp["sent_upto"], "sink_sync": sync, "sink_ck": sink_ck, "patches_sent": rp["patches"]} if rp is not None else {})},
+                     b"", None)
+        if sync:
+            # wait for the destination's verdict on the Sink digest; on a mismatch resend the dirty Sink (the existing path)
+            t_v = time.time()
+            got = rp["verdict_ev"].wait(300)
+            extra.update({"verdict": rp["verdict"] if got else "timeout", "verdict_wait_s": time.time() - t_v, "verdict_detail": rp["verdict_detail"]})
+            if rp["verdict"] == "SINKNO":
+                t_f = time.time()
+                fsent, fh, fd = self._xb_send_dirty(task, conn, snap, ("sink",))
+                with task["send_lock"]:
+                    send_msg(conn, "SINKFIN", {"task": task["id"], "call": c, "headers": fh, "digests": fd, "t_go": time.time()}, b"", None)
+                extra.update({"fallback_bytes": fsent, "fallback_send_s": time.time() - t_f})
+                sent += fsent
+            if rp["verify"]:
+                rp["verify_snap"] = snap
+            del snap
         if rp is not None:
             self._rlog_stop(task)
         conn.close()
@@ -1943,7 +2024,7 @@ class Node:
 
         rp, rt = task["replay"], self.rt
         rp["q"] = queue.Queue()
-        rt.rlog_arm()
+        rt.rlog_arm(patches=rp["sink_sync"])
         orig = type(rt).step.__get__(rt)
 
         def step(c, override=None, skip=False):
@@ -1979,6 +2060,7 @@ class Node:
             except OSError as exc:
                 rp["send_error"] = repr(exc); break
             rp["sent_upto"] = c; rp["sent_calls"] += 1; rp["sent_bytes"] += int(hdr["nbytes"])
+            rp["patches"] += len(hdr.get("patches") or []); rp["patch_bytes"] += int(hdr.get("patch_bytes") or 0)
 
     def _rlog_ack_reader(self, task: dict):
         rp, conn = task["replay"], task["conn"]
@@ -1987,6 +2069,8 @@ class Node:
                 hdr, _ = recv_msg(conn)
                 if hdr.get("kind") == "RACK":
                     rp["frontier"] = int(hdr["call"]); rp["acks"].append([time.time(), int(hdr["call"]), hdr.get("ok")])
+                elif hdr.get("kind") in ("SINKOK", "SINKNO"):
+                    rp["verdict"], rp["verdict_detail"] = hdr["kind"], hdr.get("detail"); rp["verdict_ev"].set()
         except (ConnectionError, OSError, ValueError):
             pass
 
@@ -2077,9 +2161,12 @@ class Node:
                     break
                 hdr, payload = rs["entries"].pop(nxt)
             t0 = time.time()
-            ok, dt = self.rt.rlog_apply(hdr, payload)
+            ok, dt, pinfo = self.rt.rlog_apply(hdr, payload)
             t1 = time.time()
-            rs["applied"].append({"call": nxt, "ok": bool(ok), "replay_s": dt, "t": t1, "queue_s": t0 - hdr["_t_recv"], "lag_from_source_s": t1 - float(hdr.get("t_rec") or t1)})
+            rs["applied"].append({"call": nxt, "ok": bool(ok), "replay_s": dt, "t": t1, "queue_s": t0 - hdr["_t_recv"], "lag_from_source_s": t1 - float(hdr.get("t_rec") or t1),
+                                  "patches": len(pinfo), "patch_slots_ok": all(pinfo)})
+            if pinfo:
+                rs["patch_calls"] = rs.get("patch_calls", []) + [[nxt, len(pinfo), all(pinfo)]]
             rs["n_ok"] += bool(ok)
             with rs["cv"]:
                 rs["frontier"] = nxt; rs["cv"].notify_all()
@@ -2192,21 +2279,51 @@ class Node:
                 "n_post_ok": rs["n_ok"], "gaps": rs["gaps"], "dups": rs["dups"], "left_unapplied": sorted(rs["entries"]), "recv_calls": rs["recv_calls"],
                 "recv_bytes": rs["recv_bytes"], "base": rs["base"], "last_log_src": hdr.get("last_log"), "c0_src": hdr.get("c0"),
                 "replay_s_median": float(np.median(rt_s)) if rt_s else None, "replay_s_total": float(sum(rt_s)),
-                "queue_s_max": max((a_["queue_s"] for a_ in ap), default=None)}
+                "queue_s_max": max((a_["queue_s"] for a_ in ap), default=None),
+                "patches_applied": sum(a_["patches"] for a_ in ap), "patch_slots_ok": all(a_["patch_slots_ok"] for a_ in ap), "patch_calls": rs.get("patch_calls", []),
+                "patches_sent_src": hdr.get("patches_sent")}
         order_ok = (summ["caught_up"] and summ["n_post_ok"] == len(ap) and not rs["gaps"] and not rs["dups"] and not rs["entries"]
                     and rs["c0"] == hdr.get("c0") and hdr.get("last_log") == need and len(ap) == need - rs["c0"] + 1)
+        if hdr.get("sink_sync"):
+            order_ok = order_ok and summ["patch_slots_ok"] and summ["patches_applied"] == hdr.get("patches_sent")
         self.event("replay_caught_up", order_ok=order_ok, **summ)
         if not order_ok:
             self.event("replay_switch_refused", reason="replay incomplete or out of order", call=int(hdr["call"]))
             return   # never resume on an inconsistent replayed state
         for comp in ("inflight", "meta"):
             self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
-        chk = self.rt.replay_switch()
-        if not chk["meta_consistent"]:
-            self.event("replay_switch_refused", reason="shadow metadata differs from the source's", call=int(hdr["call"]), meta_diff=chk["meta_diff"])
-            return
-        self.rt.unpack(dict(hdr["headers"]["sink"]), st["comps"]["sink"]["buf"])
-        shifted = self.rt.bind()
+        sync_info = {}
+        if hdr.get("sink_sync"):
+            ck = self.rt.sink_checksums(); ck_s = ck.pop("s")
+            src = hdr["sink_ck"]
+            bad = [[i // 2, "kv"[i % 2], b, s_] for i, layer in enumerate(ck["blocks"]) for b, row in enumerate(layer) for s_, v in enumerate(row)
+                   if v != src["blocks"][i][b][s_]]
+            pos_ok = ck["pos"] == src["pos"]
+            match = not bad and pos_ok
+            self.event("sink_sync_check", call=int(hdr["call"]), match=match, n_block_mismatch=len(bad), mismatched_blocks=bad[:40], positions_equal=pos_ok, ck_s=ck_s)
+            try:
+                with rs["send_lock"]:
+                    send_msg(rs["conn"], "SINKOK" if match else "SINKNO", {"detail": {"n_block_mismatch": len(bad), "positions_equal": pos_ok}}, b"", None)
+            except (OSError, AttributeError):
+                pass
+            sync_info = {"sink_sync": True, "sink_match": match, "sink_ck_s": ck_s, "fallback": not match}
+            if not match:
+                # never accept an approximate Sink: wait for the source's dirty-fragment resend (SINKFIN), then the existing bind
+                r["replay_pending"] = {"hdr": hdr, "st": st, "t_verified": t_verified, "wait_s": wait_s, "n_replayed": len(ap), "c0": rs["c0"], "sync_info": sync_info,
+                                       "dr2": rs.get("dr2")}
+                return
+            chk = self.rt.replay_switch(keep_sink=True)
+            if not chk["meta_consistent"]:
+                self.event("replay_switch_refused", reason="shadow metadata differs from the source's", call=int(hdr["call"]), meta_diff=chk["meta_diff"])
+                return
+            shifted = None
+        else:
+            chk = self.rt.replay_switch()
+            if not chk["meta_consistent"]:
+                self.event("replay_switch_refused", reason="shadow metadata differs from the source's", call=int(hdr["call"]), meta_diff=chk["meta_diff"])
+                return
+            self.rt.unpack(dict(hdr["headers"]["sink"]), st["comps"]["sink"]["buf"])
+            shifted = self.rt.bind()
         dr2_s = None
         dr2 = rs.get("dr2")
         if dr2 is not None and dr2[0].get("tensors") and not self.a.dry_run:
@@ -2216,7 +2333,40 @@ class Node:
         r["xb_store"] = None
         self._xb_become_owner(int(hdr["call"]), hdr["from"], hdr["t_go"], "precopy_replay", restore_s=time.time() - t_verified, slots_rerotated=shifted,
                               replay_wait_s=wait_s, meta_consistent=chk["meta_consistent"], ring_restore_s=chk["restore_s"], dr2_s=dr2_s,
-                              dr2_latents=len((dr2 or ({}, b""))[0].get("tensors") or []), n_replayed=len(ap), c0=rs["c0"])
+                              dr2_latents=len((dr2 or ({}, b""))[0].get("tensors") or []), n_replayed=len(ap), c0=rs["c0"], **sync_info)
+
+    def _replay_switch_fallback(self, fin: dict):
+        """Sink digest mismatch: the source resent the dirty Sink fragments (existing path). Verify the Sink against the
+        source's digest, then the E3 switch: keep the replayed recent slots, bind the exact Sink, DR-2, resume."""
+        self._thread_init()
+        r = self.run
+        pend = r.pop("replay_pending", None)
+        if pend is None:
+            return
+        st, hdr = pend["st"], pend["hdr"]
+        t0 = time.time()
+        c = (st or {}).get("comps", {}).get("sink")
+        ok = c is not None and component_digest(payload_slices(fin["headers"]["sink"], c["buf"])) == fin["digests"]["sink"]
+        self.event("sink_fallback_verified", ok=ok, verify_s=time.time() - t0, call=int(fin["call"]))
+        if not ok:
+            self.event("replay_switch_refused", reason="fallback Sink failed its digest", call=int(fin["call"]))
+            return
+        chk = self.rt.replay_switch()
+        if not chk["meta_consistent"]:
+            self.event("replay_switch_refused", reason="shadow metadata differs from the source's", call=int(hdr["call"]), meta_diff=chk["meta_diff"])
+            return
+        self.rt.unpack(dict(fin["headers"]["sink"]), c["buf"])
+        shifted = self.rt.bind()
+        dr2_s = None
+        dr2 = pend["dr2"]
+        if dr2 is not None and dr2[0].get("tensors") and not self.a.dry_run:
+            mv = memoryview(dr2[1])
+            lats = [bytes_to_tensor(t, mv[t["offset"]:t["offset"] + t["nbytes"]], self.rt.device) for t in dr2[0]["tensors"]]
+            dr2_s = self.rt.decode_latents(lats)
+        r["xb_store"] = None
+        self._xb_become_owner(int(hdr["call"]), hdr["from"], fin["t_go"], "precopy_replay", restore_s=time.time() - pend["t_verified"], slots_rerotated=shifted,
+                              replay_wait_s=pend["wait_s"], meta_consistent=chk["meta_consistent"], ring_restore_s=chk["restore_s"], dr2_s=dr2_s,
+                              n_replayed=pend["n_replayed"], c0=pend["c0"], **pend["sync_info"])
 
     def _xb_become_owner(self, call: int, src: str, t_go: float, mode: str, **extra):
         r = self.run
@@ -2549,6 +2699,10 @@ class Node:
                     self._replay_state()["dr2"] = (hdr, bytes(recv_exact(conn, pl)) if pl else b"")
                 elif kind == "RVERIFY":
                     self._replay_verify(hdr, recv_exact(conn, pl))
+                elif kind == "SINKFIN":
+                    if pl:
+                        recv_exact(conn, pl)
+                    self._replay_switch_fallback(hdr)
                 elif kind == "PINPUT":
                     payload = bytes(recv_exact(conn, pl)) if pl else b""
                     rc = r["xb_rc"]
