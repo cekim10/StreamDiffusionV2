@@ -29,33 +29,34 @@ Thresholds: VD-3's frozen `vd3_thresholds.json` (SHA-256 792a6ac77ffbca24); VD-4
 
 | condition | phase | numeric | flags (REF) | resolution |
 |---|---|---|---|---|
-| B0 | P1 | 11 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| B0 | P2a | 6 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| B0 | P2b | 3 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| B0 | P3 | 12 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| R | P1 | 12 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| R | P2a | 6 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| R | P2b | 2 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| R | P3 | 12 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| S3 | P1 | 10 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| S3 | P2a | 11 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| S3 | P2b | 11 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| S3 | P3 | 12 / 12 | 0 (0) | not inspected (VD-5 session; descriptive) |
-| RS3 | P1 | 12 / 12 | 0 (0) | not inspected |
-| RS3 | P2a | 11 / 12 | 0 (0) | not inspected |
-| RS3 | P2b | 11 / 12 | 0 (0) | not inspected |
-| RS3 | P3 | 12 / 12 | 0 (0) | not inspected |
+| B0 | P1 | 11 / 12 | 5 (1) | not resolved (VD-5 session; descriptive) |
+| B0 | P2a | 6 / 12 | 1 (0) | not resolved (VD-5 session; descriptive) |
+| B0 | P2b | 3 / 12 | 0 (0) | not resolved (VD-5 session; descriptive) |
+| B0 | P3 | 12 / 12 | 0 (0) | STRICT (VD-5 session; descriptive) |
+| R | P1 | 12 / 12 | 1 (1) | STRICT (VD-5 session; descriptive) |
+| R | P2a | 6 / 12 | 0 (0) | not resolved (VD-5 session; descriptive) |
+| R | P2b | 2 / 12 | 0 (0) | not resolved (VD-5 session; descriptive) |
+| R | P3 | 12 / 12 | 0 (0) | STRICT (VD-5 session; descriptive) |
+| S3 | P1 | 10 / 12 | 4 (1) | not resolved (VD-5 session; descriptive) |
+| S3 | P2a | 11 / 12 | 0 (0) | not resolved (VD-5 session; descriptive) |
+| S3 | P2b | 11 / 12 | 0 (0) | not resolved (VD-5 session; descriptive) |
+| S3 | P3 | 12 / 12 | 0 (0) | STRICT (VD-5 session; descriptive) |
+| RS3 | P1 | 12 / 12 | 1 (1) | STRICT |
+| RS3 | P2a | 11 / 12 | 0 (0) | not resolved |
+| RS3 | P2b | 11 / 12 | 0 (0) | not resolved |
+| RS3 | P3 | 12 / 12 | 0 (0) | STRICT |
+| V0 (catch) | flags per phase | - | {'P1': 0, 'P2a': 0, 'P2b': 0, 'P3': 0} | - |
 
 Oracle bytes RS3: 3450.5 MB (idealized lower bounds 1 Gbps 27.60 s, 10 Gbps 2.76 s; not a migration latency).
 
-**Primary question (RS3 sufficient for P1 and P2):** not inspected
+**Primary question (RS3 sufficient for P1 and P2):** numeric only (rater calibration failed): no
 
-Rater calibration: not inspected
+Rater calibration: {'v0_flags_per_field': [0, 0, 0, 0, 0, 0, 0], 'ref_flags_per_field': [1, 0, 0, 0, 0, 0, 0], 'v0_ok': True, 'catch_ok': 2, 'catch': 2, 'repeats_identical': 2, 'repeats': 4, 'pass': False}
 
 ## RS3 vs R and vs S3
 
-- RS3 vs R (P1): {'numeric_non_inferior_P1': 12, 'of': 12, 'block_B_at_M': None, 'non_inferior': True}
-- RS3 vs S3 (P2): {'numeric_non_inferior_P2': 12, 'of': 12, 'block_B_closer_to_REF': None, 'non_inferior': True}
+- RS3 vs R (P1): {'numeric_non_inferior_P1': 12, 'of': 12, 'block_B_at_M': {'RS3 better': 0, 'no difference': 6, 'RS3 worse': 0}, 'non_inferior': True}
+- RS3 vs S3 (P2): {'numeric_non_inferior_P2': 12, 'of': 12, 'block_B_closer_to_REF': {'RS3 better': 0, 'no difference': 6, 'RS3 worse': 0}, 'non_inferior': True}
 
 ## Per-cell numeric values
 
@@ -136,3 +137,19 @@ Rater calibration: not inspected
 | butterfly-feeding-slow-motion_s1|OT-L | -0.036 (a) | -0.001 (a) | +0.000 (a) | +0.001 (a) | -0.023 (a) | -0.056 (a) | -0.007 (a) |
 | audi-snow-trail_s1|OT-1 | +0.167 (a) | +0.022 (a) | +0.000 (a) | +0.105 (a) | -0.083 (a) | -0.646 (a) | +0.031 (a) |
 | audi-snow-trail_s1|OT-L | +0.393 (a) | +0.002 (a) | +0.000 (a) | +0.097 (a) | -0.014 (a) | -0.066 (a) | -0.015 (a) |
+
+## Block A flags per cell (fields: jump M, reversal, content, identity, color, flicker, jump B)
+
+- dog_s1|OT-1: REF .......; V0 .......; B0 x......; R .......; S3 x......; RS3 .......
+- dog_s1|OT-L: REF .......; V0 .......; B0 x......; R x......; S3 x......; RS3 .......
+- train_s0|OT-1: REF .......; V0 .......; B0 x.x....; R .......; S3 x......; RS3 .......
+- butterfly-feeding-slow-motion_s1|OT-L: REF .......; V0 .......; B0 .......; R .......; S3 .......; RS3 .......
+- audi-snow-trail_s0|OT-L: REF x......; V0 .......; B0 x......; R .......; S3 x......; RS3 x......
+- audi-snow-trail_s1|OT-1: REF .......; V0 .......; B0 x......; R .......; S3 .......; RS3 .......
+
+## Block B (paired, against the labelled reference)
+
+- R: [{'cell': 'butterfly-feeding-slow-motion_s1|OT-L', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'train_s0|OT-1', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'audi-snow-trail_s0|OT-L', 'at M': 'no difference', 'closer to REF': 'RS3 better'}, {'cell': 'dog_s1|OT-L', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'audi-snow-trail_s1|OT-1', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'dog_s1|OT-1', 'at M': 'no difference', 'closer to REF': 'no difference'}]
+- S3: [{'cell': 'audi-snow-trail_s1|OT-1', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'dog_s1|OT-L', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'train_s0|OT-1', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'butterfly-feeding-slow-motion_s1|OT-L', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'dog_s1|OT-1', 'at M': 'no difference', 'closer to REF': 'no difference'}, {'cell': 'audi-snow-trail_s0|OT-L', 'at M': 'RS3 better', 'closer to REF': 'no difference'}]
+
+Notes (never scored): {'CF951D': 'strong means noticeable by me', 'EFB138': 'strong means noticeable by me', '348B20': 'strong means noticeable by me', '597FA7': 'strong means noticeable by me'}
