@@ -53,7 +53,7 @@ Ranges over the 12 cells (recent slots zeroed at M - w; Sink and metadata exact)
 
 | quantity | value (median per call) |
 |---|---|
-| replay, generator only | 0.118-0.125 s |
+| replay, generator only (outside the slowdown bursts below) | 0.118-0.125 s |
 | source generator, same calls | 0.133-0.137 s |
 | source call interval (encode + generator + decode) | 0.547-0.557 s |
 
