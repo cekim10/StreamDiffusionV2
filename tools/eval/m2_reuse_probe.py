@@ -59,7 +59,6 @@ def main():
     torch, pl, dev = rt.torch, rt.pl, rt.device
     sync = lambda: torch.cuda.synchronize(dev)  # noqa: E731
     S, fsl = rt.sink, rt.fsl
-    L = len(pl.kv_cache1)
     M1, M2 = a.M1, a.M1 + a.interval
     freqs = pl.generator.model.freqs.to(dev)
     sl = lambda s_: slice(s_ * fsl, (s_ + 1) * fsl)  # noqa: E731
@@ -78,6 +77,7 @@ def main():
 
     # ---- 1. A to M1, logging c0 .. M1-1
     session = rt.session = rt.runner.start()
+    L = len(pl.kv_cache1)   # the ring exists once the session has started
     for c in range(a.c0):
         rt.runner.step(session, c)
     sync()
