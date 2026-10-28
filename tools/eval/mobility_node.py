@@ -974,6 +974,15 @@ class GpuRuntime:
         for b in self.pl.generator.model.blocks:
             b.self_attn.adapt_sink_thr = self.cfg_thr
 
+    def perturb_sink_for_test(self) -> dict:
+        """E6 fallback validation only: flip the lowest bit of one bf16 element of one Sink block of the live (shadow)
+        ring - a real, one-ulp Sink difference the digest must detect."""
+        li, b, s_ = len(self.pl.kv_cache1) // 2, 0, 1
+        x = self.pl.kv_cache1[li]["k"][b, s_ * self.fsl:(s_ + 1) * self.fsl].view(self.torch.int16).reshape(-1)
+        x[0] = x[0] ^ 1
+        self._sync()
+        return {"layer": li, "key": "k", "row": b, "slot": s_}
+
     def replay_switch(self, keep_sink: bool = False) -> dict:
         """Destination at the switch, after the final inflight / meta components were unpacked into self.snap: compare the
         shadow ring's metadata with the source's final metadata, keep the replayed recent slots, run the M1 fast restore
@@ -1174,6 +1183,10 @@ class FakeRuntime:
 
     def unfreeze_refresh(self):
         pass
+
+    def perturb_sink_for_test(self):
+        self.sink_bytes = self.sink_bytes.copy(); self.sink_bytes[0] ^= 1
+        return {"layer": 0, "key": "k", "row": 0, "slot": 0}
 
     def replay_switch(self, keep_sink=False):
         self.replayed = True
@@ -1869,6 +1882,7 @@ class Node:
                               "sent_calls": 0, "sent_bytes": 0, "dropped_pre_base": 0, "missing": [], "q": None,
                               # replay-aware Sink synchronization (osdi/m1_continuity/e5_plan.md): refresh patches in the log, Sink digest at the switch
                               "sink_sync": bool(h.get("replay_sink_sync")), "test_mismatch": bool(h.get("replay_sink_sync_test_mismatch")),
+                              "test_perturb_dst": bool(h.get("replay_sink_sync_test_perturb_dst")),
                               "patches": 0, "patch_bytes": 0, "verdict": None, "verdict_ev": threading.Event(), "verdict_detail": None}
             task["send_lock"] = threading.Lock()
         r["xb"] = task
@@ -1975,7 +1989,8 @@ class Node:
             del snap
         with task.get("send_lock") or _NOLOCK:
             send_msg(conn, "PSWITCH", {"task": task["id"], "from": self.label, "call": c, "variant": task["variant"], "headers": headers, "digests": digests, "t_go": time.time(),
-                                       **({"c0": rp["c0"], "last_log": rp["sent_upto"], "sink_sync": sync, "sink_ck": sink_ck, "patches_sent": rp["patches"]} if rp is not None else {})},
+                                       **({"c0": rp["c0"], "last_log": rp["sent_upto"], "sink_sync": sync, "sink_ck": sink_ck, "patches_sent": rp["patches"],
+                                          "test_perturb_dst": rp["test_perturb_dst"]} if rp is not None else {})},
                      b"", None)
         if sync:
             # wait for the destination's verdict on the Sink digest; on a mismatch resend the dirty Sink (the existing path)
@@ -2294,6 +2309,8 @@ class Node:
             self.rt.unpack(dict(hdr["headers"][comp]), st["comps"][comp]["buf"])
         sync_info = {}
         if hdr.get("sink_sync"):
+            if hdr.get("test_perturb_dst"):
+                self.event("sink_test_perturbed", call=int(hdr["call"]), **self.rt.perturb_sink_for_test())   # E6 fallback validation only
             ck = self.rt.sink_checksums(); ck_s = ck.pop("s")
             src = hdr["sink_ck"]
             bad = [[i // 2, "kv"[i % 2], b, s_] for i, layer in enumerate(ck["blocks"]) for b, row in enumerate(layer) for s_, v in enumerate(row)
@@ -2357,6 +2374,12 @@ class Node:
             return
         self.rt.unpack(dict(fin["headers"]["sink"]), c["buf"])
         shifted = self.rt.bind()
+        if hdr.get("sink_ck") is not None:
+            ck = self.rt.sink_checksums(); ck.pop("s")
+            src = hdr["sink_ck"]
+            src_eff = src
+            self.event("sink_after_fallback", call=int(fin["call"]), equal=(ck["blocks"] == src_eff["blocks"] and ck["pos"] == src_eff["pos"]),
+                       n_block_mismatch=sum(1 for i, layer in enumerate(ck["blocks"]) for b, row in enumerate(layer) for s_, v in enumerate(row) if v != src_eff["blocks"][i][b][s_]))
         dr2_s = None
         dr2 = pend["dr2"]
         if dr2 is not None and dr2[0].get("tensors") and not self.a.dry_run:

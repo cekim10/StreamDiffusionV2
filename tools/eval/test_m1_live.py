@@ -54,7 +54,8 @@ def main():
         rounds = [e for e in ev if e["event"] == "A:xb_precopy_round"]
         tx.check(len(rounds) >= 1 and float(sw[-1]["detail"].get("ready_wait_s") or 0) >= 0, f"precopy_replay: {len(rounds)} Sink round(s), ready wait {sw[-1]['detail'].get('ready_wait_s')}")
     # replay-aware Sink synchronization (osdi/m1_continuity/e5_plan.md): digest-equal path and forced-mismatch fallback
-    for exp, extra, want in (("_m1ss_test", ["--replay_sink_sync"], "SINKOK"), ("_m1ssmm_test", ["--replay_sink_sync", "--replay_sink_sync_test_mismatch"], "SINKNO")):
+    for exp, extra, want in (("_m1ss_test", ["--replay_sink_sync"], "SINKOK"), ("_m1ssmm_test", ["--replay_sink_sync", "--replay_sink_sync_test_mismatch"], "SINKNO"),
+                             ("_m1sspt_test", ["--replay_sink_sync", "--replay_sink_sync_test_perturb_dst"], "SINKNO")):
         R2 = tx.run(exp, "precopy_replay", 1, "1e9", ["--xb_policy_settings", "precopy_replay@thr=16:rl=1", "--replay_window", "12", "--replay_verify"] + extra)
         d = R2.get("precopy_replay")
         tx.check(d is not None, f"{exp}: run written")
@@ -73,6 +74,9 @@ def main():
             tx.check(v.get("replay_sink_digest_match") is False and v.get("replay_fallback_used") is True, f"{exp}: mismatch detected, fallback used")
             ev = tx.events(d)
             tx.check(any(e["event"] == "B:sink_fallback_verified" and e["detail"].get("ok") for e in ev), f"{exp}: fallback Sink verified before the resume")
+            if "sspt" in exp:   # the destination-perturbation run
+                tx.check(v.get("fallback_detected_exact_block") is True and v.get("fallback_sink_verified") is True and v.get("fallback_sink_equal_source_after_bind") is True,
+                         f"{exp}: the perturbed block detected, fallback Sink verified, Sink equal to the source's after the bind")
         tx.check(tx.first_after_switch(d, s) is not None, f"{exp}: destination generated after the switchover")
     print("ALL PASS" if not tx.FAILS else f"FAILED: {tx.FAILS}")
     sys.exit(1 if tx.FAILS else 0)

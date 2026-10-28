@@ -28,7 +28,7 @@ import test_m1_replay as tr  # noqa: E402
 def runtime(pl):
     rt = types.SimpleNamespace(torch=torch, pl=pl, sink=tr.SINK, fsl=tr.FSL, device="cpu", cfg_thr=0.0, _sync=lambda: None,
                                capture_latents=False, last_latents=[])
-    for name in ("rlog_arm", "rlog_begin", "rlog_end", "rlog_apply", "sink_checksums"):
+    for name in ("rlog_arm", "rlog_begin", "rlog_end", "rlog_apply", "sink_checksums", "perturb_sink_for_test"):
         setattr(rt, name, types.MethodType(getattr(mn.GpuRuntime, name), rt))
     return rt
 
@@ -66,6 +66,7 @@ def run(patches: bool, thr: float, tamper: bool = False):
         ok, _, pi = rt.rlog_apply(hdr, payload)
         oks.append(ok); pinfo += pi
     dst = rt.sink_checksums(); dst.pop("s")
+    run.last = (rt, src)
     return src == dst, all(oks), pinfo, n_ref, sum(len(h.get("patches") or []) for h, _ in log)
 
 
@@ -83,6 +84,10 @@ def main():
     check("with patches: every replayed call's metadata digest equals the source's", meta_ok)
     check("with patches: every patch lands in the slot the replayed call wrote", bool(pinfo) and all(pinfo))
     check("with patches: replayed Sink checksum == source's at M", eq)
+    rt_, src_ = run.last
+    w = rt_.perturb_sink_for_test(); ck = rt_.sink_checksums(); ck.pop("s")
+    bad = [[i // 2, "kv"[i % 2], b, s_] for i, layer in enumerate(ck["blocks"]) for b, row in enumerate(layer) for s_, v in enumerate(row) if v != src_["blocks"][i][b][s_]]
+    check("perturb_sink_for_test: exactly the perturbed block differs", bad == [[w["layer"], w["key"], w["row"], w["slot"]]], str(bad))
     eq3, _, _, _, _ = run(True, thr, tamper=True)
     check("negative: a patch changed by 1 ulp makes the Sink checksum differ", not eq3)
     eq2, meta_ok2, pinfo2, _, n_pat2 = run(False, thr)
