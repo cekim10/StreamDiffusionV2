@@ -115,8 +115,8 @@ class Recorder:
     """Wraps pl.generator.forward. Outside the recorded window it only keeps a clone of each call's input (for the
     determinism check across the unit's two source streams); inside it records the full log entry."""
 
-    def __init__(self, torch, pl, sink: int, device, sync):
-        self.torch, self.pl, self.sink, self.device, self.sync = torch, pl, sink, device, sync
+    def __init__(self, torch, pl, sink: int, device, sync, keep_slots: bool = True):
+        self.torch, self.pl, self.sink, self.device, self.sync, self.keep_slots = torch, pl, sink, device, sync, keep_slots
         self.orig = pl.generator.forward
         self.call, self.active, self.keep_out = None, False, set()
         self.entries, self.inputs = {}, {}
@@ -146,9 +146,10 @@ class Recorder:
         fsl = pl.frame_seq_length
         e["written"] = written_slots(e, fsl)
         e["refresh"] = [(li, i, s) for li, rows in enumerate(e["written"]) for i, s in enumerate(rows) if s < self.sink]
-        # the source's freshly written slot of every (layer, row), host copy (E1 convergence reference)
-        e["slot_k"] = [[l_["k"][i, s * fsl:(s + 1) * fsl].to("cpu", copy=True) for i, s in enumerate(rows)] for l_, rows in zip(pl.kv_cache1, e["written"])]
-        e["slot_v"] = [[l_["v"][i, s * fsl:(s + 1) * fsl].to("cpu", copy=True) for i, s in enumerate(rows)] for l_, rows in zip(pl.kv_cache1, e["written"])]
+        # the source's freshly written slot of every (layer, row), host copy (E1 convergence reference; E2 skips it)
+        if self.keep_slots:
+            e["slot_k"] = [[l_["k"][i, s * fsl:(s + 1) * fsl].to("cpu", copy=True) for i, s in enumerate(rows)] for l_, rows in zip(pl.kv_cache1, e["written"])]
+            e["slot_v"] = [[l_["v"][i, s * fsl:(s + 1) * fsl].to("cpu", copy=True) for i, s in enumerate(rows)] for l_, rows in zip(pl.kv_cache1, e["written"])]
         if c in self.keep_out:
             e["out"] = out.detach().clone()
         self.entries[c] = e
