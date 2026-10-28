@@ -14,7 +14,7 @@ synchronization on. There is one run per case, so this is a functional validatio
 
 | | train s0 | butterfly s1 (refresh-heavy) | audi s1 | dog s1 (E5) |
 |---|---|---|---|---|
-| cross-host Sink digest | equal, 0 / 180 blocks | equal | equal | equal |
+| cross-host Sink digest | equal, 0 / 360 blocks | equal | equal | equal |
 | fallback | no | no | no | no |
 | refresh patches (calls with patches) | 19 (13), 182 MB | 54 (26), 518 MB | 10 (9), 96 MB | 2 (2), 19 MB |
 | patch slot check / sent = applied / order | all yes | all yes | all yes | all yes |

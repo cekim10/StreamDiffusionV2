@@ -12,7 +12,7 @@
 
 | check | result |
 |---|---|
-| cross-host Sink digest | **equal**: 0 of 180 (layer, K / V, row, slot) blocks differ; Sink positions equal |
+| cross-host Sink digest | **equal**: 0 of 360 (layer, K / V, row, slot) blocks differ; Sink positions equal |
 | fallback | not triggered (verdict SINKOK) |
 | refresh patches | 2 (calls 34 and 60, 1 entry each, 19.2 MB); both landed in the slot the replayed call wrote; patches sent = applied = 2 |
 | order | 33 / 33 calls replayed in order, every post-call metadata digest equal, no lost / duplicated / reordered calls (source last 63, destination first 64) |
