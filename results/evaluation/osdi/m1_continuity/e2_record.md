@@ -33,7 +33,7 @@ deployed protocol.
 
 - **P1:** replay restores P1 at every window, including S3's two failures (audi s0 OT-L, dog s1 OT-L).
 - **Closeness to RS3:** the median of (V1 - V1(RS3)) / P99 is 0.011 for w = 3, 0.004 for w = 6, and 0.000 for w = 12.
-  Replay-12's V1 matches RS3's to two decimals on 9 / 12 cells.
+  Replay-12's V1 matches RS3's to two decimals on 11 / 12 cells (train s0 OT-L: 1.85 vs 1.86).
 - **P2:** no additional degradation. The P2 outcomes equal S3's and RS3's cell by cell. The two remaining failures
   (butterfly s1 OT-L late window, dog s1 OT-1 warp) are the ones VD-5 placed outside the KV ring.
 - **Sink contamination:** refreshes inside the window wrote replayed frames into Sink slots, 0-14 per cell. The Sink K
