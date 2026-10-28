@@ -861,7 +861,7 @@ def vd5_tests():
             self.nb += 1; return super().bind()
 
         def kv_digest(self, slots, part, snap=None, kv_override=None):
-            return f"fake-{part}-{'-'.join(map(str, slots))}" + (f"-b{self.nb}" if (3 in slots and snap is None) else "")
+            return f"fake-{part}-{'-'.join(map(str, slots))}" + (f"-b{self.nb}" if (3 in slots and snap is None and self.nb) else "")   # differs only after the bind
     tmp = Path(tempfile.mkdtemp(prefix="vd5_test_"))
     try:
         for cls, key_, what in ((RingOff, "vd5_ring_k_equal_snapshot", "a ring slot whose K differs from the snapshot after the reset"),
