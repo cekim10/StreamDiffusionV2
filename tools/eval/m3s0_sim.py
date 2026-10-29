@@ -127,8 +127,9 @@ def water_fill(flows, caps, demand):
 # ------------------------------------------------------------------------------------------------ simulator
 class Sim:
     def __init__(self, lin: Lineage, consts: dict, rho: float, graph: str, knowledge: str, sharing: str = "fair", restage: bool = False,
-                 retain_partial: bool | None = None, eta: float = ETA):
+                 retain_partial: bool | None = None, eta: float = ETA, order: str = "fwd"):
         self.lin, self.k, self.rho = lin, consts, rho
+        self.order = order   # candidate order: NODES forward or reversed (M3-S1 ordering robustness)
         self.graph, self.knowledge, self.sharing, self.restage = graph, knowledge, sharing, restage
         self.retain = (graph != "none") if retain_partial is None else retain_partial
         self.caps = {**{("out", n): CAP_BPS * eta for n in NODES}, **{("in", n): CAP_BPS * eta for n in NODES}}
@@ -240,7 +241,9 @@ class Sim:
         if self.knowledge == "oracle":
             nxt = PATH[self.user_idx + 1] if self.user_idx + 1 < len(PATH) else None
             return [nxt] if nxt and nxt != self.source else []
-        return [n for n in NODES if n != self.user and n != self.source]
+        nodes = NODES if self.order == "fwd" else list(reversed(NODES))
+        cands = [n for n in nodes if n != self.user and n != self.source]
+        return cands[:1] if self.knowledge == "causal1" else cands
 
     def holders(self):
         return [n for n in NODES if n != self.source and self.held[n]]
@@ -285,6 +288,17 @@ class Sim:
                     from_hub = [(e, self.held[hub][e]) for e in missing if e in self.held[hub]]
                     rest = [(e, None) for e in missing if e not in self.held[hub]]
                     self._add(hub, cand, from_hub); self._add(src, cand, rest)
+            elif self.graph == "holders":
+                # M3-S1 staging: holders only (the source never stages); fewest-assigned holder per entry
+                provs = [h for h in self.holders() if h != cand]
+                count = {p: 0 for p in provs}
+                assign = defaultdict(list)
+                for e in missing:
+                    have_h = [p for p in provs if e in self.held[p] and e not in self.lin.refreshed_in(self.held[p][e], now_c)]
+                    if have_h:
+                        p = min(have_h, key=lambda h: (count[h], h)); count[p] += 1; assign[p].append((e, self.held[p][e]))
+                for p, items in assign.items():
+                    self._add(p, cand, items)
             elif self.graph in ("butterfly", "adaptive"):
                 provs = [h for h in self.holders() if h != cand]
                 count = {p: 0 for p in provs + [src]}
@@ -622,7 +636,35 @@ def main():
     ap.add_argument("--all", action="store_true"); ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--events_dir", default=str(OUT)); ap.add_argument("--out_dir", default=str(OUT))
     ap.add_argument("--rhos", default="", help="restrict to these rhos (comma)")
+    ap.add_argument("--m3s1", action="store_true", help="predictions for the M3-S1 network-level matrix (S0, S1o, S1c, S2, S3 x fwd/rev)")
     a = ap.parse_args()
+    if a.m3s1:
+        lin = {wl: Lineage(json.load(open(Path(a.events_dir) / f"events_{wl}.json"))) for wl in ("dog", "bfly")}
+        pred = {}
+        for name, (wl, rho) in CONFIGS.items():
+            k = consts_from_e0(name)
+            P = {}
+            P["S0"] = Sim(lin[wl], k, rho, "none", "causal").run()
+            P["S1o"] = Sim(lin[wl], k, rho, "holders", "oracle").run()
+            for order in ("fwd", "rev"):
+                P[f"S1c/{order}"] = Sim(lin[wl], k, rho, "holders", "causal1", order=order).run()
+                P[f"S2/{order}"] = Sim(lin[wl], k, rho, "holders", "causal", order=order).run()
+                P[f"S3/{order}"] = Sim(lin[wl], k, rho, "holders", "causal", sharing="residual", order=order).run()
+            pred[name] = {key: {"remote_s": r["remote_s"], "total_mb": r["total_mb"], "discarded_mb": r["discarded_mb"], "staged_mb": r["staged_mb"], "wasted_mb": r["wasted_staged_mb"],
+                                "final_valid": next((m["valid"] for m in reversed(r["migrations"]) if m["outcome"] == "completed"), None),
+                                "final_base_mb": round(next((m["base_bytes"] for m in reversed(r["migrations"]) if m["outcome"] == "completed"), 0) / 1e6, 1),
+                                "final_ready_s": next((round(m["t_ready"] - m["t_start"], 2) for m in reversed(r["migrations"]) if m["outcome"] == "completed" and m["t_ready"]), None)}
+                          for key, r in P.items()}
+            s0 = P["S0"]["remote_s"]
+            for key, v in pred[name].items():
+                v["remote_vs_S0"] = round(v["remote_s"] / s0, 3); v["total_vs_S0"] = round(v["total_mb"] / P["S0"]["total_mb"], 3)
+        out = Path(a.out_dir).parent / "m3s1" / "s0_predictions.json"
+        out.parent.mkdir(parents=True, exist_ok=True); out.write_text(json.dumps({"eta": ETA, "h_startup_s": H_STARTUP, "predictions": pred}, indent=1))
+        for name, P in pred.items():
+            print(f"== {name}")
+            for key, v in P.items():
+                print(f"  {key:9s} remote {v['remote_s']:5.1f} ({v['remote_vs_S0']:.2f} S0)  total {v['total_mb']:6.0f} MB ({v['total_vs_S0']:.2f})  disc {v['discarded_mb']:5.0f}  staged {v['staged_mb']:5.0f} wasted {v['wasted_mb']:5.0f}  final valid {v['final_valid']} base {v['final_base_mb']} MB ready {v['final_ready_s']}")
+        print(f"wrote {out}"); return
     if a.selftest:
         selftest(); return
     lin = {}
