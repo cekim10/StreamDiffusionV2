@@ -1,0 +1,13 @@
+flow,kind,src,dst,n,bytes,t_start_rel,t_end_rel,reason
+f1_lg_AB,log,A,B,13,13631488,0.000,7.635,m1: input log
+f2_s0_AB,base,A,B,181,594247680,2.418,7.634,m1: base (delta 180 entries + meta)
+f3_s0_BD,stage,B,D,53,507985920,7.037,11.962,S3: B forwards lineage-valid entries to candidate D
+f4_lg_AC,log,A,C,12,12582912,7.635,14.664,m2: input log
+f5_s0_BD,stage,B,D,7,67092480,7.636,8.742,S3: B forwards lineage-valid entries to candidate D
+f6_s0_AC,base,A,C,181,527155200,10.057,14.663,m2: base (delta 180 entries + meta)
+f7_lg_AD,log,A,D,31,32505856,14.665,32.402,m3: input log
+f8_s0_BC,stage,B,C,4,38338560,14.666,15.280,S3: B forwards lineage-valid entries to candidate C
+f9_s0_DC,stage,D,C,3,28753920,14.666,15.195,S3: D forwards lineage-valid entries to candidate C
+f10_s0_AD,base,A,D,121,1152558288,17.094,27.161,m3: base (delta 120 entries + meta)
+f11_s0_AB,stage,A,B,118,134184960,32.404,,S3: A forwards lineage-valid entries to candidate B
+f12_s0_AC,stage,A,C,118,124600320,32.405,,S3: A forwards lineage-valid entries to candidate C
