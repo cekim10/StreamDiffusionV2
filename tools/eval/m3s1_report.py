@@ -89,7 +89,9 @@ def main():
     rep["rules"] = {"R1": R1, "R2": R2, "R3": R3, "R4": R4, "R5_invalid_runs": {str(k): v["invalid"] for k, v in agg.items() if v["invalid"]}}
     r1_all = bool(R1) and len(R1) == 2 and all(v["pass"] for v in R1.values())
     bytes_only = bool(R1) and len(R1) == 2 and all(all(x["remote_ratio"] <= 0.80 for x in v["per_order"].values()) for v in R1.values()) and not r1_all
-    if r1_all:
+    if not R1:
+        verdict = "NO DATA (no valid S0 / S3 cells yet)"
+    elif r1_all:
         verdict = "GO (R1 holds for both workloads; next: M3-S2 GPU validation, to be preregistered)"
     elif bytes_only:
         verdict = "CONDITIONAL (remote serving <= 0.80 S0 but total bytes > 1.30 S0)" + (": single-candidate variant" if all(R2[w]["one_candidate_suffices"] for w in R2) else ": NO-GO (two candidates needed and too costly)")
