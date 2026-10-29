@@ -1963,6 +1963,8 @@ class Node:
             mv = memoryview(buf)
             frags = frag_table(len(buf), fb)
             hashes = [fu.result() for fu in [_pool().submit(sha256_hex, mv[f["off"]:f["off"] + f["len"]]) for f in frags]]
+            if task.get("replay") is not None:   # M3-E0 instrumentation: the hashes computed above, kept for the event record only
+                task.setdefault("frag_hashes", {})[comp] = [h[:16] for h in hashes]; task.setdefault("frags_sent", {})[comp] = 0
             for f, hsh in zip(frags, hashes):
                 if task["cancel"]:
                     return sent, headers, digests
@@ -1972,6 +1974,8 @@ class Node:
                     send_msg(conn, "PFRAG", {"task": task["id"], "comp": comp, "fragment_id": f["id"], "byte_offset": f["off"], "length": f["len"], "sha256": hsh,
                                              "comp_nbytes": len(buf)}, mv[f["off"]:f["off"] + f["len"]], task["throttle"])
                 task["held"][(comp, f["id"])] = hsh; sent += f["len"]
+                if task.get("replay") is not None:
+                    task["frags_sent"][comp] += 1
             del mv, buf
         return sent, headers, digests
 
@@ -2052,7 +2056,11 @@ class Node:
         if task["cancel"]:
             if rp is not None:
                 self._rlog_stop(task)
-            conn.close(); self.event("xb_precopy_cancelled", task=task["id"], rounds=len(task["rounds"])); return
+            conn.close()
+            # M3-E0 instrumentation (record only): the log / patches sent to the abandoned destination before the cancellation
+            e0 = {"c0": rp["c0"], "log_calls": rp["sent_calls"], "log_bytes": rp["sent_bytes"], "patches": rp["patches"], "patch_bytes": rp["patch_bytes"],
+                  "last_log": rp["sent_upto"], "base_bytes": (rp.get("base") or {}).get("bytes"), "source_call": r["call"]} if rp is not None else {}
+            self.event("xb_precopy_cancelled", task=task["id"], rounds=len(task["rounds"]), **e0); return
         # atomic switchover at a chunk boundary: stop after the current call, serialize, send the final dirty set
         task["switching"] = True
         t_req = time.time()
@@ -2273,7 +2281,13 @@ class Node:
             cond_ok = self.rt.cond_digest() == hdr["cond_digest"]
         rs["c0"], rs["conn"] = int(hdr["call"]), conn
         rs["base"] = {"verified": good, "components_ok": ok, "cond_equal": cond_ok, "verify_s": t1 - t0, "base_s": base_s, "t": time.time()}
-        self.event("replay_base", task=hdr["task"], call=rs["c0"], verified=good, components_ok=ok, cond_equal=cond_ok, verify_s=t1 - t0, base_s=base_s)
+        # M3-E0 instrumentation (record only): the fragments of each base component held hash-verified (SHA-256 against the
+        # source's per-fragment hash at receipt), with their hash prefixes for the Sink
+        held = {comp: sorted(c_["hash"]) for comp, c_ in ((st or {}).get("comps") or {}).items()}
+        sk = ((st or {}).get("comps") or {}).get("sink")
+        e0 = {"frags_verified": {comp: len(v) for comp, v in held.items()},
+              "sink_frag_hashes16_held": [[fid, sk["hash"][fid][:16]] for fid in held.get("sink", [])] if sk is not None else []}
+        self.event("replay_base", task=hdr["task"], call=rs["c0"], verified=good, components_ok=ok, cond_equal=cond_ok, verify_s=t1 - t0, base_s=base_s, **e0)
         if good and cond_ok:
             rs["base_ready"].set()
             if rs["worker"] is None:
@@ -2442,7 +2456,10 @@ class Node:
         if trk is not None and "refresh_events" not in dinfo:
             dinfo.update({"tracked_calls": trk["calls"], "refresh_events": trk.get("refresh_events"), "distinct_refreshed_entries": len(trk["refreshed"]), "shift_events_kept": len(trk["shifts"])})
         rp["base"] = {"mode": mode, "fallback_reason": reason if dv else None, "bytes": dbytes, **dinfo}
-        self.event("replay_base_sent", task=task["id"], call=c, **rp["base"])
+        # M3-E0 instrumentation (record only): the full base's per-fragment SHA-256 prefixes (16 hex) and the count sent
+        e0 = {"sink_frags_total": len(task["frag_hashes"]["sink"]), "sink_frags_sent": task["frags_sent"]["sink"], "sink_frag_hashes16": task["frag_hashes"]["sink"]} \
+            if (mode == "full" and "sink" in task.get("frag_hashes", {})) else {}
+        self.event("replay_base_sent", task=task["id"], call=c, **rp["base"], **e0)
         return dbytes
 
     def cmd_retained_version(self, h):
