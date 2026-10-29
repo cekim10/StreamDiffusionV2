@@ -4,6 +4,7 @@
 #   elves-01:  bash tools/eval/run_m2_e10.sh orch
 #   Mac:       relay A's frames (elves-01 -> Mac -> elves-02), see the E10 instructions
 #   elves-02:  bash tools/eval/run_m2_e10.sh metrics
+#   elves-02:  bash tools/eval/run_m2_e10.sh frames    # bitwise frame comparison against the baselines (E9 dog frames there)
 set -u
 cd "$(dirname "$0")/../.."
 FR=/home/ckim151/m2e10_frames
@@ -36,5 +37,7 @@ case "${1:-}" in
           --out "results/evaluation/osdi/m1_continuity/e10_metrics_${name}_mig2.json" || echo "[E10] $name mig2: metrics exit $?"
       done
     done ;;
-  *) echo "usage: $0 orch|metrics"; exit 2 ;;
+  frames)
+    .venv/bin/python tools/eval/m2_e10_frames.py ;;
+  *) echo "usage: $0 orch|metrics|frames"; exit 2 ;;
 esac
