@@ -47,6 +47,7 @@ for p in (REPO_ROOT, REPO_ROOT / "tools", REPO_ROOT / "tools" / "eval"):
         sys.path.insert(0, str(p))
 
 import numpy as np  # noqa: E402
+from m3_path import M3NodeMixin  # noqa: E402  (M3-S2: the M3-only path; entered only with --m3)
 
 from common import DEFAULT_MSS, MSS_WARNINGS, CsvLog, EventLog, ResourceSampler, Throttle, clock_sync_server, effective_mss, host_info, tcp_accept, tcp_connect, tcp_listen  # noqa: E402
 from proto_handoff import MB, RecvPool, _pool, bytes_to_tensor, component_digest, estimate_sink_bytes, payload_slices, recv_exact, recv_msg, send_msg, tensor_to_bytes  # noqa: E402
@@ -1415,7 +1416,7 @@ class FakeRuntime:
 
 
 # ----------------------------------------------------------------------------- node
-class Node:
+class Node(M3NodeMixin):
     def __init__(self, args):
         self.a = args
         self.label = args.label
@@ -1998,7 +1999,9 @@ class Node:
                               "patches": 0, "patch_bytes": 0, "verdict": None, "verdict_ev": threading.Event(), "verdict_detail": None,
                               # M2 / E9: fixed switch call, retention at the switch, delta base toward a destination holding a version
                               "switch_call": h.get("replay_switch_call"), "retain": bool(h.get("replay_retain")), "dest_version": h.get("replay_dest_version"),
-                              "delta_test_mismatch": bool(h.get("replay_delta_test_mismatch")), "delta_verdict": None, "delta_ev": threading.Event(), "delta_detail": None}
+                              "delta_test_mismatch": bool(h.get("replay_delta_test_mismatch")), "delta_verdict": None, "delta_ev": threading.Event(), "delta_detail": None,
+                              # M3-S2 (m3_path.py): the mixed-version base toward a destination advertising verified entries
+                              "m3": bool(h.get("replay_m3")), "m3_held": h.get("m3_held")}
             task["send_lock"] = threading.Lock()
             task["replay"]["full_sink_bytes"] = (r.get("manifest") or {}).get("nbytes")
         r["xb"] = task
@@ -2026,7 +2029,7 @@ class Node:
                 # round 1 = the replay base: the Sink and the ring metadata of this boundary; the log starts at call c
                 rp["c0"] = c; rp["c0_set"].set()
                 trk = r.pop("xb_snap_track", None)
-                sent = self._replay_send_base(task, conn, snap, c, trk)
+                sent = self._m3_send_base(task, conn, snap, c) if rp.get("m3") else self._replay_send_base(task, conn, snap, c, trk)
             else:
                 sent, _, _ = self._xb_send_dirty(task, conn, snap, comps)
             del snap
@@ -2995,8 +2998,16 @@ class Node:
                         recv_exact(conn, pl)
                     if hdr.get("mode") == "delta":
                         self._replay_base_delta(conn, hdr)
+                    elif hdr.get("mode") == "m3":
+                        self._m3_replay_base(conn, hdr)
                     else:
                         self._replay_base(conn, hdr)
+                elif kind == "MENTRY":
+                    self._m3_recv_entry(conn, hdr, pl)
+                elif kind == "MPLAN":
+                    if pl:
+                        recv_exact(conn, pl)
+                    self._m3_recv_plan(hdr)
                 elif kind == "RDELTA":
                     r["replay_delta"] = (hdr, bytes(recv_exact(conn, pl)) if pl else b"")
                 elif kind == "RLOG":
@@ -3211,12 +3222,16 @@ class Node:
             if r["wait_sink"] and r["bound_call"] is None:
                 time.sleep(0.005)   # XB wait-for-Sink ablation: no Sink-less generation
                 continue
+            if r.get("m3s") is not None:
+                self._m3_before_step(c)   # M3-S2 lineage tracking (only after M3_TRACK)
             pc = r["pending_cold"]
             if pc is not None and c in (pc["skip"], pc["emit"]):
                 produced, ps, ss, dt, pos = self.rt.step(c, override=pc["frames"] if c == pc["emit"] else None, skip=c == pc["skip"] and c != pc["emit"])
             else:
                 produced, ps, ss, dt, pos = self.rt.step(c)
             t_out = time.time()
+            if r.get("m3s") is not None:
+                self._m3_after_step(c)
             if r.get("tracking"):
                 self.rt.sink_track_step(c)
             if produced and r["first_out_t"] is None:

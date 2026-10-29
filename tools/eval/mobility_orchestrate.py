@@ -285,6 +285,8 @@ class Run:
         if policy == "precopy_replay":
             ss += ("_retain" if self.a.replay_retain else "") + ("_reuse" if self.a.replay_reuse else "") + ("_deltatestmismatch" if self.a.replay_delta_test_mismatch else "") \
                 + (f"_fault={self.a.replay_test_fault}" if self.a.replay_test_fault else "")
+            if self.a.m3:
+                ss += f"_m3={self.a.m3_staging}-{self.a.m3_order}" + (f"_m3fault={self.a.m3_test_fault}" if self.a.m3_test_fault else "")
         self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}{('_rs=' + str(self.recent_slots)) if self.recent_slots else ''}{ss}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
@@ -1112,6 +1114,7 @@ class Run:
                 if dv and self.a.replay_test_fault == "advertise_wrong":
                     dv = {**dv, "digest": "0" * 64}   # E10 (test only): the destination advertises a version it does not hold
             task["dest_version"] = dv
+            m3x = self._m3_before_migration(src, target, task) if (self.a.m3 and self.policy == "precopy_replay") else {}
             sc = [int(x) for x in self.a.replay_switch_calls.split(",") if x.strip()] if self.a.replay_switch_calls else []
             self.node(src).call("PRECOPY_START", task=task["id"], to=target, to_host=nd["host"], to_port=nd["data"], variant=self.policy.split("_")[1],
                                 frag_bytes=self.a.frag_bytes, threshold_bytes=int(self.a.xb_threshold_mib * MB), round_limit=self.a.xb_round_limit,
@@ -1121,7 +1124,7 @@ class Run:
                                     "replay_sink_sync_test_mismatch": bool(self.a.replay_sink_sync_test_mismatch),
                                     "replay_sink_sync_test_perturb_dst": bool(self.a.replay_sink_sync_test_perturb_dst),
                                     "replay_switch_call": sc[ti] if ti < len(sc) else None, "replay_retain": bool(self.a.replay_retain), "replay_dest_version": dv,
-                                    "replay_delta_test_mismatch": bool(self.a.replay_delta_test_mismatch)} if self.policy == "precopy_replay" else {}))
+                                    "replay_delta_test_mismatch": bool(self.a.replay_delta_test_mismatch), **m3x} if self.policy == "precopy_replay" else {}))
         else:
             variant = self.policy.split("_")[1]
             c = self._xb_src_call(src)
@@ -1357,6 +1360,7 @@ class Run:
                 self.input_check[lb] = r.get("input_check")
         self.drain(0.5)
         self.xb_task, self.xb_tasks, self.xb_switches, self.xb_seen = None, [], [], 0
+        self.m3_tracking, self.m3_flows, self.m3_plans = False, {}, []
         self.t0 = time.time(); self.ev.set_ref(self.t0)
         self.ev.log("migration_start", self.t0, policy=self.policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, path=self.edges,
                     xb={"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window})
@@ -1386,6 +1390,8 @@ class Run:
                     self._xb_cancel()
                 if self.xb_task is None and self.running != to:
                     self._xb_start(to)
+                if a.m3:
+                    self._m3_plan("move")
                 next_move += 1
             fin = self.edges[-1]
             if next_move > n_moves and self.running == fin:
@@ -1460,12 +1466,113 @@ class Run:
             summary["delivery"] = delivery_metrics(summary, self.metrics, self.node_events)
         except Exception as exc:  # noqa: BLE001
             summary["delivery"] = {"error": repr(exc)}
+        if a.m3:
+            summary["m3"] = self.m3_accounting()
+            summary["validation"].update(summary["m3"]["validation"])
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
         (self.dir / "config.json").write_text(json.dumps({"experiment": a.experiment, "policy": self.policy, "args": vars(a), "nodes": self.o.node_spec}, indent=1, default=str))
         (self.dir / "host_info.json").write_text(json.dumps({lb: {"hello": {k: v for k, v in self.node(lb).hello.items() if k != "kind"}, "clock_sync": self.node(lb).sync} for lb in self.nodes_used}, indent=1, default=str))
         self.log(f"{POLICY_LABEL[self.policy]}: {len(self.xb_switches)} switchovers, verified {validation['switchovers_verified']}, stop {self.stop_reason}")
         self.trace.close()
         return summary
+
+    # ---------------- M3-S2 (osdi/m3s2/preregistration.md; node side tools/eval/m3_path.py)
+    def _m3_before_migration(self, src, target, task) -> dict:
+        """Before a pre-copy toward `target`: start the source's lineage tracking (first migration), stop every forward flow
+        toward the target and let it verify what was fully sent (bounded wait), then take its advertisement."""
+        if not self.m3_tracking:
+            r = self.node(src).call("M3_TRACK", timeout=120)
+            self.m3_tracking = True; self.ev.log("m3_track", source=src, start=r.get("start"), tracking=r.get("tracking"))
+        t0 = time.time()
+        sent = []
+        for lb in self.nodes_used:
+            if lb != target:
+                sent += self.node(lb).call("M3_FORWARD_STOP", to=target, timeout=300).get("sent") or []
+        fault = self.a.m3_test_fault if self.a.m3_test_fault == "corrupt_held" else None
+        hr = self.node(target).call("M3_HELD", expect=sent, wait_s=self.a.m3_held_wait_s, advertise=True, test_fault=fault, timeout=300)
+        held = [list(x) for x in hr.get("held") or []]
+        altered = []
+        if self.a.m3_test_fault == "advertise_wrong" and held:
+            for x in held[:3]:   # Phase B (test only): the destination advertises versions it does not hold
+                altered.append([x[0], x[1], x[1] + 1]); x[1] = x[1] + 1
+        task["m3"] = {"advertised": len(held), "expected_from_forwards": len(sent), "missing_expected": len(hr.get("missing") or []), "lost": hr.get("lost"),
+                      "wait_s": hr.get("waited_s"), "stop_and_advertise_s": time.time() - t0, "altered": altered, "test_fault": fault or (self.a.m3_test_fault if altered else None)}
+        self.ev.log("m3_advertised", task=task["id"], src=src, dst=target, **task["m3"])
+        return {"replay_m3": True, "m3_held": held}
+
+    def _m3_plan(self, why):
+        """S2 (causal, two candidates; M3-S1's network policy): every node that is neither the user's edge nor the source is a
+        candidate; each entry a candidate lacks in a version the source still holds valid is forwarded by a holder that holds
+        it verified (newest version first, then the holder with the fewest assignments). Holders never include the source."""
+        if self.a.m3_staging != "S2" or self.running is None:
+            return
+        src, user = self.running, self.edges[self.user_idx]
+        order = [n for n in (["A", "B", "C", "D"] if self.a.m3_order == "fwd" else ["D", "C", "B", "A"]) if n in self.nodes_used]
+        cands = [n for n in order if n != user and n != src]
+        held = {lb: [tuple(x) for x in self.node(lb).call("M3_HELD", wait_s=0, timeout=120).get("held") or []] for lb in self.nodes_used if lb != src}
+        pairs = sorted({x for v in held.values() for x in v})
+        valid = {tuple(x) for x in self.node(src).call("M3_VALID", pairs=[list(x) for x in pairs], timeout=120).get("valid") or []}
+        done = {e.get("flow") for e in self.node_events if e["event"] == "m3_forward_done"}
+        n_out, n_in = defaultdict(int), defaultdict(int)
+        for f in self.m3_flows.values():
+            if f["id"] not in done:
+                n_out[f["src"]] += 1; n_in[f["dst"]] += 1
+        plan = {"why": why, "t": time.time(), "source": src, "user": user, "candidates": cands, "holders": {k: len(v) for k, v in held.items()}, "valid_pairs": len(valid), "flows": []}
+        for cand in cands:
+            have = {e for e, v, h in held.get(cand, []) if (e, v) in valid}
+            have |= {e for f in self.m3_flows.values() if f["dst"] == cand and f["id"] not in done for e, v in f["entries"]}
+            provs = [p for p in held if p != cand and held[p]]
+            count = {p: 0 for p in provs}
+            assign = defaultdict(list)
+            for e in range(self.a.m3_entries):
+                if e in have:
+                    continue
+                ok = [(v, p) for p in provs for e2, v, h in held[p] if e2 == e and (e, v) in valid]
+                if not ok:
+                    continue
+                vmax = max(v for v, p in ok)
+                p = min((p for v, p in ok if v == vmax), key=lambda p_: (count[p_], p_))
+                count[p] += 1; assign[p].append([e, vmax])
+            for p, items in assign.items():
+                n_out[p] += 1; n_in[cand] += 1
+                rate = min(self.caps[("out", p)] / n_out[p], self.caps[("in", cand)] / n_in[cand]) if self.caps else 0.0
+                fid = f"m3f{len(self.m3_flows) + 1}_{p}{cand}"
+                fail = self.a.m3_fail_after if (self.a.m3_test_fault == "holder_fail" and not any(f.get("fail") for f in self.m3_flows.values())) else None
+                nd = self.o.node_spec[cand]
+                self.node(p).call("M3_FORWARD", flow=fid, to=cand, to_host=nd["host"], to_port=nd["data"], entries=items, rate_bps=rate, fail_after=fail, timeout=120)
+                self.m3_flows[fid] = {"id": fid, "src": p, "dst": cand, "entries": items, "t": time.time(), "rate_bps": rate, "fail": fail, "why": why}
+                plan["flows"].append({"id": fid, "src": p, "dst": cand, "n": len(items), "rate_mbps": rate / 1e6, "fail_after": fail})
+        self.m3_plans.append(plan)
+        self.ev.log("m3_plan", **{k: v for k, v in plan.items() if k != "t"})
+
+    def m3_accounting(self) -> dict:
+        ev = self.node_events
+        bases = [e for e in ev if e["event"] == "m3_base_sent"]
+        canc = [e for e in ev if e["event"] == "m3_base_cancelled"]
+        dst_b = [e for e in ev if e["event"] == "m3_base"]
+        fwd = [e for e in ev if e["event"] == "m3_forward_done"]
+        rx = [e for e in ev if e["event"] == "m3_entry"]
+        lost = [e for e in ev if e["event"] == "m3_entry_lost"]
+        bad = [e for e in ev if e["event"] == "m3_entry_bad"]
+        by_link = defaultdict(int)
+        for e in rx:
+            by_link[f"{e.get('role')}:{e.get('src')}>{e['node']}"] += int(e.get("bytes") or 0)
+        fin = dst_b[-1] if dst_b else None
+        fault = self.a.m3_test_fault
+        v = {"m3_final_base_present": fin is not None,
+             "m3_final_base_accepted": bool(fin and fin.get("accepted")),
+             "m3_no_unexpected_bad_entries": not bad,
+             "m3_fallback_used": any(b.get("mode") == "full" for b in bases),
+             "m3_no_lost_entries_unless_injected": (not lost) or fault == "holder_fail"}
+        return {"tasks": [{k: t.get(k) for k in ("id", "src", "dst", "outcome", "m3")} for t in self.xb_tasks],
+                "bases_sent": [{k: e.get(k) for k in ("node", "task", "call", "mode", "advertised", "reused", "planned_send", "sent_entries", "entry_bytes", "meta_bytes", "header_bytes",
+                                                      "shift_ops", "rejected", "reuse_versions", "verdict", "verdict_wait_s", "fallback_bytes", "entries_send_s", "d2h_s", "hash_s", "bytes")} for e in bases],
+                "bases_cancelled": [{k: e.get(k) for k in ("node", "task", "call", "sent_entries", "entry_bytes", "bytes")} for e in canc],
+                "dest_bases": [{k: e.get(k) for k in ("node", "task", "call", "accepted", "reused", "sent", "shift_ops", "versions", "n_block_mismatch", "positions_equal", "cond_equal",
+                                                      "complete", "n_problems", "test_injected", "total_s", "h2d_s", "shadow_base_s", "shift_s", "digest_s")} for e in dst_b],
+                "forwards": [{k: e.get(k) for k in ("node", "flow", "to", "n_sent", "bytes", "cancelled", "skipped", "failed_injected", "s")} for e in fwd],
+                "plans": [{k: v_ for k, v_ in p.items() if k != "t"} for p in self.m3_plans],
+                "rx_bytes_by_link": dict(sorted(by_link.items())), "entries_lost": len(lost), "entries_bad": len(bad), "test_fault": fault, "validation": v}
 
     # ---------------- accounting
     def vacw_summary(self, ok_first: list, tfm, S: int) -> dict:
@@ -2067,6 +2174,13 @@ def main():
     ap.add_argument("--replay_delta_test_mismatch", action="store_true", help="protocol test only: corrupt the delta base's expected digest (exercise the full-base fallback)")
     ap.add_argument("--replay_test_fault", choices=["advertise_wrong", "held_wrong", "corrupt_block"], default=None,
                     help="E10 fault injection (test only): the destination advertises a wrong version / holds a different version / one retained Sink block corrupted")
+    ap.add_argument("--m3", action="store_true", help="M3-S2: lineage-aware forwarding + mixed-version Sink base (m3_path.py; precopy_replay only)")
+    ap.add_argument("--m3_staging", choices=["none", "S2"], default="S2", help="M3-S2: none = M3 entry path without forwarding (control); S2 = two causal candidates")
+    ap.add_argument("--m3_order", choices=["fwd", "rev"], default="fwd")
+    ap.add_argument("--m3_entries", type=int, default=180)
+    ap.add_argument("--m3_held_wait_s", type=float, default=10.0, help="M3-S2: bound on the destination's wait for entries fully sent by stopped forward flows")
+    ap.add_argument("--m3_test_fault", choices=["advertise_wrong", "corrupt_held", "holder_fail"], default=None, help="M3-S2 Phase B fault injection (test only)")
+    ap.add_argument("--m3_fail_after", type=int, default=40, help="M3-S2 holder_fail: the first forward flow fails in the middle of its entry after this many entries")
     ap.add_argument("--dump_frames", type=str, default="", help="M1 replay validation: destination output + reference frames under this host-local directory")
     ap.add_argument("--dump_calls", type=int, default=200, help="M1 replay validation: dump calls [trigger - 16, trigger + dump_calls]")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")
