@@ -11,7 +11,7 @@
    "frozen_no_duplicates": false,
    "missing_node_logs": false,
    "duplicates": {
-    "other": {
+    "cancel_race_stage": {
      "n": 1,
      "bytes": 9584640
     },
@@ -21,7 +21,7 @@
     }
    },
    "n_duplicates": 13,
-   "amended_no_duplicates": false,
+   "amended_no_duplicates": true,
    "detail": [
     {
      "node": "C",
@@ -29,8 +29,8 @@
      "flow": "f8_s0_BC",
      "kind": "stage",
      "t_rel": 31.214,
-     "class": "other",
-     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.080636024475098)"
+     "class": "cancel_race_stage",
+     "why": "held copy was the in-flight fragment of f6_s0_AC (cancelled 31.000 s), landed 31.081 s after staging flow f8_s0_BC started 31.007 s"
     },
     {
      "node": "D",
@@ -166,7 +166,7 @@
    "frozen_no_duplicates": false,
    "missing_node_logs": false,
    "duplicates": {
-    "other": {
+    "cancel_race_stage": {
      "n": 1,
      "bytes": 9584640
     },
@@ -176,7 +176,7 @@
     }
    },
    "n_duplicates": 3,
-   "amended_no_duplicates": false,
+   "amended_no_duplicates": true,
    "detail": [
     {
      "node": "C",
@@ -184,8 +184,8 @@
      "flow": "f8_s0_BC",
      "kind": "stage",
      "t_rel": 28.814,
-     "class": "other",
-     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.595712900161743)"
+     "class": "cancel_race_stage",
+     "why": "held copy was the in-flight fragment of f6_s0_AC (cancelled 28.566 s), landed 28.596 s after staging flow f8_s0_BC started 28.570 s"
     },
     {
      "node": "D",

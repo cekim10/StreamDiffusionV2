@@ -11,6 +11,9 @@ and not dup) and classifies every duplicate receipt of the Sink session:
                    (the M2 delta protocol re-sends it by design; the stale copy is overwritten)
     drain_race     via a base flow; the held copy is lineage-valid at c0 but arrived after the migration started
                    (the in-flight fragment of a staging flow cancelled at migration start; the delta was computed before it landed)
+    cancel_race_stage  (Amendment 2) via a staging flow; the held copy was the in-flight fragment of a flow that had been
+                   cancelled before the staging flow was planned, and it landed after the staging flow started (the planner
+                   could not know it would arrive: a cancelled flow finishes its in-flight fragment)
     other          anything else (a same-version double delivery: a genuine duplicate)
 
 Amended validity: no `other` duplicates. Snapshot tags are reconstructed from the flows: a base flow's fragments carry
@@ -57,10 +60,12 @@ def classify(d: Path, lin_cache: dict):
     lin = lin_cache[wl]
     ev = list(csv.DictReader(open(d / "events.csv")))
     t0 = float(ev[0]["t_wall"])
-    flows = {}
+    flows, f_start, f_cancel = {}, {}, {}
     for r in ev:
         if r["event"] == "flow_start":
-            j = json.loads(r["detail"]); flows[j["flow"]] = j
+            j = json.loads(r["detail"]); flows[j["flow"]] = j; f_start[j["flow"]] = float(r["t_rel"])
+        elif r["event"] == "flow_cancel":
+            j = json.loads(r["detail"]); f_cancel[j["flow"]] = float(r["t_rel"])
     migs = {m["id"]: m for m in s["migrations"]}
     base_c0 = {}
     for fid_, j in flows.items():
@@ -74,7 +79,7 @@ def classify(d: Path, lin_cache: dict):
                     "frozen_no_duplicates": s["validation"]["no_duplicates"], "missing_node_logs": True}
         nodes[n] = [r for r in csv.DictReader(open(f)) if r["event"] == "recv" and r["session"] == "s0"]
     rows = sorted((float(r["t"]), n, r) for n, rs in nodes.items() for r in rs)
-    tag = {n: {} for n in "ABCD"}       # node -> fid -> (snapshot call, t_rel of receipt)
+    tag = {n: {} for n in "ABCD"}       # node -> fid -> (snapshot call, t_rel of receipt, delivering flow)
     out = defaultdict(lambda: {"n": 0, "bytes": 0})
     detail = []
     for t, n, r in rows:
@@ -88,7 +93,7 @@ def classify(d: Path, lin_cache: dict):
             new_tag = tag[j["src"]].get(fid, (None, None))[0]
         trel = t - t0
         if ok:
-            tag[n][fid] = (new_tag, trel)
+            tag[n][fid] = (new_tag, trel, fl)
             continue
         # duplicate receipt
         held = tag[n].get(fid)
@@ -104,6 +109,8 @@ def classify(d: Path, lin_cache: dict):
                 cls, why = "other", f"base re-sent a lineage-valid held entry (tag {held[0]}, c0 {c0}, held at {held[1]:.2f} s)"
         elif j["kind"] == "base":
             cls, why = "other", "base duplicate of an entry with no reconstructed tag"
+        elif held is not None and held[2] in f_cancel and f_cancel[held[2]] <= f_start.get(fl, -1) + SKEW_TOL_S and held[1] >= f_start.get(fl, 1e9) - SKEW_TOL_S:
+            cls, why = "cancel_race_stage", f"held copy was the in-flight fragment of {held[2]} (cancelled {f_cancel[held[2]]:.3f} s), landed {held[1]:.3f} s after staging flow {fl} started {f_start[fl]:.3f} s"
         else:
             cls, why = "other", f"duplicate via staging flow {fl} ({j['src']}->{j['dst']}); held {held}"
         out[cls]["n"] += 1; out[cls]["bytes"] += b

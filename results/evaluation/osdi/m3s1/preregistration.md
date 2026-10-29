@@ -141,3 +141,19 @@ delivery — a genuine duplicate). A run is valid under the amendment iff it has
 check passes. Duplicate bytes stay counted in total bytes. Both verdicts (frozen: NO DATA; amended) are reported; no
 rule, threshold, policy, constant or prediction changes. The amended analysis requires the node logs of B, C, D, which
 the orchestrator does not collect (only node A's log is local to elves-01).
+
+## Amendment 2 (2026-10-29, after the node logs were classified; rules and thresholds unchanged)
+
+With the node logs, `m3s1_dupcheck.py` found, in every run with two causal candidates or with S1c/rev (39 of 54 main
+runs, 2 of 4 shakedown runs), exactly one duplicate that Amendment 1's classes did not cover: node C receives one
+entry via the staging flow B → C that it already holds, where the held copy was the **in-flight fragment of the
+cancelled A → C base** (cancelled at the move, 28.57 s; the fragment landed at ≈ 28.65 s) and the staging flow was
+planned at the cancellation (28.574 s) before that fragment landed. A cancelled flow finishes its in-flight fragment
+(`restore_orchestrate` semantics); the planner's "already held or claimed" set does not include it. Cost: one entry
+(9.6 MB, ≈ 0.2 % of total bytes) per run; the staged copy carries tag 30 and the held copy tag 56 — both lineage-valid,
+so no version conflict. A new class **cancel_race_stage** is added with the mechanistic condition checked from the
+logs: the held copy's delivering flow was cancelled no later than the staging flow's start (+ clock tolerance 0.25 s)
+and the held copy landed no earlier than that start (− tolerance). Everything outside the three classes stays
+*other*. Under Amendment 1 alone the only valid staging cells are S1o (3 / 3 both workloads) and the verdict stays
+NO DATA (no valid S3 cell); under Amendments 1 + 2 every run is valid. The ρ = 2 failures are this class alone
+(held − valid = 0; no stale re-send).
