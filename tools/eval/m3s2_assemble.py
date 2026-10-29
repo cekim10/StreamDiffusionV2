@@ -66,11 +66,10 @@ def main():
     versions = sorted({int(x) for x in a.versions.split(",")})
     targets = sorted({int(x) for x in a.targets.split(",")})
     bounds = sorted(set(versions) | set(targets))
-    L, rows = len(pl.kv_cache1), int(pl.kv_cache1[0]["k"].shape[0])
-    N = L * rows * S
-    coords = [m3.coords_of(e, rows, S) for e in range(N)]
+    geo = {}   # the KV cache exists only after the session's first call: geometry is read at the first boundary
 
     def entries_now():
+        coords = geo["coords"]
         out = {}
         for e, (li, i, s) in enumerate(coords):
             out[e] = (pl.kv_cache1[li]["k"][i, s * fsl:(s + 1) * fsl].detach().to("cpu", copy=True), pl.kv_cache1[li]["v"][i, s * fsl:(s + 1) * fsl].detach().to("cpu", copy=True))
@@ -84,8 +83,12 @@ def main():
     # per-entry serialization cost on this GPU (D2H + SHA-256), measured at the first boundary
     cost = None
     for c in range(targets[-1] + 1):
+        if c in bounds and not geo:
+            L_, rows_ = len(pl.kv_cache1), int(pl.kv_cache1[0]["k"].shape[0])
+            geo.update({"L": L_, "rows": rows_, "N": L_ * rows_ * S, "coords": [m3.coords_of(e, rows_, S) for e in range(L_ * rows_ * S)]})
         if c in bounds:
             sync()
+            L, rows, N, coords = geo["L"], geo["rows"], geo["N"], geo["coords"]
             snaps[c] = entries_now()
             if c in targets:
                 ck = rt.sink_checksums(); ck.pop("s"); cks[c] = ck["blocks"]; pos_at[c] = ck["pos"]

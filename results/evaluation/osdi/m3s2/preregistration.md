@@ -153,3 +153,11 @@ lost / bad, advertisement wait.
 No GPU run before this file is committed; rules, thresholds and predictions do not change after a run. Phases run in
 order and a failing phase stops the later ones. Every number in the report is labelled measured (testbed / GPU) or
 predicted.
+
+## Note 1 (2026-10-29, before any A0 data; rules unchanged)
+
+The first `a0` invocation stopped before producing any data: `m3s2_assemble.py` read the KV-cache geometry before
+the session's first call (the cache is allocated by the first call). Fixed by reading it at the first boundary. The
+tool was then run end to end on a CPU mock of the KV ring with the real `_shift_temporal_rope` (code-path test only,
+not evidence): all checks executed, up to 7 versions in one assembled Sink; `gpu_entry_payload` / `gpu_assemble`
+likewise exercised on the mock.
