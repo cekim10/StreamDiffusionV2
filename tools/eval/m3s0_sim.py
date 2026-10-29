@@ -35,7 +35,10 @@ NODES = ["A", "B", "C", "D"]
 PATH = ["A", "B", "C", "D"]
 META_BYTES = 2_401_488            # full base 1,727,636,688 B minus 180 entries of 9,584,640 B
 CAP_BPS = 1e9
-ETA = 0.88                        # link efficiency of the paced flows (calibration gate: S0 base time within 15 %)
+CAL = ROOT / "results/evaluation/osdi/m3s0/calibration.json"   # eta and the per-task startup latency h, fitted from the 12 measured M3-E0 tasks
+_cal = json.load(open(CAL)) if CAL.exists() else {}
+ETA = float(_cal.get("eta", 0.88))      # link efficiency of the paced flows (gate G1)
+H_STARTUP = float(_cal.get("h_s", 0.0))  # base flow: time from task start to the first fragment on the wire, after the snapshot (fragment hashing + connect)
 W = 12                            # Replay-W (frozen M1)
 READY_EXTRA_S = 0.6               # readiness beyond the call c0 + W (E9: 8.74 s; E10 butterfly: 8.97 s at c0 = 123, W = 12)
 BASE_READY_EXTRA_S = 0.4          # base flow end -> base ready (M3-E0: 0.40-0.44 s)
@@ -165,7 +168,8 @@ class Sim:
         self.nflow += 1
         fid = f"f{self.nflow}_{kind}_{src}{dst}"
         q = deque(items)
-        fl = {"id": fid, "kind": kind, "src": src, "dst": dst, "q": q, "cur": None, "left": 0.0, "demand": demand, "task": task, "sent": 0.0, "open": kind == "stage"}
+        fl = {"id": fid, "kind": kind, "src": src, "dst": dst, "q": q, "cur": None, "left": 0.0, "demand": demand, "task": task, "sent": 0.0, "open": kind == "stage",
+              "startup": (self.k["snapshot_s"] + H_STARTUP) if kind == "base" else 0.0}
         self.flows[fid] = fl
         self._next_item(fl)
         return fl
@@ -249,6 +253,11 @@ class Sim:
             return
         src = self.source
         for cand in cands:
+            # re-plan: entries still queued (not in flight) on the source's staging flow to this candidate are re-assigned now,
+            # so a holder that has them since can provide them (the first run showed a starved source queue blocking this)
+            for fl in self.flows.values():
+                if fl["kind"] == "stage" and fl["src"] == src and fl["dst"] == cand and fl["q"]:
+                    fl["q"].clear()
             have = set(self.held[cand]) | self.queued_to(cand)
             missing = [e for e in range(self.lin.n) if e not in have]
             if not missing:
@@ -357,8 +366,11 @@ class Sim:
                         for e in rf:
                             if e in self.held[cand] and e not in self.queued_to(cand):
                                 self._add(self.source, cand, [(e, None)])
-            # bandwidth
-            fl_list = [(f, fl["src"], fl["dst"]) for f, fl in self.flows.items() if fl["cur"] is not None]
+            # bandwidth (a base flow in its startup phase - snapshot, hashing, connect - has nothing on the wire yet)
+            for fl in self.flows.values():
+                if fl["startup"] > 0:
+                    fl["startup"] -= DT
+            fl_list = [(f, fl["src"], fl["dst"]) for f, fl in self.flows.items() if fl["cur"] is not None and fl["startup"] <= 0]
             demand = {f: self.flows[f]["demand"] for f, _, _ in fl_list}
             if self.sharing == "residual":
                 prim = [x for x in fl_list if self.flows[x[0]]["kind"] != "stage"]
@@ -394,8 +406,10 @@ class Sim:
                             elif fl["kind"] == "stage" and not fl["open"]:
                                 pass
             # finished closed flows
-            for f in [f for f, fl in self.flows.items() if fl["cur"] is None and fl["kind"] == "stage" and not fl["q"]]:
+            done = [f for f, fl in self.flows.items() if fl["cur"] is None and fl["kind"] == "stage" and not fl["q"]]
+            for f in done:
                 fl = self.flows.pop(f); self.log("stage_done", flow=f, src=fl["src"], dst=fl["dst"], mb=round(fl["sent"] / 1e6, 1))
+            if done:
                 self.plan_staging("stage_done")
             for f in [f for f, fl in self.flows.items() if fl["cur"] is None and fl["kind"] == "base"]:
                 self.flows.pop(f)
@@ -449,13 +463,13 @@ def consts_from_e0(name: str) -> dict:
                 lags.append(tk["t_end"] - mv)
     return {"log_bytes_per_call": t["log_bytes"] / t["log_calls"], "catchup_per_call_s": f["replay_catchup_s"] / t["log_calls"],
             "switch_s": f["first_output_s"] - f["readiness_s"], "cancel_lag_s": sum(lags) / len(lags) if lags else 0.5, "snapshot_s": f["round_snapshot_s"],
-            "measured": {"remote_s": R["serving"]["remote_wall_s"], "n_cancelled": R["n_cancelled"], "discarded_mb": R["discarded_bytes"] / 1e6,
+            "measured": {"remote_s": R["serving"]["remote_wall_s"], "n_cancelled": R["n_cancelled"], "discarded_mb": R["discarded_bytes"] / 1e6, "snapshot_s": f["round_snapshot_s"],
                          "final_base_send_s": f["base_send_s"], "final_readiness_s": f["readiness_s"], "moves": [m["t"] for m in R["moves"]]}}
 
 
 def gate(sim_s0: dict, meas: dict) -> dict:
     fin = next((m for m in reversed(sim_s0["migrations"]) if m["outcome"] == "completed"), None)
-    bs = (fin["t_base_ready"] - fin["t_start"] - BASE_READY_EXTRA_S) if fin else None
+    bs = (fin["t_base_ready"] - fin["t_start"] - BASE_READY_EXTRA_S - meas.get("snapshot_s", 0.0)) if fin else None   # as the measured round send_s (hashing + transfer)
     chk = {"cancellations_equal": sim_s0["n_cancelled"] == meas["n_cancelled"],
            "base_send_within_15pct": bs is not None and abs(bs - meas["final_base_send_s"]) <= 0.15 * meas["final_base_send_s"],
            "remote_within_10pct": abs(sim_s0["remote_s"] - meas["remote_s"]) <= 0.10 * meas["remote_s"],
@@ -464,7 +478,7 @@ def gate(sim_s0: dict, meas: dict) -> dict:
 
 
 def run_matrix(lin_by_wl: dict, out_dir: Path, rho_filter=None) -> dict:
-    rep = {"eta": ETA, "W": W, "ready_extra_s": READY_EXTRA_S, "configs": {}}
+    rep = {"eta": ETA, "h_startup_s": H_STARTUP, "W": W, "ready_extra_s": READY_EXTRA_S, "configs": {}}
     for name, (wl, rho) in CONFIGS.items():
         if rho_filter and rho not in rho_filter:
             continue
@@ -530,13 +544,15 @@ def rules(rep: dict) -> dict:
         out["e2e"][name] = {"achievable_remote_reduction_s": ach, "floor_remote_s": fl["remote_s"], "s0_remote_s": s0["remote_s"],
                             "any_graph_causal_primary_pass": any(e2e[f"{g}/causal/fair/once"]["pass"] for g in ("star", "line", "tree", "butterfly", "adaptive")),
                             "any_graph_oracle_pass": any(e2e[f"{g}/oracle/fair/once"]["pass"] for g in ("star", "line", "tree", "butterfly", "adaptive")), "per_policy": e2e}
-    r1 = [n for n in out["gate"] if CONFIGS[n][1] == 1]
-    g_ok = all(out["gate"][n] for n in out["gate"])
+    # per-configuration gate (preregistration 3.2: a configuration whose G1 fails gets no verdict); the verdict uses rho 1
+    r1 = [n for n in out["gate"] if CONFIGS[n][1] == 1 and out["gate"][n]]
+    out["no_verdict_configs"] = [n for n in out["gate"] if not out["gate"][n]]
+    g_ok = len(r1) == 2
     F = all(out["feasibility"][n]["any_graph_causal_primary"] for n in r1) if r1 else False
     E = all(out["e2e"][n]["any_graph_causal_primary_pass"] for n in r1) if r1 else False
     Fo = all(out["feasibility"][n]["any_graph_oracle"] for n in r1) if r1 else False
     if not g_ok:
-        verdict = "NO VERDICT (model validity gate failed)"
+        verdict = "NO VERDICT (model validity gate failed for a rho-1 configuration)"
     elif F and E:
         verdict = "GO"
     elif not Fo or not F:
@@ -575,7 +591,8 @@ def selftest():
     check("S0 rho1: two cancellations and a completed final migration", s0["n_cancelled"] == 2 and s0["final_completed"], f"remote {s0['remote_s']} discarded {s0['discarded_mb']}")
     fin = next(m for m in reversed(s0["migrations"]) if m["outcome"] == "completed")
     bs = fin["t_base_ready"] - fin["t_start"] - BASE_READY_EXTRA_S
-    check("S0 full base send near 1727.6 MB / (eta x 1 Gbps)", abs(bs - 1727.6e6 * 8 / (ETA * 1e9)) < 1.0, f"{bs:.2f} s")
+    exp_bs = k["snapshot_s"] + H_STARTUP + 1727.6e6 * 8 / (ETA * 1e9 - k["log_bytes_per_call"] * 8 / lin.period)
+    check("S0 full base: snapshot + startup + transfer beside the log", abs(bs - exp_bs) < 1.0, f"{bs:.2f} s vs {exp_bs:.2f}")
     g = gate(s0, k["measured"]); check("gate structure computed", "pass" in g, str(g))
     fl = Sim(lin, k, 1, "floor", "oracle").run()
     check("floor: every migration metadata-only, readiness at the Replay-W floor", all(m["delta"] == 0 for m in fl["migrations"]) and fl["remote_s"] < s0["remote_s"], f"remote {fl['remote_s']}")

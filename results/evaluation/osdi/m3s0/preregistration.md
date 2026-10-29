@@ -143,3 +143,26 @@ Achievable reduction of a configuration = S0 remote serving − floor remote ser
 - The lineage table is the uninterrupted trajectory's; after an ownership transition the model assumes the same
   refresh / shift sequence (a stated assumption; M3-E0 verified it for the uninterrupted source only).
 - Every number in the report is labelled simulated, measured (constants) or recorded (lineage).
+
+## Amendment 1 (2026-10-29, after the first `--all` run, before any verdict was read; rules and thresholds unchanged)
+
+The first run failed gate G1 in 3 of 4 configurations on discarded bytes (model +15 to +63 %). Two model defects were
+found and fixed; both are documented here because they were made after seeing simulated output. No rule, threshold,
+policy definition or measured constant was changed.
+
+1. **Per-task startup latency.** The source hashes all 412 fragments before it sends the first one
+   (`_xb_send_dirty`), after the snapshot; the first model had no such latency, so short tasks (ρ = 2) sent too much
+   before their cancellation. η and a startup h are now fitted jointly by least squares to the 12 measured M3-E0
+   tasks (`calibration.json`: η = 0.96, h = 2.36 s, RMSE 0.60 s; the four final tasks within −0.06 / +0.34 / +1.38 /
+   +0.62 s). h applies to base flows only (staging flows have no measured protocol; stated limitation).
+2. **Planner artefact.** A staging flow from the source that had received no bandwidth (residual sharing) kept its
+   queued entries, and the "already queued" check prevented a holder from providing them later; the planner now
+   re-plans the source's queued (not in-flight) staging entries at every decision point, as M3-v2 re-plans a slow
+   provider's remaining fragments. Without this fix tree / butterfly / adaptive degenerated to star under residual
+   sharing.
+3. The gate is applied per configuration, as section 3.2 states (the first `rules()` implementation required all
+   four). ρ = 2 configurations are descriptive in any case.
+
+After the amendment G1 passes for dog ρ1 (remote 51.6 vs 50.0 s; discarded 2,784 vs 2,795 MB), dog ρ2 (37.9 vs 35.4;
+1,194 vs 1,040) and butterfly ρ1 (59.0 vs 53.8; 3,152 vs 2,953) and fails for butterfly ρ2 (42.7 vs 38.7 s, +10.3 %;
+1,372 vs 1,034 MB, +33 %): that configuration gets no verdict.
