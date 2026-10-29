@@ -1,0 +1,312 @@
+{
+ "baseline": {
+  "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_path=ABA_rep=1_sinksync_20261028-172312",
+  "validation": {
+   "four_hosts_distinct": true,
+   "nodes_same_commit": true,
+   "gpu0_idle_before_run": true,
+   "switchovers_verified": true,
+   "n_switchovers": 2,
+   "final_edge_served": true,
+   "stop_reason": "horizon",
+   "source_served_after_trigger": 145,
+   "source_served_until_switch": true,
+   "codecs_ok": true,
+   "replay_base_verified": true,
+   "replay_conditioning_equal": true,
+   "replay_order_ok": true,
+   "replay_post_meta_all_equal": true,
+   "replay_meta_consistent_at_switch": true,
+   "replay_switch_refused": 0,
+   "replay_no_lost_or_duplicated_calls": true,
+   "replay_source_unchanged_vs_reference": true,
+   "replay_ready_timeout": false,
+   "replay_sink_sync": true,
+   "replay_sink_digest_match": true,
+   "replay_fallback_used": false,
+   "replay_verdict": "SINKOK",
+   "replay_patches_all_applied_in_order": true,
+   "replay_resumed_on_digest_equal_sink_or_fallback": true
+  },
+  "migrations": [
+   {
+    "src": "A",
+    "dst": "B",
+    "M": 64,
+    "planned": 64,
+    "missed": false,
+    "base_mode": "full",
+    "base_bytes": 1727636688,
+    "base_fallback_reason": null,
+    "delta": null,
+    "delta_rebuild": null,
+    "round_bytes": [
+     1727636688
+    ],
+    "log_bytes": 45928464,
+    "patch_bytes": 28753920,
+    "patches": 3,
+    "final_bytes": 3198768,
+    "cutover_verdict": "SINKOK",
+    "cutover_digest_equal": true,
+    "fallback_bytes": null,
+    "retained": null,
+    "retained_bytes": null,
+    "retain_s": null,
+    "t_task_start": 0.005458,
+    "base_ready_s": 17.806628,
+    "readiness_s": 21.491813999999998,
+    "ready_call": 51,
+    "ready_wait_s": 4.10042929649353,
+    "interruption_s": 1.5494650000000014,
+    "stop_to_first_output_s": 1.5435508137969975,
+    "restore_s": 0.6559982299804688,
+    "dr2_s": 0.520580668002367,
+    "n_replayed": 43,
+    "tracking_started": null,
+    "total_bytes": 1776763920,
+    "continuity": {
+     "M": 64,
+     "rules": {
+      "P1": true,
+      "P2a": true,
+      "P2b": false
+     },
+     "v1_reset": 1.9342228318254184,
+     "v1_reset_ref_same_call": 1.0266560812926675,
+     "D_c": -0.0003539348642031352,
+     "C_c": 0.08282228151107213,
+     "warp_excess": 0.28271928429603577,
+     "frame_diff_ratio": 1.105381827949525,
+     "stores": {
+      "out": "OUT_B",
+      "ref": "REF_B",
+      "prefix": "REF_B"
+     }
+    }
+   },
+   {
+    "src": "B",
+    "dst": "A",
+    "M": 164,
+    "planned": 164,
+    "missed": false,
+    "base_mode": "full",
+    "base_bytes": 1727636688,
+    "base_fallback_reason": null,
+    "delta": null,
+    "delta_rebuild": null,
+    "round_bytes": [
+     1727636688
+    ],
+    "log_bytes": 25960368,
+    "patch_bytes": 9584640,
+    "patches": 1,
+    "final_bytes": 3198768,
+    "cutover_verdict": "SINKOK",
+    "cutover_digest_equal": true,
+    "fallback_bytes": null,
+    "retained": null,
+    "retained_bytes": null,
+    "retain_s": null,
+    "t_task_start": 63.610443,
+    "base_ready_s": 18.303666999999997,
+    "readiness_s": 22.167901000000008,
+    "ready_call": 154,
+    "ready_wait_s": 4.227698087692261,
+    "interruption_s": 1.5418499999999966,
+    "stop_to_first_output_s": 1.5359954007110588,
+    "restore_s": 0.6597080230712891,
+    "dr2_s": 0.5214954167604446,
+    "n_replayed": 41,
+    "tracking_started": null,
+    "total_bytes": 1756795824,
+    "continuity": {
+     "M": 164,
+     "rules": {
+      "P1": true,
+      "P2a": true,
+      "P2b": true
+     },
+     "v1_reset": 1.3211557102733071,
+     "v1_reset_ref_same_call": 0.8274608745731845,
+     "D_c": 6.86471660931905e-05,
+     "C_c": 0.03140712116093693,
+     "warp_excess": 0.23697674026091864,
+     "frame_diff_ratio": 1.0886080410621672,
+     "stores": {
+      "out": "OUT_A",
+      "ref": "REF_A",
+      "prefix": "OUT_B"
+     }
+    }
+   }
+  ]
+ },
+ "m2": {
+  "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_path=ABA_rep=1_sinksync_retain_reuse_20261028-173124",
+  "validation": {
+   "four_hosts_distinct": true,
+   "nodes_same_commit": true,
+   "gpu0_idle_before_run": true,
+   "switchovers_verified": true,
+   "n_switchovers": 2,
+   "final_edge_served": true,
+   "stop_reason": "horizon",
+   "source_served_after_trigger": 145,
+   "source_served_until_switch": true,
+   "codecs_ok": true,
+   "replay_base_verified": true,
+   "replay_conditioning_equal": true,
+   "replay_order_ok": true,
+   "replay_post_meta_all_equal": true,
+   "replay_meta_consistent_at_switch": true,
+   "replay_switch_refused": 0,
+   "replay_no_lost_or_duplicated_calls": true,
+   "replay_source_unchanged_vs_reference": true,
+   "replay_ready_timeout": false,
+   "replay_sink_sync": true,
+   "replay_sink_digest_match": true,
+   "replay_fallback_used": false,
+   "replay_verdict": "SINKOK",
+   "replay_patches_all_applied_in_order": true,
+   "replay_resumed_on_digest_equal_sink_or_fallback": true
+  },
+  "migrations": [
+   {
+    "src": "A",
+    "dst": "B",
+    "M": 64,
+    "planned": 64,
+    "missed": false,
+    "base_mode": "full",
+    "base_bytes": 1727636688,
+    "base_fallback_reason": null,
+    "delta": null,
+    "delta_rebuild": null,
+    "round_bytes": [
+     1727636688
+    ],
+    "log_bytes": 45928464,
+    "patch_bytes": 28753920,
+    "patches": 3,
+    "final_bytes": 3198768,
+    "cutover_verdict": "SINKOK",
+    "cutover_digest_equal": true,
+    "fallback_bytes": null,
+    "retained": true,
+    "retained_bytes": 1725236640,
+    "retain_s": 0.9894980117678642,
+    "t_task_start": 0.005646,
+    "base_ready_s": 17.711532000000002,
+    "readiness_s": 21.421885,
+    "ready_call": 51,
+    "ready_wait_s": 4.130491256713867,
+    "interruption_s": 1.5426450000000003,
+    "stop_to_first_output_s": 1.5366754946899412,
+    "restore_s": 0.6574697494506836,
+    "dr2_s": 0.5221303571015596,
+    "n_replayed": 43,
+    "tracking_started": true,
+    "total_bytes": 1776763920,
+    "continuity": {
+     "M": 64,
+     "rules": {
+      "P1": true,
+      "P2a": true,
+      "P2b": false
+     },
+     "v1_reset": 1.9342228318254184,
+     "v1_reset_ref_same_call": 1.0266560812926675,
+     "D_c": -0.0003539348642031352,
+     "C_c": 0.08282228151107213,
+     "warp_excess": 0.28271928429603577,
+     "frame_diff_ratio": 1.105381827949525,
+     "stores": {
+      "out": "OUT_B",
+      "ref": "REF_B",
+      "prefix": "REF_B"
+     }
+    }
+   },
+   {
+    "src": "B",
+    "dst": "A",
+    "M": 164,
+    "planned": 164,
+    "missed": false,
+    "base_mode": "delta",
+    "base_bytes": 21569328,
+    "base_fallback_reason": null,
+    "delta": {
+     "delta_entries": 2,
+     "delta_shifts": 73,
+     "delta_value_bytes": 19169280,
+     "delta_verdict": "DELTAOK",
+     "delta_verdict_wait_s": 1.0135302543640137,
+     "tracked_calls": 59,
+     "track_s": 0.020756018348038197
+    },
+    "delta_rebuild": {
+     "accepted": true,
+     "digest_equal": true,
+     "n_block_mismatch": 0,
+     "positions_equal": true,
+     "retained_h2d_s": 0.08273819833993912,
+     "rebuild_s": 0.02059808373451233,
+     "digest_s": 0.06332478672266006,
+     "total_s": 0.3389270305633545,
+     "mismatched_blocks": []
+    },
+    "round_bytes": [
+     21569328
+    ],
+    "log_bytes": 25960368,
+    "patch_bytes": 9584640,
+    "patches": 1,
+    "final_bytes": 3198768,
+    "cutover_verdict": "SINKOK",
+    "cutover_digest_equal": true,
+    "fallback_bytes": null,
+    "retained": true,
+    "retained_bytes": 1725236640,
+    "retain_s": 1.0212477007880807,
+    "t_task_start": 63.38955,
+    "base_ready_s": 2.463190999999995,
+    "readiness_s": 8.743645,
+    "ready_call": 134,
+    "ready_wait_s": 6.279203414916992,
+    "interruption_s": 1.4121829999999989,
+    "stop_to_first_output_s": 1.405792309112556,
+    "restore_s": 0.6340491771697998,
+    "dr2_s": 0.5215287953615189,
+    "n_replayed": 41,
+    "tracking_started": true,
+    "total_bytes": 50728464,
+    "continuity": {
+     "M": 164,
+     "rules": {
+      "P1": true,
+      "P2a": true,
+      "P2b": true
+     },
+     "v1_reset": 1.3211557102733071,
+     "v1_reset_ref_same_call": 0.8274608745731845,
+     "D_c": 6.86471660931905e-05,
+     "C_c": 0.03140712116093693,
+     "warp_excess": 0.23697674026091864,
+     "frame_diff_ratio": 1.0886080410621672,
+     "stores": {
+      "out": "OUT_A",
+      "ref": "REF_A",
+      "prefix": "OUT_B"
+     }
+    }
+   }
+  ]
+ },
+ "equivalence": {
+  "B_calls_compared": 100,
+  "B_psnr_equal_every_call": true
+ }
+}
