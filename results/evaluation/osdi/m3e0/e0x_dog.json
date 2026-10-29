@@ -1,0 +1,330 @@
+{
+ "host": "elves-01",
+ "commit": "6a37b94a4618d6db8a70e0b158079fdcdf31eb28",
+ "video": "examples/original.mp4",
+ "seed": "0",
+ "versions": [
+  31,
+  41,
+  50,
+  52,
+  73
+ ],
+ "sink_bytes": 1725236640,
+ "n_fragments": 412,
+ "block_bytes": 4792320,
+ "runs": {
+  "policy=precopy_replay_bw=1000_rho=1_tm=14.05_rep=1_sinksync_retain_reuse_20261029-012634": {
+   "tasks": [
+    {
+     "task": "x1",
+     "dst": "B",
+     "c0": 31,
+     "cancelled": true,
+     "held_fragments": 330,
+     "held_bytes": 1384120320,
+     "held_equal_live_base": true,
+     "strict_same_version": false,
+     "vs_final": {
+      "identical": {
+       "fragments": 188,
+       "bytes": 788529152
+      },
+      "shift_only": {
+       "fragments": 134,
+       "bytes": 562036736
+      },
+      "refresh": {
+       "fragments": 8,
+       "bytes": 33554432
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     },
+     "blocks_changed_vs_final": {
+      "refresh": 4,
+      "other": 0,
+      "shift_only": 72,
+      "unchanged": 284
+     },
+     "fragments_unexplained": 0,
+     "whole_base_vs_final": {
+      "identical": {
+       "fragments": 238,
+       "bytes": 998244352
+      },
+      "shift_only": {
+       "fragments": 166,
+       "bytes": 693437856
+      },
+      "refresh": {
+       "fragments": 8,
+       "bytes": 33554432
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     },
+     "vs_next": {
+      "task": "x2",
+      "c0": 52,
+      "identical": {
+       "fragments": 189,
+       "bytes": 792723456
+      },
+      "shift_only": {
+       "fragments": 136,
+       "bytes": 570425344
+      },
+      "refresh": {
+       "fragments": 5,
+       "bytes": 20971520
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     }
+    },
+    {
+     "task": "x2",
+     "dst": "C",
+     "c0": 52,
+     "cancelled": true,
+     "held_fragments": 328,
+     "held_bytes": 1375731712,
+     "held_equal_live_base": true,
+     "strict_same_version": false,
+     "vs_final": {
+      "identical": {
+       "fragments": 322,
+       "bytes": 1350565888
+      },
+      "shift_only": {
+       "fragments": 1,
+       "bytes": 4194304
+      },
+      "refresh": {
+       "fragments": 5,
+       "bytes": 20971520
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     },
+     "blocks_changed_vs_final": {
+      "refresh": 2,
+      "other": 0,
+      "shift_only": 0,
+      "unchanged": 358
+     },
+     "fragments_unexplained": 0,
+     "whole_base_vs_final": {
+      "identical": {
+       "fragments": 406,
+       "bytes": 1700070816
+      },
+      "shift_only": {
+       "fragments": 1,
+       "bytes": 4194304
+      },
+      "refresh": {
+       "fragments": 5,
+       "bytes": 20971520
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     }
+    }
+   ],
+   "final_task": "x3",
+   "final_c0": 73,
+   "reproduction": {
+    "x1": 412,
+    "x2": 412,
+    "x3": 412
+   },
+   "reproduced_all": true,
+   "union_over_abandoned_holders_vs_final": {
+    "identical": {
+     "fragments": 323,
+     "bytes": 1354760192
+    },
+    "shift_only": {
+     "fragments": 2,
+     "bytes": 8388608
+    },
+    "refresh": {
+     "fragments": 5,
+     "bytes": 20971520
+    },
+    "other": {
+     "fragments": 0,
+     "bytes": 0
+    }
+   }
+  },
+  "policy=precopy_replay_bw=1000_rho=2_tm=7.025_rep=1_sinksync_retain_reuse_20261029-014520": {
+   "tasks": [
+    {
+     "task": "x1",
+     "dst": "B",
+     "c0": 31,
+     "cancelled": true,
+     "held_fragments": 126,
+     "held_bytes": 528482304,
+     "held_equal_live_base": true,
+     "strict_same_version": false,
+     "vs_final": {
+      "identical": {
+       "fragments": 63,
+       "bytes": 264241152
+      },
+      "shift_only": {
+       "fragments": 58,
+       "bytes": 243269632
+      },
+      "refresh": {
+       "fragments": 5,
+       "bytes": 20971520
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     },
+     "blocks_changed_vs_final": {
+      "refresh": 2,
+      "other": 0,
+      "shift_only": 73,
+      "unchanged": 285
+     },
+     "fragments_unexplained": 0,
+     "whole_base_vs_final": {
+      "identical": {
+       "fragments": 239,
+       "bytes": 1002438656
+      },
+      "shift_only": {
+       "fragments": 168,
+       "bytes": 701826464
+      },
+      "refresh": {
+       "fragments": 5,
+       "bytes": 20971520
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     },
+     "vs_next": {
+      "task": "x2",
+      "c0": 41,
+      "identical": {
+       "fragments": 120,
+       "bytes": 503316480
+      },
+      "shift_only": {
+       "fragments": 1,
+       "bytes": 4194304
+      },
+      "refresh": {
+       "fragments": 5,
+       "bytes": 20971520
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     }
+    },
+    {
+     "task": "x2",
+     "dst": "C",
+     "c0": 41,
+     "cancelled": true,
+     "held_fragments": 118,
+     "held_bytes": 494927872,
+     "held_equal_live_base": true,
+     "strict_same_version": false,
+     "vs_final": {
+      "identical": {
+       "fragments": 60,
+       "bytes": 251658240
+      },
+      "shift_only": {
+       "fragments": 58,
+       "bytes": 243269632
+      },
+      "refresh": {
+       "fragments": 0,
+       "bytes": 0
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     },
+     "blocks_changed_vs_final": {
+      "refresh": 0,
+      "other": 0,
+      "shift_only": 74,
+      "unchanged": 286
+     },
+     "fragments_unexplained": 0,
+     "whole_base_vs_final": {
+      "identical": {
+       "fragments": 242,
+       "bytes": 1015021568
+      },
+      "shift_only": {
+       "fragments": 170,
+       "bytes": 710215072
+      },
+      "refresh": {
+       "fragments": 0,
+       "bytes": 0
+      },
+      "other": {
+       "fragments": 0,
+       "bytes": 0
+      }
+     }
+    }
+   ],
+   "final_task": "x3",
+   "final_c0": 50,
+   "reproduction": {
+    "x1": 412,
+    "x2": 412,
+    "x3": 412
+   },
+   "reproduced_all": true,
+   "union_over_abandoned_holders_vs_final": {
+    "identical": {
+     "fragments": 66,
+     "bytes": 276824064
+    },
+    "shift_only": {
+     "fragments": 60,
+     "bytes": 251658240
+    },
+    "refresh": {
+     "fragments": 0,
+     "bytes": 0
+    },
+    "other": {
+     "fragments": 0,
+     "bytes": 0
+    }
+   }
+  }
+ }
+}
