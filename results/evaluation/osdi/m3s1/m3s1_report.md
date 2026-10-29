@@ -1,8 +1,21 @@
 # M3-S1 report — network-level validation of lineage-aware progress forwarding (2026-10-29)
 
-Runs: `results/evaluation/expM3S1` (54 runs, commit 8bafb7ec) and `expM3S1_shk` (4). Rules: `preregistration.md`
-section 5, applied by `tools/eval/m3s1_report.py`. Labels: **[M]** measured on the testbed network, **[C]** measured
-constant fed to the harness, **[S]** simulated (pre-run prediction `s0_predictions.json`).
+Runs: Original `results/evaluation/expM3S1` (54 runs, 8bafb7ec) and `expM3S1_shk` (4); Corrected `expM3S1c` (54 runs,
+d8619c35 harness, ad6a6222) and `expM3S1c_shk` (3). Rules: `preregistration.md` section 5, applied by
+`tools/eval/m3s1_report.py`. Labels: **[M]** measured on the testbed network, **[C]** measured constant fed to the
+harness, **[S]** simulated (pre-run prediction `s0_predictions.json`).
+
+## 0. Summary
+
+| result | harness | validity | valid runs | verdict |
+|---|---|---|---|---|
+| **Original** | 9ba73566 / 0a361739 | frozen | 6 / 54 (S0, S1c/fwd) | **NO DATA** |
+| **Amended** | same runs | Amendments 1 + 2 (post hoc) | 54 / 54 | GO (not used as the basis of a decision) |
+| **Corrected** | d8619c35 (version-aware duplicates, in-flight accounting) | **frozen** | **54 / 54** | **GO** |
+
+The Corrected run is a follow-up validation made after the Original results were seen (section 7); it uses the
+unchanged rules, thresholds, constants and predictions and the frozen validity checks. It reproduces the Amended
+numbers within 0.08 s of remote serving and 0.6 % of total bytes in every cell.
 
 ## 1. Verdicts
 
@@ -102,3 +115,69 @@ to be fixed before any further network run, not retroactively.
 GO to M3-S2 (GPU validation of lineage-aware forwarding under ownership change), to be preregistered, **if the two
 amendments are accepted**; otherwise re-run the 39 affected runs with a version-aware duplicate check and a planner
 that counts a cancelled flow's in-flight fragment as claimed (≈ 55 min of testbed time, no GPU).
+
+## 7. Corrected M3-S1 (follow-up validation, `expM3S1c`)
+
+Decided by the user after sections 1–6: the amendments are not accepted as the basis of a verdict; the harness is fixed
+and all 54 cells re-run on one harness version (`preregistration.md`, "Corrected M3-S1", written before the run).
+
+**Validity [M].** All 54 runs (and 3 shakedown runs) pass every frozen check of section 4, including `no_duplicates`.
+The per-node fragment logs confirm it independently (`dupcheck_expM3S1c.json`: 0 duplicate receipts of the Sink in
+57 runs). The two defects behave as intended:
+- **Stale re-sends are now version replacements**, not duplicates: `n_replaced` = 2 (dog) / 12 (butterfly) in every
+  run with a tag-30 holder at D, 0 in S0, S1c/fwd and dog ρ2 (exactly the counts held − valid of the Original run).
+- **The cancellation race is gone**: in every two-candidate run the planner deferred one cancelled-but-draining entry per
+  cancelled base flow to a candidate (`staging_defer`: 2 per S2 / S3 run, 1 per S1c run), and re-planned at its
+  FLOW_DONE (`drain_done`); the fragment then landed and was held, so nothing was re-sent. Restoration never waited
+  for it.
+- **Delta at base start**: in dog S2 / S3 the final delta is 42 entries instead of 43 (138 valid instead of 137): B's
+  draining fragment to D lands between the migration start and the base start and is no longer re-sent.
+
+**Rules (frozen validity) [M].**
+
+| rule | dog | butterfly | result |
+|---|---|---|---|
+| R1 S3 remote / total vs S0 (fwd, rev) | 0.734 / 1.069, 0.734 / 1.067 | 0.781 / 1.056, 0.781 / 1.052 | **holds** |
+| R2 S1c worse order vs S3 | S1c/fwd 0.999 × S0 | S1c/fwd 1.000 × S0 | one candidate does **not** suffice |
+| R3 \|fwd − rev\| / S0 (S3, S2) | 0.00 %, 0.00 % (S1c 26.4 %) | 0.01 %, 0.06 % (S1c 21.9 %) | **holds** |
+| R4 max model error (remote, total) | 2.0 %, 3.4 % | 0.6 %, 1.9 % | **holds** |
+| R5 validity | 27 / 27 (+ 6 ρ2) | 24 / 24 | **holds** |
+
+**Verdict (Corrected M3-S1): GO** — proceed to an M3-S2 GPU validation, to be preregistered.
+
+**Reproduction against the Amended reading [M].** Largest change in any cell: remote serving 0.08 s (dog S2/rev,
+S3/rev, 38.43 → 38.35), total bytes −0.6 % (dog S2/rev); every S0 cell within 0.02 s. The headline numbers do not
+depend on how the duplicates were handled.
+
+**What stands after the Corrected run.** Forwarding an abandoned destination's verified, lineage-valid partial base
+to two causal candidates turns the final migration into a delta migration (405 / 692 MB instead of 1,728 MB), ready in
+8.1 / 12.6 s instead of 22.0 / 25.6 s, and cuts remote serving by 26.6 % (dog) / 21.9 % (butterfly) for 5–7 % more
+total bytes, of which ≈ 250 MB per run is post-ownership staging cut by the run end (section 4). The saving comes from
+B's abandoned base; C's is discarded in every policy. Source prioritisation is unnecessary at these loads. The model
+predicted every cell within 2 % (time) and 3.4 % (bytes). Still not established: GPU-level exactness of a Sink
+assembled from blocks of different versions under ownership change; lineage after an ownership change; cross
+traffic. ρ = 2 remains descriptive (S3 cuts 38.5 → 32.3 s but readiness 15.5 s > T_m).
+
+## 8. M3-S2 design sketch (not frozen; for the next preregistration)
+
+Question (user's framing): *can OTTER assemble an exact Sink from partially restored, differently versioned blocks
+held across GPUs, while preserving live-generation continuity?*
+
+Minimal mechanism, layered on the frozen M1 / M2 (47acbe44) without changing their verification or cutover:
+1. **Per-entry versions at a holder.** An abandoned destination keeps the verified entries of its cancelled base with
+   the base's snapshot call (today the XB path discards them on cancel); the old source keeps its Sink tagged at the
+   switch call (M2 already retains it).
+2. **Holder → candidate forwarding** of entries, entry-aligned (the GPU path's 4 MiB fragments are not block-aligned:
+   412 fragments vs 180 entries; forwarding must be per entry or per block to keep versions per unit).
+3. **Mixed-version delta at the destination.** At RDELTA the destination advertises (entry, version) pairs; the source's
+   owner tracker answers per entry: valid (no refresh in (v, c0]; the K block needs the ordered shifts since v
+   applied), or re-send. This generalises M2's single retained version to one version per entry.
+4. **Exactness check** unchanged in spirit: the assembled Sink's 360 block checksums equal the source's at c0 before
+   SINKOK; any mismatch → full-base fallback (as M2's DELTANO).
+
+Experiments: dog and butterfly, A → B → C → D at ρ = 1, S2 order fwd (the Corrected network policy); conditions
+fresh base / M2 / M3 forwarding, 1 run each; faults: wrong-version entry advertised, corrupted forwarded block, holder
+lost mid-forward. Measurements: block checksums at c0 (bitwise), frames after the final switch bitwise equal to the
+fresh-base run (as E10), readiness and bytes vs the Corrected network numbers. Open decisions for the user: whether
+to implement entry-aligned fragments in the GPU path (2) or forward whole fragments and verify per block; whether
+the per-entry version tracker may be added beside the frozen M2 tracker or must replace it for M3 runs only.
