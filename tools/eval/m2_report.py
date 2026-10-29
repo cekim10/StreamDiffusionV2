@@ -51,8 +51,10 @@ def migration(R, k):
     base_t = (rdb["t"] if (rdb and rdb.get("accepted")) else (rb["t"] if rb else None))
     out = {"src": src, "dst": dst, "M": M, "planned": sw and sw.get("switch_call_planned"), "missed": sw and sw.get("switch_call_missed"),
            "base_mode": base_sent and base_sent.get("mode"), "base_bytes": base_sent and base_sent.get("bytes"), "base_fallback_reason": base_sent and base_sent.get("fallback_reason"),
-           "delta": None if not base_sent or base_sent.get("delta_entries") is None else {k_: base_sent.get(k_) for k_ in ("delta_entries", "delta_shifts", "delta_value_bytes", "delta_verdict", "delta_verdict_wait_s", "tracked_calls", "track_s")},
-           "delta_rebuild": None if not rdb else {k_: rdb.get(k_) for k_ in ("accepted", "digest_equal", "n_block_mismatch", "positions_equal", "retained_h2d_s", "rebuild_s", "digest_s", "total_s", "mismatched_blocks")},
+           "delta": None if not base_sent or base_sent.get("delta_entries") is None else {k_: base_sent.get(k_) for k_ in ("delta_entries", "delta_shifts", "delta_value_bytes", "delta_verdict", "delta_verdict_wait_s", "delta_detail", "tracked_calls", "track_s", "refresh_events")},
+           "tracker": None if not base_sent else {k_: base_sent.get(k_) for k_ in ("tracked_calls", "refresh_events", "distinct_refreshed_entries", "delta_entries", "shift_events_kept", "delta_shifts", "track_s") if base_sent.get(k_) is not None},
+           "delta_rebuild": None if not rdb else {k_: rdb.get(k_) for k_ in ("accepted", "digest_equal", "n_block_mismatch", "positions_equal", "version_ok", "meta_ok", "retained_h2d_s", "rebuild_s", "digest_s", "total_s", "mismatched_blocks", "test_injected")},
+           "full_base_verified": None if not rb else bool(rb.get("verified")),
            "round_bytes": [e.get("dirty_bytes") for e in rounds], "log_bytes": sw and sw.get("log_bytes"), "patch_bytes": sw and sw.get("patch_bytes"), "patches": sw and sw.get("patches"),
            "final_bytes": sw and sw.get("final_bytes"), "cutover_verdict": sw and sw.get("verdict"), "cutover_digest_equal": ssc and ssc.get("match"),
            "fallback_bytes": sw and sw.get("fallback_bytes"), "retained": sw and sw.get("retained"), "retained_bytes": sw and sw.get("retained_bytes"), "retain_s": sw and sw.get("retain_s"),

@@ -283,7 +283,8 @@ class Run:
         ss = ("_sinksync" + ("_testmismatch" if self.a.replay_sink_sync_test_mismatch else "") + ("_testperturb" if self.a.replay_sink_sync_test_perturb_dst else "")
               if (policy == "precopy_replay" and self.a.replay_sink_sync) else "")
         if policy == "precopy_replay":
-            ss += ("_retain" if self.a.replay_retain else "") + ("_reuse" if self.a.replay_reuse else "") + ("_deltatestmismatch" if self.a.replay_delta_test_mismatch else "")
+            ss += ("_retain" if self.a.replay_retain else "") + ("_reuse" if self.a.replay_reuse else "") + ("_deltatestmismatch" if self.a.replay_delta_test_mismatch else "") \
+                + (f"_fault={self.a.replay_test_fault}" if self.a.replay_test_fault else "")
         self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}{('_rs=' + str(self.recent_slots)) if self.recent_slots else ''}{ss}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
@@ -1102,11 +1103,14 @@ class Run:
             prev_src = any(t_["src"] == target for t_ in self.xb_tasks)
             t_p = time.time()
             # a destination that served as a source earlier gets fresh receive buffers now (timed; its retained Sink is a host copy)
-            self.node(target).call("XB_PREPARE", task=task["id"], provision=bool(prev_src and self.policy == "precopy_replay"))
+            tf = self.a.replay_test_fault if (prev_src and self.a.replay_test_fault in ("held_wrong", "corrupt_block")) else None
+            self.node(target).call("XB_PREPARE", task=task["id"], provision=bool(prev_src and self.policy == "precopy_replay"), **({"test_fault": tf} if tf else {}))
             task["prepare_s"] = time.time() - t_p
             dv = None
             if self.policy == "precopy_replay" and self.a.replay_reuse:
                 dv = self.node(target).call("RETAINED_VERSION").get("version")
+                if dv and self.a.replay_test_fault == "advertise_wrong":
+                    dv = {**dv, "digest": "0" * 64}   # E10 (test only): the destination advertises a version it does not hold
             task["dest_version"] = dv
             sc = [int(x) for x in self.a.replay_switch_calls.split(",") if x.strip()] if self.a.replay_switch_calls else []
             self.node(src).call("PRECOPY_START", task=task["id"], to=target, to_host=nd["host"], to_port=nd["data"], variant=self.policy.split("_")[1],
@@ -2061,6 +2065,8 @@ def main():
     ap.add_argument("--replay_retain", action="store_true", help="M2: the source retains its Sink version at a digest-equal switch; the new owner tracks changes since it")
     ap.add_argument("--replay_reuse", action="store_true", help="M2: a destination holding a retained version gets a delta base")
     ap.add_argument("--replay_delta_test_mismatch", action="store_true", help="protocol test only: corrupt the delta base's expected digest (exercise the full-base fallback)")
+    ap.add_argument("--replay_test_fault", choices=["advertise_wrong", "held_wrong", "corrupt_block"], default=None,
+                    help="E10 fault injection (test only): the destination advertises a wrong version / holds a different version / one retained Sink block corrupted")
     ap.add_argument("--dump_frames", type=str, default="", help="M1 replay validation: destination output + reference frames under this host-local directory")
     ap.add_argument("--dump_calls", type=int, default=200, help="M1 replay validation: dump calls [trigger - 16, trigger + dump_calls]")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")

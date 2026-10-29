@@ -990,7 +990,7 @@ class GpuRuntime:
 
     def sink_track_start(self, version: dict):
         """New owner: from now on, the Sink entries refreshed since `version` and the ordered shifts of the others."""
-        self._track = {"version": version, "refreshed": set(), "shifts": [], "last": self._sink_pos_now(), "calls": 0, "s": 0.0}
+        self._track = {"version": version, "refreshed": set(), "shifts": [], "last": self._sink_pos_now(), "calls": 0, "s": 0.0, "refresh_events": 0}
 
     def sink_track_step(self, c: int):
         tr = getattr(self, "_track", None)
@@ -1008,6 +1008,7 @@ class GpuRuntime:
                         continue
                     key = (li, i, s_)
                     if p_ == newp:   # a refresh write: the entry's current value supersedes its earlier shifts
+                        tr["refresh_events"] += 1
                         if key not in tr["refreshed"]:
                             tr["refreshed"].add(key)
                             tr["shifts"] = [e for e in tr["shifts"] if (e[1], e[2], e[3]) != key]
@@ -1019,7 +1020,8 @@ class GpuRuntime:
         tr = getattr(self, "_track", None)
         if tr is None:
             return None
-        return {"version": tr["version"], "refreshed": sorted(tr["refreshed"]), "shifts": [list(e) for e in tr["shifts"]], "calls": tr["calls"], "track_s": tr["s"]}
+        return {"version": tr["version"], "refreshed": sorted(tr["refreshed"]), "shifts": [list(e) for e in tr["shifts"]], "calls": tr["calls"], "track_s": tr["s"],
+                "refresh_events": tr["refresh_events"]}
 
     def sink_track_stop(self):
         self._track = None
@@ -1248,6 +1250,8 @@ class FakeRuntime:
         return "dry"
 
     def shadow_base(self):
+        if self.staged is not None:   # as GpuRuntime.shadow_base: the ring takes the received (verified) Sink
+            self.sink_bytes = self.staged.copy()
         return 0.0
 
     def rlog_apply(self, hdr, payload):
@@ -1269,7 +1273,7 @@ class FakeRuntime:
 
     def sink_track_copy(self):
         tr = getattr(self, "_track", None)
-        return None if tr is None else {"version": tr["version"], "refreshed": [], "shifts": [], "calls": tr["calls"], "track_s": 0.0}
+        return None if tr is None else {"version": tr["version"], "refreshed": [], "shifts": [], "calls": tr["calls"], "track_s": 0.0, "refresh_events": 0}
 
     def sink_track_stop(self):
         self._track = None
@@ -2284,12 +2288,18 @@ class Node:
         rs, st = self._replay_state(), r["xb_store"]
         t0 = time.time()
         ret, delta = r.get("retained"), r.get("replay_delta")
+        fault, injected = r.get("test_fault"), None
+        if fault == "held_wrong" and ret is not None:
+            # E10 (test only): the version this node holds differs from the one it advertised (a stale / replaced retention)
+            ret = {**ret, "version": {**ret["version"], "digest": "f" * 64}}; injected = {"fault": "held_wrong"}
         c = (st or {}).get("comps", {}).get("meta")
         meta_ok = c is not None and component_digest(payload_slices(hdr["headers"]["meta"], c["buf"])) == hdr["digests"]["meta"]
         version_ok = ret is not None and ret["version"] == hdr["version"]
         detail = {"meta_ok": meta_ok, "version_ok": version_ok, "delta_present": delta is not None}
         match, tm, bad = False, {}, []
         if meta_ok and version_ok and delta is not None:
+            if fault == "corrupt_block":
+                injected = {"fault": "corrupt_block", **self._corrupt_retained_block(ret, delta[0])}   # E10 (test only)
             self.rt.unpack(dict(hdr["headers"]["meta"]), c["buf"])
             ck, tm = self.rt.reuse_base(ret["hdr"], ret["buf"], delta[0], delta[1])
             src = hdr["sink_ck"]
@@ -2304,13 +2314,35 @@ class Node:
         except OSError:
             pass
         self.event("replay_delta_base", task=hdr["task"], call=int(hdr["call"]), accepted=ok, digest_equal=match, mismatched_blocks=bad[:40], cond_equal=cond_ok,
-                   total_s=time.time() - t0, **detail, **tm)
+                   total_s=time.time() - t0, test_injected=injected, **detail, **tm)
         if ok:
             rs["c0"], rs["conn"] = int(hdr["call"]), conn
             rs["base"] = {"verified": True, "mode": "delta", "cond_equal": cond_ok, "t": time.time(), **tm}
             rs["base_ready"].set()
             if rs["worker"] is None:
                 rs["worker"] = threading.Thread(target=self._replay_worker, args=(rs,), daemon=True); rs["worker"].start()
+
+    def _corrupt_retained_block(self, ret: dict, dhdr: dict) -> dict:
+        """E10 fault injection (test only): flip the lowest bit of the first byte of one retained Sink K block that the
+        delta does not overwrite (layer L / 2 first, row 0, then the next free slot), so only the digest can catch it."""
+        entries = {tuple(e) for e in dhdr.get("entries") or []}
+        ks = [t for t in ret["hdr"]["tensors"] if t["name"].startswith("kv/") and t["name"].endswith("/k")]
+        if not ks:   # dry runtime: no tensor layout; flip the first byte
+            ret["buf"][0] ^= 1
+            return {"layer": 0, "key": "k", "row": 0, "slot": 0}
+        L = len(ks)
+        S = int(getattr(self.rt, "sink", 3))
+        for li in list(range(L // 2, L)) + list(range(L // 2)):
+            t = next(x for x in ks if x["name"] == f"kv/{li}/k")
+            rows, toks = int(t["shape"][0]), int(t["shape"][1])
+            blk = t["nbytes"] // (rows * S)
+            for b in range(rows):
+                for s_ in range(S):
+                    if (li, b, s_) not in entries:
+                        off = t["offset"] + (b * S + s_) * blk
+                        ret["buf"][off] ^= 1
+                        return {"layer": li, "key": "k", "row": b, "slot": s_}
+        return {}
 
     def _replay_enqueue(self, conn, hdr: dict, payload):
         rs = self._replay_state()
@@ -2393,7 +2425,8 @@ class Node:
                     send_msg(conn, "PROUND", {"task": task["id"], "round": 1, "call": c, "headers": headers, "digests": digests, "cond_digest": self.rt.cond_digest(),
                                               "W": rp["W"], "mode": "delta", "version": dv, "sink_ck": ck0}, b"", None)
                 got = rp["delta_ev"].wait(300)
-                dinfo = {"delta_entries": len(trk["refreshed"]), "delta_shifts": len(trk["shifts"]), "delta_value_bytes": off, "delta_verdict": rp["delta_verdict"] if got else "timeout",
+                dinfo = {"delta_entries": len(trk["refreshed"]), "delta_shifts": len(trk["shifts"]), "delta_value_bytes": off, "refresh_events": trk.get("refresh_events"),
+                         "delta_verdict": rp["delta_verdict"] if got else "timeout",
                          "delta_verdict_wait_s": time.time() - t_d, "delta_detail": rp["delta_detail"], "tracked_calls": trk["calls"], "track_s": trk["track_s"]}
                 dbytes = sent_m + off
                 if got and rp["delta_verdict"] == "DELTAOK":
@@ -2406,6 +2439,8 @@ class Node:
                 send_msg(conn, "PROUND", {"task": task["id"], "round": 1, "call": c, "headers": headers, "digests": digests, "cond_digest": self.rt.cond_digest(),
                                           "W": rp["W"]}, b"", None)
             dbytes += sent
+        if trk is not None and "refresh_events" not in dinfo:
+            dinfo.update({"tracked_calls": trk["calls"], "refresh_events": trk.get("refresh_events"), "distinct_refreshed_entries": len(trk["refreshed"]), "shift_events_kept": len(trk["shifts"])})
         rp["base"] = {"mode": mode, "fallback_reason": reason if dv else None, "bytes": dbytes, **dinfo}
         self.event("replay_base_sent", task=task["id"], call=c, **rp["base"])
         return dbytes
@@ -2434,6 +2469,7 @@ class Node:
             with old["cv"]:
                 old["stop"] = True; old["cv"].notify_all()
         r["replay_dst"] = None; r["replay_delta"] = None
+        r["test_fault"] = h.get("test_fault")   # E10 fault injection (test only): held_wrong / corrupt_block
         if h.get("provision", True):
             self.rt.provision()
         if h.get("inputs"):

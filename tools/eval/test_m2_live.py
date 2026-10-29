@@ -48,6 +48,35 @@ def main():
         a2 = [int(r["call"]) for r in m if r["owner"] == "A" and int(r["call"]) >= 164]
         b = [int(r["call"]) for r in m if r["owner"] == "B"]
         tx.check(bool(a2) and a2[0] == 164 and bool(b) and b[0] == 80 and b[-1] == 163, f"{exp}: B served 80..163, A resumed at 164")
+    # E10 fault injection: wrong advertised version (the source refuses the delta), wrong held version and one corrupted
+    # retained block (the destination rejects: DELTANO); every case falls back to the full base and completes
+    for fault in ("advertise_wrong", "held_wrong", "corrupt_block"):
+        exp = f"_m2f_{fault}_test"
+        R = tx.run(exp, "precopy_replay", 1, "1e9", base + ["--replay_retain", "--replay_reuse", "--replay_test_fault", fault])
+        d = R.get("precopy_replay")
+        tx.check(d is not None and f"_fault={fault}" in d.name, f"{exp}: run written")
+        if d is None:
+            continue
+        s = json.load(open(d / "summary.json"))
+        ev = tx.events(d)
+        bs = [e for e in ev if e["event"] == "B:replay_base_sent"]
+        db = [e for e in ev if e["event"] == "A:replay_delta_base"]
+        rb = [e for e in ev if e["event"] == "A:replay_base"]
+        sw = [e for e in ev if e["event"].endswith(":xb_precopy_switch")]
+        tx.check(bool(bs) and bs[-1]["detail"].get("mode") == "full", f"{exp}: second base is the full base ({bs and bs[-1]['detail'].get('mode')}, reason {bs and bs[-1]['detail'].get('fallback_reason')})")
+        if fault == "advertise_wrong":
+            tx.check(not db and "not the tracked one" in (bs[-1]["detail"].get("fallback_reason") or ""), f"{exp}: the source detected the version mismatch; no delta sent")
+        else:
+            tx.check(bool(db) and db[-1]["detail"].get("accepted") is False and bs[-1]["detail"].get("delta_verdict") == "DELTANO", f"{exp}: the destination rejected the delta (DELTANO)")
+            if fault == "held_wrong":
+                tx.check(db[-1]["detail"].get("version_ok") is False, f"{exp}: rejected on the version check")
+            else:
+                inj = db[-1]["detail"].get("test_injected") or {}
+                want = [inj.get("layer"), inj.get("key"), inj.get("row"), inj.get("slot")]
+                tx.check(db[-1]["detail"].get("mismatched_blocks") == [want], f"{exp}: the digest names exactly the corrupted block {want}")
+        tx.check(bool(rb) and rb[-1]["detail"].get("verified") is True, f"{exp}: the full base verified on A")
+        tx.check(len(sw) == 2 and all(e["detail"].get("verdict") == "SINKOK" for e in sw) and [int(x["call"]) for x in s["switchovers"]] == [80, 164],
+                 f"{exp}: both cutovers digest-equal at their planned calls")
     print("ALL PASS" if not tx.FAILS else f"FAILED: {tx.FAILS}")
     sys.exit(1 if tx.FAILS else 0)
 
