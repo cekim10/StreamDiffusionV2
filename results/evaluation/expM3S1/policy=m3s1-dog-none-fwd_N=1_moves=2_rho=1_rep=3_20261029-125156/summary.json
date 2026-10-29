@@ -1,0 +1,169 @@
+{
+ "run_id": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=1_rep=3_20261029-125156",
+ "workload": "dog",
+ "staging": "none",
+ "order": "fwd",
+ "rho": 1.0,
+ "tm_s": 14.05,
+ "rep": 3,
+ "scale": 1.0,
+ "sink_bytes": 1727636688,
+ "entry_bytes": 9584640,
+ "consts": {
+  "log_bytes_per_call": 980295.2727272727,
+  "catchup_per_call_s": 0.11681224242424247,
+  "switch_s": 1.6931730000000016,
+  "cancel_lag_s": 0.4505459999999992,
+  "snapshot_s": 0.36850905418395996,
+  "h_startup_s": 2.36,
+  "source_run": "dog_rho1"
+ },
+ "stop_reason": "final migration completed",
+ "remote_s": 51.246,
+ "local_s": 2.03,
+ "moves": [
+  [
+   14.051,
+   "C"
+  ],
+  [
+   28.111,
+   "D"
+  ]
+ ],
+ "migrations": [
+  {
+   "id": 1,
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.0,
+   "c0": 30,
+   "valid": 0,
+   "delta": 180,
+   "base_bytes": 1727636688,
+   "t_base_start": 2.729,
+   "base_started": true,
+   "t_base_ready": null,
+   "t_ready": null,
+   "t_first_out": null,
+   "outcome": "cancelled",
+   "log_sent": 25165824,
+   "base_sent": 1341849600,
+   "t_end": 14.508,
+   "readiness_s": null,
+   "first_output_s": null
+  },
+  {
+   "id": 2,
+   "src": "A",
+   "dst": "C",
+   "t_start": 14.509,
+   "c0": 56,
+   "valid": 0,
+   "delta": 180,
+   "base_bytes": 1727636688,
+   "t_base_start": 17.237,
+   "base_started": true,
+   "t_base_ready": null,
+   "t_ready": null,
+   "t_first_out": null,
+   "outcome": "cancelled",
+   "log_sent": 24117248,
+   "base_sent": 1293926400,
+   "t_end": 28.57,
+   "readiness_s": null,
+   "first_output_s": null
+  },
+  {
+   "id": 3,
+   "src": "A",
+   "dst": "D",
+   "t_start": 28.571,
+   "c0": 81,
+   "valid": 0,
+   "delta": 180,
+   "base_bytes": 1727636688,
+   "t_base_start": 31.299,
+   "base_started": true,
+   "t_base_ready": 45.945,
+   "t_ready": 49.566,
+   "t_first_out": 51.259,
+   "outcome": "completed",
+   "log_sent": 38797312,
+   "base_sent": 1727636688,
+   "t_end": 51.266,
+   "readiness_s": 20.995285511016846,
+   "first_output_s": 22.68845844268799
+  }
+ ],
+ "n_cancelled": 2,
+ "n_completed": 1,
+ "final_completed": true,
+ "bytes": {
+  "total": 4473808080,
+  "discarded": 2685059072,
+  "staged": 0,
+  "wasted_staged": 0,
+  "source_bytes_final_base": 1727636688,
+  "by_kind_link": {
+   "base:A>B": 1351434240,
+   "base:A>C": 1303511040,
+   "base:A>D": 1727636688,
+   "log:A>B": 26214400,
+   "log:A>C": 25165824,
+   "log:A>D": 39845888
+  }
+ },
+ "sinks": {
+  "total": 2.5895537592334343,
+  "discarded": 1.5541803960579008,
+  "staged": 0.0,
+  "wasted_staged": 0.0
+ },
+ "nic": {
+  "A": {
+   "rx_peak": 1.1,
+   "tx_peak": 1046.6
+  },
+  "B": {
+   "rx_peak": 983.1,
+   "tx_peak": 1.1
+  },
+  "C": {
+   "rx_peak": 984.5,
+   "tx_peak": 0.9
+  },
+  "D": {
+   "rx_peak": 1043.6,
+   "tx_peak": 1.0
+  }
+ },
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02",
+  "C": "elves-03",
+  "D": "elves-04"
+ },
+ "node_commits": {
+  "A": "0a3617399c0d1d037a8ed056be866c29ae4c7401",
+  "B": "0a3617399c0d1d037a8ed056be866c29ae4c7401",
+  "C": "0a3617399c0d1d037a8ed056be866c29ae4c7401",
+  "D": "0a3617399c0d1d037a8ed056be866c29ae4c7401"
+ },
+ "paced_egress_worst_10s_mbps": {
+  "A": 988.0600576,
+  "B": 0.0,
+  "C": 0.0,
+  "D": 0.0
+ },
+ "validation": {
+  "all_fragments_verified": true,
+  "no_duplicates": true,
+  "final_completed": true,
+  "stop_reason_ok": true,
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "nic_within_cap": true,
+  "paced_egress_within_cap": true
+ }
+}
