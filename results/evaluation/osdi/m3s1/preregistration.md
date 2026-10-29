@@ -112,3 +112,32 @@ Specific predictions:
 - Caps are per node (1 Gbps symmetric); no per-link or cross traffic.
 - The reactive multi-provider base (holders feeding the *active* migration) is excluded by design (staging to the
   destination stops at c0), to keep the frozen base-verification protocol shape.
+
+## Amendment 1 (2026-10-29, after the testbed run, before any amended verdict; rules and thresholds unchanged)
+
+**What happened.** All 54 main runs and the 4 shakedown runs completed with every validity check of section 4 passing
+except `no_duplicates`, which fails in **every** run with staging (S1o, S1c/rev, S2, S3 at ρ = 1; S3 at ρ = 2) and
+passes in every run without staging (S0, S1c/fwd). Under the frozen checks no staging cell has a valid rep, so the
+frozen verdict is **NO DATA** (the report tool's verdict fall-through, which printed CONDITIONAL for empty R1 cells,
+was corrected to NO DATA; a reporting bug, not a rule).
+
+**Cause (harness, not protocol).** The restore node marks a fragment "dup" when it already holds that
+(session, fragment_id) (`restore_node._receiver`), with no notion of version. The M2 delta protocol, as frozen,
+re-sends to the destination every entry it holds whose version is stale (refreshed since its snapshot tag) — by
+design, the stale copy is overwritten. In M3-S1 the final destination D holds forwarded entries tagged at call 30
+(B's abandoned base) and the final base at c0 ≈ 81 re-sends those refreshed in (30, 81]: 2 entries (dog) and
+12 entries (butterfly) per run, equal to held − valid in every ρ = 1 run (`m3s1_dupcheck.py` table). The ρ = 2 dog runs
+show held − valid = 0 and still fail; the suspected cause is the in-flight fragment of a staging flow cancelled at
+migration start landing after the delta was computed (to be classified from the node logs, not assumed).
+The same two stale re-sends were present in the loopback run made before freezing (`_dryrun_m3s1`, S2 / S3: 2
+duplicates at D) and were not noticed; the check was wrong when it was frozen.
+
+**Amended validity (post hoc; declared).** `no_duplicates` is replaced by `amended_no_duplicates` from
+`tools/eval/m3s1_dupcheck.py`, which classifies every duplicate receipt of the Sink session from the per-node fragment
+logs (`node_X/fragments.csv`, copied back from the hosts with `d0_remote.py recover --pattern`): *stale_resend* (via a
+base flow; the held copy's tag s has the entry refreshed in (s, c0] — the M2 delta by design), *drain_race* (via a base
+flow; the held copy was lineage-valid but arrived after the migration started), *other* (a same-version double
+delivery — a genuine duplicate). A run is valid under the amendment iff it has no *other* duplicate and every other
+check passes. Duplicate bytes stay counted in total bytes. Both verdicts (frozen: NO DATA; amended) are reported; no
+rule, threshold, policy, constant or prediction changes. The amended analysis requires the node logs of B, C, D, which
+the orchestrator does not collect (only node A's log is local to elves-01).

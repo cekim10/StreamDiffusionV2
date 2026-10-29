@@ -10,7 +10,8 @@ instead of ssh, which is not available between the testbed hosts. Run on elves-0
                            results/ that are byte-identical to the incoming commit are restored / removed and the pull retried;
                            any file that differs is left untouched and reported
     probe NAME SCRIPT      run a read-only bash probe on elves-02..04, write results/evaluation/osdi/d0/NAME/<host>.txt
-    recover                copy back node_{B,C,D}/fragments.csv of restore_* runs; never overwrites a local file
+    recover [--pattern G] copy back node_{B,C,D}/fragments.csv of the runs matching results/evaluation/G/* (default
+                           restore_*; e.g. --pattern 'expM3S1*' for the M3-S1 runs); never overwrites a local file
     codecs                 XB preflight on all four hosts: PyAV, FFV1 bit-exact round trip, libx264 (exit 1 if any fails);
                            writes results/evaluation/osdi/expXB/codec_hosts.json
 """
@@ -123,7 +124,7 @@ def probe(a):
 def recover(a):
     for lb, ag in agents(REMOTE, a.agent_hosts).items():
         new = kept = 0
-        for rel in ag.glob(f"results/evaluation/restore_*/*/node_{lb}/fragments.csv"):
+        for rel in ag.glob(f"results/evaluation/{a.pattern}/*/node_{lb}/fragments.csv"):
             dst = ROOT / rel
             if dst.exists():
                 kept += 1; continue
@@ -163,7 +164,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--agent_hosts", default=None)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("status"); sub.add_parser("gpu_idle").add_argument("--hosts", default="", help="comma list of labels whose GPU 0 must be idle (default all four)"); sub.add_parser("pull"); sub.add_parser("recover"); sub.add_parser("codecs")
+    sub.add_parser("status"); sub.add_parser("gpu_idle").add_argument("--hosts", default="", help="comma list of labels whose GPU 0 must be idle (default all four)"); sub.add_parser("pull"); sub.add_parser("recover").add_argument("--pattern", default="restore_*"); sub.add_parser("codecs")
     p = sub.add_parser("probe"); p.add_argument("name"); p.add_argument("script")
     a = ap.parse_args()
     {"status": status, "gpu_idle": gpu_idle, "pull": pull, "probe": probe, "recover": recover, "codecs": codecs}[a.cmd](a)

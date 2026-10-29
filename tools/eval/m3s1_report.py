@@ -2,7 +2,12 @@
 """M3-S1 report (osdi/m3s1/preregistration.md section 5): medians over valid reps per (workload, rho, policy, order),
 rules R1-R5 as written, comparison with the pre-run predictions (s0_predictions.json).
 
-    python tools/eval/m3s1_report.py [--experiment expM3S1]
+    python tools/eval/m3s1_report.py [--experiment expM3S1] [--validity frozen|amended|descriptive]
+
+--validity frozen       (default) the preregistered harness checks, including the node's version-blind `no_duplicates`
+--validity amended      Amendment 1: `no_duplicates` replaced by `amended_no_duplicates` from m3s1_dupcheck.py
+                        (dupcheck_<experiment>.json; a run without node logs stays invalid)
+--validity descriptive  `no_duplicates` ignored (numbers labelled descriptive; no verdict claimed)
 """
 
 from __future__ import annotations
@@ -19,14 +24,24 @@ KEYS = ("remote_s", "local_s", "n_cancelled", "final_completed")
 BKEYS = ("total", "discarded", "staged", "wasted_staged", "source_bytes_final_base")
 
 
-def load(exp: str):
+def load(exp: str, validity: str = "frozen"):
     runs = defaultdict(list)
+    dup = {}
+    if validity == "amended":
+        f = OUT / f"dupcheck_{exp}.json"
+        dup = {r["run"]: r for r in json.load(open(f))["runs"]} if f.exists() else {}
     for d in sorted((ROOT / "results/evaluation" / exp).glob("policy=*")):
         f = d / "summary.json"
         if not f.exists():
             continue
         s = json.load(open(f))
-        valid = all(s["validation"].values())
+        s["validation"] = dict(s["validation"])
+        if validity == "amended":
+            s["validation"]["no_duplicates_frozen"] = s["validation"]["no_duplicates"]
+            s["validation"]["no_duplicates"] = bool(dup.get(d.name, {}).get("amended_no_duplicates", False))
+        elif validity == "descriptive":
+            s["validation"]["no_duplicates_frozen"] = s["validation"].pop("no_duplicates")
+        valid = all(v for k, v in s["validation"].items() if k != "no_duplicates_frozen")
         key = (s["workload"], float(s["rho"]), s["staging"], s["order"])
         fin = next((m for m in reversed(s["migrations"]) if m["outcome"] == "completed"), None)
         runs[key].append({"run": d.name, "rep": s["rep"], "valid": valid, "why": [k for k, v in s["validation"].items() if not v], **{k: s[k] for k in KEYS},
@@ -41,8 +56,8 @@ def med(rows, k):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--experiment", default="expM3S1"); a = ap.parse_args()
-    runs = load(a.experiment)
+    ap = argparse.ArgumentParser(); ap.add_argument("--experiment", default="expM3S1"); ap.add_argument("--validity", default="frozen", choices=("frozen", "amended", "descriptive")); a = ap.parse_args()
+    runs = load(a.experiment, a.validity)
     pred = json.load(open(OUT / "s0_predictions.json"))["predictions"] if (OUT / "s0_predictions.json").exists() else {}
     agg = {}
     for key, rows in runs.items():
@@ -51,7 +66,7 @@ def main():
                     **{k: med(ok, k) for k in ("remote_s", "local_s", "final_ready_s", "final_valid", "final_base_mb")},
                     **{f"{k}_mb": (med(ok, f"bytes_{k}") or 0) / 1e6 for k in BKEYS},
                     "n_cancelled": med(ok, "n_cancelled"), "final_completed_all": all(r["final_completed"] for r in ok) if ok else None}
-    rep = {"experiment": a.experiment, "cells": {}, "rules": {}}
+    rep = {"experiment": a.experiment, "validity": a.validity, "cells": {}, "rules": {}}
     def cell(wl, rho, stg, order="fwd"):
         return agg.get((wl, rho, stg, order))
     R1, R2, R3, R4 = {}, {}, {}, {}
@@ -89,24 +104,27 @@ def main():
     rep["rules"] = {"R1": R1, "R2": R2, "R3": R3, "R4": R4, "R5_invalid_runs": {str(k): v["invalid"] for k, v in agg.items() if v["invalid"]}}
     r1_all = bool(R1) and len(R1) == 2 and all(v["pass"] for v in R1.values())
     bytes_only = bool(R1) and len(R1) == 2 and all(all(x["remote_ratio"] <= 0.80 for x in v["per_order"].values()) for v in R1.values()) and not r1_all
-    if not R1:
-        verdict = "NO DATA (no valid S0 / S3 cells yet)"
+    if not R1 or len(R1) < 2 or any(not v["per_order"] for v in R1.values()):
+        verdict = "NO DATA (no valid S0 / S3 cells for a workload)"
     elif r1_all:
         verdict = "GO (R1 holds for both workloads; next: M3-S2 GPU validation, to be preregistered)"
     elif bytes_only:
         verdict = "CONDITIONAL (remote serving <= 0.80 S0 but total bytes > 1.30 S0)" + (": single-candidate variant" if all(R2[w]["one_candidate_suffices"] for w in R2) else ": NO-GO (two candidates needed and too costly)")
     else:
         verdict = "NO-GO (remote serving not <= 0.80 S0 for a workload under S3)"
+    if a.validity != "frozen":
+        verdict = f"[{a.validity.upper()} validity] " + verdict
     rep["verdict"] = verdict
+    sfx = "" if a.validity == "frozen" else f"_{a.validity}"
     rep["cells"] = {f"{k[0]}|rho{k[1]:g}|{k[2]}|{k[3]}": v for k, v in agg.items()}
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "s1_results.json").write_text(json.dumps(rep, indent=1, default=str))
-    L = [f"# M3-S1 results ({a.experiment})", "", "| cell | valid | remote s | local s | cancelled | final valid/180 | final base MB | final ready s | total MB | discarded | staged | wasted |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    (OUT / f"s1_results{sfx}.json").write_text(json.dumps(rep, indent=1, default=str))
+    L = [f"# M3-S1 results ({a.experiment}; validity: {a.validity})", "", "| cell | valid | remote s | local s | cancelled | final valid/180 | final base MB | final ready s | total MB | discarded | staged | wasted |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for k, v in sorted(agg.items()):
         f = lambda x, d=1: "-" if x is None else (f"{x:.{d}f}" if isinstance(x, float) else str(x))  # noqa: E731
         L.append(f"| {k[0]} ρ{k[1]:g} {k[2]}/{k[3]} | {v['n_valid']}/{v['n_runs']} | {f(v['remote_s'])} | {f(v['local_s'])} | {f(v['n_cancelled'],0)} | {f(v['final_valid'],0)} | {f(v['final_base_mb'],0)} | {f(v['final_ready_s'])} | {f(v['total_mb'],0)} | {f(v['discarded_mb'],0)} | {f(v['staged_mb'],0)} | {f(v['wasted_staged_mb'],0)} |")
     L += ["", "## Rules", "", "```", json.dumps(rep["rules"], indent=1, default=str), "```", "", f"**Verdict: {verdict}**", ""]
-    (OUT / "s1_results.md").write_text("\n".join(L))
+    (OUT / f"s1_results{sfx}.md").write_text("\n".join(L))
     print("\n".join(L[:len(agg) + 4])); print(json.dumps({"R1": R1, "R3": R3, "verdict": verdict}, indent=1, default=str))
 
 
