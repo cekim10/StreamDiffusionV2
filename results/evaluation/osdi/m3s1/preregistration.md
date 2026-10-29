@@ -157,3 +157,43 @@ and the held copy landed no earlier than that start (− tolerance). Everything 
 *other*. Under Amendment 1 alone the only valid staging cells are S1o (3 / 3 both workloads) and the verdict stays
 NO DATA (no valid S3 cell); under Amendments 1 + 2 every run is valid. The ρ = 2 failures are this class alone
 (held − valid = 0; no stale re-send).
+
+## Corrected M3-S1 (follow-up validation; written 2026-10-29 before its run)
+
+The user's decision after the Original (frozen: NO DATA) and Amended (Amendments 1 + 2: GO) results: do not accept the
+amendments as the basis of a verdict; fix the harness and re-run **all 54 cells** on one harness version, judged by
+the **unchanged** section 5 rules, thresholds, constants and predictions (`s0_predictions.json`), with the **frozen**
+section 4 validity checks (no amendment). The three results are kept apart: *Original* (expM3S1), *Amended*
+(expM3S1 + dupcheck), *Corrected* (expM3S1c). The Corrected run is a validation of reproducibility under a race-free
+harness, made after the results were seen; it is labelled as such wherever it is cited.
+
+Harness changes (`tools/eval/restore_node.py`, `m3s1_orchestrate.py`; loopback-tested, 0 duplicates, deferrals and
+re-plans observed when the base is cancelled mid-flight):
+1. **Version-aware duplicate detection, separate from in-flight accounting.** FLOW_START / FLOW_ADD carry optional
+   per-fragment snapshot tags; the FRAG header carries the tag; a verified fragment whose fid is held with a *different*
+   tag is a *replace* (the M2 delta's stale re-send; logged as event `replace`, counted in `n_replaced`), the same tag
+   again is a *duplicate* as before. Fragments without tags behave exactly as before (the frozen restore harness of
+   the earlier experiments is unaffected). `no_duplicates` now means: no same-version double delivery.
+2. **In-flight accounting in the planner.** Per (node, fragment) the planner distinguishes *verified and held*
+   (`held`: receipts with checksum ok), *in flight, expected* (`claims`: queued in an active flow or sent and not yet
+   received), *cancelled but draining* (the first unsent fragment of a cancelled flow until it reports FLOW_DONE) and
+   *not held* (everything else, including a drained fragment that did not land). Only verified-held entries count as
+   state: `valid_at` is unchanged. A cancelled-but-draining fragment is neither relied upon nor assigned: staging to a
+   candidate defers it (event `staging_defer`) and the cancelled flow's FLOW_DONE is a decision point (`drain_done`
+   re-plan): if the fragment landed it is held, if not it is assigned then. Restoration never waits for a draining
+   fragment.
+3. **Delta fixed at base start from verified-held entries.** The migration's c0 is unchanged (snapshot call); the
+   delta is recomputed when the base transfer starts (2.7 s after the migration start, as the M2 destination advertises
+   its held versions at RDELTA), so a staging fragment that drained into the destination in between is not re-sent and
+   one that did not land is. `valid_at_start` (the old definition) is also recorded.
+4. Correctness unchanged: the Sink verification (per-fragment SHA-256, digest at completion), the readiness floor,
+   the switch and the cancellation lag are as before; nothing is weakened for performance.
+5. Summary additions (`corrected_harness`): `n_replaced`, `replaced_bytes`, `n_drain_replans`,
+   `post_ownership_stage_bytes` (the horizon artefact, reported, still counted in total bytes), `duplicate_bytes`.
+
+Expectations for the Corrected run (not rules): every run passes the frozen checks; `n_replaced` = 2 (dog) / 12
+(butterfly) per staging run with a tag-30 holder, 0 for S0 and S1c/fwd; `n_drain_replans` ≥ 1 per cancellation with a
+flow in flight; one deferred entry per two-candidate run instead of the 9.6 MB duplicate; remote serving within 0.5 s
+and total bytes within 1 % of the Amended medians; R1–R5 as in the Amended reading. Shakedown: dog S3/rev, butterfly
+S3/rev, dog ρ2 S3/fwd (1 rep, `expM3S1c_shk`), checked for `dup 0`, `replaced` as expected and `valid True` before the
+54 runs.

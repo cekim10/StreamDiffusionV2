@@ -4,6 +4,9 @@
 #   bash tools/eval/run_m3_s1.sh preflight   # agents, one commit, data present
 #   bash tools/eval/run_m3_s1.sh main        # 48 runs at rho 1 (dog, bfly x 8 policies x 3 reps) + 6 descriptive dog rho-2 runs (~1.3 min each)
 #   bash tools/eval/run_m3_s1.sh shakedown   # one rep of S0 and S3/rev per workload (4 runs), results under expM3S1_shk
+# Corrected run (preregistration.md "Corrected M3-S1"): version-aware duplicate rule + in-flight accounting, same matrix and rules
+#   bash tools/eval/run_m3_s1.sh corrected_shakedown   # dog S3/rev, bfly S3/rev, dog rho2 S3/fwd, 1 rep -> expM3S1c_shk
+#   bash tools/eval/run_m3_s1.sh corrected             # all 54 runs -> expM3S1c
 set -u
 cd "$(dirname "$0")/../.."
 PY=${PY:-python}
@@ -21,5 +24,15 @@ case "${1:-}" in
       $PY tools/eval/m3s1_orchestrate.py $COMMON --experiment expM3S1 --workload $wl --staging none,S1o,S1c,S2,S3 --orders fwd,rev --rhos 1 --reps 3 || echo "[M3S1] $wl: exit $?"
     done
     $PY tools/eval/m3s1_orchestrate.py $COMMON --experiment expM3S1 --workload dog --staging none,S3 --orders fwd --rhos 2 --reps 3 || echo "[M3S1] dog rho2: exit $?" ;;
-  *) echo "usage: $0 preflight|shakedown|main"; exit 2 ;;
+  corrected_shakedown)
+    for wl in dog bfly; do
+      $PY tools/eval/m3s1_orchestrate.py $COMMON --experiment expM3S1c_shk --workload $wl --staging S3 --orders rev --rhos 1 --reps 1 || echo "[M3S1c] shakedown $wl: exit $?"
+    done
+    $PY tools/eval/m3s1_orchestrate.py $COMMON --experiment expM3S1c_shk --workload dog --staging S3 --orders fwd --rhos 2 --reps 1 || echo "[M3S1c] shakedown rho2: exit $?" ;;
+  corrected)
+    for wl in dog bfly; do
+      $PY tools/eval/m3s1_orchestrate.py $COMMON --experiment expM3S1c --workload $wl --staging none,S1o,S1c,S2,S3 --orders fwd,rev --rhos 1 --reps 3 || echo "[M3S1c] $wl: exit $?"
+    done
+    $PY tools/eval/m3s1_orchestrate.py $COMMON --experiment expM3S1c --workload dog --staging none,S3 --orders fwd --rhos 2 --reps 3 || echo "[M3S1c] dog rho2: exit $?" ;;
+  *) echo "usage: $0 preflight|shakedown|main|corrected_shakedown|corrected"; exit 2 ;;
 esac

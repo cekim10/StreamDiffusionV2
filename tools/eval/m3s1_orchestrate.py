@@ -118,6 +118,7 @@ class M3S1Run(Run):
         self.last_tick = None
         self.stage_flows = {}                    # (holder, cand) -> flow id
         self.staged_to = defaultdict(int); self.used_staged = defaultdict(int)
+        self.n_replaced = 0; self.replaced_bytes = 0; self.n_drain_replans = 0; self.t_final_ownership = None
         self.base_bytes_by_mig = {}
         self.prio = staging == "S3"
 
@@ -174,7 +175,8 @@ class M3S1Run(Run):
         self.flows[fid_] = fl
         self.realloc()
         nd = self.o.node_spec[dst]
-        self.node(src).cast("FLOW_START", flow_id=fid_, session=sid, dst=dst, dst_host=nd["host"], dst_port=nd["data"], frag_ids=fids, rate_bps=fl["rate"], closed=closed)
+        self.node(src).cast("FLOW_START", flow_id=fid_, session=sid, dst=dst, dst_host=nd["host"], dst_port=nd["data"], frag_ids=fids, rate_bps=fl["rate"], closed=closed,
+                            frag_tags={str(f): v for f, v in (tags or {}).items()})
         fl["started"] = True
         self.ev.log("flow_start", flow=fid_, kind=kind, session=sid, src=src, dst=dst, n=len(fids), rate_bps=fl["rate"], reason=reason, closed=closed)
         return fl
@@ -184,13 +186,12 @@ class M3S1Run(Run):
         now = time.time()
         c0 = self.call(now + self.k["snapshot_s"])
         valid = self.valid_at(dst, c0) if self.staging != "none" else set()
-        delta = [f for f in range(N_ENTRIES) if f not in valid] + [N_ENTRIES]   # + metadata
-        self.used_staged[dst] += len(valid & {f for f in self.tag[dst] if self.tag[dst][f] is not None}) * self.entry_bytes
+        delta = [f for f in range(N_ENTRIES) if f not in valid] + [N_ENTRIES]   # + metadata; recomputed at base start from verified-held entries
         for key in [k_ for k_ in self.stage_flows if k_[1] == dst]:   # staging to the destination stops
             fl = self.flows.get(self.stage_flows.pop(key))
             if fl and fl["active"]:
                 self._cancel(fl, "destination is now migrating")
-        m = {"id": len(self.migs) + 1, "src": self.source, "dst": dst, "t_start": now, "c0": c0, "valid": len(valid), "delta": len(delta) - 1,
+        m = {"id": len(self.migs) + 1, "src": self.source, "dst": dst, "t_start": now, "c0": c0, "valid": len(valid), "valid_at_start": len(valid), "delta": len(delta) - 1,
              "base_bytes": (len(delta) - 1) * self.entry_bytes + self.meta_bytes, "t_base_start": now + self.k["snapshot_s"] + self.k["h_startup_s"],
              "base_started": False, "t_base_ready": None, "t_ready": None, "t_first_out": None, "outcome": "open", "delta_fids": delta, "log_sent": 0, "base_sent": 0}
         self.mig = m; self.migs.append(m)
@@ -201,6 +202,12 @@ class M3S1Run(Run):
 
     def start_base(self, m):
         m["base_started"] = True
+        # corrected run: the delta is what the destination does not hold (verified) lineage-valid at c0 when the base starts;
+        # a cancelled staging flow's draining fragment that landed meanwhile is therefore not re-sent, one that did not land is
+        valid = self.valid_at(m["dst"], m["c0"]) if self.staging != "none" else set()
+        m["delta_fids"] = [f for f in range(N_ENTRIES) if f not in valid] + [N_ENTRIES]
+        m["valid"] = len(valid); m["delta"] = len(m["delta_fids"]) - 1; m["base_bytes"] = m["delta"] * self.entry_bytes + self.meta_bytes
+        self.used_staged[m["dst"]] += len(valid & {f for f in self.tag[m["dst"]] if self.tag[m["dst"]][f] is not None}) * self.entry_bytes
         m["base_flow"] = self.start_kind("base", "s0", m["src"], m["dst"], m["delta_fids"], f"m{m['id']}: base (delta {m['delta']} entries + meta)", tags={f: m["c0"] for f in m["delta_fids"]})
         self.ev.log("base_start", id=m["id"], fids=len(m["delta_fids"]))
 
@@ -248,6 +255,7 @@ class M3S1Run(Run):
         self.source = m["dst"]
         self.held["s0"][old] = set(range(N_ENTRIES + 1)); self.tag[old] = {f: c_sw for f in range(N_ENTRIES + 1)}   # the old source's Sink is frozen at the switch
         self.ev.log("ownership", **{"from": old, "to": self.source, "call": c_sw})
+        self.t_final_ownership = time.time()
         self.mig = None
         self.realloc()
 
@@ -267,13 +275,25 @@ class M3S1Run(Run):
     def holders(self):
         return [n for n in NODES if n != self.source and self.held["s0"][n]]
 
+    def draining_fids(self, dst):
+        """Fragments a cancelled flow to dst may still deliver (its in-flight fragment: the first unsent one in its order).
+        State 'cancelled but draining': not held (not verified), not relied upon, not assigned until the flow reports FLOW_DONE."""
+        out = set()
+        for fl in self.flows.values():
+            if fl.get("draining") and fl["sid"] == "s0" and fl["dst"] == dst and fl["left"]:
+                out.add(next(f for f in fl["order"] if f in fl["left"]))
+        return out
+
     def plan_staging(self, why):
         cands = self.candidates()
         if not cands:
             return
         now_c = self.call()
         for cand in cands:
-            have = set(self.held["s0"][cand]) | self.claims("s0", cand)
+            drain = self.draining_fids(cand)
+            have = set(self.held["s0"][cand]) | self.claims("s0", cand) | drain
+            if drain:
+                self.ev.log("staging_defer", candidate=cand, draining=sorted(drain), why=why)
             provs = [h for h in self.holders() if h != cand]
             count = {p: 0 for p in provs}
             assign = defaultdict(list)
@@ -297,6 +317,8 @@ class M3S1Run(Run):
             with self.lock:
                 fl = self.flows.get(m["flow_id"])
                 sid, f, dst = m["session"], int(m["fragment_id"]), m["label"]
+                if m.get("replaced") and sid == "s0":
+                    self.n_replaced += 1; self.replaced_bytes += int(m["bytes"])
                 if fl is not None and sid == "s0":
                     self.tag[dst][f] = fl.get("tags", {}).get(f, self.call())
                     if fl.get("kind") == "stage":
@@ -307,7 +329,17 @@ class M3S1Run(Run):
                 if fl and fl.get("kind") == "stage":
                     for key in [k_ for k_, v in self.stage_flows.items() if v == fl["id"]]:
                         self.stage_flows.pop(key, None)
+        drained = None
+        if k == "FLOW_DONE":
+            with self.lock:
+                fl = self.flows.get(m["flow_id"])
+                if fl and fl.get("draining") and fl.get("cancelled") and fl["sid"] == "s0":
+                    drained = fl["id"]
         super().handle(m)
+        if drained is not None:
+            with self.lock:   # the draining fragment either landed (held) or is lost: re-plan without it in the way
+                self.n_drain_replans += 1
+                self.plan_staging("drain_done")
         if k == "FRAG_RECV" and m.get("ok"):
             with self.lock:
                 mg = self.mig
@@ -444,6 +476,9 @@ class M3S1Run(Run):
             "bytes": {"total": tot, "discarded": disc, "staged": staged, "wasted_staged": wasted, "source_bytes_final_base": fin["base_sent"] if fin else None,
                       "by_kind_link": {f"{k}:{s}>{d}": v for (k, s, d), v in sorted(by.items())}},
             "sinks": {"total": tot / S, "discarded": disc / S, "staged": staged / S, "wasted_staged": wasted / S},
+            "corrected_harness": {"n_replaced": self.n_replaced, "replaced_bytes": self.replaced_bytes, "n_drain_replans": self.n_drain_replans,
+                                  "post_ownership_stage_bytes": sum(fl["bytes"] for fl in self.flows.values() if fl.get("kind") == "stage" and self.t_final_ownership and fl["t_start"] >= self.t_final_ownership - 0.01),
+                                  "duplicate_bytes": sum(b for t_, s_, d_, sid, f, b, ok, dup_ in self.recv if dup_ and sid == "s0")},
             "nic": nic, "hosts": {lb: self.node(lb).hello.get("host") for lb in NODES}, "node_commits": {lb: self.node(lb).hello.get("commit") for lb in NODES},
             "paced_egress_worst_10s_mbps": {lb: e.get("egress_worst_10s_mbps") for lb, e in ends.items()},
             # the `lg` session is set up as held on every node (any node may feed the log after an ownership change), so its receipts are
@@ -463,7 +498,7 @@ class M3S1Run(Run):
                 w.writerow([fl["id"], fl.get("kind"), fl["src"], fl["dst"], fl["n"], fl["bytes"], f"{self.rel(fl['t_start']):.3f}", "" if fl["t_end"] is None else f"{self.rel(fl['t_end']):.3f}", fl["reason"]])
         print(f"[orch] {self.wl} {self.staging}/{self.order} rho {self.rho:g}: remote {self.remote_s:.1f} s, local {self.local_s:.1f} s, cancelled {summary['n_cancelled']}, "
               f"final {summary['final_completed']} ({fin and round(fin['t_ready'] - fin['t_start'], 1)} s ready, valid {fin and fin['valid']}/180), discarded {disc / S:.2f} S, staged {staged / S:.2f} S, "
-              f"wasted {wasted / S:.2f} S, total {tot / S:.2f} S, valid {all(summary['validation'].values())}", flush=True)
+              f"wasted {wasted / S:.2f} S, total {tot / S:.2f} S, replaced {self.n_replaced}, dup {summary['corrected_harness']['duplicate_bytes'] // max(1, self.entry_bytes)}, valid {all(summary['validation'].values())}", flush=True)
         return summary
 
 

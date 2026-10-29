@@ -187,10 +187,12 @@ class Node:
         fl = {"id": h["flow_id"], "sid": h["session"], "dst": h["dst"], "host": h["dst_host"], "port": int(h["dst_port"]),
               "queue": list(h["frag_ids"]), "cancel": False, "closed": bool(h.get("closed", True)), "cond": threading.Condition(),
               "throttle": CountingThrottle(float(h["rate_bps"]), self.egress_hist, self.hist_lock) if float(h["rate_bps"]) > 0 else None,
-              "lock": threading.Lock(), "sent": 0, "bytes": 0}
+              "lock": threading.Lock(), "sent": 0, "bytes": 0,
+              # optional version tags (M3-S1 corrected run): {fragment_id: snapshot tag}; a fragment without a tag behaves as before
+              "tags": {int(k): v for k, v in (h.get("frag_tags") or {}).items()}}
         with self.lock:
-            for ids, closed in self.pending_add.pop(fl["id"], []):
-                fl["queue"].extend(ids); fl["closed"] = fl["closed"] or closed
+            for ids, closed, tags in self.pending_add.pop(fl["id"], []):
+                fl["queue"].extend(ids); fl["closed"] = fl["closed"] or closed; fl["tags"].update(tags)
             self.flows[fl["id"]] = fl
         fl["thread"] = threading.Thread(target=self._sender, args=(fl,), daemon=True)
         fl["thread"].start()
@@ -201,7 +203,7 @@ class Node:
         with self.lock:
             fl = self.flows.get(h["flow_id"])
             if fl is None:
-                self.pending_add.setdefault(h["flow_id"], []).append((list(h.get("frag_ids", [])), bool(h.get("closed", False))))
+                self.pending_add.setdefault(h["flow_id"], []).append((list(h.get("frag_ids", [])), bool(h.get("closed", False)), {int(k): v for k, v in (h.get("frag_tags") or {}).items()}))
                 self.stats["add_before_start"] += 1
                 return {"pending": True}
         if not fl["thread"].is_alive():   # the flow already finished: the orchestrator must start a new flow for these fragments
@@ -209,6 +211,7 @@ class Node:
             return {"rejected": True}
         with fl["cond"]:
             fl["queue"].extend(int(x) for x in h.get("frag_ids", []))
+            fl["tags"].update({int(k): v for k, v in (h.get("frag_tags") or {}).items()})
             if h.get("closed"):
                 fl["closed"] = True
             fl["cond"].notify_all()
@@ -286,7 +289,8 @@ class Node:
             with fl["lock"]:
                 thr = fl["throttle"]
             t0 = time.time()
-            send_msg(conn, "FRAG", {"session": fl["sid"], "fragment_id": fid, "length": n, "sha256": s["hashes"][fid], "holder": self.label, "flow_id": fl["id"]}, payload, thr)
+            send_msg(conn, "FRAG", {"session": fl["sid"], "fragment_id": fid, "length": n, "sha256": s["hashes"][fid], "holder": self.label, "flow_id": fl["id"],
+                                    "tag": fl.get("tags", {}).get(fid)}, payload, thr)
             t1 = time.time()
             fl["sent"] += 1; fl["bytes"] += n
             self.frag_log.row(t=f"{t1:.6f}", event="sent", session=fl["sid"], fragment_id=fid, src=self.label, dst=fl["dst"], bytes=n, flow=fl["id"], ok="")
@@ -316,16 +320,26 @@ class Node:
                 sid, fid = hdr["session"], int(hdr["fragment_id"])
                 s = self.sess.get(sid)
                 ok = s is not None and hashlib.sha256(view).hexdigest() == s["hashes"][fid] == hdr["sha256"]
-                dup = False
+                dup = replaced = False
                 complete = False
+                tag = hdr.get("tag")
                 if ok:
                     with self.lock:
-                        dup = fid in s["have"]
+                        tags = s.setdefault("tags", {})
+                        if fid in s["have"]:
+                            # version-aware: a tagged fragment that differs in version from the held copy replaces it (the M2
+                            # delta re-sends stale entries by design); the same version again is a duplicate (as before)
+                            if tag is not None and tags.get(fid) is not None and tags.get(fid) != tag:
+                                replaced = True
+                            else:
+                                dup = True
                         s["have"].add(fid)
-                        if not dup and len(s["have"]) == len(s["lens"]) and s["complete_t"] is None:
+                        if not dup and tag is not None:
+                            tags[fid] = tag
+                        if not dup and not replaced and len(s["have"]) == len(s["lens"]) and s["complete_t"] is None:
                             s["complete_t"] = t1; complete = True
-                self.frag_log.row(t=f"{t1:.6f}", event="recv", session=sid, fragment_id=fid, src=hdr["holder"], dst=self.label, bytes=pl, flow=hdr["flow_id"], ok=ok and not dup)
-                self.send("FRAG_RECV", session=sid, fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=pl, t_start=t0, t_end=t1, ok=ok, dup=dup)
+                self.frag_log.row(t=f"{t1:.6f}", event="replace" if replaced else "recv", session=sid, fragment_id=fid, src=hdr["holder"], dst=self.label, bytes=pl, flow=hdr["flow_id"], ok=ok and not dup)
+                self.send("FRAG_RECV", session=sid, fragment_id=fid, src=hdr["holder"], flow_id=hdr["flow_id"], bytes=pl, t_start=t0, t_end=t1, ok=ok, dup=dup, replaced=replaced, tag=tag)
                 if complete:
                     # Sink digest = hash of the fragment hashes; every fragment was verified on arrival
                     d = hashlib.sha256("".join(s["hashes"]).encode()).hexdigest()

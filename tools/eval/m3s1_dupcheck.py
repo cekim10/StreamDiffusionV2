@@ -77,7 +77,7 @@ def classify(d: Path, lin_cache: dict):
         if not f.exists():
             return {"run": d.name, "workload": wl, "staging": s["staging"], "order": s["order"], "rho": s["rho"], "rep": s["rep"],
                     "frozen_no_duplicates": s["validation"]["no_duplicates"], "missing_node_logs": True}
-        nodes[n] = [r for r in csv.DictReader(open(f)) if r["event"] == "recv" and r["session"] == "s0"]
+        nodes[n] = [r for r in csv.DictReader(open(f)) if r["event"] in ("recv", "replace") and r["session"] == "s0"]   # "replace": corrected harness, version update
     rows = sorted((float(r["t"]), n, r) for n, rs in nodes.items() for r in rs)
     tag = {n: {} for n in "ABCD"}       # node -> fid -> (snapshot call, t_rel of receipt, delivering flow)
     out = defaultdict(lambda: {"n": 0, "bytes": 0})
