@@ -1,12 +1,15 @@
 # E10 record: final M2 functional validation (2026-10-29)
 
+Status: complete. All checks hold; recommendation in section 7.
+
 ## Sources
 
 - Runs: `results/evaluation/expM2E10_{bfly_baseline,bfly_m2,dog_fault_advertise,dog_fault_held,dog_fault_corrupt}`
   (pushed 8a7456ce), at commit 47acbe44. The plan `e10_plan.md` was committed in 47acbe44, before the runs.
 - Continuity: `e10_metrics_<run>_mig{1,2}.json`, computed on host B (3607bd17). VD-3 frozen rules; butterfly with
   `butterfly-feeding-slow-motion_s1|OT-1` thresholds (REF P99 1.25), dog with `dog_s1|OT-1`.
-- Bitwise frame comparison: `e10_frames_bitwise.json` (`tools/eval/m2_e10_frames.py`). **PENDING** (section 4).
+- Bitwise frame comparison: `e10_frames_bitwise.json` (`tools/eval/m2_e10_frames.py`), computed on host B (54cd1f1a)
+  on the decoded lossless (ffv1) frame dumps.
 - Report: `e10_report.json` (`tools/eval/m2_e10_report.py`).
 - Setup as E9:
   - A -> B -> A on elves-01 / elves-02, 1 Gbps, Replay-12, Sink synchronization on;
@@ -100,10 +103,21 @@ against the source's: SINKOK, 0 mismatched blocks, positions equal. No cutover f
   - between each dog fault run and E9's fresh-base baseline at the second migration.
 - **The dog first-migration P2b fail** is the dog s1 residual already present in E9's baseline (and E3 / E5). It is not
   caused by M2: the first migration of every run uses the fresh base.
-- **Bitwise frames:** PENDING (`e10_frames_bitwise.json`, run on B). The comparisons are
-  - bfly_m2 against bfly_baseline;
-  - each fault run against E9's baseline;
-  - all on stores OUT_B, OUT_A, REF_B and REF_A.
+- **Bitwise frames:** every decoded output frame is bitwise identical, with the same call sets, in all four
+  comparisons:
+
+  | comparison | OUT_B (calls 64 .. 163) | OUT_A (164 .. 220) | REF_B (48 .. 163) | REF_A (148 .. 220) |
+  |---|---|---|---|---|
+  | bfly_m2 vs bfly_baseline | 100 / 100 | 57 / 57 | 116 / 116 | 73 / 73 |
+  | dog_fault_advertise vs E9 baseline | 100 / 100 | 57 / 57 | 116 / 116 | 73 / 73 |
+  | dog_fault_held vs E9 baseline | 100 / 100 | 57 / 57 | 116 / 116 | 73 / 73 |
+  | dog_fault_corrupt vs E9 baseline | 100 / 100 | 57 / 57 | 116 / 116 | 73 / 73 |
+
+  The M2 delta base and every fault fallback therefore produce the fresh-base outputs exactly:
+  - for B's whole ownership;
+  - for A's first 57 calls after the second switch (the dump window; per-call PSNR / SSIM are identical through 264).
+
+  The identical continuity metrics follow from this.
 
 ## 5. Real GPU delta-base fallback (dog s1, E9 configuration)
 
@@ -158,18 +172,17 @@ Every fault run:
   with the delta size.
 - **Refresh-heavy workloads:** on butterfly the M1 log patches (546 MB per migration) now dominate M2's traffic.
   Reducing them would be a new optimization and is outside E10.
-- **Continuity rules:** VD-3 rules over a 24-call window, with frame dumps covering 100 calls after the second switch.
+- **Continuity rules:** VD-3 rules over a 24-call window. A's frame dumps after the second switch cover calls 164 .. 220
+  (bitwise comparison); calls 221 .. 264 are compared by per-call PSNR / SSIM only.
 
 ## 7. Recommendation
 
-**PENDING the bitwise frame comparison.**
-
-If it shows all frames bitwise equal (bfly_m2 vs bfly_baseline, each fault run vs E9 baseline), the recommendation is:
-- freeze M1 (input-log replay with replay-aware Sink synchronization);
-- freeze M2 (versioned Sink reuse with a digest-verified delta base and full-base fallback) as implemented at 47acbe44.
+**Freeze M1 and M2 as implemented at 47acbe44:**
+- M1: input-log replay with replay-aware Sink synchronization;
+- M2: versioned Sink reuse with a digest-verified delta base and full-base fallback.
 
 The reasons:
-- every planned check of E10 holds;
+- every planned check of E10 holds, and the outputs are bitwise identical to the fresh-base runs (section 4);
 - no correctness failure occurred, so no fix or rerun was needed;
 - the measured gains of E9 generalize to a refresh-heavy workload with the expected scaling (distinct entries, not
   events);
