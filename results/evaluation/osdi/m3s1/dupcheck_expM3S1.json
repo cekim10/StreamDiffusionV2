@@ -1,0 +1,3680 @@
+{
+ "skew_tolerance_s": 0.25,
+ "runs": [
+  {
+   "run": "policy=m3s1-bfly-S1c-fwd_N=1_moves=2_rho=1_rep=1_20261029-130039",
+   "workload": "bfly",
+   "staging": "S1c",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-bfly-S1c-fwd_N=1_moves=2_rho=1_rep=2_20261029-130745",
+   "workload": "bfly",
+   "staging": "S1c",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-bfly-S1c-fwd_N=1_moves=2_rho=1_rep=3_20261029-131450",
+   "workload": "bfly",
+   "staging": "S1c",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-bfly-S1c-rev_N=1_moves=2_rho=1_rep=1_20261029-130142",
+   "workload": "bfly",
+   "staging": "S1c",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 113,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.263,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.23802399635315)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.166,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.264,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.46,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.656,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.754,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.852,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.951,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.049,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.147,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.833,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.519,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.205,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S1c-rev_N=1_moves=2_rho=1_rep=2_20261029-130847",
+   "workload": "bfly",
+   "staging": "S1c",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 113,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.224,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.176028966903687)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.167,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.265,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.462,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.657,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.755,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.853,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.952,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.05,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.148,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.833,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.52,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.207,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S1c-rev_N=1_moves=2_rho=1_rep=3_20261029-131553",
+   "workload": "bfly",
+   "staging": "S1c",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.215,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.091963052749634)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.175,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.273,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.472,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.671,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.771,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.871,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.97,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.071,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.17,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.856,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.542,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.229,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S1o-fwd_N=1_moves=2_rho=1_rep=1_20261029-125949",
+   "workload": "bfly",
+   "staging": "S1o",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 12,
+   "amended_no_duplicates": true,
+   "detail": [
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.177,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.275,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.472,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.668,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.766,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.864,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.963,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.061,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.159,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.846,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 36.535,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 37.223,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S1o-fwd_N=1_moves=2_rho=1_rep=2_20261029-130655",
+   "workload": "bfly",
+   "staging": "S1o",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 12,
+   "amended_no_duplicates": true,
+   "detail": [
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.159,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.257,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.454,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.65,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.748,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.846,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.944,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.043,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.141,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.827,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 36.513,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 37.2,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S1o-fwd_N=1_moves=2_rho=1_rep=3_20261029-131400",
+   "workload": "bfly",
+   "staging": "S1o",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 12,
+   "amended_no_duplicates": true,
+   "detail": [
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.186,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.286,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.485,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.682,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.781,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.878,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 34.978,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.077,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.174,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 35.86,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 36.545,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 37.233,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S2-fwd_N=1_moves=2_rho=1_rep=1_20261029-130232",
+   "workload": "bfly",
+   "staging": "S2",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.212,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.089646100997925)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.181,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.279,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.476,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.672,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.77,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.868,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.966,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.064,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.162,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.848,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.535,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.223,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S2-fwd_N=1_moves=2_rho=1_rep=2_20261029-130937",
+   "workload": "bfly",
+   "staging": "S2",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.214,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.092776775360107)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.181,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.28,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.475,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.671,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.769,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.867,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.966,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.064,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.162,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.849,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.535,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.224,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S2-fwd_N=1_moves=2_rho=1_rep=3_20261029-131643",
+   "workload": "bfly",
+   "staging": "S2",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.209,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.111406087875366)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.15,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.245,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.434,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.624,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.718,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.813,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.908,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.003,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.101,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.774,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.449,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.136,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S2-rev_N=1_moves=2_rho=1_rep=1_20261029-130322",
+   "workload": "bfly",
+   "staging": "S2",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.215,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.092353105545044)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.18,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.278,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.474,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.67,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.768,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.866,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.965,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.063,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.161,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.847,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.534,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.222,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S2-rev_N=1_moves=2_rho=1_rep=2_20261029-131027",
+   "workload": "bfly",
+   "staging": "S2",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.218,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.119693994522095)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.172,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.27,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.466,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.662,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.76,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.858,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.958,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.056,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.154,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.842,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.528,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.215,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S2-rev_N=1_moves=2_rho=1_rep=3_20261029-131733",
+   "workload": "bfly",
+   "staging": "S2",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 113,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.253,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.225511074066162)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.162,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.26,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.456,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.652,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.75,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.848,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.948,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.045,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.143,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.829,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.519,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.207,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S3-fwd_N=1_moves=2_rho=1_rep=1_20261029-130412",
+   "workload": "bfly",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.215,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.057891845703125)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.179,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.277,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.473,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.669,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.768,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.866,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.965,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.064,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.162,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.848,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.534,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.221,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S3-fwd_N=1_moves=2_rho=1_rep=2_20261029-131117",
+   "workload": "bfly",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.186,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.056211948394775)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.181,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.279,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.475,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.671,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.769,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.867,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.966,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.065,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.163,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.848,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.535,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.224,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S3-fwd_N=1_moves=2_rho=1_rep=3_20261029-131823",
+   "workload": "bfly",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.202,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.079684019088745)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.165,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.263,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.46,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.656,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.754,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.852,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.952,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.05,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.149,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.835,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.522,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.22,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S3-rev_N=1_moves=2_rho=1_rep=1_20261029-130502",
+   "workload": "bfly",
+   "staging": "S3",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.226,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.08115315437317)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.162,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.26,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.456,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.652,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.75,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.848,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.948,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.046,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.144,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.831,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.518,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.209,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S3-rev_N=1_moves=2_rho=1_rep=2_20261029-131207",
+   "workload": "bfly",
+   "staging": "S3",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 112,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.222,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.098376989364624)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.195,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.293,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.488,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.684,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.781,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.879,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.979,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.076,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.174,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.861,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.548,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.236,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-S3-rev_N=1_moves=2_rho=1_rep=3_20261029-131913",
+   "workload": "bfly",
+   "staging": "S3",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 12,
+     "bytes": 115015680
+    }
+   },
+   "n_duplicates": 13,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 113,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 31.258,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (61, 31.126308917999268)"
+    },
+    {
+     "node": "D",
+     "fid": 6,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.192,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 8,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.29,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 10,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.489,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 12,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.684,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 13,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.782,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 14,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.88,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 15,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 34.978,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 16,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.076,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 17,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.174,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 35,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 35.864,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 54,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 36.562,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    },
+    {
+     "node": "D",
+     "fid": 126,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 37.25,
+     "class": "stale_resend",
+     "why": "held tag 31 refreshed in (31, 86]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-bfly-none-fwd_N=1_moves=2_rho=1_rep=1_20261029-125813",
+   "workload": "bfly",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-bfly-none-fwd_N=1_moves=2_rho=1_rep=2_20261029-130552",
+   "workload": "bfly",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-bfly-none-fwd_N=1_moves=2_rho=1_rep=3_20261029-131257",
+   "workload": "bfly",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-S1c-fwd_N=1_moves=2_rho=1_rep=1_20261029-124122",
+   "workload": "dog",
+   "staging": "S1c",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-S1c-fwd_N=1_moves=2_rho=1_rep=2_20261029-124728",
+   "workload": "dog",
+   "staging": "S1c",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-S1c-fwd_N=1_moves=2_rho=1_rep=3_20261029-125334",
+   "workload": "dog",
+   "staging": "S1c",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-S1c-rev_N=1_moves=2_rho=1_rep=1_20261029-124218",
+   "workload": "dog",
+   "staging": "S1c",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.808,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.761306047439575)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.419,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.511,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S1c-rev_N=1_moves=2_rho=1_rep=2_20261029-124825",
+   "workload": "dog",
+   "staging": "S1c",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.785,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.70314311981201)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.411,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.503,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S1c-rev_N=1_moves=2_rho=1_rep=3_20261029-125430",
+   "workload": "dog",
+   "staging": "S1c",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.771,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.645808219909668)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.415,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.508,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S1o-fwd_N=1_moves=2_rho=1_rep=1_20261029-124039",
+   "workload": "dog",
+   "staging": "S1o",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 2,
+   "amended_no_duplicates": true,
+   "detail": [
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 31.417,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 31.509,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S1o-fwd_N=1_moves=2_rho=1_rep=2_20261029-124646",
+   "workload": "dog",
+   "staging": "S1o",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 2,
+   "amended_no_duplicates": true,
+   "detail": [
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 31.408,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 31.493,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S1o-fwd_N=1_moves=2_rho=1_rep=3_20261029-125252",
+   "workload": "dog",
+   "staging": "S1o",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 2,
+   "amended_no_duplicates": true,
+   "detail": [
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 31.408,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f8_s0_AD",
+     "kind": "base",
+     "t_rel": 31.5,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S2-fwd_N=1_moves=2_rho=1_rep=1_20261029-124300",
+   "workload": "dog",
+   "staging": "S2",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.767,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.606961965560913)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.411,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.506,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S2-fwd_N=1_moves=2_rho=1_rep=2_20261029-124907",
+   "workload": "dog",
+   "staging": "S2",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.758,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.636502027511597)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.4,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.492,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S2-fwd_N=1_moves=2_rho=1_rep=3_20261029-125513",
+   "workload": "dog",
+   "staging": "S2",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.781,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.695201873779297)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.408,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.493,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S2-rev_N=1_moves=2_rho=1_rep=1_20261029-124343",
+   "workload": "dog",
+   "staging": "S2",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.788,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.700411081314087)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.415,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.507,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S2-rev_N=1_moves=2_rho=1_rep=2_20261029-124949",
+   "workload": "dog",
+   "staging": "S2",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.778,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.657618045806885)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.424,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.516,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S2-rev_N=1_moves=2_rho=1_rep=3_20261029-125555",
+   "workload": "dog",
+   "staging": "S2",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 140,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.68,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.624626874923706)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f9_s0_AD",
+     "kind": "base",
+     "t_rel": 31.417,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f9_s0_AD",
+     "kind": "base",
+     "t_rel": 31.496,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-fwd_N=1_moves=2_rho=1_rep=1_20261029-124425",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.811,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.656239986419678)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.416,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.508,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-fwd_N=1_moves=2_rho=1_rep=2_20261029-125032",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.775,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.65239906311035)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.423,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.514,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-fwd_N=1_moves=2_rho=1_rep=3_20261029-125637",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.794,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.639856100082397)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.408,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.493,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-fwd_N=1_moves=2_rho=2_rep=1_20261029-132103",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 2.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    }
+   },
+   "n_duplicates": 1,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 54,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 14.869,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (43, 14.74638295173645)"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-fwd_N=1_moves=2_rho=2_rep=2_20261029-132222",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 2.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    }
+   },
+   "n_duplicates": 1,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 54,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 14.842,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (43, 14.729602098464966)"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-fwd_N=1_moves=2_rho=2_rep=3_20261029-132341",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "fwd",
+   "rho": 2.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    }
+   },
+   "n_duplicates": 1,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 54,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 14.846,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (43, 14.7131929397583)"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-rev_N=1_moves=2_rho=1_rep=1_20261029-124507",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.804,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.65060591697693)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.42,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.505,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-rev_N=1_moves=2_rho=1_rep=2_20261029-125114",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 135,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.806,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.649914026260376)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.41,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.501,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-S3-rev_N=1_moves=2_rho=1_rep=3_20261029-125719",
+   "workload": "dog",
+   "staging": "S3",
+   "order": "rev",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": false,
+   "missing_node_logs": false,
+   "duplicates": {
+    "other": {
+     "n": 1,
+     "bytes": 9584640
+    },
+    "stale_resend": {
+     "n": 2,
+     "bytes": 19169280
+    }
+   },
+   "n_duplicates": 3,
+   "amended_no_duplicates": false,
+   "detail": [
+    {
+     "node": "C",
+     "fid": 136,
+     "flow": "f8_s0_BC",
+     "kind": "stage",
+     "t_rel": 28.808,
+     "class": "other",
+     "why": "duplicate via staging flow f8_s0_BC (B->C); held (56, 28.658915042877197)"
+    },
+    {
+     "node": "D",
+     "fid": 27,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.416,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    },
+    {
+     "node": "D",
+     "fid": 33,
+     "flow": "f10_s0_AD",
+     "kind": "base",
+     "t_rel": 31.502,
+     "class": "stale_resend",
+     "why": "held tag 30 refreshed in (30, 81]"
+    }
+   ]
+  },
+  {
+   "run": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=1_rep=1_20261029-123939",
+   "workload": "dog",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 1,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=1_rep=2_20261029-124550",
+   "workload": "dog",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 2,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=1_rep=3_20261029-125156",
+   "workload": "dog",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 1.0,
+   "rep": 3,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=2_rep=1_20261029-132014",
+   "workload": "dog",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 2.0,
+   "rep": 1,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=2_rep=2_20261029-132140",
+   "workload": "dog",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 2.0,
+   "rep": 2,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  },
+  {
+   "run": "policy=m3s1-dog-none-fwd_N=1_moves=2_rho=2_rep=3_20261029-132258",
+   "workload": "dog",
+   "staging": "none",
+   "order": "fwd",
+   "rho": 2.0,
+   "rep": 3,
+   "frozen_no_duplicates": true,
+   "missing_node_logs": false,
+   "duplicates": {},
+   "n_duplicates": 0,
+   "amended_no_duplicates": true,
+   "detail": []
+  }
+ ]
+}
