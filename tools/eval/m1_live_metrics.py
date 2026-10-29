@@ -41,6 +41,9 @@ def main():
     ap.add_argument("--work", default=str(ROOT / "results/evaluation/expM1R_metrics"))
     ap.add_argument("--out", default=str(OUT / "e3_metrics.json"))
     ap.add_argument("--k", type=int, default=2)
+    ap.add_argument("--out_store", default=None, help="E9: the destination's output store in the run directory (e.g. OUT_A); default the only OUT_*")
+    ap.add_argument("--ref_store", default=None, help="E9: the reference store (e.g. REF_A); default REF or the only REF_*")
+    ap.add_argument("--prefix_store", default=None, help="E9: the previous owner's output store for calls before M (e.g. OUT_B); default the reference")
     a = ap.parse_args()
     import numpy as np
 
@@ -64,14 +67,16 @@ def main():
     res = {"unit": a.unit, "cell_thresholds": key, "ref_p99": p99, "span": SPAN, "runs": {}}
     for run_id in [x for x in a.runs.split(",") if x]:
         d = Path(a.dump_root) / run_id
-        outs = sorted(d.glob("OUT_*"))
-        if not outs or not (d / "REF" / "index.json").exists():
+        outs = [d / a.out_store] if a.out_store else sorted(d.glob("OUT_*"))
+        refs = [d / a.ref_store] if a.ref_store else ([d / "REF"] if (d / "REF").exists() else sorted(d.glob("REF_*")))
+        if not outs or not refs or not (outs[0] / "index.json").exists() or not (refs[0] / "index.json").exists():
             res["runs"][run_id] = {"error": "missing dump"}; continue
-        D = vf.read_calls(outs[0]); R = vf.read_calls(d / "REF")
+        D = vf.read_calls(outs[0]); R = vf.read_calls(refs[0])
+        P = vf.read_calls(d / a.prefix_store) if a.prefix_store else R   # calls before M: the previous owner's frames (E9) or the reference
         M = min(D)
         end = max(D)
         lo = M - 16
-        O = {c: (R[c] if c < M else D[c]) for c in range(lo, end + 1) if (c < M and c in R) or (c >= M and c in D)}
+        O = {c: (P[c] if c < M else D[c]) for c in range(lo, end + 1) if (c < M and c in P) or (c >= M and c in D)}
         Rc = {c: R[c] for c in O if c in R}
         I = {c: getI(c - (a.k - 1)) for c in O}
         cond = {"id": run_id, "kind": "vd4", "resets": [M], "binds": [M + SPAN], "cold_call": None, "frames_from": lo, "frames_to": end, "end": end}
@@ -93,7 +98,7 @@ def main():
         v = a3.cell(unit, json.loads((unit / "metrics.json").read_text()), run_id)
         rr = a3.rules(v, "replay", tol, p99, None)
         sl = v["P"]["sinkless"]
-        res["runs"][run_id] = {"M": M, "dst_calls": [M, end], "frames_dst": len(D), "frames_ref": len(R), "rules": {p: bool(rr[p]) for p in PH},
+        res["runs"][run_id] = {"M": M, "dst_calls": [M, end], "stores": {"out": outs[0].name, "ref": refs[0].name, "prefix": a.prefix_store or refs[0].name}, "frames_dst": len(D), "frames_ref": len(R), "rules": {p: bool(rr[p]) for p in PH},
                                "v1_reset": v["v1_reset"], "v1_reset_ref_same_call": v["v1_reset_ref_same_call"], "D_c": sl.get("D_c"), "C_c": sl.get("C_c"),
                                "dE_cross": sl.get("dE_cross"), "late_D_c": v["P"]["sl_late"].get("D_c"), "X_late": v["X_late"],
                                "warp_excess": (sl["eO"] - sl["eR"]) if sl.get("eO") is not None and sl.get("eR") is not None else None,

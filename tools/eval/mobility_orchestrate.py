@@ -259,7 +259,8 @@ class Run:
         self.policy, self.bw, self.tm, self.rho, self.rep = policy, bw_mbps, tm, rho, rep
         self.recent_slots = int(recent_slots)   # Experiment A: recent ring slots sent with the fast path (0 = frozen M1)
         self.edges = list(path) if path else EDGES[:hops + 1]
-        assert self.edges[0] == "A" and "A" not in self.edges[1:] and all(x != y for x, y in zip(self.edges, self.edges[1:])), \
+        ret_ok = policy == "precopy_replay" and bool(getattr(orch.a, "allow_return", False))   # M2 / E9: A -> B -> A
+        assert self.edges[0] == "A" and ("A" not in self.edges[1:] or ret_ok) and all(x != y for x, y in zip(self.edges, self.edges[1:])), \
             "path must start at A, never return to A, and change owner at every move (revisits of B, C, D are allowed)"
         self.final = self.edges[-1]
         self.revisit = len(set(self.edges)) < len(self.edges)
@@ -281,6 +282,8 @@ class Run:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         ss = ("_sinksync" + ("_testmismatch" if self.a.replay_sink_sync_test_mismatch else "") + ("_testperturb" if self.a.replay_sink_sync_test_perturb_dst else "")
               if (policy == "precopy_replay" and self.a.replay_sink_sync) else "")
+        if policy == "precopy_replay":
+            ss += ("_retain" if self.a.replay_retain else "") + ("_reuse" if self.a.replay_reuse else "") + ("_deltatestmismatch" if self.a.replay_delta_test_mismatch else "")
         self.run_id = f"{run_tag(self.a, policy, bw_mbps, tm, rho, rep, path and self.edges, prepos)}{('_rs=' + str(self.recent_slots)) if self.recent_slots else ''}{ss}_{stamp}"
         # per-node caps (D0): the emulated network; planners only see known_caps (never the live caps)
         if bw_mbps > 0:
@@ -1095,14 +1098,26 @@ class Run:
         nd = self.o.node_spec[target]
         rate = self._xb_rate(src, target)
         if self.policy.startswith("precopy"):
-            self.node(target).call("XB_PREPARE", task=task["id"], provision=False)
+            ti = len(self.xb_tasks)   # index of this task (0 = first migration)
+            prev_src = any(t_["src"] == target for t_ in self.xb_tasks)
+            t_p = time.time()
+            # a destination that served as a source earlier gets fresh receive buffers now (timed; its retained Sink is a host copy)
+            self.node(target).call("XB_PREPARE", task=task["id"], provision=bool(prev_src and self.policy == "precopy_replay"))
+            task["prepare_s"] = time.time() - t_p
+            dv = None
+            if self.policy == "precopy_replay" and self.a.replay_reuse:
+                dv = self.node(target).call("RETAINED_VERSION").get("version")
+            task["dest_version"] = dv
+            sc = [int(x) for x in self.a.replay_switch_calls.split(",") if x.strip()] if self.a.replay_switch_calls else []
             self.node(src).call("PRECOPY_START", task=task["id"], to=target, to_host=nd["host"], to_port=nd["data"], variant=self.policy.split("_")[1],
                                 frag_bytes=self.a.frag_bytes, threshold_bytes=int(self.a.xb_threshold_mib * MB), round_limit=self.a.xb_round_limit,
                                 min_shrink=self.a.xb_min_shrink, rate_bps=rate,
                                 **({"replay_window": self.a.replay_window, "replay_lag": self.a.replay_lag, "replay_verify": bool(self.a.replay_verify),
                                     "replay_max_wait_s": self.a.replay_max_wait_s, "replay_sink_sync": bool(self.a.replay_sink_sync),
                                     "replay_sink_sync_test_mismatch": bool(self.a.replay_sink_sync_test_mismatch),
-                                    "replay_sink_sync_test_perturb_dst": bool(self.a.replay_sink_sync_test_perturb_dst)} if self.policy == "precopy_replay" else {}))
+                                    "replay_sink_sync_test_perturb_dst": bool(self.a.replay_sink_sync_test_perturb_dst),
+                                    "replay_switch_call": sc[ti] if ti < len(sc) else None, "replay_retain": bool(self.a.replay_retain), "replay_dest_version": dv,
+                                    "replay_delta_test_mismatch": bool(self.a.replay_delta_test_mismatch)} if self.policy == "precopy_replay" else {}))
         else:
             variant = self.policy.split("_")[1]
             c = self._xb_src_call(src)
@@ -1230,7 +1245,8 @@ class Run:
         sw = next((e for e in ev if e["event"] == "xb_precopy_switch" and e["node"] == "A"), None)
         dst = self.xb_switches[0]["dst"] if self.xb_switches else self.edges[1]
         fo = next((e for e in ev if e["event"] == "first_output" and e["node"] == dst), None)
-        src_t = [m["t_out_rel"] for m in self.metrics if m["owner"] == "A"]
+        M0 = sw and sw.get("call")
+        src_t = [m["t_out_rel"] for m in self.metrics if m["owner"] == "A" and (M0 is None or int(m["call"]) < int(M0))]
         rounds = [e for e in ev if e["event"] == "xb_precopy_round" and e["node"] == "A"]
         out = {"M": sw and sw.get("call"), "rounds": len(rounds), "round_bytes": [int(e.get("dirty_bytes") or 0) for e in rounds], "final_bytes": sw and sw.get("final_bytes"),
                "switch_reason": sw and sw.get("reason"), "t_switch_sent_rel": sw and self.rel_t(sw["t"]), "t_first_output_rel": fo and self.rel_t(fo["t"]),
@@ -1252,10 +1268,13 @@ class Run:
         base, caught, resume, verify = last("replay_base", dst), last("replay_caught_up", dst), last("resume", dst), last("replay_verify", dst)
         refused = [e for e in ev if e["event"] == "replay_switch_refused"]
         M = int(sw_src["call"]) if sw_src and sw_src.get("call") is not None else None
-        src_calls = sorted(int(m["call"]) for m in self.metrics if m["owner"] == "A")
-        dst_calls = sorted(int(m["call"]) for m in self.metrics if m["owner"] == dst)
-        src_ref = [m.get("ref_match") for m in self.metrics if m["owner"] == "A"]
-        t_last_src = max((m["t_out_rel"] for m in self.metrics if m["owner"] == "A"), default=None)   # orchestrator clock, relative to t0
+        nxt = self.xb_switches[1]["call"] if len(self.xb_switches) > 1 else None
+        inA = lambda m_: m_["owner"] == "A" and (M is None or int(m_["call"]) < M)  # noqa: E731
+        inD = lambda m_: m_["owner"] == dst and (M is None or int(m_["call"]) >= M) and (nxt is None or int(m_["call"]) < int(nxt))  # noqa: E731
+        src_calls = sorted(int(m["call"]) for m in self.metrics if inA(m))
+        dst_calls = sorted(int(m["call"]) for m in self.metrics if inD(m))
+        src_ref = [m.get("ref_match") for m in self.metrics if inA(m)]
+        t_last_src = max((m["t_out_rel"] for m in self.metrics if inA(m)), default=None)   # orchestrator clock, relative to t0
         fo = next((e for e in ev if e["event"] == "first_output" and e["node"] == dst), None)
         applied = [e for e in ev if e["event"] == "replay_applied" and e["node"] == dst]
         rounds = [e for e in ev if e["event"] == "xb_precopy_round" and e["node"] == "A"]
@@ -1312,8 +1331,8 @@ class Run:
         for lb in self.nodes_used:
             # exact_check: per-call output digest vs the reference; delivery: estimated remote delivery bytes (H.264 CRF 23 / 28)
             # of every chunk a node serves while the user is at another edge (the user is at edges[1] from the trigger on)
-            dump = ({"dir": a.dump_frames, "lo": max(0, a.migration_chunk - 16), "hi": a.migration_chunk + a.dump_calls, "ref": True}
-                    if (a.dump_frames and lb != "A") else None)   # M1 replay validation: destination output + reference frames
+            dump = ({"dir": a.dump_frames, "lo": max(0, a.migration_chunk - 16), "hi": a.migration_chunk + a.dump_calls, "ref": True, "after_resume": True, "active": False}
+                    if (a.dump_frames and (lb != "A" or self.edges.count("A") > 1)) else None)   # destination output (after its switchover) + reference frames
             self.node(lb).call("RUN_BEGIN", run_id=self.run_id, run_rel=self.rel, session_id=self.run_id, t0=None, exact_check=True,
                                delivery=list(xc.DELIVERY_CRFS), user_edge=self.edges[1], **({"dump": dump} if dump else {}))
         prep = self.node("A").call("SOURCE_PREP", M=a.migration_chunk, frag_bytes=a.frag_bytes, timeout=900)
@@ -1349,7 +1368,10 @@ class Run:
             self.drain(0.05)
             self._xb_step()
             now = time.time()
-            if next_move <= n_moves and now >= self.t0 + next_move * self.tm:
+            mc = [int(x) for x in a.move_calls.split(",") if x.strip()] if a.move_calls else []
+            by_call = bool(mc) and next_move <= n_moves and next_move - 1 < len(mc) and self.running is not None and \
+                any(m_["owner"] == self.running and int(m_["call"]) >= mc[next_move - 1] for m_ in self.metrics[-4:])
+            if next_move <= n_moves and (by_call if mc else now >= self.t0 + next_move * self.tm):
                 self.user_idx = next_move + 1
                 to = self.edges[self.user_idx]
                 self.moves.append({"i": self.user_idx, "from": self.edges[next_move], "to": to, "t_req": now, "t_stop": None, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "xb"})
@@ -2033,6 +2055,12 @@ def main():
     ap.add_argument("--replay_sink_sync", action="store_true", help="M1 replay: replay-aware Sink synchronization (refresh patches in the log; Sink digest at the switch; fallback resend)")
     ap.add_argument("--replay_sink_sync_test_mismatch", action="store_true", help="protocol test only: corrupt the source's Sink digest to exercise the fallback")
     ap.add_argument("--replay_sink_sync_test_perturb_dst", action="store_true", help="E6 fallback validation: flip one bit of one shadow-Sink element at the destination before the digest")
+    ap.add_argument("--allow_return", action="store_true", help="M2 / E9: allow a precopy_replay path that returns to A (e.g. --path A,B,A)")
+    ap.add_argument("--replay_switch_calls", type=str, default="", help="M2 / E9: planned switch call per migration, e.g. '64,164'")
+    ap.add_argument("--move_calls", type=str, default="", help="M2 / E9: trigger the 2nd, 3rd, ... migration when the serving node reaches these calls (replaces T_m)")
+    ap.add_argument("--replay_retain", action="store_true", help="M2: the source retains its Sink version at a digest-equal switch; the new owner tracks changes since it")
+    ap.add_argument("--replay_reuse", action="store_true", help="M2: a destination holding a retained version gets a delta base")
+    ap.add_argument("--replay_delta_test_mismatch", action="store_true", help="protocol test only: corrupt the delta base's expected digest (exercise the full-base fallback)")
     ap.add_argument("--dump_frames", type=str, default="", help="M1 replay validation: destination output + reference frames under this host-local directory")
     ap.add_argument("--dump_calls", type=int, default=200, help="M1 replay validation: dump calls [trigger - 16, trigger + dump_calls]")
     ap.add_argument("--dyn_probe", type=int, default=4, help="M3-v2: fragments of a single-provider probe (4 = 0.01 Sink; dry runs use 1)")

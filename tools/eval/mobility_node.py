@@ -952,27 +952,103 @@ class GpuRuntime:
             self._sync()
         return mr.meta_digest(self.torch, mr.meta_of(pl)) == hdr["post_digest"], dt, pinfo
 
-    def sink_checksums(self) -> dict:
-        """Digest of the live Sink: per (layer, K / V, row, slot) an order-sensitive int64 checksum of the bf16 block (int16
-        view x fixed pseudo-random int64 weights, wrapping integer arithmetic: identical on every host), plus the Sink
-        positions. One device-to-host copy."""
+    def sink_checksums(self, snap: dict | None = None) -> dict:
+        """Digest of the live Sink (or of a serialize_live snapshot's Sink): per (layer, K / V, row, slot) an
+        order-sensitive int64 checksum of the bf16 block (int16 view x fixed pseudo-random int64 weights, wrapping integer
+        arithmetic: identical on every host), plus the Sink positions. One device-to-host copy."""
         torch, fsl, S = self.torch, self.fsl, self.sink
         if not hasattr(self, "_ck_w"):
             g = torch.Generator(device="cpu").manual_seed(20261020)
             self._ck_w = torch.randint(-(1 << 62), 1 << 62, (fsl * self.pl.generator.model.blocks[0].self_attn.k.out_features,), generator=g, dtype=torch.int64).to(self.device)
         self._sync(); t0 = time.perf_counter()
         out = []
-        for layer in self.pl.kv_cache1:
+        layers = self.pl.kv_cache1 if snap is None else snap["kv"]
+        for layer in layers:
             for key in ("k", "v"):
                 x = layer[key][:, :S * fsl].reshape(layer[key].shape[0], S, -1).contiguous().view(torch.int16).to(torch.int64)
                 out.append((x * self._ck_w[: x.shape[-1]]).sum(-1))
         blocks = torch.stack(out).cpu().tolist()
-        pos = torch.stack([l_["pos"][:, :S] for l_ in self.pl.kv_cache1]).cpu().tolist()
+        pos = torch.stack([(l_["pos"] if snap is None else r_["pos"])[:, :S] for l_, r_ in zip(self.pl.kv_cache1, (snap or {}).get("ring") or self.pl.kv_cache1)]).cpu().tolist()
         return {"blocks": blocks, "pos": pos, "s": time.perf_counter() - t0}
 
     def unfreeze_refresh(self):
         for b in self.pl.generator.model.blocks:
             b.self_attn.adapt_sink_thr = self.cfg_thr
+
+    # ---- M2: versioned Sink state reuse (osdi/m1_continuity/e9_plan.md)
+    def retain_sink(self, snap: dict) -> tuple[dict, bytearray, float]:
+        """Host copy of the Sink of `snap` (the exact serialization the Sink pre-copy uses)."""
+        t0 = time.perf_counter()
+        header, bufs = self.pack(snap, "sink")
+        buf = bytearray(header["nbytes"]); mv = memoryview(buf)
+        for t, b in zip(header["tensors"], bufs):
+            mv[t["offset"]:t["offset"] + t["nbytes"]] = memoryview(b).cast("B")
+        return header, buf, time.perf_counter() - t0
+
+    def _sink_pos_now(self) -> list:
+        return self.torch.stack([l_["pos"][:, :self.sink] for l_ in self.pl.kv_cache1]).cpu().tolist()
+
+    def sink_track_start(self, version: dict):
+        """New owner: from now on, the Sink entries refreshed since `version` and the ordered shifts of the others."""
+        self._track = {"version": version, "refreshed": set(), "shifts": [], "last": self._sink_pos_now(), "calls": 0, "s": 0.0}
+
+    def sink_track_step(self, c: int):
+        tr = getattr(self, "_track", None)
+        if tr is None:
+            return
+        t0 = time.perf_counter()
+        pos = self._sink_pos_now()
+        starts = self.pl.kv_cache_starts.cpu().tolist()
+        for li, rows in enumerate(pos):
+            for i, row in enumerate(rows):
+                newp = int(starts[i]) // self.fsl
+                for s_, p_ in enumerate(row):
+                    pre = tr["last"][li][i][s_]
+                    if p_ == pre:
+                        continue
+                    key = (li, i, s_)
+                    if p_ == newp:   # a refresh write: the entry's current value supersedes its earlier shifts
+                        if key not in tr["refreshed"]:
+                            tr["refreshed"].add(key)
+                            tr["shifts"] = [e for e in tr["shifts"] if (e[1], e[2], e[3]) != key]
+                    elif key not in tr["refreshed"]:
+                        tr["shifts"].append([c, li, i, s_, int(p_ - pre)])
+        tr["last"] = pos; tr["calls"] += 1; tr["s"] += time.perf_counter() - t0
+
+    def sink_track_copy(self) -> dict | None:
+        tr = getattr(self, "_track", None)
+        if tr is None:
+            return None
+        return {"version": tr["version"], "refreshed": sorted(tr["refreshed"]), "shifts": [list(e) for e in tr["shifts"]], "calls": tr["calls"], "track_s": tr["s"]}
+
+    def sink_track_stop(self):
+        self._track = None
+
+    def reuse_base(self, retained_hdr: dict, retained_buf, dhdr: dict, dpayload) -> tuple[dict, dict]:
+        """Destination: the shadow base from the retained Sink. The metadata component of the base boundary is already
+        unpacked into self.snap. Retained Sink -> snapshot buffers -> ring (meta + Sink, recent zero); the ordered shifts of
+        the unrefreshed entries; the refreshed entries' current exact K / V. Returns (Sink digest, timings)."""
+        from models.wan.causal_model import _shift_temporal_rope
+
+        self._sync(); t0 = time.perf_counter()
+        self.unpack(dict(retained_hdr), retained_buf)
+        self._sync(); t1 = time.perf_counter()
+        self.sa.restore_state(self.pl, self.pm, self.session, self.snap, {"meta", "sink"})
+        for b in self.pl.generator.model.blocks:
+            b.self_attn.adapt_sink_thr = -1
+        freqs = self.pl.generator.model.freqs.to(self.device)
+        fsl = self.fsl
+        for _, li, i, s_, d in dhdr["shifts"]:
+            k = self.pl.kv_cache1[li]["k"]
+            k[i, s_ * fsl:(s_ + 1) * fsl] = _shift_temporal_rope(k[i, s_ * fsl:(s_ + 1) * fsl], freqs, int(d))
+        view = memoryview(dpayload)
+        T = {t["name"]: bytes_to_tensor(t, view[t["offset"]:t["offset"] + t["nbytes"]], self.device) for t in dhdr["tensors"]}
+        for j, (li, i, s_) in enumerate(dhdr["entries"]):
+            self.pl.kv_cache1[li]["k"][i, s_ * fsl:(s_ + 1) * fsl] = T[f"e{j}k"]
+            self.pl.kv_cache1[li]["v"][i, s_ * fsl:(s_ + 1) * fsl] = T[f"e{j}v"]
+        self._sync(); t2 = time.perf_counter()
+        ck = self.sink_checksums(); ck_s = ck.pop("s")
+        return ck, {"retained_h2d_s": t1 - t0, "rebuild_s": t2 - t1, "digest_s": ck_s}
 
     def perturb_sink_for_test(self) -> dict:
         """E6 fallback validation only: flip the lowest bit of one bf16 element of one Sink block of the live (shadow)
@@ -1178,8 +1254,30 @@ class FakeRuntime:
         time.sleep(self.args.dry_service_s * 0.25)
         return hdr["post_digest"] == f"dry{hdr['call']}", self.args.dry_service_s * 0.25, []
 
-    def sink_checksums(self):
+    def sink_checksums(self, snap=None):
         return {"blocks": [[[int(self.sink_bytes[:64].sum())]]], "pos": [[[0, 1, 2]]], "s": 0.0}
+
+    def retain_sink(self, snap):
+        return {"comp": "sink", "tensors": [], "nbytes": len(self.sink_bytes)}, bytearray(self.sink_bytes.tobytes()), 0.0
+
+    def sink_track_start(self, version):
+        self._track = {"version": version, "calls": 0}
+
+    def sink_track_step(self, c):
+        if getattr(self, "_track", None) is not None:
+            self._track["calls"] += 1
+
+    def sink_track_copy(self):
+        tr = getattr(self, "_track", None)
+        return None if tr is None else {"version": tr["version"], "refreshed": [], "shifts": [], "calls": tr["calls"], "track_s": 0.0}
+
+    def sink_track_stop(self):
+        self._track = None
+
+    def reuse_base(self, retained_hdr, retained_buf, dhdr, dpayload):
+        self.sink_bytes = np.frombuffer(bytes(retained_buf), dtype=np.uint8).copy()
+        ck = self.sink_checksums(); ck.pop("s")
+        return ck, {"retained_h2d_s": 0.0, "rebuild_s": 0.0, "digest_s": 0.0}
 
     def unfreeze_refresh(self):
         pass
@@ -1744,7 +1842,7 @@ class Node:
             if dmp.get("ref") and base is not None and not self.a.dry_run:
                 import vc_frames as vf
 
-                st_ = vf.FrameStore(dmp["root"], "REF")
+                st_ = vf.FrameStore(dmp["root"], "REF" if not dmp.get("after_resume") else f"REF_{self.label}")
                 n = 0
                 # the reference over the span this node generated, from 16 calls before its first output (pre-move window)
                 ref_lo = max(int(dmp["lo"]), int(dmp["first"]) - 16) if dmp.get("first") is not None else int(dmp["lo"])
@@ -1760,6 +1858,12 @@ class Node:
             r["xb"]["replay"].pop("verify_snap", None)
         if hasattr(self.rt, "rlog_disarm"):
             self.rt.rlog_disarm()
+        if hasattr(self.rt, "sink_track_stop"):
+            self.rt.sink_track_stop()
+        r["tracking"] = False
+        ret = r.pop("retained", None)
+        dump_out = dump_out or {}
+        dump_out["retained_bytes_at_end"] = None if ret is None else len(ret["buf"])
         if r.get("deliv_q") is not None:
             r["deliv_q"].put(None); r["deliv_thread"].join(timeout=120)
         r["full_pack"] = None
@@ -1883,8 +1987,12 @@ class Node:
                               # replay-aware Sink synchronization (osdi/m1_continuity/e5_plan.md): refresh patches in the log, Sink digest at the switch
                               "sink_sync": bool(h.get("replay_sink_sync")), "test_mismatch": bool(h.get("replay_sink_sync_test_mismatch")),
                               "test_perturb_dst": bool(h.get("replay_sink_sync_test_perturb_dst")),
-                              "patches": 0, "patch_bytes": 0, "verdict": None, "verdict_ev": threading.Event(), "verdict_detail": None}
+                              "patches": 0, "patch_bytes": 0, "verdict": None, "verdict_ev": threading.Event(), "verdict_detail": None,
+                              # M2 / E9: fixed switch call, retention at the switch, delta base toward a destination holding a version
+                              "switch_call": h.get("replay_switch_call"), "retain": bool(h.get("replay_retain")), "dest_version": h.get("replay_dest_version"),
+                              "delta_test_mismatch": bool(h.get("replay_delta_test_mismatch")), "delta_verdict": None, "delta_ev": threading.Event(), "delta_detail": None}
             task["send_lock"] = threading.Lock()
+            task["replay"]["full_sink_bytes"] = (r.get("manifest") or {}).get("nbytes")
         r["xb"] = task
         task["thread"] = threading.Thread(target=self._precopy, args=(task,), daemon=True); task["thread"].start()
         return {}
@@ -1909,10 +2017,8 @@ class Node:
             if rp is not None and rp["c0"] is None:
                 # round 1 = the replay base: the Sink and the ring metadata of this boundary; the log starts at call c
                 rp["c0"] = c; rp["c0_set"].set()
-                sent, headers, digests = self._xb_send_dirty(task, conn, snap, ("sink", "meta"), whole=("meta",))
-                with task["send_lock"]:
-                    send_msg(conn, "PROUND", {"task": task["id"], "round": 1, "call": c, "headers": headers, "digests": digests, "cond_digest": self.rt.cond_digest(),
-                                              "W": rp["W"]}, b"", None)
+                trk = r.pop("xb_snap_track", None)
+                sent = self._replay_send_base(task, conn, snap, c, trk)
             else:
                 sent, _, _ = self._xb_send_dirty(task, conn, snap, comps)
             del snap
@@ -1938,6 +2044,7 @@ class Node:
                 time.sleep(0.01)
             rp["ready_wait_s"] = time.time() - t_w0
             rp["frontier_at_ready"] = rp["frontier"]; rp["source_call_at_ready"] = r["call"] - 1
+            self.event("replay_ready", task=task["id"], call=r["call"] - 1, frontier=rp["frontier"], ready_wait_s=rp["ready_wait_s"], timeout=bool(rp.get("ready_timeout")))
         if task["cancel"]:
             if rp is not None:
                 self._rlog_stop(task)
@@ -1946,11 +2053,19 @@ class Node:
         task["switching"] = True
         t_req = time.time()
         if r["gen_thread"] is not None and r["gen_thread"].is_alive():
-            r["stop_owner"] = True; r["gen_thread"].join()
-        r["owner"] = False
+            if rp is not None and rp.get("switch_call") is not None:
+                r["stop_at"] = int(rp["switch_call"])   # stop exactly at the planned switch call (if not already past it)
+                r["gen_thread"].join()
+            else:
+                r["stop_owner"] = True; r["gen_thread"].join()
+        r["owner"] = False; r["stop_at"] = None
         t_stop = time.time()
         c = r["call"]
         extra = {}
+        if rp is not None and rp.get("switch_call") is not None:
+            extra["switch_call_planned"] = int(rp["switch_call"]); extra["switch_call_missed"] = c != int(rp["switch_call"])
+        if rp is not None and rp.get("base"):
+            extra["base"] = rp["base"]
         if rp is not None:
             # every call before the switch is logged and sent before the final components (ordered on this connection)
             t_f = time.time()
@@ -1964,9 +2079,11 @@ class Node:
         sync = rp is not None and rp["sink_sync"]
         final_comps = comps if task["variant"] == "full" else (("inflight", "meta") if sync else ("sink", "inflight", "meta"))
         sink_ck = None
+        version = None
         if sync:
             # the Sink is NOT resent: its digest at M goes with the switch; the destination compares its shadow Sink
             sink_ck = self.rt.sink_checksums(); extra["sink_ck_s"] = sink_ck.pop("s")
+            version = {"session": r["session_id"], "call": c, "digest": hashlib.sha256(json.dumps(sink_ck, sort_keys=True).encode()).hexdigest()}
             if rp["test_mismatch"]:
                 sink_ck["blocks"][0][0][0] = int(sink_ck["blocks"][0][0][0]) + 1   # protocol test of the fallback only
         sent, headers, digests = self._xb_send_dirty(task, conn, snap, final_comps, whole=whole)
@@ -1990,7 +2107,7 @@ class Node:
         with task.get("send_lock") or _NOLOCK:
             send_msg(conn, "PSWITCH", {"task": task["id"], "from": self.label, "call": c, "variant": task["variant"], "headers": headers, "digests": digests, "t_go": time.time(),
                                        **({"c0": rp["c0"], "last_log": rp["sent_upto"], "sink_sync": sync, "sink_ck": sink_ck, "patches_sent": rp["patches"],
-                                          "test_perturb_dst": rp["test_perturb_dst"]} if rp is not None else {})},
+                                          "test_perturb_dst": rp["test_perturb_dst"], "version": version, "track_after": bool(rp["retain"])} if rp is not None else {})},
                      b"", None)
         if sync:
             # wait for the destination's verdict on the Sink digest; on a mismatch resend the dirty Sink (the existing path)
@@ -2006,9 +2123,16 @@ class Node:
                 sent += fsent
             if rp["verify"]:
                 rp["verify_snap"] = snap
+            if rp["retain"] and rp["verdict"] == "SINKOK":
+                # M2: retain the Sink version verified at this cutover (host copy, off the critical path)
+                hdr_s, buf_s, ret_s = self.rt.retain_sink(snap)
+                r["retained"] = {"version": version, "hdr": hdr_s, "buf": buf_s}
+                extra.update({"retained": True, "retain_s": ret_s, "retained_bytes": len(buf_s), "version": version})
             del snap
         if rp is not None:
             self._rlog_stop(task)
+            if r.get("tracking"):
+                self.rt.sink_track_stop(); r["tracking"] = False   # the version this owner tracked is consumed
         conn.close()
         task["done"] = True
         self.event("xb_precopy_switch", task=task["id"], call=c, final_bytes=sent, reason=task.get("switch_reason"), wait_boundary_s=t_stop - t_req,
@@ -2086,6 +2210,8 @@ class Node:
                     rp["frontier"] = int(hdr["call"]); rp["acks"].append([time.time(), int(hdr["call"]), hdr.get("ok")])
                 elif hdr.get("kind") in ("SINKOK", "SINKNO"):
                     rp["verdict"], rp["verdict_detail"] = hdr["kind"], hdr.get("detail"); rp["verdict_ev"].set()
+                elif hdr.get("kind") in ("DELTAOK", "DELTANO"):
+                    rp["delta_verdict"], rp["delta_detail"] = hdr["kind"], hdr.get("detail"); rp["delta_ev"].set()
         except (ConnectionError, OSError, ValueError):
             pass
 
@@ -2149,6 +2275,43 @@ class Node:
             if rs["worker"] is None:
                 rs["worker"] = threading.Thread(target=self._replay_worker, args=(rs,), daemon=True); rs["worker"].start()
 
+    def _replay_base_delta(self, conn, hdr: dict):
+        """M2 / E9: rebuild the base from this node's retained Sink and the source's delta; accept it only when the rebuilt
+        Sink's digest equals the source's at the base boundary. Otherwise answer DELTANO: the source sends the full base
+        (handled by _replay_base when its PROUND arrives)."""
+        self._thread_init()
+        r = self.run
+        rs, st = self._replay_state(), r["xb_store"]
+        t0 = time.time()
+        ret, delta = r.get("retained"), r.get("replay_delta")
+        c = (st or {}).get("comps", {}).get("meta")
+        meta_ok = c is not None and component_digest(payload_slices(hdr["headers"]["meta"], c["buf"])) == hdr["digests"]["meta"]
+        version_ok = ret is not None and ret["version"] == hdr["version"]
+        detail = {"meta_ok": meta_ok, "version_ok": version_ok, "delta_present": delta is not None}
+        match, tm, bad = False, {}, []
+        if meta_ok and version_ok and delta is not None:
+            self.rt.unpack(dict(hdr["headers"]["meta"]), c["buf"])
+            ck, tm = self.rt.reuse_base(ret["hdr"], ret["buf"], delta[0], delta[1])
+            src = hdr["sink_ck"]
+            bad = [[i // 2, "kv"[i % 2], b, s_] for i, layer in enumerate(ck["blocks"]) for b, row in enumerate(layer) for s_, v in enumerate(row) if v != src["blocks"][i][b][s_]]
+            match = not bad and ck["pos"] == src["pos"]
+            detail.update({"n_block_mismatch": len(bad), "positions_equal": ck["pos"] == src["pos"], "entries": len(delta[0]["entries"]), "shifts": len(delta[0]["shifts"])})
+        cond_ok = self.rt.cond_digest() == hdr["cond_digest"] if match else None
+        ok = match and bool(cond_ok)
+        try:
+            with rs["send_lock"]:
+                send_msg(conn, "DELTAOK" if ok else "DELTANO", {"detail": detail}, b"", None)
+        except OSError:
+            pass
+        self.event("replay_delta_base", task=hdr["task"], call=int(hdr["call"]), accepted=ok, digest_equal=match, mismatched_blocks=bad[:40], cond_equal=cond_ok,
+                   total_s=time.time() - t0, **detail, **tm)
+        if ok:
+            rs["c0"], rs["conn"] = int(hdr["call"]), conn
+            rs["base"] = {"verified": True, "mode": "delta", "cond_equal": cond_ok, "t": time.time(), **tm}
+            rs["base_ready"].set()
+            if rs["worker"] is None:
+                rs["worker"] = threading.Thread(target=self._replay_worker, args=(rs,), daemon=True); rs["worker"].start()
+
     def _replay_enqueue(self, conn, hdr: dict, payload):
         rs = self._replay_state()
         c = int(hdr["call"])
@@ -2198,6 +2361,59 @@ class Node:
         out = self.rt.replay_verify(hdr, payload)
         self.event("replay_verify", recent_rel=out["recent_rel"], bitwise=out["bitwise"], per_layer=out["per_layer"])
 
+    def _replay_send_base(self, task: dict, conn, snap: dict, c: int, trk: dict | None) -> int:
+        """Round 1 of the replay pre-copy. M2 / E9: a delta base when the destination advertised the version this owner
+        tracks since (the refreshed entries' current exact K / V, the ordered shifts of the others, the metadata, the Sink
+        digest of this boundary); the full Sink + metadata base otherwise, or when the destination rejects the delta."""
+        rp, r = task["replay"], self.run
+        dv = rp.get("dest_version")
+        mode, reason, dbytes, dinfo = "full", "no destination version" if not dv else None, 0, {}
+        if dv and (trk is None or trk["version"] != dv):
+            reason = "the destination's version is not the tracked one"
+        if dv and reason is None:
+            fsl = self.rt.fsl if hasattr(self.rt, "fsl") else 0
+            tens, bufs, off = [], [], 0
+            for j, (li, i, s_) in enumerate(trk["refreshed"]):
+                for key in ("k", "v"):
+                    m, b = tensor_to_bytes(snap["kv"][li][key][i, s_ * fsl:(s_ + 1) * fsl])
+                    tens.append({"name": f"e{j}{key}", "offset": off, "nbytes": int(b.nbytes), **m}); bufs.append(b); off += int(b.nbytes)
+            full_n = int(rp.get("full_sink_bytes") or 0)
+            if full_n and off >= full_n:
+                reason = f"delta {off} B >= full Sink {full_n} B"
+            else:
+                ck0 = self.rt.sink_checksums(snap); ck0.pop("s")
+                if rp["delta_test_mismatch"]:
+                    ck0["blocks"][0][0][0] = int(ck0["blocks"][0][0][0]) + 1   # protocol test of the delta fallback only
+                sent_m, headers, digests = self._xb_send_dirty(task, conn, snap, ("meta",), whole=("meta",))
+                dh = {"task": task["id"], "version": dv, "entries": [list(e) for e in trk["refreshed"]], "shifts": trk["shifts"], "tensors": tens, "nbytes": off,
+                      "tracked_calls": trk["calls"], "track_s": trk["track_s"]}
+                t_d = time.time()
+                with task["send_lock"]:
+                    send_msg(conn, "RDELTA", dh, bufs, task["throttle"])
+                    send_msg(conn, "PROUND", {"task": task["id"], "round": 1, "call": c, "headers": headers, "digests": digests, "cond_digest": self.rt.cond_digest(),
+                                              "W": rp["W"], "mode": "delta", "version": dv, "sink_ck": ck0}, b"", None)
+                got = rp["delta_ev"].wait(300)
+                dinfo = {"delta_entries": len(trk["refreshed"]), "delta_shifts": len(trk["shifts"]), "delta_value_bytes": off, "delta_verdict": rp["delta_verdict"] if got else "timeout",
+                         "delta_verdict_wait_s": time.time() - t_d, "delta_detail": rp["delta_detail"], "tracked_calls": trk["calls"], "track_s": trk["track_s"]}
+                dbytes = sent_m + off
+                if got and rp["delta_verdict"] == "DELTAOK":
+                    mode = "delta"
+                else:
+                    reason = "the destination rejected the delta base"
+        if mode == "full":
+            sent, headers, digests = self._xb_send_dirty(task, conn, snap, ("sink", "meta"), whole=("meta",))
+            with task["send_lock"]:
+                send_msg(conn, "PROUND", {"task": task["id"], "round": 1, "call": c, "headers": headers, "digests": digests, "cond_digest": self.rt.cond_digest(),
+                                          "W": rp["W"]}, b"", None)
+            dbytes += sent
+        rp["base"] = {"mode": mode, "fallback_reason": reason if dv else None, "bytes": dbytes, **dinfo}
+        self.event("replay_base_sent", task=task["id"], call=c, **rp["base"])
+        return dbytes
+
+    def cmd_retained_version(self, h):
+        ret = (self.run or {}).get("retained")
+        return {"version": None if ret is None else ret["version"], "bytes": None if ret is None else len(ret["buf"])}
+
     def cmd_precopy_cancel(self, h):
         task = (self.run or {}).get("xb")
         if task is None or task["id"] != h["task"]:
@@ -2217,7 +2433,7 @@ class Node:
             old = r["replay_dst"]
             with old["cv"]:
                 old["stop"] = True; old["cv"].notify_all()
-        r["replay_dst"] = None
+        r["replay_dst"] = None; r["replay_delta"] = None
         if h.get("provision", True):
             self.rt.provision()
         if h.get("inputs"):
@@ -2334,6 +2550,12 @@ class Node:
                 self.event("replay_switch_refused", reason="shadow metadata differs from the source's", call=int(hdr["call"]), meta_diff=chk["meta_diff"])
                 return
             shifted = None
+            if hdr.get("track_after") and hdr.get("version") is not None:
+                # M2: this owner's Sink is the version the source retained (digest-equal): track the changes since it
+                mine = {"session": hdr["version"]["session"], "call": int(hdr["call"]), "digest": hashlib.sha256(json.dumps(ck, sort_keys=True).encode()).hexdigest()}
+                if mine == hdr["version"]:
+                    self.rt.sink_track_start(mine); r["tracking"] = True
+                sync_info["tracking_version"] = mine == hdr["version"]
         else:
             chk = self.rt.replay_switch()
             if not chk["meta_consistent"]:
@@ -2393,6 +2615,9 @@ class Node:
 
     def _xb_become_owner(self, call: int, src: str, t_go: float, mode: str, **extra):
         r = self.run
+        r["stop_at"] = None
+        if r.get("dump") is not None:
+            r["dump"]["active"] = True
         r["call"] = call; r["owner"] = True; r["stop_owner"] = False; r["first_out_t"] = None
         r["bound_call"] = call; r["bind_at"] = call; r["rejoin_call"] = None; r["pending_cold"] = None; r["n_owned"] += 1
         r["last_fp"] = None; r["wait_sink"] = False; r["await_manifest"] = False
@@ -2715,7 +2940,12 @@ class Node:
                 elif kind == "PROUND":
                     if pl:
                         recv_exact(conn, pl)
-                    self._replay_base(conn, hdr)
+                    if hdr.get("mode") == "delta":
+                        self._replay_base_delta(conn, hdr)
+                    else:
+                        self._replay_base(conn, hdr)
+                elif kind == "RDELTA":
+                    r["replay_delta"] = (hdr, bytes(recv_exact(conn, pl)) if pl else b"")
                 elif kind == "RLOG":
                     self._replay_enqueue(conn, hdr, recv_exact(conn, pl) if pl else b"")
                 elif kind == "RDR2":
@@ -2912,10 +3142,14 @@ class Node:
         r = self.run
         while not r["stop_owner"]:
             c = r["call"]
+            if r.get("stop_at") is not None and c >= r["stop_at"]:
+                break   # M2 / E9: a switchover at a fixed call (the source stops exactly at this boundary)
             req = r["xb_snap_req"]
             if req is not None:
                 # XB pre-copy round: a consistent snapshot at this chunk boundary (state after call c - 1)
-                r["xb_snap"] = (c, self.rt.serialize_live()); r["xb_snap_req"] = None; req.set()
+                r["xb_snap"] = (c, self.rt.serialize_live())
+                r["xb_snap_track"] = self.rt.sink_track_copy() if r.get("tracking") else None   # M2: the tracker at the same boundary
+                r["xb_snap_req"] = None; req.set()
             if r["bound_call"] is None and r["sink_verified"] and r["pending_cold"] is None and not r["await_manifest"]:
                 self._unpack_sink()
                 shifted = self.rt.bind()
@@ -2930,10 +3164,13 @@ class Node:
             else:
                 produced, ps, ss, dt, pos = self.rt.step(c)
             t_out = time.time()
+            if r.get("tracking"):
+                self.rt.sink_track_step(c)
             if produced and r["first_out_t"] is None:
                 r["first_out_t"] = t_out; self.event("first_output", t_out, call=c)
             dmp = r.get("dump")
-            if dmp is not None and produced and dmp["lo"] <= c <= dmp["hi"] and getattr(self.rt, "last_frames", None) is not None:
+            if dmp is not None and produced and dmp["lo"] <= c <= dmp["hi"] and getattr(self.rt, "last_frames", None) is not None and \
+                    (dmp.get("active", True) or not dmp.get("after_resume")):
                 dmp["q"].put((c, self.rt.last_frames))
             if r["bound_call"] is not None and r["rejoin_call"] is None and ps is not None and ps >= REJOIN_DB:
                 r["rejoin_call"] = c; self.event("rejoin", t_out, call=c, calls_after_bind=c - r["bound_call"], psnr=ps)
