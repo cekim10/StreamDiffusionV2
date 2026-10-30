@@ -211,3 +211,13 @@ without a retain (no wait). No other change. The Corrected runs use experiment n
 (`run_m3_s3.sh` default; `m3s3_report.py --set c`, the default); the Original runs stay under `expM3S3{A,B}_*`
 (`--set ""`). P0 is not rerun: `m3s3_p0.py` does not use the handover build. Phases A/C and B are rerun in full on the
 corrected harness; D only after they pass.
+
+## Note 2 (2026-10-30, after the first Phase D runs; rules, thresholds and predictions unchanged)
+
+**Procedure defect: the first Phase D set ran with the hosts on different commits.** Before D only elves-01 was
+updated (to 79d107b0, which added the A/C/B report); elves-02..04 stayed on 73dfc084. `tools/` is identical between the
+two commits (0 diff lines; 79d107b0 changed only result files), but the frozen XB validity requires one commit on all
+nodes, so all 18 runs are **invalid** and Phase D has **no verdict** from them. The runs are kept, renamed to
+`expM3S3cDmix_*`; numbers computed without validity (descriptive only) are in `m3s3_D_commitmix_descriptive.json`.
+Rerun: all four hosts synced (`d0_remote.py pull`), preflight must report one commit, then `run_m3_s3.sh perf` into
+`expM3S3cD_*`, judged by the rules as written.

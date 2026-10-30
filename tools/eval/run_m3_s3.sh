@@ -38,6 +38,8 @@ case "${1:-}" in
       $PY tools/eval/mobility_orchestrate.py --experiment "${EXPSET}B_$f" $COMMON --reps 1 $S3 --m3_test_fault $f --m3_fail_after 40 --node_extra="$(node_args dog)" || echo "[M3S3] B $f: exit $?"
     done ;;
   perf)
+    # prereg Note 2: refuse to start unless all four hosts are on one commit with GPU 0 idle
+    $PY tools/eval/d0_remote.py gpu_idle || { echo "[M3S3] perf: hosts not on one commit or GPU 0 busy; run d0_remote.py pull first"; exit 1; }
     for wl in dog bfly; do
       for cond in base ctl s2; do
         case $cond in base) X="" ;; ctl) X="$CTL" ;; s2) X="$S3" ;; esac

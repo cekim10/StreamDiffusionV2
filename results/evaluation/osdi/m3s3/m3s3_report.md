@@ -12,7 +12,7 @@ Results: `m3s3_results_corrected.json` (Corrected set `expM3S3c*`, this report),
 | A exactness after the owner change | **fail** (handover built 0 entries; Note 1) | **pass**, both workloads |
 | C live switchovers | pass | **pass**, both workloads |
 | B faults | version_mismatch vacuous pass; other two fail | **pass**, all three |
-| D performance | not run | **pending** (18 runs) |
+| D performance | not run | first set **invalid** (hosts on different commits, Note 2); rerun pending |
 
 Frozen mapping now: "P0, A, B, C pass" → D decides between SUPPORTED (R-D1 holds) and "correct but not faster by
 the margin". Nothing below is a performance claim; A/C/B are single runs.
@@ -86,8 +86,23 @@ first); on butterfly both holders contribute. These are single runs; Phase D is 
 - faults: version_mismatch and old_owner_fail as predicted; corrupt_retained: the entry was re-provided by
   sending, as predicted, but with the 10 s wait (not predicted).
 
-## 6. Next
+## 6. Phase D, first set: INVALID (prereg Note 2)
 
-Phase D (`run_m3_s3.sh perf`, 18 runs, ≈ 5.7 h): dog, butterfly × {base, ctl, s2} × 3 reps, judged by R-D1
+All 18 runs (`expM3S3cDmix_*`) fail the frozen XB validity with one reason only: nodes on different commits
+(A 79d107b0, B/C/D 73dfc084; `tools/` identical between them). No verdict is drawn from them. Descriptive numbers
+(validity skipped, `m3s3_D_commitmix_descriptive.json`), medians of 3 reps, **not evidence for R-D1/R-D2**:
+
+| | dog | butterfly |
+|---|---|---|
+| remote serving base / ctl / s2 (s) | 67.5 / 66.3 / 52.3 | 71.1 / 70.5 / 54.1 |
+| s2 / base remote; total bytes | 0.774; 1.098 | 0.762; 1.056 |
+| ctl / base remote; s2 / ctl remote | 0.98; 0.79 | 0.99; 0.77 |
+| first move to final switch, s2 / base | 0.61 | 0.59 |
+| final readiness base / s2 (s) | 21.6 / 8.3 | 22.7 / 9.7 |
+| s2 final Sink: from A / from C | 150 / 1 | 107 / 11 |
+
+## 7. Next
+
+Phase D rerun on one commit (`run_m3_s3.sh perf`, 18 runs, ≈ 2.5 h: the first set took 01:04–03:16): dog, butterfly × {base, ctl, s2} × 3 reps, judged by R-D1
 (s2 remote ≤ 0.80 × base and total ≤ 1.30 × base) and R-D2 (s2 remote ≤ 0.85 × ctl). The preregistration predicts
 R-D1 is at risk (≈ 0.76–0.82) because ≈ 30 s before the first switch is common to all conditions.
