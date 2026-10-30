@@ -12,9 +12,11 @@ Preregistration: `preregistration.md` (frozen 5bcb05b0; Note 1 at 7d438875, befo
 | A end-to-end exactness | m3 base accepted, 0 mismatches, positions, cond, B's state reused | pass | pass | **pass** |
 | C live migration | one verified switch to D, SINKOK, replay checks, no refused switch | pass | pass | **pass** |
 | B faults (dog) | advertise_wrong / corrupt_held / holder_fail handled and safe | 3 / 3 | — | **pass** |
-| D performance | R-D1, R-D2 | not run | not run | pending |
+| D performance (3 reps, medians) | R-D1: s2 remote ≤ 0.80, total ≤ 1.30 x base | 0.722 / 1.017 | 0.743 / 0.954 | **holds** |
+| | R-D2: s2 remote ≤ 0.85 x ctl | 0.736 | 0.773 | **holds** |
 
-Report verdict: **CORRECT (A0, A, B, C pass); performance phase incomplete.** Phase D is allowed by the rules.
+Report verdict: **SUPPORTED** — exact, fault-safe and live; remote serving ≤ 0.80 and total bytes ≤ 1.30 of the frozen
+M1 / M2 baseline on both workloads (18 / 18 Phase D runs valid).
 
 ## 1. Phase A0: offline mixed-version exactness (GPU 0 of elves-01, commit 7d438875)
 
@@ -88,10 +90,65 @@ loses most of the reuse (+9 s).
 - [V] On the live source, per-entry D2H averages ≈ 82 ms (dog final base: 3.46 s for 42 entries); offline (A0) the
   first entry took 1.4 ms. Per-entry send time is ≈ 91 ms, about 84 % of the 1 Gbps line rate.
 - [H] The live D2H waits behind generation kernels on the same GPU and may pace the entry path near the link rate.
-  Phase D's ctl vs base comparison measures this effect; nothing is changed before D.
+  Phase D's ctl vs base comparison measures this effect; nothing is changed before D. **Resolved by D:** ctl is not
+  slower than base (remote 0.98 / 0.96 x base, readiness equal within 0.4 s), so the entry path costs nothing at 1 Gbps.
 - [V] At the move to D the S2 planner also stages C's entries to B (9 entries, 86 MB in dog). This is pre-ownership
   staging for a possible next move and counts in total bytes.
 
-## 5. Next
+## 5. Phase D: performance (2 workloads x {base, ctl, s2} x 3 reps, all 18 valid)
 
-Phase D as preregistered: 2 workloads x {base, ctl, s2} x 3 reps, `run_m3_s2.sh perf` (18 runs, ≈ 18 min each).
+Conditions: **base** = frozen M1 / M2 path (4 MiB fragments, full base); **ctl** = M3 entry path with no staging (full
+base as 180 entries); **s2** = M3 entry path with S2 staging. Medians of 3 reps.
+
+| | dog base | dog ctl | dog s2 | bfly base | bfly ctl | bfly s2 |
+|---|---|---|---|---|---|---|
+| remote serving (s) | 50.8 | 49.9 | **36.7** | 55.5 | 53.3 | **41.2** |
+| final base (MB) | 1,728 | 1,728 | 405 | 1,728 | 1,728 | 855 |
+| entries reused at D | 0 | 0 | 138 | 0 | 0 | 91 |
+| forwarded holder -> holder (MB) | 0 | 0 | 1,419 | 0 | 0 | 1,073 |
+| discarded cancelled bases + logs (MB) | 2,812 | 2,830 | 2,791 | 2,966 | 2,868 | 2,849 |
+| total bytes (MB) | 4,572 | 4,591 | 4,649 | 5,216 | 5,081 | 4,977 |
+| readiness at D (s) | 21.9 | 22.1 | **8.3** | 25.6 | 25.2 | **12.9** |
+| interruption (s, diagnostic) | 1.55 | 1.42 | 1.43 | 1.61 | 1.48 | 1.59 |
+
+| ratio (medians) | dog | bfly | rule |
+|---|---|---|---|
+| s2 / base remote | **0.722** | **0.743** | ≤ 0.80 (R-D1) |
+| s2 / base total bytes | **1.017** | **0.954** | ≤ 1.30 (R-D1) |
+| s2 / ctl remote | **0.736** | **0.773** | ≤ 0.85 (R-D2) |
+| ctl / base remote (entry path's own effect) | 0.982 | 0.961 | reported |
+| framing headers / entry bytes | 0.0036 % | 0.0029 % | reported |
+
+Decomposition: the whole gain is the final base. S2 moves B's abandoned entries to D before the move (1.07–1.42 GB
+off the critical path), so the source sends 405 / 855 MB instead of 1,728 MB and readiness drops by 13.6 / 12.7 s.
+Total bytes stay about equal because the forwarded bytes replace the final-base bytes they save. The entry path alone
+(ctl) is not slower than the frozen path, so R-D2 attributes the gain to forwarding, not to framing.
+
+Spread across reps (informative, not a rule):
+- dog is tight (s2 remote 36.2–36.8 s, base 50.5–50.9 s); every s2 rep / every base rep ≤ 0.729.
+- butterfly has one fast base rep (51.4 s vs 55.5 / 55.9 s; c0 75 vs 76 / 77). The worst pairing, slowest s2 rep vs
+  that base rep, is 0.803, just above 0.80. The rule is on medians and holds; this pairing shows the butterfly margin
+  is small.
+- reuse per rep: dog 137–139, butterfly 91–93.
+
+Against the predictions (written before the runs):
+- s2 / base remote predicted 0.73–0.78: dog 0.722 just below the range, butterfly 0.743 inside.
+- total predicted 1.0–1.05 x base: dog 1.017 inside, butterfly 0.954 below. Butterfly's base condition discards more
+  log bytes in this sample.
+- ctl predicted up to ≈ 2 s faster than base: dog 0.9 s, butterfly 2.2 s faster (median).
+- framing < 0.1 %: 0.003–0.004 %.
+- GPU vs the network-level M3-S1 Corrected result (S2 / S0 remote 0.734 / 0.781): 0.722 / 0.743. The GPU path
+  reproduces the network result and is slightly better on butterfly.
+
+## 6. Conclusion
+
+[V] On GPUs, OTTER assembles an exact Sink at the destination from partial, differently versioned entries held on
+another GPU plus the source's latest delta: 360 / 360 blocks bitwise equal, SINKOK at the switch, under live
+generation. Wrong advertisements, corrupted held entries and holder failure are caught and fall back safely. With S2
+staging, remote serving is 0.72 / 0.74 x the frozen M1 / M2 path at about equal total bytes.
+
+Limitations (as declared, plus one observed):
+- The source A owns the session until the final switch; lineage after an ownership change is not exercised.
+- One seed per workload, two workloads, rho 1, 1 Gbps caps, static forward rates, 3 reps in D, 1 run per A/B/C cell.
+- Faults were tested on dog only. Frame-level continuity against a fresh-base run was not measured.
+- Butterfly's R-D1 margin is small at the rep level (worst pairing 0.803).
