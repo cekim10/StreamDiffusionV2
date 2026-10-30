@@ -2679,6 +2679,8 @@ class Node(M3NodeMixin):
         r["last_fp"] = None; r["wait_sink"] = False; r["await_manifest"] = False
         self.event("sink_bind", call=call, slots_rerotated=extra.get("slots_rerotated"), at_resume=True, xb=mode)
         self.event("resume", call=call, src=src, t_go_src=t_go, mode=mode, ownership=r["n_owned"], gpu_mem_alloc_mb=self.rt.gpu_mem_mb(), **extra)
+        if r.get("m3s") is not None:
+            self._m3_become_owner(call)   # M3-S3: the new owner's lineage starts at the switch call (only after M3_OWNER_ARM)
         r["gen_thread"] = threading.Thread(target=self._generate, daemon=True); r["gen_thread"].start()
 
     def _codec_pool(self):

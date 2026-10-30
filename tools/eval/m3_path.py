@@ -103,6 +103,43 @@ class LineageHistory:
             return {"start": self.start, "last": self.last, "calls": self.calls, "track_s": self.track_s, "refresh_events": self.n_refresh,
                     "shift_events": self.n_shift, "issued": len(self.issued)}
 
+    # ---- M3-S3 (osdi/m3s3/preregistration.md): lineage across an ownership change
+    def export(self) -> dict:
+        """The whole history and issued table (JSON-safe), for the next owner."""
+        with self.lock:
+            return {"start": self.start, "last": self.last, "refresh": {str(c): sorted(v) for c, v in self.refresh.items()},
+                    "shifts": {str(c): [list(x) for x in v] for c, v in self.shifts.items()}, "issued": [[e, v, h] for (e, v), h in sorted(self.issued.items())]}
+
+    def merge_prefix(self, exp: dict) -> dict:
+        """New owner: prepend the previous owner's history. Accepted only if it ends exactly at the call before this
+        history's first call (contiguous: no call of the lineage is missing); otherwise nothing is merged and versions
+        older than this owner's first call stay invalid."""
+        with self.lock:
+            contiguous = exp is not None and int(exp["last"]) == self.start - 1 and int(exp["start"]) <= self.start
+            if not contiguous:
+                return {"contiguous": False, "merged_calls": 0, "merged_issued": 0}
+            n = 0
+            for c, v in exp["refresh"].items():
+                if int(c) < self.start:
+                    self.refresh[int(c)] = set(int(e) for e in v); n += 1
+            for c, v in exp["shifts"].items():
+                if int(c) < self.start:
+                    self.shifts[int(c)] = [(int(e), int(d)) for e, d in v]
+            missing = [c for c in range(int(exp["start"]), self.start) if c not in self.refresh]
+            if missing:   # an exported call without a record: refuse (a gap would read as 'no refresh')
+                for c in range(int(exp["start"]), self.start):
+                    self.refresh.pop(c, None); self.shifts.pop(c, None)
+                return {"contiguous": False, "merged_calls": 0, "merged_issued": 0, "missing_calls": missing[:10]}
+            first = self.start
+            self.start = int(exp["start"])
+            k = 0
+            for e, v, h in exp["issued"]:
+                # only versions older than this owner's first call: those the merged history covers. The switch version
+                # itself is issued separately, and only after the version check (cmd_m3_lineage_import).
+                if int(v) < first and (int(e), int(v)) not in self.issued:
+                    self.issued[(int(e), int(v))] = h; k += 1
+            return {"contiguous": True, "merged_calls": n, "merged_issued": k}
+
 
 # ------------------------------------------------------------------------------------------------------ entry store
 class EntryStore:
@@ -256,6 +293,27 @@ def gpu_assemble(rt, entries: dict, shifts: dict) -> tuple[dict, dict]:
     rt._sync(); t2 = time.perf_counter()
     ck = rt.sink_checksums(); ck_s = ck.pop("s")
     return ck, {"h2d_s": t1 - t0, "shadow_base_s": base_s, "shift_s": t2 - t1 - (base_s or 0.0), "n_shift_ops": n_sh, "digest_s": ck_s}
+
+
+def retained_entries(hdr: dict, buf, rows: int, S: int, fsl: int):
+    """M3-S3: the Sink entries of an M2 retained host copy (proto_handoff.pack_component 'sink': per layer kv/{l}/k and
+    kv/{l}/v of shape [rows, S * fsl, ...], C-contiguous). Yields (e, mk, mv, k_bytes, v_bytes) with the same metadata and
+    bytes gpu_entry_payload produces for k[i, s * fsl:(s + 1) * fsl] (checked offline by m3s3_p0.py)."""
+    mvb = memoryview(buf)
+    by = {t_["name"]: t_ for t_ in hdr["tensors"]}
+    L = sum(1 for n in by if n.startswith("kv/") and n.endswith("/k"))
+    for li in range(L):
+        tk, tv = by[f"kv/{li}/k"], by[f"kv/{li}/v"]
+        T = int(tk["shape"][1])
+        assert int(tk["shape"][0]) == rows and T == S * fsl, (tk["shape"], rows, S, fsl)
+        tok_k, tok_v = tk["nbytes"] // (rows * T), tv["nbytes"] // (rows * T)
+        mk = {"shape": [fsl] + list(tk["shape"][2:]), "dtype": tk["dtype"]}
+        mv = {"shape": [fsl] + list(tv["shape"][2:]), "dtype": tv["dtype"]}
+        for i in range(rows):
+            for s in range(S):
+                ok_ = tk["offset"] + (i * T + s * fsl) * tok_k
+                ov_ = tv["offset"] + (i * T + s * fsl) * tok_v
+                yield eid_of(li, i, s, rows, S), mk, mv, mvb[ok_:ok_ + fsl * tok_k], mvb[ov_:ov_ + fsl * tok_v]
 
 
 def block_mismatches(ck: dict, src: dict) -> list:
@@ -480,6 +538,7 @@ class M3NodeMixin:
         except Exception as exc:  # noqa: BLE001
             self.event("m3_forward_failed", flow=fl["id"], to=fl["to"], error=repr(exc)); fl["done"].set(); return
         thr = Throttle(fl["rate"]) if fl["rate"] > 0 else None
+        fl["thr"] = thr
         injected = None
         try:
             for e, v in fl["entries"]:
@@ -568,7 +627,10 @@ class M3NodeMixin:
         complete = plan_ok and not problems and len(entries) == n
         detail = {"meta_ok": meta_ok, "plan_ok": plan_ok, "complete": complete, "n_problems": len(problems), "problems": problems[:20],
                   "reused": len(plan["reuse"]) if plan_ok else None, "sent": len(plan["send"]) if plan_ok else None, "shift_ops": sum(len(x) for x in shifts.values()),
-                  "versions": dict(sorted(defaultdict(int, {rec["v"]: sum(1 for x in entries.values() if x["v"] == rec["v"]) for rec in entries.values()}).items()))}
+                  "versions": dict(sorted(defaultdict(int, {rec["v"]: sum(1 for x in entries.values() if x["v"] == rec["v"]) for rec in entries.values()}).items())),
+                  # M3-S3 record: per (issuer, sender, version) how many entries of the assembled Sink came that way
+                  "provenance": dict(sorted(defaultdict(int, {k_: sum(1 for x in entries.values() if f"{x.get('origin')}|{x.get('src')}|{x['v']}" == k_)
+                                                              for k_ in {f"{x.get('origin')}|{x.get('src')}|{x['v']}" for x in entries.values()}}).items()))}
         match, tm, bad, pos_ok = False, {}, [], None
         if meta_ok and complete:
             self.rt.unpack(dict(hdr["headers"]["meta"]), c["buf"])
@@ -605,3 +667,114 @@ class M3NodeMixin:
             rs["base_ready"].set()
             if rs["worker"] is None:
                 rs["worker"] = threading.Thread(target=self._replay_worker, args=(rs,), daemon=True); rs["worker"].start()
+
+    # ---------------------------------------------------------------- M3-S3: lineage across an ownership change
+    # (osdi/m3s3/preregistration.md). Entered only when the orchestrator runs with --m3 --m3_owner.
+    def cmd_m3_owner_arm(self, h):
+        """Every node: if it becomes the owner through a switchover, start its own lineage history at the switch call."""
+        st = self._m3(); st["owner_arm"] = True
+        return {"armed": True}
+
+    def _m3_become_owner(self, call: int):
+        """Hook in Node._xb_become_owner (before the generation thread starts): the new owner's history begins at the switch
+        call. The M2 tracking version this node verified at the switch (Sink digest equal to the source's) is kept: it
+        decides whether the previous owner's retained entries may be issued under this owner's lineage."""
+        st = self.run.get("m3s")
+        if st is None or not st.get("owner_arm"):
+            return
+        tr = getattr(self.rt, "_track", None)
+        st["owner_prev_hist"] = st["hist"]
+        st["hist"] = None; st["track_req"] = True; st["track_ready"].clear()
+        st["owner_since"] = int(call); st["owner_version"] = (tr or {}).get("version")
+        self.event("m3_owner_begin", call=int(call), tracking_version=st["owner_version"])
+
+    def cmd_m3_handover_begin(self, h):
+        """Old owner, right after its switchover: in the background, turn the M2 retained host copy (the Sink verified at
+        the switch) into verified-held entries at version = switch call, hashed here (it serialized them). No GPU work."""
+        st = self._m3()
+        if st.get("handover") is not None:
+            return {"started": False}
+        ho = st["handover"] = {"done": threading.Event(), "t0": time.time(), "test_fault": h.get("test_fault")}
+        threading.Thread(target=self._m3_handover_build, args=(ho,), daemon=True).start()
+        return {"started": True}
+
+    def _m3_handover_build(self, ho: dict):
+        st = self._m3(); r = self.run
+        ret = r.get("retained")
+        out = {"retained_version": None if ret is None else ret["version"], "n_entries": 0, "bytes": 0}
+        try:
+            if ret is not None:
+                v = int(ret["version"]["call"])
+                if self._m3_dry:
+                    it = ((e, {"dtype": "u8", "shape": [FakeSinkModel.EB]}, {"dtype": "u8", "shape": [FakeSinkModel.EB]}) + FakeSinkModel.entry(e, v)
+                          for e in range(FakeSinkModel.N))
+                else:
+                    L, rows, S = gpu_geometry(self.rt)
+                    it = retained_entries(ret["hdr"], ret["buf"], rows, S, self.rt.fsl)
+                hist = st["hist"]
+                for e, mk, mv, bk, bv in it:
+                    payload = bytes(bk) + bytes(bv)
+                    hsh = hashlib.sha256(payload).hexdigest()
+                    if ho["test_fault"] == "corrupt_retained" and out["n_entries"] == 0:
+                        # Phase B (test only): the held bytes of the first entry differ from the hash advertised for it
+                        pb = bytearray(payload); pb[0] ^= 1; payload = bytes(pb); out["corrupted_entry"] = e
+                    st["store"].put(e, {"v": v, "h": hsh, "mk": mk, "mv": mv, "nk": len(bk), "payload": payload, "origin": self.label, "src": self.label,
+                                        "flow": None, "role": "retained", "t": time.time()})
+                    if hist is not None:
+                        hist.issue(e, v, hsh)
+                    out.setdefault("retained_hashes", []).append([e, v, hsh])
+                    out["n_entries"] += 1; out["bytes"] += len(payload)
+            out["history"] = st["hist"].export() if st["hist"] is not None else None
+        except Exception as exc:  # noqa: BLE001
+            out["error"] = repr(exc)
+        out["build_s"] = time.time() - ho["t0"]
+        ho["out"] = out; ho["done"].set()
+        self.event("m3_handover_built", **{k: v for k, v in out.items() if k not in ("history", "retained_hashes")},
+                   history_calls=None if not out.get("history") else len(out["history"]["refresh"]))
+
+    def cmd_m3_handover(self, h):
+        """Old owner: wait for the build, return the history, the issued table and the retained version."""
+        ho = self._m3().get("handover")
+        if ho is None:
+            return {"missing": True}
+        ho["done"].wait(float(h.get("wait_s", 300)))
+        return ho.get("out") or {"timeout": True}
+
+    def cmd_m3_lineage_import(self, h):
+        """New owner: prepend the previous owner's history (only if contiguous with this owner's first call) and issue the
+        previous owner's hashes of its retained entries only if their version is the one this node verified at the switch
+        (M2 tracking version: same session, call and Sink digest). Anything refused stays not issued, so the entries are
+        re-sent rather than reused."""
+        st = self._m3()
+        if not st["track_ready"].wait(float(h.get("wait_s", 60))) or st["hist"] is None:
+            self.event("m3_lineage_import", accepted=False, reason="no history at this owner"); return {"accepted": False}
+        hist = st["hist"]
+        exp = h.get("export") or {}
+        hx = exp.get("history")
+        mr = hist.merge_prefix(hx) if hx else {"contiguous": False, "merged_calls": 0, "merged_issued": 0}
+        rv, mine = exp.get("retained_version"), st.get("owner_version")
+        version_equal = rv is not None and mine is not None and rv == mine and int(rv["call"]) == hist_start_of(st)
+        issued_retained = 0
+        if version_equal:
+            v = int(rv["call"])
+            for e, vv, hh in exp.get("retained_hashes") or []:
+                if int(vv) == v:
+                    hist.issue(int(e), v, hh); issued_retained += 1
+        res = {"accepted": True, **mr, "version_equal": version_equal, "issued_retained": issued_retained, "owner_since": st.get("owner_since"),
+               "history_start": hist.start, "history_last": hist.last}
+        self.event("m3_lineage_import", **res)
+        return res
+
+    def cmd_m3_forward_rate(self, h):
+        """Re-rate active forward flows (cap-conserving shares computed by the orchestrator at each re-plan)."""
+        st = self._m3(); n = 0
+        for fid, bps in (h.get("rates") or {}).items():
+            fl = st["fwd"].get(fid)
+            if fl is not None and fl.get("thr") is not None and not fl["done"].is_set():
+                fl["thr"].rate = float(bps) / 8.0; fl["rate"] = float(bps); n += 1
+        return {"updated": n}
+
+
+def hist_start_of(st: dict) -> int | None:
+    """The call this owner's own history began at (the switch call)."""
+    return st.get("owner_since")
