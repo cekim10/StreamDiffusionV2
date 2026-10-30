@@ -12,10 +12,11 @@ Results: `m3s3_results_corrected.json` (Corrected set `expM3S3c*`, this report),
 | A exactness after the owner change | **fail** (handover built 0 entries; Note 1) | **pass**, both workloads |
 | C live switchovers | pass | **pass**, both workloads |
 | B faults | version_mismatch vacuous pass; other two fail | **pass**, all three |
-| D performance | not run | first set **invalid** (hosts on different commits, Note 2); rerun pending |
+| D performance | not run | first set **invalid** (hosts on different commits, Note 2); rerun on one commit: **R-D1, R-D2 hold** |
 
-Frozen mapping now: "P0, A, B, C pass" → D decides between SUPPORTED (R-D1 holds) and "correct but not faster by
-the margin". Nothing below is a performance claim; A/C/B are single runs.
+**Verdict (frozen mapping): SUPPORTED** — exact, fault-safe and live across an ownership change; remote serving
+≤ 0.80 × and total bytes ≤ 1.30 × the frozen M1 / M2 baseline on both workloads (Phase D rerun, section 7).
+Sections 1–5 are single runs (correctness); only section 7 is a performance measurement.
 
 ## 1. Scenario (both workloads, all Corrected runs) [V]
 
@@ -101,8 +102,49 @@ All 18 runs (`expM3S3cDmix_*`) fail the frozen XB validity with one reason only:
 | final readiness base / s2 (s) | 21.6 / 8.3 | 22.7 / 9.7 |
 | s2 final Sink: from A / from C | 150 / 1 | 107 / 11 |
 
-## 7. Next
+## 7. Phase D rerun (one commit 20a955f on all four hosts; `expM3S3cD_*`): R-D1, R-D2 hold [V]
 
-Phase D rerun on one commit (`run_m3_s3.sh perf`, 18 runs, ≈ 2.5 h: the first set took 01:04–03:16): dog, butterfly × {base, ctl, s2} × 3 reps, judged by R-D1
-(s2 remote ≤ 0.80 × base and total ≤ 1.30 × base) and R-D2 (s2 remote ≤ 0.85 × ctl). The preregistration predicts
-R-D1 is at risk (≈ 0.76–0.82) because ≈ 30 s before the first switch is common to all conditions.
+18 / 18 runs valid by the frozen XB validity; scenario valid in all. Medians of 3 reps:
+
+| | dog | butterfly |
+|---|---|---|
+| remote serving base / ctl / s2 (s) | 67.5 / 65.9 / 52.0 | 72.4 / 70.5 / 54.0 |
+| **s2 / base remote** (R-D1 ≤ 0.80) | **0.771** | **0.747** |
+| **s2 / base total bytes** (R-D1 ≤ 1.30) | **1.098** | **1.051** |
+| **s2 / ctl remote** (R-D2 ≤ 0.85) | **0.789** | **0.767** |
+| ctl / base remote (entry path + owner lineage, no staging) | 0.977 | 0.974 |
+| first move → final switch, s2 / base | 0.607 (21.9 vs 36.2 s) | 0.563 (23.3 vs 41.4 s) |
+| before the first switch, all conditions (s) | 31.7–32.8 | 32.4–33.0 |
+| final readiness base / ctl / s2 (s) | 21.3 / 21.9 / 8.2 | 24.7 / 26.0 / 9.7 |
+| final base base / s2 (MB) | 1,728 / 300 | 1,728 / 597 |
+| forwarded (s2, all links, MB) | 1,898 | 1,840 |
+| s2 final Sink: from A (v80) / from C (v112) / fresh | 148 / 1 / 31 | 107 / 11 / 62 |
+| interruption base / s2 (s) | 1.50 / 1.39 | 1.65 / 1.54 |
+
+Spread: s2 reps are within 0.4 s of each other (52.0–52.1 dog, 53.8–54.1 bfly); the worst rep pairing (slowest s2 vs
+fastest base) is 0.779 dog / 0.768 bfly, still ≤ 0.80. Provenance is the same in every s2 rep (± 1 entry).
+
+Reading (descriptive): the gain comes entirely from the window between the first move and the final switch (s2 needs
+0.56–0.61 of base there); ≈ 32 s of serving before the first switch is common to all conditions and dilutes the
+whole-run ratio, as preregistered. Total bytes rise 5–10 %: M3 forwards 1.8–1.9 GB to holders (including to C and
+A) to remove 1.1–1.4 GB from the final base, so this is not a traffic reduction. ctl ≈ base (0.97–0.98): owner lineage
+and the entry path cost nothing by themselves; the gain is staging.
+
+Agreement with the invalid first set (section 6, same code): s2 / base 0.774 / 0.762 there vs 0.771 / 0.747 here.
+
+Predictions vs observed: s2 / base 0.76–0.82: dog 0.771 inside, butterfly 0.747 below the range (better); total
+1.0–1.15: held; ctl / base 0.95–1.0: held; first-move window 0.45–0.6: dog 0.607 just above, butterfly 0.563 inside;
+s2 readiness 7.5–9 s: dog 8.2 inside, butterfly 9.7 above; base / ctl readiness 22–26 s: dog base 21.3 just below,
+others inside.
+
+Comparison with M3-S2 (single owner A until the final switch): s2 / base 0.722 / 0.743 there. With an ownership change
+the whole-run ratio is 0.771 / 0.747, i.e. holds by the same margins, but is diluted on dog by the common pre-switch
+period.
+
+Limitations (declared in the preregistration and still true): one seed, two workloads, faults on dog only, scheduled
+moves (A → B at a planned call, then two user moves), one ownership change, 1 Gbps links, no frame comparison.
+
+## 8. Next
+
+M3-S3 is complete. Candidates: a second model (LongLive) for generality; faults on butterfly; more than one ownership
+change; seeds.
