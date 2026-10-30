@@ -1,0 +1,833 @@
+{
+ "phases": {
+  "P0": {
+   "dog": {
+    "R_retained_entries_exact": true,
+    "M_merge_contiguous": true,
+    "M_gap_refused": true,
+    "E_retained_all_exact": true,
+    "E_cross_owner_all_exact": true,
+    "N_late_start_all_detected": true,
+    "N_late_start_exposed": 0,
+    "S_assemblies_all_exact": true,
+    "S_assemblies": 18,
+    "pass": true,
+    "N_exercised": false
+   },
+   "bfly": {
+    "R_retained_entries_exact": true,
+    "M_merge_contiguous": true,
+    "M_gap_refused": true,
+    "E_retained_all_exact": true,
+    "E_cross_owner_all_exact": true,
+    "N_late_start_all_detected": true,
+    "N_late_start_exposed": 0,
+    "S_assemblies_all_exact": true,
+    "S_assemblies": 18,
+    "pass": true,
+    "N_exercised": false
+   }
+  },
+  "A_C": {
+   "dog": {
+    "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_m3=S2-fwd_own_rp2_20261029-214105",
+    "valid": true,
+    "why": [],
+    "A": {
+     "scenario": true,
+     "handover_accepted": false,
+     "final_mode_m3": true,
+     "accepted": true,
+     "blocks_equal": true,
+     "positions_equal": true,
+     "cond_equal": true,
+     "old_owner_entries_reused": false
+    },
+    "A_pass": false,
+    "C": {
+     "all_switches_ok": true,
+     "calls_contiguous_unique": true,
+     "owners_match_switches": true,
+     "no_refused_switch": true
+    },
+    "C_pass": true,
+    "scenario": {
+     "two_switches_A_B_then_B_D": true,
+     "A_B_before_first_move": true,
+     "B_C_cancelled": true,
+     "s1": 80,
+     "c0_BC": 112,
+     "final_c0": 133,
+     "ok": true
+    },
+    "switches": [
+     {
+      "task": "x1",
+      "src": "A",
+      "dst": "B",
+      "call": 80,
+      "verdict": "SINKOK",
+      "base_verified": true,
+      "cond_equal": true,
+      "sink_match": true,
+      "meta_consistent": true,
+      "order_ok": true,
+      "switch_call_planned": 80,
+      "switch_call_missed": false,
+      "ok": true
+     },
+     {
+      "task": "x3",
+      "src": "B",
+      "dst": "D",
+      "call": 156,
+      "verdict": "SINKOK",
+      "base_verified": true,
+      "cond_equal": true,
+      "sink_match": true,
+      "meta_consistent": true,
+      "order_ok": true,
+      "switch_call_planned": null,
+      "switch_call_missed": null,
+      "ok": true
+     }
+    ],
+    "handover": {
+     "n": 1,
+     "first": {
+      "old": "A",
+      "new": "B",
+      "call": 80,
+      "n_entries": 0,
+      "build_s": 0.008397102355957031,
+      "error": null,
+      "wait_after_switch_s": 18.343642711639404,
+      "handover_call_s": 0.002418041229248047,
+      "import_s": 0.0037848949432373047,
+      "history_bytes": 15989,
+      "issued_bytes": 2,
+      "altered": null,
+      "corrupted_entry": null,
+      "import": {
+       "accepted": true,
+       "contiguous": true,
+       "merged_calls": 49,
+       "merged_issued": 180,
+       "version_equal": false,
+       "issued_retained": 0,
+       "owner_since": 80,
+       "history_start": 31,
+       "history_last": 110,
+       "missing_calls": null
+      }
+     },
+     "old_A_new_B": true,
+     "accepted": true,
+     "contiguous": true,
+     "version_equal": false,
+     "issued_retained": 0,
+     "n_entries": 0,
+     "bad": [],
+     "lost": [],
+     "rerates": 7
+    },
+    "provenance": {
+     "raw": {
+      "B|B|133": 116,
+      "B|C|112": 64
+     },
+     "old_owner_A_at_s1": 0,
+     "new_owner_partial_at_C": 64,
+     "fresh_from_B": 116,
+     "other": 0
+    },
+    "final": {
+     "task": "x3",
+     "mode": "m3",
+     "c0": 133,
+     "reused": 64,
+     "sent_entries": 116,
+     "readiness_s": 15.129069000000001,
+     "first_output_s": 16.890758000000005,
+     "interruption_s": 1.39947509765625,
+     "dest": {
+      "node": "D",
+      "task": "x3",
+      "call": 133,
+      "accepted": true,
+      "reused": 64,
+      "sent": 116,
+      "shift_ops": 0,
+      "versions": {
+       "112": 64,
+       "133": 116
+      },
+      "provenance": {
+       "B|B|133": 116,
+       "B|C|112": 64
+      },
+      "n_block_mismatch": 0,
+      "positions_equal": true,
+      "cond_equal": true,
+      "complete": true,
+      "n_problems": 0,
+      "test_injected": null,
+      "total_s": 0.5071020126342773,
+      "h2d_s": 0.19559816271066666,
+      "shadow_base_s": 0.014306262135505676,
+      "shift_s": 5.177408456802368e-05,
+      "digest_s": 0.06423938274383545
+     },
+     "sink_sync": {
+      "call": 156,
+      "match": true,
+      "n_block_mismatch": 0,
+      "positions_equal": true
+     }
+    },
+    "remote_s": 58.89066422767638,
+    "bytes": {
+     "base": 4099841424,
+     "log": 64700640,
+     "forward": 1869004800,
+     "total": 6033546864,
+     "discarded": 1265576640,
+     "final_base": 1114218288,
+     "header": 150184
+    },
+    "rx_bytes_by_link": {
+     "base:A>B": 1725235200,
+     "base:B>C": 1255587840,
+     "base:B>D": 1111818240,
+     "forward:C>A": 1255587840,
+     "forward:C>D": 613416960
+    },
+    "continuity_diagnostic": {
+     "interruption_s": 1.39947509765625,
+     "first_output_s": 16.890758000000005,
+     "readiness_s": 15.129069000000001
+    }
+   },
+   "bfly": {
+    "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_m3=S2-fwd_own_rp2_20261029-215946",
+    "valid": true,
+    "why": [],
+    "A": {
+     "scenario": true,
+     "handover_accepted": false,
+     "final_mode_m3": true,
+     "accepted": true,
+     "blocks_equal": true,
+     "positions_equal": true,
+     "cond_equal": true,
+     "old_owner_entries_reused": false,
+     "new_owner_partial_reused": true
+    },
+    "A_pass": false,
+    "C": {
+     "all_switches_ok": true,
+     "calls_contiguous_unique": true,
+     "owners_match_switches": true,
+     "no_refused_switch": true
+    },
+    "C_pass": true,
+    "scenario": {
+     "two_switches_A_B_then_B_D": true,
+     "A_B_before_first_move": true,
+     "B_C_cancelled": true,
+     "s1": 80,
+     "c0_BC": 112,
+     "final_c0": 133,
+     "ok": true
+    },
+    "switches": [
+     {
+      "task": "x1",
+      "src": "A",
+      "dst": "B",
+      "call": 80,
+      "verdict": "SINKOK",
+      "base_verified": true,
+      "cond_equal": true,
+      "sink_match": true,
+      "meta_consistent": true,
+      "order_ok": true,
+      "switch_call_planned": 80,
+      "switch_call_missed": false,
+      "ok": true
+     },
+     {
+      "task": "x3",
+      "src": "B",
+      "dst": "D",
+      "call": 162,
+      "verdict": "SINKOK",
+      "base_verified": true,
+      "cond_equal": true,
+      "sink_match": true,
+      "meta_consistent": true,
+      "order_ok": true,
+      "switch_call_planned": null,
+      "switch_call_missed": null,
+      "ok": true
+     }
+    ],
+    "handover": {
+     "n": 1,
+     "first": {
+      "old": "A",
+      "new": "B",
+      "call": 80,
+      "n_entries": 0,
+      "build_s": 0.00801706314086914,
+      "error": null,
+      "wait_after_switch_s": 18.46946406364441,
+      "handover_call_s": 0.0026702880859375,
+      "import_s": 0.003204822540283203,
+      "history_bytes": 16450,
+      "issued_bytes": 2,
+      "altered": null,
+      "corrupted_entry": null,
+      "import": {
+       "accepted": true,
+       "contiguous": true,
+       "merged_calls": 49,
+       "merged_issued": 180,
+       "version_equal": false,
+       "issued_retained": 0,
+       "owner_since": 80,
+       "history_start": 31,
+       "history_last": 110,
+       "missing_calls": null
+      }
+     },
+     "old_A_new_B": true,
+     "accepted": true,
+     "contiguous": true,
+     "version_equal": false,
+     "issued_retained": 0,
+     "n_entries": 0,
+     "bad": [],
+     "lost": [],
+     "rerates": 7
+    },
+    "provenance": {
+     "raw": {
+      "B|B|133": 123,
+      "B|C|112": 57
+     },
+     "old_owner_A_at_s1": 0,
+     "new_owner_partial_at_C": 57,
+     "fresh_from_B": 123,
+     "other": 0
+    },
+    "final": {
+     "task": "x3",
+     "mode": "m3",
+     "c0": 133,
+     "reused": 57,
+     "sent_entries": 123,
+     "readiness_s": 18.88751400000001,
+     "first_output_s": 20.715258000000006,
+     "interruption_s": 1.557528018951416,
+     "dest": {
+      "node": "D",
+      "task": "x3",
+      "call": 133,
+      "accepted": true,
+      "reused": 57,
+      "sent": 123,
+      "shift_ops": 0,
+      "versions": {
+       "112": 57,
+       "133": 123
+      },
+      "provenance": {
+       "B|B|133": 123,
+       "B|C|112": 57
+      },
+      "n_block_mismatch": 0,
+      "positions_equal": true,
+      "cond_equal": true,
+      "complete": true,
+      "n_problems": 0,
+      "test_injected": null,
+      "total_s": 0.49300122261047363,
+      "h2d_s": 0.17701051384210587,
+      "shadow_base_s": 0.014350198209285736,
+      "shift_s": 3.75211238861084e-05,
+      "digest_s": 0.06502705812454224
+     },
+     "sink_sync": {
+      "call": 162,
+      "match": true,
+      "n_block_mismatch": 0,
+      "positions_equal": true
+     }
+    },
+    "remote_s": 63.65050602226257,
+    "bytes": {
+     "base": 4023164304,
+     "log": 1207669248,
+     "forward": 1648558080,
+     "total": 6879391632,
+     "discarded": 1313499840,
+     "final_base": 1181310768,
+     "header": 147335
+    },
+    "rx_bytes_by_link": {
+     "base:A>B": 1725235200,
+     "base:B>C": 1111818240,
+     "base:B>D": 1178910720,
+     "forward:C>A": 1054310400,
+     "forward:C>D": 594247680
+    },
+    "continuity_diagnostic": {
+     "interruption_s": 1.557528018951416,
+     "first_output_s": 20.715258000000006,
+     "readiness_s": 18.88751400000001
+    }
+   }
+  },
+  "B": {
+   "version_mismatch": {
+    "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_m3=S2-fwd_m3fault=version_mismatch_own_rp2_20261029-221837",
+    "valid": true,
+    "why": [],
+    "handled": true,
+    "exact_and_safe": true,
+    "pass": true,
+    "final_mode": "m3",
+    "dest": {
+     "node": "D",
+     "task": "x3",
+     "call": 133,
+     "accepted": true,
+     "reused": 63,
+     "sent": 117,
+     "shift_ops": 0,
+     "versions": {
+      "112": 63,
+      "133": 117
+     },
+     "provenance": {
+      "B|B|133": 117,
+      "B|C|112": 63
+     },
+     "n_block_mismatch": 0,
+     "positions_equal": true,
+     "cond_equal": true,
+     "complete": true,
+     "n_problems": 0,
+     "test_injected": null,
+     "total_s": 0.47021007537841797,
+     "h2d_s": 0.16902433335781097,
+     "shadow_base_s": 0.014293096959590912,
+     "shift_s": 4.8354268074035645e-05,
+     "digest_s": 0.06415366381406784
+    },
+    "handover": {
+     "n": 1,
+     "first": {
+      "old": "A",
+      "new": "B",
+      "call": 80,
+      "n_entries": 0,
+      "build_s": 0.008612394332885742,
+      "error": null,
+      "wait_after_switch_s": 18.390028476715088,
+      "handover_call_s": 0.0027723312377929688,
+      "import_s": 0.003551483154296875,
+      "history_bytes": 15989,
+      "issued_bytes": 2,
+      "altered": null,
+      "corrupted_entry": null,
+      "import": {
+       "accepted": true,
+       "contiguous": true,
+       "merged_calls": 49,
+       "merged_issued": 180,
+       "version_equal": false,
+       "issued_retained": 0,
+       "owner_since": 80,
+       "history_start": 31,
+       "history_last": 110,
+       "missing_calls": null
+      }
+     },
+     "old_A_new_B": true,
+     "accepted": true,
+     "contiguous": true,
+     "version_equal": false,
+     "issued_retained": 0,
+     "n_entries": 0,
+     "bad": [],
+     "lost": [],
+     "rerates": 7
+    },
+    "provenance": {
+     "raw": {
+      "B|B|133": 117,
+      "B|C|112": 63
+     },
+     "old_owner_A_at_s1": 0,
+     "new_owner_partial_at_C": 63,
+     "fresh_from_B": 117,
+     "other": 0
+    },
+    "advertise": {
+     "advertised": 63,
+     "expected_from_forwards": 63,
+     "missing_expected": 0,
+     "lost": [],
+     "wait_s": 0.020941495895385742,
+     "stop_and_advertise_s": 0.7652201652526855,
+     "altered": [],
+     "test_fault": null
+    },
+    "remote_s": 58.930370059967046
+   },
+   "corrupt_retained": {
+    "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_m3=S2-fwd_m3fault=corrupt_retained_own_rp2_20261029-223718",
+    "valid": true,
+    "why": [],
+    "handled": false,
+    "exact_and_safe": true,
+    "pass": false,
+    "final_mode": "m3",
+    "dest": {
+     "node": "D",
+     "task": "x3",
+     "call": 133,
+     "accepted": true,
+     "reused": 64,
+     "sent": 116,
+     "shift_ops": 0,
+     "versions": {
+      "112": 64,
+      "133": 116
+     },
+     "provenance": {
+      "B|B|133": 116,
+      "B|C|112": 64
+     },
+     "n_block_mismatch": 0,
+     "positions_equal": true,
+     "cond_equal": true,
+     "complete": true,
+     "n_problems": 0,
+     "test_injected": null,
+     "total_s": 0.8309924602508545,
+     "h2d_s": 0.5194760039448738,
+     "shadow_base_s": 0.014295525848865509,
+     "shift_s": 3.488361835479736e-05,
+     "digest_s": 0.06420690566301346
+    },
+    "handover": {
+     "n": 1,
+     "first": {
+      "old": "A",
+      "new": "B",
+      "call": 80,
+      "n_entries": 0,
+      "build_s": 0.022513628005981445,
+      "error": null,
+      "wait_after_switch_s": 18.34405517578125,
+      "handover_call_s": 0.0029401779174804688,
+      "import_s": 0.003142118453979492,
+      "history_bytes": 15989,
+      "issued_bytes": 2,
+      "altered": null,
+      "corrupted_entry": null,
+      "import": {
+       "accepted": true,
+       "contiguous": true,
+       "merged_calls": 49,
+       "merged_issued": 180,
+       "version_equal": false,
+       "issued_retained": 0,
+       "owner_since": 80,
+       "history_start": 31,
+       "history_last": 110,
+       "missing_calls": null
+      }
+     },
+     "old_A_new_B": true,
+     "accepted": true,
+     "contiguous": true,
+     "version_equal": false,
+     "issued_retained": 0,
+     "n_entries": 0,
+     "bad": [],
+     "lost": [],
+     "rerates": 7
+    },
+    "provenance": {
+     "raw": {
+      "B|B|133": 116,
+      "B|C|112": 64
+     },
+     "old_owner_A_at_s1": 0,
+     "new_owner_partial_at_C": 64,
+     "fresh_from_B": 116,
+     "other": 0
+    },
+    "advertise": {
+     "advertised": 64,
+     "expected_from_forwards": 64,
+     "missing_expected": 0,
+     "lost": [],
+     "wait_s": 0.020856142044067383,
+     "stop_and_advertise_s": 0.7043962478637695,
+     "altered": [],
+     "test_fault": null
+    },
+    "remote_s": 59.191872836685185
+   },
+   "old_owner_fail": {
+    "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_m3=S2-fwd_m3fault=old_owner_fail_own_rp2_20261029-225604",
+    "valid": true,
+    "why": [],
+    "handled": false,
+    "exact_and_safe": true,
+    "pass": false,
+    "final_mode": "m3",
+    "dest": {
+     "node": "D",
+     "task": "x3",
+     "call": 133,
+     "accepted": true,
+     "reused": 65,
+     "sent": 115,
+     "shift_ops": 0,
+     "versions": {
+      "112": 65,
+      "133": 115
+     },
+     "provenance": {
+      "B|B|133": 115,
+      "B|C|112": 65
+     },
+     "n_block_mismatch": 0,
+     "positions_equal": true,
+     "cond_equal": true,
+     "complete": true,
+     "n_problems": 0,
+     "test_injected": null,
+     "total_s": 0.845332145690918,
+     "h2d_s": 0.52866630256176,
+     "shadow_base_s": 0.014302879571914673,
+     "shift_s": 3.727525472640991e-05,
+     "digest_s": 0.06426657736301422
+    },
+    "handover": {
+     "n": 1,
+     "first": {
+      "old": "A",
+      "new": "B",
+      "call": 80,
+      "n_entries": 0,
+      "build_s": 0.008650779724121094,
+      "error": null,
+      "wait_after_switch_s": 18.350680351257324,
+      "handover_call_s": 0.002718210220336914,
+      "import_s": 0.002882242202758789,
+      "history_bytes": 15989,
+      "issued_bytes": 2,
+      "altered": null,
+      "corrupted_entry": null,
+      "import": {
+       "accepted": true,
+       "contiguous": true,
+       "merged_calls": 49,
+       "merged_issued": 180,
+       "version_equal": false,
+       "issued_retained": 0,
+       "owner_since": 80,
+       "history_start": 31,
+       "history_last": 110,
+       "missing_calls": null
+      }
+     },
+     "old_A_new_B": true,
+     "accepted": true,
+     "contiguous": true,
+     "version_equal": false,
+     "issued_retained": 0,
+     "n_entries": 0,
+     "bad": [],
+     "lost": [],
+     "rerates": 7
+    },
+    "provenance": {
+     "raw": {
+      "B|B|133": 115,
+      "B|C|112": 65
+     },
+     "old_owner_A_at_s1": 0,
+     "new_owner_partial_at_C": 65,
+     "fresh_from_B": 115,
+     "other": 0
+    },
+    "advertise": {
+     "advertised": 65,
+     "expected_from_forwards": 65,
+     "missing_expected": 0,
+     "lost": [],
+     "wait_s": 0.020891666412353516,
+     "stop_and_advertise_s": 0.6514105796813965,
+     "altered": [],
+     "test_fault": null
+    },
+    "remote_s": 59.13184071617127
+   }
+  },
+  "D": {
+   "dog": {
+    "cells": {
+     "base": {
+      "n_runs": 0,
+      "n_valid": 0,
+      "invalid": [],
+      "remote_s": null,
+      "total_mb": null,
+      "discarded_mb": null,
+      "forward_mb": null,
+      "final_base_mb": null,
+      "readiness_s": null,
+      "interruption_s": null,
+      "reused": null,
+      "from_old_owner": null,
+      "from_C": null,
+      "s1": null,
+      "to_first_switch_s": null,
+      "first_move_to_final_switch_s": null,
+      "per_rep": []
+     },
+     "ctl": {
+      "n_runs": 0,
+      "n_valid": 0,
+      "invalid": [],
+      "remote_s": null,
+      "total_mb": null,
+      "discarded_mb": null,
+      "forward_mb": null,
+      "final_base_mb": null,
+      "readiness_s": null,
+      "interruption_s": null,
+      "reused": null,
+      "from_old_owner": null,
+      "from_C": null,
+      "s1": null,
+      "to_first_switch_s": null,
+      "first_move_to_final_switch_s": null,
+      "per_rep": []
+     },
+     "s2": {
+      "n_runs": 0,
+      "n_valid": 0,
+      "invalid": [],
+      "remote_s": null,
+      "total_mb": null,
+      "discarded_mb": null,
+      "forward_mb": null,
+      "final_base_mb": null,
+      "readiness_s": null,
+      "interruption_s": null,
+      "reused": null,
+      "from_old_owner": null,
+      "from_C": null,
+      "s1": null,
+      "to_first_switch_s": null,
+      "first_move_to_final_switch_s": null,
+      "per_rep": []
+     }
+    },
+    "s2_remote_vs_base": null,
+    "s2_total_vs_base": null,
+    "ctl_remote_vs_base": null,
+    "s2_remote_vs_ctl": null,
+    "s2_post_window_vs_base": null,
+    "R_D1": false,
+    "R_D2": false
+   },
+   "bfly": {
+    "cells": {
+     "base": {
+      "n_runs": 0,
+      "n_valid": 0,
+      "invalid": [],
+      "remote_s": null,
+      "total_mb": null,
+      "discarded_mb": null,
+      "forward_mb": null,
+      "final_base_mb": null,
+      "readiness_s": null,
+      "interruption_s": null,
+      "reused": null,
+      "from_old_owner": null,
+      "from_C": null,
+      "s1": null,
+      "to_first_switch_s": null,
+      "first_move_to_final_switch_s": null,
+      "per_rep": []
+     },
+     "ctl": {
+      "n_runs": 0,
+      "n_valid": 0,
+      "invalid": [],
+      "remote_s": null,
+      "total_mb": null,
+      "discarded_mb": null,
+      "forward_mb": null,
+      "final_base_mb": null,
+      "readiness_s": null,
+      "interruption_s": null,
+      "reused": null,
+      "from_old_owner": null,
+      "from_C": null,
+      "s1": null,
+      "to_first_switch_s": null,
+      "first_move_to_final_switch_s": null,
+      "per_rep": []
+     },
+     "s2": {
+      "n_runs": 0,
+      "n_valid": 0,
+      "invalid": [],
+      "remote_s": null,
+      "total_mb": null,
+      "discarded_mb": null,
+      "forward_mb": null,
+      "final_base_mb": null,
+      "readiness_s": null,
+      "interruption_s": null,
+      "reused": null,
+      "from_old_owner": null,
+      "from_C": null,
+      "s1": null,
+      "to_first_switch_s": null,
+      "first_move_to_final_switch_s": null,
+      "per_rep": []
+     }
+    },
+    "s2_remote_vs_base": null,
+    "s2_total_vs_base": null,
+    "ctl_remote_vs_base": null,
+    "s2_remote_vs_ctl": null,
+    "s2_post_window_vs_base": null,
+    "R_D1": false,
+    "R_D2": false
+   }
+  }
+ },
+ "gates": {
+  "P0": true,
+  "A": false,
+  "B": false,
+  "C": true,
+  "D_R_D1": false,
+  "D_R_D2": false
+ },
+ "verdict": "EXACTNESS ACROSS AN OWNERSHIP CHANGE NOT SHOWN: M3 stays scoped to a source that serves until the final switch"
+}

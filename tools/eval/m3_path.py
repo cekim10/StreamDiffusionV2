@@ -700,8 +700,14 @@ class M3NodeMixin:
 
     def _m3_handover_build(self, ho: dict):
         st = self._m3(); r = self.run
+        # Note 1 (m3s3 preregistration): the old owner's switch thread retains the Sink (host copy, ~1 s on GPU) after the
+        # new owner already resumed; wait until that thread has finished (retained copy present, or switch done without
+        # one, e.g. SINKNO) before reading it. Bounded wait.
+        t_w = time.time()
+        while r.get("retained") is None and not (r.get("xb") or {}).get("done") and time.time() - t_w < 120:
+            time.sleep(0.02)
         ret = r.get("retained")
-        out = {"retained_version": None if ret is None else ret["version"], "n_entries": 0, "bytes": 0}
+        out = {"retained_version": None if ret is None else ret["version"], "n_entries": 0, "bytes": 0, "retain_wait_s": time.time() - t_w}
         try:
             if ret is not None:
                 v = int(ret["version"]["call"])

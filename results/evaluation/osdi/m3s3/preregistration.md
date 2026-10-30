@@ -183,3 +183,31 @@ order and a failing phase stops the later ones. Every number in the report is la
   executes; B 3 / 3 pass, C pass; with a 2 s re-plan interval the dry move-to-move window (2.05 s) ended before the
   first periodic plan, so C's entries did not reach D and the butterfly C-rule read false. On the testbed the window is
   20 calls (≈ 13 s, ≈ 6 re-plans). Dry byte ratios are meaningless (4 KiB fake entries vs fragment-sized fake Sink).
+
+## Note 1 (2026-10-29, after the first P0 / A / C / B runs; rules, thresholds and predictions unchanged)
+
+**Harness defect, found in the first runs (Original set, commit 27d42a63, `m3s3_results_original.json`).** The
+orchestrator starts the old owner's handover when the new owner resumes. On the GPU the old owner's switch thread is
+still copying its retained Sink to host memory at that moment (≈ 1.0 s, `retain_s` 0.99–1.10 s in all five runs), so
+the handover found no retained copy and built 0 entries (dry runs did not show it: the fake retain is instantaneous).
+Consequence in all five testbed runs: A held nothing, B could not issue A's version (version_equal false because the
+retained version was null), and the old-owner holder path, the hypothesis under test, was never exercised.
+
+**Original verdict, as written:** P0 pass on both workloads (with N not exercised: no Sink event at call 80; and no
+entry had shifts on both sides of the switch in E(b)); A fails on both (handover not accepted, 0 entries from A);
+C passes on both (A -> B and B -> D SINKOK, calls contiguous); B: version_mismatch passes only vacuously,
+corrupt_retained and old_owner_fail fail (nothing from A to corrupt or lose). Frozen mapping: "exactness across an
+ownership change not shown". Recorded, not overwritten.
+
+**What the Original runs do show (descriptive):** after the ownership change, B's partial Sink left at C (version 112,
+issued by the new owner B) was forwarded by C to D and reused: dog 64, butterfly 57 entries, combined with 116 / 123
+fresh entries at 133, 0 of 360 blocks mismatching, both switches SINKOK. Because A held nothing, C also forwarded
+1.26 / 1.05 GB to A (a candidate under the unchanged S2 rule).
+
+**Fix (Corrected set).** `_m3_handover_build` waits (bounded, 120 s) until the old owner's switch thread has finished
+(retained copy present, or switch done without one) before reading the retained copy; the wait is recorded
+(`retain_wait_s`). Unit-tested with a retain that arrives 1 s late (waits 1.03 s, then 180 entries) and with a switch
+without a retain (no wait). No other change. The Corrected runs use experiment names `expM3S3c{A,B,D}_*`
+(`run_m3_s3.sh` default; `m3s3_report.py --set c`, the default); the Original runs stay under `expM3S3{A,B}_*`
+(`--set ""`). P0 is not rerun: `m3s3_p0.py` does not use the handover build. Phases A/C and B are rerun in full on the
+corrected harness; D only after they pass.

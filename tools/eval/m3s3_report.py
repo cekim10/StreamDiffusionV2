@@ -122,8 +122,11 @@ def full_record(d: Path, chk: bool) -> dict:
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--prefix", default=""); ap.add_argument("--no_validity", action="store_true"); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--prefix", default=""); ap.add_argument("--no_validity", action="store_true")
+    ap.add_argument("--set", default="c", help="experiment set: 'c' = Corrected runs (expM3S3c*, after Note 1); '' = Original runs (expM3S3*)")
+    a = ap.parse_args()
     chk = not a.no_validity
+    X = f"expM3S3{a.set}"
     rep = {"phases": {}}
     # ---- P0
     P0 = {}
@@ -138,7 +141,7 @@ def main():
     # ---- A + C
     AC = {}
     for wl in WLS:
-        ds = R2.latest(f"expM3S3A_{wl}", a.prefix)
+        ds = R2.latest(f"{X}A_{wl}", a.prefix)
         if not ds:
             continue
         r = full_record(ds[-1], chk)
@@ -159,7 +162,7 @@ def main():
     # ---- B (dog)
     B = {}
     for fault in FAULTS:
-        ds = R2.latest(f"expM3S3B_{fault}", a.prefix)
+        ds = R2.latest(f"{X}B_{fault}", a.prefix)
         if not ds:
             continue
         r = full_record(ds[-1], chk)
@@ -187,7 +190,7 @@ def main():
     for wl in WLS:
         cells = {}
         for cond in CONDS:
-            recs = [full_record(d, chk) for d in R2.latest(f"expM3S3D_{wl}_{cond}", a.prefix)]
+            recs = [full_record(d, chk) for d in R2.latest(f"{X}D_{wl}_{cond}", a.prefix)]
             okr = [x for x in recs if x["valid"] and x["scenario"]["ok"] and x["final_completed"] and (cond == "base" or (x["final"] or {}).get("mode") == "m3")]
             med = lambda f: st.median([f(x) for x in okr]) if okr else None  # noqa: E731
             cells[cond] = {"n_runs": len(recs), "n_valid": len(okr), "invalid": [(x["run"], x["why"], x["scenario"]) for x in recs if x not in okr],
@@ -228,7 +231,7 @@ def main():
         verdict = "CORRECT BUT NOT FASTER BY THE MARGIN: exact, fault-safe and live across an ownership change; R-D1 fails for a workload"
     rep["verdict"] = verdict
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"m3s3_results{'_' + a.prefix.strip('_') if a.prefix else ''}.json").write_text(json.dumps(rep, indent=1, default=str))
+    (OUT / f"m3s3_results{'_corrected' if a.set == 'c' else '_original' if a.set == '' else '_' + a.set}{'_' + a.prefix.strip('_') if a.prefix else ''}.json").write_text(json.dumps(rep, indent=1, default=str))
     print(json.dumps(rep["gates"], indent=1)); print("verdict:", verdict)
     for wl, x in P0.items():
         print(f"P0 {wl}: pass {x['pass']} (N exercised {x['N_exercised']})")

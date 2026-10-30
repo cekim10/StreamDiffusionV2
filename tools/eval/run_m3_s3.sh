@@ -16,6 +16,7 @@ DOG_V=examples/original.mp4; DOG_P=examples/prompt.txt
 BF_V=data/loveu_tgve_2023/butterfly-feeding-slow-motion.mp4; BF_P=data/loveu_tgve_2023/butterfly-feeding-slow-motion__background.txt
 node_args() { if [ "$1" = dog ]; then echo "--video_path $DOG_V --prompt_file_path $DOG_P --seed 0"; else echo "--video_path $BF_V --prompt_file_path $BF_P --seed 0"; fi; }
 PY=${PY:-python}
+EXPSET=${SET-expM3S3c}   # Corrected runs (prereg Note 1); SET=expM3S3 reproduces the Original set names
 case "${1:-}" in
   preflight)
     $PY tools/eval/d0_remote.py status
@@ -29,19 +30,19 @@ case "${1:-}" in
   ac)
     for wl in dog bfly; do
       echo "[M3S3] === A/C $wl"
-      $PY tools/eval/mobility_orchestrate.py --experiment "expM3S3A_$wl" $COMMON --reps 1 $S3 --node_extra="$(node_args $wl)" || echo "[M3S3] A/C $wl: exit $?"
+      $PY tools/eval/mobility_orchestrate.py --experiment "${EXPSET}A_$wl" $COMMON --reps 1 $S3 --node_extra="$(node_args $wl)" || echo "[M3S3] A/C $wl: exit $?"
     done ;;
   faults)
     for f in version_mismatch corrupt_retained old_owner_fail; do
       echo "[M3S3] === B $f"
-      $PY tools/eval/mobility_orchestrate.py --experiment "expM3S3B_$f" $COMMON --reps 1 $S3 --m3_test_fault $f --m3_fail_after 40 --node_extra="$(node_args dog)" || echo "[M3S3] B $f: exit $?"
+      $PY tools/eval/mobility_orchestrate.py --experiment "${EXPSET}B_$f" $COMMON --reps 1 $S3 --m3_test_fault $f --m3_fail_after 40 --node_extra="$(node_args dog)" || echo "[M3S3] B $f: exit $?"
     done ;;
   perf)
     for wl in dog bfly; do
       for cond in base ctl s2; do
         case $cond in base) X="" ;; ctl) X="$CTL" ;; s2) X="$S3" ;; esac
         echo "[M3S3] === D $wl $cond"
-        $PY tools/eval/mobility_orchestrate.py --experiment "expM3S3D_${wl}_$cond" $COMMON --reps 3 $X --node_extra="$(node_args $wl)" || echo "[M3S3] D $wl $cond: exit $?"
+        $PY tools/eval/mobility_orchestrate.py --experiment "${EXPSET}D_${wl}_$cond" $COMMON --reps 3 $X --node_extra="$(node_args $wl)" || echo "[M3S3] D $wl $cond: exit $?"
       done
     done ;;
   *) echo "usage: $0 preflight|p0|ac|faults|perf"; exit 2 ;;
