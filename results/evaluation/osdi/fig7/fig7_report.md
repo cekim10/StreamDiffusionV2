@@ -56,7 +56,9 @@ calls of 101 in every OTTER run; every baseline run is bit-exact on every scored
    reps) or 33 (2 reps); bfly 34 (3) or 36 (2). Runs with the same switch call have identical bytes and identical
    PSNR series. In bfly the 36-call switch (reps 1, 3) gives terminal median 32.4 dB against 44.4 dB for the 34-call
    switch. 32.4 dB is lower than the M1 E6 butterfly record (42.0 dB). The prereg defines no threshold for "severely
-   degraded"; this report does not judge it, and Fig. 13 (quality) must cover the switch-call dependence.
+   degraded"; this report does not judge it. **Cause found in the logs** (`bfly_fidelity_analysis.md`): in the two
+   36-call runs B's first live call (67) makes a Sink refresh the reference does not make, so the Sink (exact at the
+   switch) diverges for the rest of the run; the 8 other runs follow the reference Sink schedule exactly.
 3. **P-full never converges** (no-shrink in all 10 runs: 3 rounds + final copy, bfly rep 4: 4 rounds). Per section 5
    this is a completed migration with a long stop-and-copy, not a failure.
 

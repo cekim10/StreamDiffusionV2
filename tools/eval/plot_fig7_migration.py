@@ -116,7 +116,7 @@ def panel(cells, name, scale, out: Path):
             ax.scatter(x + np.linspace(-0.1, 0.1, len(vals)), vals, s=16, color="black", edgecolor="white", lw=0.5, zorder=5)
             hi = max(max(vals), s["q3"])
             hi_all.append(hi)
-            annotate(ax, x + (2 * j - 1) * NUDGE, hi * 1.12 if scale == "log" else hi + top * 0.02, fmt(s["median"]))
+            annotate(ax, x + (2 * j - 1) * NUDGE, hi * 1.12 if scale == "log" else hi + top * 0.04, fmt(s["median"]))
     assert lo < min(cells[w][m][key]["q1"] for w in WORKLOADS for m in METHODS if cells[w][m][key]["n"]) and max(hi_all) < top, (name, scale)
     ax.set_ylim(lo, top)
     ax.set_xlim(-0.55, len(METHODS) - 0.45)
