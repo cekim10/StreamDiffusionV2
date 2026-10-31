@@ -75,8 +75,8 @@ calls of 101 in every OTTER run; every baseline run is bit-exact on every scored
 baseline (R-full: 18.47 / 1.63 s dog, 18.33 / 1.59 s butterfly) and starts local service 1.5-1.6x sooner (36.9 / 23.3 s,
 36.8 / 24.6 s). Not "seamless" or "imperceptible": 1.6 s is a visible interruption. OTTER does not minimize traffic
 (21-35x R-full's bytes); it combines Sink transfer with replay to shorten the interruption. P-full's 22.9-23.6 GB is
-iterative pre-copy that never converges (no-shrink: each round re-sends ~5.5 GB of recent KV and VAE state rewritten
-every call). The source keeps serving for 21.6 / 23.1 s (median remote serving) before B serves; WAN latency during
+iterative pre-copy that never converges (no-shrink: after the first 6.46 GB round, every round finds 4.5-5.7 GB
+of the state dirty again, since recent KV and VAE caches are rewritten every call; measured dirty rounds in section 2). The source keeps serving for 21.6 / 23.1 s (median remote serving) before B serves; WAN latency during
 that period is not charged here.
 
 **Caption.**
