@@ -325,7 +325,7 @@ class Run:
         (self.dir / "git_commit.txt").write_text(git_commit() + "\n")
         self.ev = EventLog(self.dir / "events.csv", "orchestrator")
         self.frag_csv = CsvLog(self.dir / "fragments.csv", ["t_rel", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok", "dup", "classification"])
-        self.metric_csv = CsvLog(self.dir / "metrics.csv", ["call", "t_out_rel", "owner", "owner_idx", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "lag_hops", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode_rel", "n_frames", "ref_match"])
+        self.metric_csv = CsvLog(self.dir / "metrics.csv", ["call", "t_out_rel", "owner", "owner_idx", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "lag_hops", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode_rel", "n_frames", "ref_match", "track_ms"])
         self.pcur_csv = CsvLog(self.dir / "p_current.csv", ["t_rel", "owner", "p_current", "held_A", "held_B", "held_C", "held_D"])
         self.flow_csv = CsvLog(self.dir / "flows.csv", ["flow", "src", "dst", "t_start_rel", "t_end_rel", "n_frags", "bytes", "rate_bps_last", "cancelled", "reason"])
         self.trace = open(self.dir / "trace.txt", "w")
@@ -792,7 +792,8 @@ class Run:
             lag = EDGES.index(lb) - max([EDGES.index(e) for e in self.bound] + [0])
             row = {"call": m["call"], "t_out_rel": self.rel_t(t), "owner": lb, "owner_idx": EDGES.index(lb), "chunk_s": m["chunk_s"], "psnr": m["psnr"], "ssim": m["ssim"], "missing": m["missing"],
                    "sink_bound": m["sink_bound"], "lag_hops": lag, "gpu_mem_alloc_mb": m["gpu_mem_alloc_mb"], "sink_slot_pos": m["sink_slot_pos"],
-                   "t_decode_rel": self.rel_t(nc.to_orch(m.get("t_decode"))) if m.get("t_decode") else None, "n_frames": m.get("n_frames"), "ref_match": m.get("ref_match")}
+                   "t_decode_rel": self.rel_t(nc.to_orch(m.get("t_decode"))) if m.get("t_decode") else None, "n_frames": m.get("n_frames"), "ref_match": m.get("ref_match"),
+                   "track_ms": m.get("track_ms")}
             self.metrics.append(row)
             self.metric_csv.row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
             return

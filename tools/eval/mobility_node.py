@@ -1497,7 +1497,7 @@ class Node(M3NodeMixin):
         rd.mkdir(parents=True, exist_ok=True)
         ev = EventLog(rd / "events.csv", self.me, h["t0"] if h.get("t0") else None)
         metrics = CsvLog(rd / "metrics.csv", ["call", "t_out", "owner", "chunk_s", "psnr", "ssim", "missing", "sink_bound", "gpu_mem_alloc_mb", "sink_slot_pos", "t_decode", "n_frames",
-                                              "sink_vfp", "promotion", "fp_ms"])
+                                              "sink_vfp", "promotion", "fp_ms", "track_ms"])
         if getattr(self.rt, "base_record", None) is not None:
             (rd / "baseline_record.json").write_text(json.dumps(self.rt.base_record))
         frag_log = CsvLog(rd / "fragments.csv", ["t", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok"])
@@ -3224,18 +3224,22 @@ class Node(M3NodeMixin):
             if r["wait_sink"] and r["bound_call"] is None:
                 time.sleep(0.005)   # XB wait-for-Sink ablation: no Sink-less generation
                 continue
+            t_trk = time.perf_counter()
             if r.get("m3s") is not None:
                 self._m3_before_step(c)   # M3-S2 lineage tracking (only after M3_TRACK)
+            track_s = time.perf_counter() - t_trk
             pc = r["pending_cold"]
             if pc is not None and c in (pc["skip"], pc["emit"]):
                 produced, ps, ss, dt, pos = self.rt.step(c, override=pc["frames"] if c == pc["emit"] else None, skip=c == pc["skip"] and c != pc["emit"])
             else:
                 produced, ps, ss, dt, pos = self.rt.step(c)
             t_out = time.time()
+            t_trk = time.perf_counter()
             if r.get("m3s") is not None:
                 self._m3_after_step(c)
             if r.get("tracking"):
                 self.rt.sink_track_step(c)
+            track_s += time.perf_counter() - t_trk   # Fig. 8: per-call M2 / M3 tracking time (timing only)
             if produced and r["first_out_t"] is None:
                 r["first_out_t"] = t_out; self.event("first_output", t_out, call=c)
             dmp = r.get("dump")
@@ -3262,7 +3266,7 @@ class Node(M3NodeMixin):
             row = {"call": c, "t_out": t_out, "owner": self.label, "chunk_s": dt, "psnr": ps, "ssim": ss, "missing": not produced,
                    "sink_bound": r["bound_call"] is not None and c >= r["bound_call"], "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), "sink_slot_pos": pos,
                    "t_decode": dec[-1][0] if dec else None, "n_frames": sum(n for _, n in dec),
-                   "sink_vfp": None if fp is None else json.dumps(fp), "promotion": promo, "fp_ms": fp_ms}
+                   "sink_vfp": None if fp is None else json.dumps(fp), "promotion": promo, "fp_ms": fp_ms, "track_ms": track_s * 1e3}
             r["metrics"].row(**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in row.items()})
             self.send("METRIC", **{k: v for k, v in row.items() if k != "sink_vfp"}, **({"ref_match": ref_match} if ref_match is not None else {}))
             r["call"] = c + 1
