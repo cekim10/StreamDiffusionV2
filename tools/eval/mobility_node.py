@@ -2141,7 +2141,7 @@ class Node(M3NodeMixin):
             if rp["retain"] and rp["verdict"] == "SINKOK":
                 # M2: retain the Sink version verified at this cutover (host copy, off the critical path)
                 hdr_s, buf_s, ret_s = self.rt.retain_sink(snap)
-                r["retained"] = {"version": version, "hdr": hdr_s, "buf": buf_s}
+                r["retained"] = {"version": version, "hdr": hdr_s, "buf": buf_s, "ck": sink_ck["blocks"]}   # ck: Fig. 10 record only
                 extra.update({"retained": True, "retain_s": ret_s, "retained_bytes": len(buf_s), "version": version})
             del snap
         if rp is not None:
@@ -2330,8 +2330,13 @@ class Node(M3NodeMixin):
                 send_msg(conn, "DELTAOK" if ok else "DELTANO", {"detail": detail}, b"", None)
         except OSError:
             pass
+        chg = {}
+        if ret is not None and ret.get("ck") is not None and hdr.get("sink_ck") is not None:   # Fig. 10 (record only): no extra work
+            src_b = hdr["sink_ck"]["blocks"]
+            d_ = [i % 2 for i, layer in enumerate(ret["ck"]) for b, row in enumerate(layer) for s_, v in enumerate(row) if v != src_b[i][b][s_]]
+            chg = {"changed_vs_retained": {"blocks": len(d_), "k": d_.count(0), "v": d_.count(1)}}
         self.event("replay_delta_base", task=hdr["task"], call=int(hdr["call"]), accepted=ok, digest_equal=match, mismatched_blocks=bad[:40], cond_equal=cond_ok,
-                   total_s=time.time() - t0, test_injected=injected, **detail, **tm)
+                   total_s=time.time() - t0, test_injected=injected, **detail, **tm, **chg)
         if ok:
             rs["c0"], rs["conn"] = int(hdr["call"]), conn
             rs["base"] = {"verified": True, "mode": "delta", "cond_equal": cond_ok, "t": time.time(), **tm}
@@ -2458,6 +2463,8 @@ class Node(M3NodeMixin):
             dbytes += sent
         if trk is not None and "refresh_events" not in dinfo:
             dinfo.update({"tracked_calls": trk["calls"], "refresh_events": trk.get("refresh_events"), "distinct_refreshed_entries": len(trk["refreshed"]), "shift_events_kept": len(trk["shifts"])})
+        if trk is not None:   # Fig. 10 (record only): distinct shifted entries, for the computed unchanged-only bytes
+            dinfo["distinct_shifted_entries"] = len({tuple(e[1:4]) for e in trk["shifts"]})
         rp["base"] = {"mode": mode, "fallback_reason": reason if dv else None, "bytes": dbytes, **dinfo}
         # M3-E0 instrumentation (record only): the full base's per-fragment SHA-256 prefixes (16 hex) and the count sent
         e0 = {"sink_frags_total": len(task["frag_hashes"]["sink"]), "sink_frags_sent": task["frags_sent"]["sink"], "sink_frag_hashes16": task["frag_hashes"]["sink"]} \
