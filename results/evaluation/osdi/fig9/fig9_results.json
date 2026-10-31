@@ -1,0 +1,4641 @@
+{
+ "cells": {
+  "dog": {
+   "wait": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 15.0237,
+     "q1": 15.0051,
+     "q3": 15.0299,
+     "n": 5,
+     "values": [
+      15.0299,
+      15.0051,
+      15.0306,
+      14.9988,
+      15.0237
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 15.0237,
+     "q1": 15.0051,
+     "q3": 15.0299,
+     "n": 5,
+     "values": [
+      15.0299,
+      15.0051,
+      15.0306,
+      14.9988,
+      15.0237
+     ]
+    },
+    "total_stall_s": {
+     "median": 14.426399999999996,
+     "q1": 14.405800000000001,
+     "q3": 14.4319,
+     "n": 5,
+     "values": [
+      14.4319,
+      14.405800000000001,
+      14.433199999999992,
+      14.4008,
+      14.426399999999996
+     ]
+    },
+    "tx_bytes": {
+     "median": 1728036048,
+     "q1": 1728036048.0,
+     "q3": 1728036048.0,
+     "n": 5,
+     "values": [
+      1728036048,
+      1728036048,
+      1728036048,
+      1728036048,
+      1728036048
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 15.0237,
+     "q1": 15.0051,
+     "q3": 15.0299,
+     "n": 5,
+     "values": [
+      15.0299,
+      15.0051,
+      15.0306,
+      14.9988,
+      15.0237
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 42.598600000000005,
+     "q1": 42.598600000000005,
+     "q3": 42.598600000000005,
+     "n": 5,
+     "values": [
+      42.598600000000005,
+      42.598600000000005,
+      42.598600000000005,
+      42.598600000000005,
+      42.598600000000005
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 19.1883,
+     "q1": 19.1883,
+     "q3": 19.1883,
+     "n": 5,
+     "values": [
+      19.1883,
+      19.1883,
+      19.1883,
+      19.1883,
+      19.1883
+     ]
+    },
+    "psnr_terminal": {
+     "median": 47.257,
+     "q1": 47.257,
+     "q3": 47.257,
+     "n": 5,
+     "values": [
+      47.257,
+      47.257,
+      47.257,
+      47.257,
+      47.257
+     ]
+    },
+    "switch_reasons": [
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "cost": null,
+    "runs": [
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261031-113145",
+      "step": "wait",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.0299,
+      "delivery_gap_s": 15.0299,
+      "total_stall_s": 14.4319,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.0299,
+      "c2": {
+       "first_call_psnr": 19.2517,
+       "min_psnr_first_24": 19.1883,
+       "median_psnr_first_24": 42.598600000000005,
+       "terminal_median_psnr": 47.257,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=2_20261031-121321",
+      "step": "wait",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.0051,
+      "delivery_gap_s": 15.0051,
+      "total_stall_s": 14.405800000000001,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.0051,
+      "c2": {
+       "first_call_psnr": 19.2517,
+       "min_psnr_first_24": 19.1883,
+       "median_psnr_first_24": 42.598600000000005,
+       "terminal_median_psnr": 47.257,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=3_20261031-125646",
+      "step": "wait",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.0306,
+      "delivery_gap_s": 15.0306,
+      "total_stall_s": 14.433199999999992,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.0306,
+      "c2": {
+       "first_call_psnr": 19.2517,
+       "min_psnr_first_24": 19.1883,
+       "median_psnr_first_24": 42.598600000000005,
+       "terminal_median_psnr": 47.257,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=4_20261031-134008",
+      "step": "wait",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 14.9988,
+      "delivery_gap_s": 14.9988,
+      "total_stall_s": 14.4008,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 14.9988,
+      "c2": {
+       "first_call_psnr": 19.2517,
+       "min_psnr_first_24": 19.1883,
+       "median_psnr_first_24": 42.598600000000005,
+       "terminal_median_psnr": 47.257,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=5_20261031-142326",
+      "step": "wait",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.0237,
+      "delivery_gap_s": 15.0237,
+      "total_stall_s": 14.426399999999996,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.0237,
+      "c2": {
+       "first_call_psnr": 19.2517,
+       "min_psnr_first_24": 19.1883,
+       "median_psnr_first_24": 42.598600000000005,
+       "terminal_median_psnr": 47.257,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     }
+    ]
+   },
+   "psink": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 2.234400000000001,
+     "q1": 2.2194000000000003,
+     "q3": 2.304299999999998,
+     "n": 5,
+     "values": [
+      2.234400000000001,
+      2.336100000000002,
+      2.2194000000000003,
+      2.2072000000000003,
+      2.304299999999998
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 28.7193,
+     "q1": 28.7078,
+     "q3": 28.8805,
+     "n": 5,
+     "values": [
+      28.8805,
+      29.0868,
+      28.7193,
+      28.7076,
+      28.7078
+     ]
+    },
+    "total_stall_s": {
+     "median": 4.766799999999988,
+     "q1": 4.74220000000001,
+     "q3": 4.830600000000009,
+     "n": 5,
+     "values": [
+      4.830600000000009,
+      5.017400000000041,
+      4.74220000000001,
+      4.732200000000011,
+      4.766799999999988
+     ]
+    },
+    "tx_bytes": {
+     "median": 2475999856,
+     "q1": 2475999856.0,
+     "q3": 2475999856.0,
+     "n": 5,
+     "values": [
+      2475999856,
+      2475999856,
+      2475999856,
+      2475999856,
+      2475999856
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 2.234400000000001,
+     "q1": 2.2194000000000003,
+     "q3": 2.304299999999998,
+     "n": 5,
+     "values": [
+      2.234400000000001,
+      2.336100000000002,
+      2.2194000000000003,
+      2.2072000000000003,
+      2.304299999999998
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 40.55355,
+     "q1": 40.55355,
+     "q3": 40.55355,
+     "n": 5,
+     "values": [
+      40.55355,
+      40.55355,
+      40.55355,
+      40.55355,
+      40.55355
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 19.1635,
+     "q1": 19.1635,
+     "q3": 19.1635,
+     "n": 5,
+     "values": [
+      19.1635,
+      19.1635,
+      19.1635,
+      19.1635,
+      19.1635
+     ]
+    },
+    "psnr_terminal": {
+     "median": 48.810900000000004,
+     "q1": 48.810900000000004,
+     "q3": 48.810900000000004,
+     "n": 5,
+     "values": [
+      48.810900000000004,
+      48.810900000000004,
+      48.810900000000004,
+      48.810900000000004,
+      48.810900000000004
+     ]
+    },
+    "switch_reasons": [
+     "threshold",
+     "threshold",
+     "threshold",
+     "threshold",
+     "threshold"
+    ],
+    "cost": null,
+    "runs": [
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261031-111130",
+      "step": "psink",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 28.8805,
+      "delivery_gap_s": 2.234400000000001,
+      "total_stall_s": 4.830600000000009,
+      "n_stalls": 4,
+      "tx_bytes": 2475999856,
+      "cutover_interruption_s": 2.234400000000001,
+      "c2": {
+       "first_call_psnr": 19.1635,
+       "min_psnr_first_24": 19.1635,
+       "median_psnr_first_24": 40.55355,
+       "terminal_median_psnr": 48.810900000000004,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        722797984,
+        25165824
+       ],
+       "stop_and_copy_bytes": 2799408,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.4189558506014572,
+        0.014586882411678898,
+        0.001622622621787119
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=2_20261031-121519",
+      "step": "psink",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 29.0868,
+      "delivery_gap_s": 2.336100000000002,
+      "total_stall_s": 5.017400000000041,
+      "n_stalls": 4,
+      "tx_bytes": 2475999856,
+      "cutover_interruption_s": 2.336100000000002,
+      "c2": {
+       "first_call_psnr": 19.1635,
+       "min_psnr_first_24": 19.1635,
+       "median_psnr_first_24": 40.55355,
+       "terminal_median_psnr": 48.810900000000004,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        722797984,
+        25165824
+       ],
+       "stop_and_copy_bytes": 2799408,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.4189558506014572,
+        0.014586882411678898,
+        0.001622622621787119
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=3_20261031-125843",
+      "step": "psink",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 28.7193,
+      "delivery_gap_s": 2.2194000000000003,
+      "total_stall_s": 4.74220000000001,
+      "n_stalls": 4,
+      "tx_bytes": 2475999856,
+      "cutover_interruption_s": 2.2194000000000003,
+      "c2": {
+       "first_call_psnr": 19.1635,
+       "min_psnr_first_24": 19.1635,
+       "median_psnr_first_24": 40.55355,
+       "terminal_median_psnr": 48.810900000000004,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        722797984,
+        25165824
+       ],
+       "stop_and_copy_bytes": 2799408,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.4189558506014572,
+        0.014586882411678898,
+        0.001622622621787119
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=4_20261031-134207",
+      "step": "psink",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 28.7076,
+      "delivery_gap_s": 2.2072000000000003,
+      "total_stall_s": 4.732200000000011,
+      "n_stalls": 4,
+      "tx_bytes": 2475999856,
+      "cutover_interruption_s": 2.2072000000000003,
+      "c2": {
+       "first_call_psnr": 19.1635,
+       "min_psnr_first_24": 19.1635,
+       "median_psnr_first_24": 40.55355,
+       "terminal_median_psnr": 48.810900000000004,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        722797984,
+        25165824
+       ],
+       "stop_and_copy_bytes": 2799408,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.4189558506014572,
+        0.014586882411678898,
+        0.001622622621787119
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=5_20261031-142524",
+      "step": "psink",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 28.7078,
+      "delivery_gap_s": 2.304299999999998,
+      "total_stall_s": 4.766799999999988,
+      "n_stalls": 4,
+      "tx_bytes": 2475999856,
+      "cutover_interruption_s": 2.304299999999998,
+      "c2": {
+       "first_call_psnr": 19.1635,
+       "min_psnr_first_24": 19.1635,
+       "median_psnr_first_24": 40.55355,
+       "terminal_median_psnr": 48.810900000000004,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        722797984,
+        25165824
+       ],
+       "stop_and_copy_bytes": 2799408,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.4189558506014572,
+        0.014586882411678898,
+        0.001622622621787119
+       ]
+      },
+      "cost": null
+     }
+    ]
+   },
+   "nosync": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 8.828999999999997,
+     "q1": 8.723899999999997,
+     "q3": 8.8731,
+     "n": 5,
+     "values": [
+      8.828999999999997,
+      8.922899999999998,
+      8.706699999999998,
+      8.723899999999997,
+      8.8731
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 30.3115,
+     "q1": 30.1784,
+     "q3": 30.3741,
+     "n": 5,
+     "values": [
+      30.0493,
+      30.1784,
+      30.3115,
+      30.3741,
+      31.0407
+     ]
+    },
+    "total_stall_s": {
+     "median": 9.216199999999997,
+     "q1": 9.112499999999985,
+     "q3": 9.361799999999992,
+     "n": 5,
+     "values": [
+      9.216199999999997,
+      9.659099999999992,
+      9.098399999999991,
+      9.112499999999985,
+      9.361799999999992
+     ]
+    },
+    "tx_bytes": {
+     "median": 2470608800,
+     "q1": 2470209392.0,
+     "q3": 2470608800.0,
+     "n": 5,
+     "values": [
+      2470209392,
+      2470209392,
+      2470608800,
+      2470608800,
+      2471008208
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 8.828999999999997,
+     "q1": 8.723899999999997,
+     "q3": 8.8731,
+     "n": 5,
+     "values": [
+      8.828999999999997,
+      8.922899999999998,
+      8.706699999999998,
+      8.723899999999997,
+      8.8731
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 41.019949999999994,
+     "q1": 40.99885,
+     "q3": 41.301,
+     "n": 5,
+     "values": [
+      41.301,
+      41.301,
+      40.99885,
+      40.99885,
+      41.019949999999994
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 26.9385,
+     "q1": 26.3981,
+     "q3": 27.5403,
+     "n": 5,
+     "values": [
+      26.3981,
+      26.3981,
+      27.5403,
+      27.5403,
+      26.9385
+     ]
+    },
+    "psnr_terminal": {
+     "median": 48.76965,
+     "q1": 48.76965,
+     "q3": 48.9393,
+     "n": 5,
+     "values": [
+      48.9393,
+      48.9393,
+      48.76965,
+      48.76965,
+      48.6459
+     ]
+    },
+    "switch_reasons": [
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit"
+    ],
+    "cost": {
+     "replayed_calls": {
+      "median": 32,
+      "q1": 31.0,
+      "q3": 32.0,
+      "n": 5,
+      "values": [
+       31,
+       31,
+       32,
+       32,
+       33
+      ]
+     },
+     "replay_s_per_call": {
+      "median": 0.1206113351508975,
+      "q1": 0.12059568846598268,
+      "q3": 0.12065492942929268,
+      "n": 5,
+      "values": [
+       0.11908618081361055,
+       0.1206113351508975,
+       0.12059568846598268,
+       0.1207362967543304,
+       0.12065492942929268
+      ]
+     },
+     "replay_s_total": {
+      "median": 3.8863859521225095,
+      "q1": 3.7684744726866484,
+      "q3": 3.893355118110776,
+      "n": 5,
+      "values": [
+       3.7216490814462304,
+       3.7684744726866484,
+       3.8863859521225095,
+       3.893355118110776,
+       4.02024544402957
+      ]
+     },
+     "patches": {
+      "median": 0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0,
+       0,
+       0,
+       0,
+       0
+      ]
+     },
+     "patch_mb": {
+      "median": 0.0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "log_mb": {
+      "median": 12.781056,
+      "q1": 12.381648,
+      "q3": 12.781056,
+      "n": 5,
+      "values": [
+       12.381648,
+       12.381648,
+       12.781056,
+       12.781056,
+       13.180464
+      ]
+     },
+     "base_mb": {
+      "median": 1727.636688,
+      "q1": 1727.636688,
+      "q3": 1727.636688,
+      "n": 5,
+      "values": [
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688
+      ]
+     },
+     "switch_mb": {
+      "median": 730.191056,
+      "q1": 730.191056,
+      "q3": 730.191056,
+      "n": 5,
+      "values": [
+       730.191056,
+       730.191056,
+       730.191056,
+       730.191056,
+       730.191056
+      ]
+     },
+     "ready_wait_s": {
+      "median": 4.0682361125946045,
+      "q1": 4.057286739349365,
+      "q3": 4.1274573802948,
+      "n": 5,
+      "values": [
+       4.03697943687439,
+       4.0682361125946045,
+       4.057286739349365,
+       4.1274573802948,
+       4.3621509075164795
+      ]
+     },
+     "stop_to_sent_s": {
+      "median": 7.349728107452393,
+      "q1": 7.250688314437866,
+      "q3": 7.378315687179565,
+      "n": 5,
+      "values": [
+       7.349728107452393,
+       7.451460123062134,
+       7.246928691864014,
+       7.250688314437866,
+       7.378315687179565
+      ]
+     },
+     "fallback_mb": {
+      "median": 0.0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "restore_s": {
+      "median": 0.6536023616790771,
+      "q1": 0.6532154083251953,
+      "q3": 0.6542890071868896,
+      "n": 5,
+      "values": [
+       0.6531941890716553,
+       0.6536023616790771,
+       0.6532154083251953,
+       0.6554667949676514,
+       0.6542890071868896
+      ]
+     },
+     "dr2_s": {
+      "median": 0.5209499830380082,
+      "q1": 0.5208990406244993,
+      "q3": 0.5211149211972952,
+      "n": 5,
+      "values": [
+       0.5209499830380082,
+       0.5208990406244993,
+       0.5208751196041703,
+       0.5211149211972952,
+       0.521689091809094
+      ]
+     }
+    },
+    "runs": [
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_20261031-113343",
+      "step": "nosync",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 30.0493,
+      "delivery_gap_s": 8.828999999999997,
+      "total_stall_s": 9.216199999999997,
+      "n_stalls": 2,
+      "tx_bytes": 2470209392,
+      "cutover_interruption_s": 8.828999999999997,
+      "c2": {
+       "first_call_psnr": 29.2595,
+       "min_psnr_first_24": 26.3981,
+       "median_psnr_first_24": 41.301,
+       "terminal_median_psnr": 48.9393,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 730191056,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.42265313133938265
+       ]
+      },
+      "cost": {
+       "replayed_calls": 31,
+       "replay_s_per_call": 0.11908618081361055,
+       "replay_s_total": 3.7216490814462304,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.381648,
+       "base_mb": 1727.636688,
+       "switch_mb": 730.191056,
+       "ready_wait_s": 4.03697943687439,
+       "stop_to_sent_s": 7.349728107452393,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6531941890716553,
+       "dr2_s": 0.5209499830380082
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=2_20261031-121712",
+      "step": "nosync",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 30.1784,
+      "delivery_gap_s": 8.922899999999998,
+      "total_stall_s": 9.659099999999992,
+      "n_stalls": 3,
+      "tx_bytes": 2470209392,
+      "cutover_interruption_s": 8.922899999999998,
+      "c2": {
+       "first_call_psnr": 29.2595,
+       "min_psnr_first_24": 26.3981,
+       "median_psnr_first_24": 41.301,
+       "terminal_median_psnr": 48.9393,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 730191056,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.42265313133938265
+       ]
+      },
+      "cost": {
+       "replayed_calls": 31,
+       "replay_s_per_call": 0.1206113351508975,
+       "replay_s_total": 3.7684744726866484,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.381648,
+       "base_mb": 1727.636688,
+       "switch_mb": 730.191056,
+       "ready_wait_s": 4.0682361125946045,
+       "stop_to_sent_s": 7.451460123062134,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6536023616790771,
+       "dr2_s": 0.5208990406244993
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=3_20261031-130036",
+      "step": "nosync",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 30.3115,
+      "delivery_gap_s": 8.706699999999998,
+      "total_stall_s": 9.098399999999991,
+      "n_stalls": 2,
+      "tx_bytes": 2470608800,
+      "cutover_interruption_s": 8.706699999999998,
+      "c2": {
+       "first_call_psnr": 29.3163,
+       "min_psnr_first_24": 27.5403,
+       "median_psnr_first_24": 40.99885,
+       "terminal_median_psnr": 48.76965,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 730191056,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.42265313133938265
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12059568846598268,
+       "replay_s_total": 3.8863859521225095,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.781056,
+       "base_mb": 1727.636688,
+       "switch_mb": 730.191056,
+       "ready_wait_s": 4.057286739349365,
+       "stop_to_sent_s": 7.246928691864014,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6532154083251953,
+       "dr2_s": 0.5208751196041703
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=4_20261031-134359",
+      "step": "nosync",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 30.3741,
+      "delivery_gap_s": 8.723899999999997,
+      "total_stall_s": 9.112499999999985,
+      "n_stalls": 2,
+      "tx_bytes": 2470608800,
+      "cutover_interruption_s": 8.723899999999997,
+      "c2": {
+       "first_call_psnr": 29.3163,
+       "min_psnr_first_24": 27.5403,
+       "median_psnr_first_24": 40.99885,
+       "terminal_median_psnr": 48.76965,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 730191056,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.42265313133938265
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.1207362967543304,
+       "replay_s_total": 3.893355118110776,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.781056,
+       "base_mb": 1727.636688,
+       "switch_mb": 730.191056,
+       "ready_wait_s": 4.1274573802948,
+       "stop_to_sent_s": 7.250688314437866,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6554667949676514,
+       "dr2_s": 0.5211149211972952
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=5_20261031-142717",
+      "step": "nosync",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 31.0407,
+      "delivery_gap_s": 8.8731,
+      "total_stall_s": 9.361799999999992,
+      "n_stalls": 2,
+      "tx_bytes": 2471008208,
+      "cutover_interruption_s": 8.8731,
+      "c2": {
+       "first_call_psnr": 29.2994,
+       "min_psnr_first_24": 26.9385,
+       "median_psnr_first_24": 41.019949999999994,
+       "terminal_median_psnr": 48.6459,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 730191056,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.42265313133938265
+       ]
+      },
+      "cost": {
+       "replayed_calls": 33,
+       "replay_s_per_call": 0.12065492942929268,
+       "replay_s_total": 4.02024544402957,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 13.180464,
+       "base_mb": 1727.636688,
+       "switch_mb": 730.191056,
+       "ready_wait_s": 4.3621509075164795,
+       "stop_to_sent_s": 7.378315687179565,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6542890071868896,
+       "dr2_s": 0.521689091809094
+      }
+     }
+    ]
+   },
+   "otter": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 1.6260999999999999,
+     "q1": 1.5974000000000004,
+     "q3": 1.6582999999999999,
+     "n": 5,
+     "values": [
+      1.5974000000000004,
+      1.6772,
+      1.5942999999999998,
+      1.6260999999999999,
+      1.6582999999999999
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 23.2821,
+     "q1": 23.1187,
+     "q3": 23.5325,
+     "n": 5,
+     "values": [
+      23.8171,
+      23.2821,
+      23.5325,
+      23.1187,
+      23.0915
+     ]
+    },
+    "total_stall_s": {
+     "median": 1.9884000000000117,
+     "q1": 1.9611000000000078,
+     "q3": 2.020000000000006,
+     "n": 5,
+     "values": [
+      1.9884000000000117,
+      2.1154999999999875,
+      1.8862000000000088,
+      1.9611000000000078,
+      2.020000000000006
+     ]
+    },
+    "tx_bytes": {
+     "median": 1762785792,
+     "q1": 1762785792.0,
+     "q3": 1763185200.0,
+     "n": 5,
+     "values": [
+      1763185200,
+      1762785792,
+      1763185200,
+      1762785792,
+      1762785792
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 1.5679000000000016,
+     "q1": 1.5420000000000016,
+     "q3": 1.5974000000000004,
+     "n": 5,
+     "values": [
+      1.5974000000000004,
+      1.6440999999999981,
+      1.5004999999999988,
+      1.5420000000000016,
+      1.5679000000000016
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 40.9765,
+     "q1": 40.9765,
+     "q3": 41.024699999999996,
+     "n": 5,
+     "values": [
+      41.024699999999996,
+      40.9765,
+      41.024699999999996,
+      40.9765,
+      40.9765
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 27.5475,
+     "q1": 26.9358,
+     "q3": 27.5475,
+     "n": 5,
+     "values": [
+      26.9358,
+      27.5475,
+      26.9358,
+      27.5475,
+      27.5475
+     ]
+    },
+    "psnr_terminal": {
+     "median": 48.76965,
+     "q1": 48.6459,
+     "q3": 48.76965,
+     "n": 5,
+     "values": [
+      48.6459,
+      48.76965,
+      48.6459,
+      48.76965,
+      48.76965
+     ]
+    },
+    "switch_reasons": [
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit"
+    ],
+    "cost": {
+     "replayed_calls": {
+      "median": 32,
+      "q1": 32.0,
+      "q3": 33.0,
+      "n": 5,
+      "values": [
+       33,
+       32,
+       33,
+       32,
+       32
+      ]
+     },
+     "replay_s_per_call": {
+      "median": 0.12043648026883602,
+      "q1": 0.12029719585552812,
+      "q3": 0.12063435884192586,
+      "n": 5,
+      "values": [
+       0.12021110765635967,
+       0.12029719585552812,
+       0.12114868685603142,
+       0.12043648026883602,
+       0.12063435884192586
+      ]
+     },
+     "replay_s_total": {
+      "median": 3.8932370990514755,
+      "q1": 3.883795374073088,
+      "q3": 4.007543391548097,
+      "n": 5,
+      "values": [
+       4.007543391548097,
+       3.8818443780764937,
+       4.048560466617346,
+       3.883795374073088,
+       3.8932370990514755
+      ]
+     },
+     "patches": {
+      "median": 2,
+      "q1": 2.0,
+      "q3": 2.0,
+      "n": 5,
+      "values": [
+       2,
+       2,
+       2,
+       2,
+       2
+      ]
+     },
+     "patch_mb": {
+      "median": 19.16928,
+      "q1": 19.16928,
+      "q3": 19.16928,
+      "n": 5,
+      "values": [
+       19.16928,
+       19.16928,
+       19.16928,
+       19.16928,
+       19.16928
+      ]
+     },
+     "log_mb": {
+      "median": 31.950336,
+      "q1": 31.950336,
+      "q3": 32.349744,
+      "n": 5,
+      "values": [
+       32.349744,
+       31.950336,
+       32.349744,
+       31.950336,
+       31.950336
+      ]
+     },
+     "base_mb": {
+      "median": 1727.636688,
+      "q1": 1727.636688,
+      "q3": 1727.636688,
+      "n": 5,
+      "values": [
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688
+      ]
+     },
+     "switch_mb": {
+      "median": 3.198768,
+      "q1": 3.198768,
+      "q3": 3.198768,
+      "n": 5,
+      "values": [
+       3.198768,
+       3.198768,
+       3.198768,
+       3.198768,
+       3.198768
+      ]
+     },
+     "ready_wait_s": {
+      "median": 4.0788679122924805,
+      "q1": 4.069348335266113,
+      "q3": 4.224001169204712,
+      "n": 5,
+      "values": [
+       4.383509397506714,
+       4.048891067504883,
+       4.224001169204712,
+       4.0788679122924805,
+       4.069348335266113
+      ]
+     },
+     "stop_to_sent_s": {
+      "median": 1.3692882061004639,
+      "q1": 1.3587355613708496,
+      "q3": 1.430448293685913,
+      "n": 5,
+      "values": [
+       1.3587355613708496,
+       1.430448293685913,
+       1.2408697605133057,
+       1.3692882061004639,
+       1.4459822177886963
+      ]
+     },
+     "src_sink_digest_s": {
+      "median": 0.06413508951663971,
+      "q1": 0.06410498172044754,
+      "q3": 0.06415048241615295,
+      "n": 5,
+      "values": [
+       0.06415048241615295,
+       0.06410498172044754,
+       0.06395129859447479,
+       0.06416483223438263,
+       0.06413508951663971
+      ]
+     },
+     "dst_sink_check_s": {
+      "median": 0.06374910101294518,
+      "q1": 0.06367166060954332,
+      "q3": 0.06384122371673584,
+      "n": 5,
+      "values": [
+       0.06358333304524422,
+       0.06384122371673584,
+       0.06374910101294518,
+       0.06385722663253546,
+       0.06367166060954332
+      ]
+     },
+     "verdict_wait_s": {
+      "median": 0.13080930709838867,
+      "q1": 0.1260383129119873,
+      "q3": 0.1559913158416748,
+      "n": 5,
+      "values": [
+       0.13080930709838867,
+       0.17727041244506836,
+       0.08901739120483398,
+       0.1260383129119873,
+       0.1559913158416748
+      ]
+     },
+     "fallback_mb": {
+      "median": 0.0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "restore_s": {
+      "median": 0.6830089092254639,
+      "q1": 0.6771500110626221,
+      "q3": 0.7054126262664795,
+      "n": 5,
+      "values": [
+       0.6830089092254639,
+       0.7267031669616699,
+       0.6383457183837891,
+       0.6771500110626221,
+       0.7054126262664795
+      ]
+     },
+     "dr2_s": {
+      "median": 0.5217953072860837,
+      "q1": 0.5215854570269585,
+      "q3": 0.5233640363439918,
+      "n": 5,
+      "values": [
+       0.5264211725443602,
+       0.5215854570269585,
+       0.5217953072860837,
+       0.5233640363439918,
+       0.5211177105084062
+      ]
+     }
+    },
+    "runs": [
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_20261030-173550",
+      "step": "otter",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 23.8171,
+      "delivery_gap_s": 1.5974000000000004,
+      "total_stall_s": 1.9884000000000117,
+      "n_stalls": 2,
+      "tx_bytes": 1763185200,
+      "cutover_interruption_s": 1.5974000000000004,
+      "c2": {
+       "first_call_psnr": 29.2969,
+       "min_psnr_first_24": 26.9358,
+       "median_psnr_first_24": 41.024699999999996,
+       "terminal_median_psnr": 48.6459,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 33,
+       "replay_s_per_call": 0.12021110765635967,
+       "replay_s_total": 4.007543391548097,
+       "patches": 2,
+       "patch_mb": 19.16928,
+       "log_mb": 32.349744,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.383509397506714,
+       "stop_to_sent_s": 1.3587355613708496,
+       "src_sink_digest_s": 0.06415048241615295,
+       "dst_sink_check_s": 0.06358333304524422,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.13080930709838867,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6830089092254639,
+       "dr2_s": 0.5264211725443602
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=2_sinksync_retain_reuse_20261030-182940",
+      "step": "otter",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 23.2821,
+      "delivery_gap_s": 1.6772,
+      "total_stall_s": 2.1154999999999875,
+      "n_stalls": 2,
+      "tx_bytes": 1762785792,
+      "cutover_interruption_s": 1.6440999999999981,
+      "c2": {
+       "first_call_psnr": 29.3223,
+       "min_psnr_first_24": 27.5475,
+       "median_psnr_first_24": 40.9765,
+       "terminal_median_psnr": 48.76965,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12029719585552812,
+       "replay_s_total": 3.8818443780764937,
+       "patches": 2,
+       "patch_mb": 19.16928,
+       "log_mb": 31.950336,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.048891067504883,
+       "stop_to_sent_s": 1.430448293685913,
+       "src_sink_digest_s": 0.06410498172044754,
+       "dst_sink_check_s": 0.06384122371673584,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.17727041244506836,
+       "fallback_mb": 0.0,
+       "restore_s": 0.7267031669616699,
+       "dr2_s": 0.5215854570269585
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=3_sinksync_retain_reuse_20261030-184103",
+      "step": "otter",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 23.5325,
+      "delivery_gap_s": 1.5942999999999998,
+      "total_stall_s": 1.8862000000000088,
+      "n_stalls": 2,
+      "tx_bytes": 1763185200,
+      "cutover_interruption_s": 1.5004999999999988,
+      "c2": {
+       "first_call_psnr": 29.2969,
+       "min_psnr_first_24": 26.9358,
+       "median_psnr_first_24": 41.024699999999996,
+       "terminal_median_psnr": 48.6459,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 33,
+       "replay_s_per_call": 0.12114868685603142,
+       "replay_s_total": 4.048560466617346,
+       "patches": 2,
+       "patch_mb": 19.16928,
+       "log_mb": 32.349744,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.224001169204712,
+       "stop_to_sent_s": 1.2408697605133057,
+       "src_sink_digest_s": 0.06395129859447479,
+       "dst_sink_check_s": 0.06374910101294518,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.08901739120483398,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6383457183837891,
+       "dr2_s": 0.5217953072860837
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=4_sinksync_retain_reuse_20261030-185227",
+      "step": "otter",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 23.1187,
+      "delivery_gap_s": 1.6260999999999999,
+      "total_stall_s": 1.9611000000000078,
+      "n_stalls": 2,
+      "tx_bytes": 1762785792,
+      "cutover_interruption_s": 1.5420000000000016,
+      "c2": {
+       "first_call_psnr": 29.3223,
+       "min_psnr_first_24": 27.5475,
+       "median_psnr_first_24": 40.9765,
+       "terminal_median_psnr": 48.76965,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12043648026883602,
+       "replay_s_total": 3.883795374073088,
+       "patches": 2,
+       "patch_mb": 19.16928,
+       "log_mb": 31.950336,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.0788679122924805,
+       "stop_to_sent_s": 1.3692882061004639,
+       "src_sink_digest_s": 0.06416483223438263,
+       "dst_sink_check_s": 0.06385722663253546,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.1260383129119873,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6771500110626221,
+       "dr2_s": 0.5233640363439918
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=5_sinksync_retain_reuse_20261030-190352",
+      "step": "otter",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 23.0915,
+      "delivery_gap_s": 1.6582999999999999,
+      "total_stall_s": 2.020000000000006,
+      "n_stalls": 2,
+      "tx_bytes": 1762785792,
+      "cutover_interruption_s": 1.5679000000000016,
+      "c2": {
+       "first_call_psnr": 29.3223,
+       "min_psnr_first_24": 27.5475,
+       "median_psnr_first_24": 40.9765,
+       "terminal_median_psnr": 48.76965,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12063435884192586,
+       "replay_s_total": 3.8932370990514755,
+       "patches": 2,
+       "patch_mb": 19.16928,
+       "log_mb": 31.950336,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.069348335266113,
+       "stop_to_sent_s": 1.4459822177886963,
+       "src_sink_digest_s": 0.06413508951663971,
+       "dst_sink_check_s": 0.06367166060954332,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.1559913158416748,
+       "fallback_mb": 0.0,
+       "restore_s": 0.7054126262664795,
+       "dr2_s": 0.5211177105084062
+      }
+     }
+    ]
+   },
+   "pfull": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 50.91589999999999,
+     "q1": 50.75060000000002,
+     "q3": 50.98599999999999,
+     "n": 5,
+     "values": [
+      50.91589999999999,
+      50.75060000000002,
+      50.643400000000014,
+      50.98599999999999,
+      51.112899999999996
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 213.8467,
+     "q1": 213.5739,
+     "q3": 213.8596,
+     "n": 5,
+     "values": [
+      213.8467,
+      213.5739,
+      213.2416,
+      213.8596,
+      215.6755
+     ]
+    },
+    "total_stall_s": {
+     "median": 61.80029999999992,
+     "q1": 61.479999999999926,
+     "q3": 62.04259999999995,
+     "n": 5,
+     "values": [
+      61.479999999999926,
+      61.42489999999998,
+      62.04259999999995,
+      61.80029999999992,
+      62.26370000000004
+     ]
+    },
+    "tx_bytes": {
+     "median": 22854062912,
+     "q1": 22854062912.0,
+     "q3": 22854062912.0,
+     "n": 5,
+     "values": [
+      22854062912,
+      22854062912,
+      22854062912,
+      22854062912,
+      22854062912
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 50.91589999999999,
+     "q1": 50.75060000000002,
+     "q3": 50.98599999999999,
+     "n": 5,
+     "values": [
+      50.91589999999999,
+      50.75060000000002,
+      50.643400000000014,
+      50.98599999999999,
+      51.112899999999996
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 99.0,
+     "q1": 99.0,
+     "q3": 99.0,
+     "n": 5,
+     "values": [
+      99.0,
+      99.0,
+      99.0,
+      99.0,
+      99.0
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 99.0,
+     "q1": 99.0,
+     "q3": 99.0,
+     "n": 5,
+     "values": [
+      99.0,
+      99.0,
+      99.0,
+      99.0,
+      99.0
+     ]
+    },
+    "psnr_terminal": {
+     "median": 99.0,
+     "q1": 99.0,
+     "q3": 99.0,
+     "n": 5,
+     "values": [
+      99.0,
+      99.0,
+      99.0,
+      99.0,
+      99.0
+     ]
+    },
+    "switch_reasons": [
+     "no_shrink",
+     "no_shrink",
+     "no_shrink",
+     "no_shrink",
+     "no_shrink"
+    ],
+    "cost": null,
+    "runs": [
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261030-175711",
+      "step": "pfull",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 213.8467,
+      "delivery_gap_s": 50.91589999999999,
+      "total_stall_s": 61.479999999999926,
+      "n_stalls": 10,
+      "tx_bytes": 22854062912,
+      "cutover_interruption_s": 50.91589999999999,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5477586128,
+        5460808912
+       ],
+       "stop_and_copy_bytes": 5452420304,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8474974957047785,
+        0.8449017083976258,
+        0.8436038147440494
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=2_20261030-182240",
+      "step": "pfull",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 213.5739,
+      "delivery_gap_s": 50.75060000000002,
+      "total_stall_s": 61.42489999999998,
+      "n_stalls": 10,
+      "tx_bytes": 22854062912,
+      "cutover_interruption_s": 50.75060000000002,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5477586128,
+        5460808912
+       ],
+       "stop_and_copy_bytes": 5452420304,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8474974957047785,
+        0.8449017083976258,
+        0.8436038147440494
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=3_20261030-183405",
+      "step": "pfull",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 213.2416,
+      "delivery_gap_s": 50.643400000000014,
+      "total_stall_s": 62.04259999999995,
+      "n_stalls": 10,
+      "tx_bytes": 22854062912,
+      "cutover_interruption_s": 50.643400000000014,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5477586128,
+        5460808912
+       ],
+       "stop_and_copy_bytes": 5452420304,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8474974957047785,
+        0.8449017083976258,
+        0.8436038147440494
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=4_20261030-184528",
+      "step": "pfull",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 213.8596,
+      "delivery_gap_s": 50.98599999999999,
+      "total_stall_s": 61.80029999999992,
+      "n_stalls": 10,
+      "tx_bytes": 22854062912,
+      "cutover_interruption_s": 50.98599999999999,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5477586128,
+        5460808912
+       ],
+       "stop_and_copy_bytes": 5452420304,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8474974957047785,
+        0.8449017083976258,
+        0.8436038147440494
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=5_20261030-185651",
+      "step": "pfull",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 215.6755,
+      "delivery_gap_s": 51.112899999999996,
+      "total_stall_s": 62.26370000000004,
+      "n_stalls": 10,
+      "tx_bytes": 22854062912,
+      "cutover_interruption_s": 51.112899999999996,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5477586128,
+        5460808912
+       ],
+       "stop_and_copy_bytes": 5452420304,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8474974957047785,
+        0.8449017083976258,
+        0.8436038147440494
+       ]
+      },
+      "cost": null
+     }
+    ]
+   }
+  },
+  "bfly": {
+   "wait": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 15.0182,
+     "q1": 15.005,
+     "q3": 15.0252,
+     "n": 5,
+     "values": [
+      14.983,
+      15.0252,
+      15.005,
+      15.035,
+      15.0182
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 15.0182,
+     "q1": 15.005,
+     "q3": 15.0252,
+     "n": 5,
+     "values": [
+      14.983,
+      15.0252,
+      15.005,
+      15.035,
+      15.0182
+     ]
+    },
+    "total_stall_s": {
+     "median": 14.420099999999998,
+     "q1": 14.407900000000003,
+     "q3": 14.426899999999998,
+     "n": 5,
+     "values": [
+      14.385899999999996,
+      14.426899999999998,
+      14.407900000000003,
+      14.438499999999994,
+      14.420099999999998
+     ]
+    },
+    "tx_bytes": {
+     "median": 1728036048,
+     "q1": 1728036048.0,
+     "q3": 1728036048.0,
+     "n": 5,
+     "values": [
+      1728036048,
+      1728036048,
+      1728036048,
+      1728036048,
+      1728036048
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 15.0182,
+     "q1": 15.005,
+     "q3": 15.0252,
+     "n": 5,
+     "values": [
+      14.983,
+      15.0252,
+      15.005,
+      15.035,
+      15.0182
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 34.5223,
+     "q1": 34.5223,
+     "q3": 34.5223,
+     "n": 5,
+     "values": [
+      34.5223,
+      34.5223,
+      34.5223,
+      34.5223,
+      34.5223
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 14.1349,
+     "q1": 14.1349,
+     "q3": 14.1349,
+     "n": 5,
+     "values": [
+      14.1349,
+      14.1349,
+      14.1349,
+      14.1349,
+      14.1349
+     ]
+    },
+    "psnr_terminal": {
+     "median": 36.19265,
+     "q1": 36.19265,
+     "q3": 36.19265,
+     "n": 5,
+     "values": [
+      36.19265,
+      36.19265,
+      36.19265,
+      36.19265,
+      36.19265
+     ]
+    },
+    "switch_reasons": [
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "cost": null,
+    "runs": [
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=1_20261031-115129",
+      "step": "wait",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 14.983,
+      "delivery_gap_s": 14.983,
+      "total_stall_s": 14.385899999999996,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 14.983,
+      "c2": {
+       "first_call_psnr": 14.1349,
+       "min_psnr_first_24": 14.1349,
+       "median_psnr_first_24": 34.5223,
+       "terminal_median_psnr": 36.19265,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=2_20261031-123459",
+      "step": "wait",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.0252,
+      "delivery_gap_s": 15.0252,
+      "total_stall_s": 14.426899999999998,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.0252,
+      "c2": {
+       "first_call_psnr": 14.1349,
+       "min_psnr_first_24": 14.1349,
+       "median_psnr_first_24": 34.5223,
+       "terminal_median_psnr": 36.19265,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=3_20261031-131823",
+      "step": "wait",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.005,
+      "delivery_gap_s": 15.005,
+      "total_stall_s": 14.407900000000003,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.005,
+      "c2": {
+       "first_call_psnr": 14.1349,
+       "min_psnr_first_24": 14.1349,
+       "median_psnr_first_24": 34.5223,
+       "terminal_median_psnr": 36.19265,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=4_20261031-140141",
+      "step": "wait",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.035,
+      "delivery_gap_s": 15.035,
+      "total_stall_s": 14.438499999999994,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.035,
+      "c2": {
+       "first_call_psnr": 14.1349,
+       "min_psnr_first_24": 14.1349,
+       "median_psnr_first_24": 34.5223,
+       "terminal_median_psnr": 36.19265,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=split_wait_bw=1000_rho=none_tm=inf_rep=5_20261031-144509",
+      "step": "wait",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at bind; recent state from zero",
+       "checks": {
+        "all_fragments_verified": true,
+        "sink_version_consistent": true,
+        "final_sink_digest_matches_source": true,
+        "no_generation_before_bind": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 15.0182,
+      "delivery_gap_s": 15.0182,
+      "total_stall_s": 14.420099999999998,
+      "n_stalls": 1,
+      "tx_bytes": 1728036048,
+      "cutover_interruption_s": 15.0182,
+      "c2": {
+       "first_call_psnr": 14.1349,
+       "min_psnr_first_24": 14.1349,
+       "median_psnr_first_24": 34.5223,
+       "terminal_median_psnr": 36.19265,
+       "calls_scored": 131
+      },
+      "rounds": {
+       "dirty_bytes": [],
+       "stop_and_copy_bytes": 0,
+       "scope_bytes": null,
+       "switch_reason": null,
+       "fraction_of_scope": null
+      },
+      "cost": null
+     }
+    ]
+   },
+   "psink": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 2.5178999999999974,
+     "q1": 2.438600000000001,
+     "q3": 2.540999999999997,
+     "n": 5,
+     "values": [
+      2.438600000000001,
+      2.540999999999997,
+      2.5178999999999974,
+      2.3637999999999977,
+      2.5651999999999973
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 35.3478,
+     "q1": 35.3109,
+     "q3": 35.61,
+     "n": 5,
+     "values": [
+      35.3478,
+      35.3109,
+      35.61,
+      34.8966,
+      35.6141
+     ]
+    },
+    "total_stall_s": {
+     "median": 6.052499999999989,
+     "q1": 5.972050000000005,
+     "q3": 6.144899999999991,
+     "n": 5,
+     "values": [
+      6.144899999999991,
+      6.052499999999989,
+      5.972050000000005,
+      5.8780000000000365,
+      6.216699999999992
+     ]
+    },
+    "tx_bytes": {
+     "median": 3018442768,
+     "q1": 3018442768.0,
+     "q3": 3018442768.0,
+     "n": 5,
+     "values": [
+      3018442768,
+      3018442768,
+      3014248464,
+      3018442768,
+      3018442768
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 2.5178999999999974,
+     "q1": 2.438600000000001,
+     "q3": 2.540999999999997,
+     "n": 5,
+     "values": [
+      2.438600000000001,
+      2.540999999999997,
+      2.5178999999999974,
+      2.3637999999999977,
+      2.5651999999999973
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 41.51235,
+     "q1": 41.51235,
+     "q3": 41.51235,
+     "n": 5,
+     "values": [
+      41.51235,
+      41.51235,
+      35.953100000000006,
+      41.51235,
+      41.51235
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 14.7687,
+     "q1": 14.7687,
+     "q3": 14.7687,
+     "n": 5,
+     "values": [
+      14.7687,
+      14.7687,
+      14.0045,
+      14.7687,
+      14.7687
+     ]
+    },
+    "psnr_terminal": {
+     "median": 39.2488,
+     "q1": 39.2488,
+     "q3": 39.2488,
+     "n": 5,
+     "values": [
+      39.2488,
+      39.2488,
+      34.643649999999994,
+      39.2488,
+      39.2488
+     ]
+    },
+    "switch_reasons": [
+     "threshold",
+     "threshold",
+     "threshold",
+     "threshold",
+     "threshold"
+    ],
+    "cost": null,
+    "runs": [
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261031-115328",
+      "step": "psink",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 35.3478,
+      "delivery_gap_s": 2.438600000000001,
+      "total_stall_s": 6.144899999999991,
+      "n_stalls": 5,
+      "tx_bytes": 3018442768,
+      "cutover_interruption_s": 2.438600000000001,
+      "c2": {
+       "first_call_psnr": 14.7687,
+       "min_psnr_first_24": 14.7687,
+       "median_psnr_first_24": 41.51235,
+       "terminal_median_psnr": 39.2488,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        894764448,
+        282396064,
+        88080384
+       ],
+       "stop_and_copy_bytes": 27965232,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.5186328804145963,
+        0.16368540839707646,
+        0.051054088440876146,
+        0.016209505033466017
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=2_20261031-123657",
+      "step": "psink",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 35.3109,
+      "delivery_gap_s": 2.540999999999997,
+      "total_stall_s": 6.052499999999989,
+      "n_stalls": 5,
+      "tx_bytes": 3018442768,
+      "cutover_interruption_s": 2.540999999999997,
+      "c2": {
+       "first_call_psnr": 14.7687,
+       "min_psnr_first_24": 14.7687,
+       "median_psnr_first_24": 41.51235,
+       "terminal_median_psnr": 39.2488,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        894764448,
+        282396064,
+        88080384
+       ],
+       "stop_and_copy_bytes": 27965232,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.5186328804145963,
+        0.16368540839707646,
+        0.051054088440876146,
+        0.016209505033466017
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=3_20261031-132021",
+      "step": "psink",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 35.61,
+      "delivery_gap_s": 2.5178999999999974,
+      "total_stall_s": 5.972050000000005,
+      "n_stalls": 5,
+      "tx_bytes": 3014248464,
+      "cutover_interruption_s": 2.5178999999999974,
+      "c2": {
+       "first_call_psnr": 14.0045,
+       "min_psnr_first_24": 14.0045,
+       "median_psnr_first_24": 35.953100000000006,
+       "terminal_median_psnr": 34.643649999999994,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        894764448,
+        282396064,
+        88080384
+       ],
+       "stop_and_copy_bytes": 23770928,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.5186328804145963,
+        0.16368540839707646,
+        0.051054088440876146,
+        0.013778357964852867
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=4_20261031-140339",
+      "step": "psink",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 34.8966,
+      "delivery_gap_s": 2.3637999999999977,
+      "total_stall_s": 5.8780000000000365,
+      "n_stalls": 5,
+      "tx_bytes": 3018442768,
+      "cutover_interruption_s": 2.3637999999999977,
+      "c2": {
+       "first_call_psnr": 14.7687,
+       "min_psnr_first_24": 14.7687,
+       "median_psnr_first_24": 41.51235,
+       "terminal_median_psnr": 39.2488,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        894764448,
+        282396064,
+        88080384
+       ],
+       "stop_and_copy_bytes": 27965232,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.5186328804145963,
+        0.16368540839707646,
+        0.051054088440876146,
+        0.016209505033466017
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=5_20261031-144707",
+      "step": "psink",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch; recent state from zero",
+       "checks": {
+        "switchover_verified": true,
+        "sink_verified_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 35.6141,
+      "delivery_gap_s": 2.5651999999999973,
+      "total_stall_s": 6.216699999999992,
+      "n_stalls": 5,
+      "tx_bytes": 3018442768,
+      "cutover_interruption_s": 2.5651999999999973,
+      "c2": {
+       "first_call_psnr": 14.7687,
+       "min_psnr_first_24": 14.7687,
+       "median_psnr_first_24": 41.51235,
+       "terminal_median_psnr": 39.2488,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1725236640,
+        894764448,
+        282396064,
+        88080384
+       ],
+       "stop_and_copy_bytes": 27965232,
+       "scope_bytes": 1725236640,
+       "switch_reason": "threshold",
+       "fraction_of_scope": [
+        1.0,
+        0.5186328804145963,
+        0.16368540839707646,
+        0.051054088440876146,
+        0.016209505033466017
+       ]
+      },
+      "cost": null
+     }
+    ]
+   },
+   "nosync": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 10.4011,
+     "q1": 10.381599999999999,
+     "q3": 10.401299999999996,
+     "n": 5,
+     "values": [
+      10.4011,
+      10.401299999999996,
+      10.377500000000001,
+      10.381599999999999,
+      10.466500000000003
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 32.0869,
+     "q1": 31.8026,
+     "q3": 32.2824,
+     "n": 5,
+     "values": [
+      32.0869,
+      32.41,
+      31.8026,
+      31.764,
+      32.2824
+     ]
+    },
+    "total_stall_s": {
+     "median": 10.760799999999993,
+     "q1": 10.760700000000002,
+     "q3": 10.798300000000012,
+     "n": 5,
+     "values": [
+      10.798300000000012,
+      10.760799999999993,
+      10.759900000000004,
+      10.760700000000002,
+      11.166349999999989
+     ]
+    },
+    "tx_bytes": {
+     "median": 2676129696,
+     "q1": 2676129696.0,
+     "q3": 2676129696.0,
+     "n": 5,
+     "values": [
+      2676129696,
+      2680723408,
+      2676129696,
+      2676129696,
+      2676129696
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 10.4011,
+     "q1": 10.381599999999999,
+     "q3": 10.401299999999996,
+     "n": 5,
+     "values": [
+      10.4011,
+      10.401299999999996,
+      10.377500000000001,
+      10.381599999999999,
+      10.466500000000003
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 43.8989,
+     "q1": 43.8989,
+     "q3": 43.8989,
+     "n": 5,
+     "values": [
+      43.8989,
+      41.7886,
+      43.8989,
+      43.8989,
+      43.8989
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 21.9675,
+     "q1": 21.9675,
+     "q3": 21.9675,
+     "n": 5,
+     "values": [
+      21.9675,
+      24.2608,
+      21.9675,
+      21.9675,
+      21.9675
+     ]
+    },
+    "psnr_terminal": {
+     "median": 44.06785,
+     "q1": 44.06785,
+     "q3": 44.06785,
+     "n": 5,
+     "values": [
+      44.06785,
+      40.2645,
+      44.06785,
+      44.06785,
+      44.06785
+     ]
+    },
+    "switch_reasons": [
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit"
+    ],
+    "cost": {
+     "replayed_calls": {
+      "median": 32,
+      "q1": 32.0,
+      "q3": 32.0,
+      "n": 5,
+      "values": [
+       32,
+       33,
+       32,
+       32,
+       32
+      ]
+     },
+     "replay_s_per_call": {
+      "median": 0.12033294839784503,
+      "q1": 0.12026037042960525,
+      "q3": 0.1204936751164496,
+      "n": 5,
+      "values": [
+       0.12022295733913779,
+       0.12050739116966724,
+       0.1204936751164496,
+       0.12033294839784503,
+       0.12026037042960525
+      ]
+     },
+     "replay_s_total": {
+      "median": 3.881365280598402,
+      "q1": 3.8801537565886974,
+      "q3": 3.8886271324008703,
+      "n": 5,
+      "values": [
+       3.8797999508678913,
+       4.012039723806083,
+       3.8886271324008703,
+       3.881365280598402,
+       3.8801537565886974
+      ]
+     },
+     "patches": {
+      "median": 0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0,
+       0,
+       0,
+       0,
+       0
+      ]
+     },
+     "patch_mb": {
+      "median": 0.0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "log_mb": {
+      "median": 12.781056,
+      "q1": 12.781056,
+      "q3": 12.781056,
+      "n": 5,
+      "values": [
+       12.781056,
+       13.180464,
+       12.781056,
+       12.781056,
+       12.781056
+      ]
+     },
+     "base_mb": {
+      "median": 1727.636688,
+      "q1": 1727.636688,
+      "q3": 1727.636688,
+      "n": 5,
+      "values": [
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688
+      ]
+     },
+     "switch_mb": {
+      "median": 935.711952,
+      "q1": 935.711952,
+      "q3": 935.711952,
+      "n": 5,
+      "values": [
+       935.711952,
+       939.906256,
+       935.711952,
+       935.711952,
+       935.711952
+      ]
+     },
+     "ready_wait_s": {
+      "median": 4.05686092376709,
+      "q1": 4.051780462265015,
+      "q3": 4.129294157028198,
+      "n": 5,
+      "values": [
+       4.05686092376709,
+       4.360018968582153,
+       4.04775857925415,
+       4.051780462265015,
+       4.129294157028198
+      ]
+     },
+     "stop_to_sent_s": {
+      "median": 8.933733940124512,
+      "q1": 8.908795356750488,
+      "q3": 8.93851089477539,
+      "n": 5,
+      "values": [
+       8.933733940124512,
+       8.93851089477539,
+       8.87286901473999,
+       8.908795356750488,
+       8.96497130393982
+      ]
+     },
+     "fallback_mb": {
+      "median": 0.0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "restore_s": {
+      "median": 0.6563758850097656,
+      "q1": 0.6554563045501709,
+      "q3": 0.6571817398071289,
+      "n": 5,
+      "values": [
+       0.6563758850097656,
+       0.653801679611206,
+       0.6754369735717773,
+       0.6554563045501709,
+       0.6571817398071289
+      ]
+     },
+     "dr2_s": {
+      "median": 0.522201020270586,
+      "q1": 0.522154189646244,
+      "q3": 0.5227290960028768,
+      "n": 5,
+      "values": [
+       0.522201020270586,
+       0.5211855713278055,
+       0.5242139445617795,
+       0.5227290960028768,
+       0.522154189646244
+      ]
+     }
+    },
+    "runs": [
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_20261031-115527",
+      "step": "nosync",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 32.0869,
+      "delivery_gap_s": 10.4011,
+      "total_stall_s": 10.798300000000012,
+      "n_stalls": 2,
+      "tx_bytes": 2676129696,
+      "cutover_interruption_s": 10.4011,
+      "c2": {
+       "first_call_psnr": 32.7773,
+       "min_psnr_first_24": 21.9675,
+       "median_psnr_first_24": 43.8989,
+       "terminal_median_psnr": 44.06785,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 935711952,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.5416138465334559
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12022295733913779,
+       "replay_s_total": 3.8797999508678913,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.781056,
+       "base_mb": 1727.636688,
+       "switch_mb": 935.711952,
+       "ready_wait_s": 4.05686092376709,
+       "stop_to_sent_s": 8.933733940124512,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6563758850097656,
+       "dr2_s": 0.522201020270586
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=2_20261031-123857",
+      "step": "nosync",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 32.41,
+      "delivery_gap_s": 10.401299999999996,
+      "total_stall_s": 10.760799999999993,
+      "n_stalls": 2,
+      "tx_bytes": 2680723408,
+      "cutover_interruption_s": 10.401299999999996,
+      "c2": {
+       "first_call_psnr": 35.5865,
+       "min_psnr_first_24": 24.2608,
+       "median_psnr_first_24": 41.7886,
+       "terminal_median_psnr": 40.2645,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 939906256,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.5440416162312941
+       ]
+      },
+      "cost": {
+       "replayed_calls": 33,
+       "replay_s_per_call": 0.12050739116966724,
+       "replay_s_total": 4.012039723806083,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 13.180464,
+       "base_mb": 1727.636688,
+       "switch_mb": 939.906256,
+       "ready_wait_s": 4.360018968582153,
+       "stop_to_sent_s": 8.93851089477539,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.653801679611206,
+       "dr2_s": 0.5211855713278055
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=3_20261031-132220",
+      "step": "nosync",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 31.8026,
+      "delivery_gap_s": 10.377500000000001,
+      "total_stall_s": 10.759900000000004,
+      "n_stalls": 2,
+      "tx_bytes": 2676129696,
+      "cutover_interruption_s": 10.377500000000001,
+      "c2": {
+       "first_call_psnr": 32.7773,
+       "min_psnr_first_24": 21.9675,
+       "median_psnr_first_24": 43.8989,
+       "terminal_median_psnr": 44.06785,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 935711952,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.5416138465334559
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.1204936751164496,
+       "replay_s_total": 3.8886271324008703,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.781056,
+       "base_mb": 1727.636688,
+       "switch_mb": 935.711952,
+       "ready_wait_s": 4.04775857925415,
+       "stop_to_sent_s": 8.87286901473999,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6754369735717773,
+       "dr2_s": 0.5242139445617795
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=4_20261031-140538",
+      "step": "nosync",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 31.764,
+      "delivery_gap_s": 10.381599999999999,
+      "total_stall_s": 10.760700000000002,
+      "n_stalls": 2,
+      "tx_bytes": 2676129696,
+      "cutover_interruption_s": 10.381599999999999,
+      "c2": {
+       "first_call_psnr": 32.7773,
+       "min_psnr_first_24": 21.9675,
+       "median_psnr_first_24": 43.8989,
+       "terminal_median_psnr": 44.06785,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 935711952,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.5416138465334559
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12033294839784503,
+       "replay_s_total": 3.881365280598402,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.781056,
+       "base_mb": 1727.636688,
+       "switch_mb": 935.711952,
+       "ready_wait_s": 4.051780462265015,
+       "stop_to_sent_s": 8.908795356750488,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6554563045501709,
+       "dr2_s": 0.5227290960028768
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=5_20261031-144907",
+      "step": "nosync",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "claim": "Sink exact at the switch (resent); recent KV rebuilt by replay",
+       "checks": {
+        "switchover_verified": true,
+        "sink_resent_verified": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 32.2824,
+      "delivery_gap_s": 10.466500000000003,
+      "total_stall_s": 11.166349999999989,
+      "n_stalls": 3,
+      "tx_bytes": 2676129696,
+      "cutover_interruption_s": 10.466500000000003,
+      "c2": {
+       "first_call_psnr": 32.7773,
+       "min_psnr_first_24": 21.9675,
+       "median_psnr_first_24": 43.8989,
+       "terminal_median_psnr": 44.06785,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 935711952,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.5416138465334559
+       ]
+      },
+      "cost": {
+       "replayed_calls": 32,
+       "replay_s_per_call": 0.12026037042960525,
+       "replay_s_total": 3.8801537565886974,
+       "patches": 0,
+       "patch_mb": 0.0,
+       "log_mb": 12.781056,
+       "base_mb": 1727.636688,
+       "switch_mb": 935.711952,
+       "ready_wait_s": 4.129294157028198,
+       "stop_to_sent_s": 8.96497130393982,
+       "src_sink_digest_s": null,
+       "dst_sink_check_s": null,
+       "verdict": null,
+       "verdict_wait_s": null,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6571817398071289,
+       "dr2_s": 0.522154189646244
+      }
+     }
+    ]
+   },
+   "otter": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 1.5865999999999998,
+     "q1": 1.5741,
+     "q3": 1.7333999999999996,
+     "n": 5,
+     "values": [
+      1.7970000000000006,
+      1.5865999999999998,
+      1.7333999999999996,
+      1.5741,
+      1.5593
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 24.6245,
+     "q1": 24.4492,
+     "q3": 25.7796,
+     "n": 5,
+     "values": [
+      26.2682,
+      24.6245,
+      25.7796,
+      24.4002,
+      24.4492
+     ]
+    },
+    "total_stall_s": {
+     "median": 1.8707000000000056,
+     "q1": 1.8693000000000048,
+     "q3": 2.099599999999997,
+     "n": 5,
+     "values": [
+      2.167399999999999,
+      1.8707000000000056,
+      2.099599999999997,
+      1.8693000000000048,
+      1.838999999999991
+     ]
+    },
+    "tx_bytes": {
+     "median": 2242816608,
+     "q1": 2242816608.0,
+     "q3": 2281953984.0,
+     "n": 5,
+     "values": [
+      2281953984,
+      2242816608,
+      2281953984,
+      2242816608,
+      2242816608
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 1.508300000000002,
+     "q1": 1.4910999999999994,
+     "q3": 1.7333999999999996,
+     "n": 5,
+     "values": [
+      1.7970000000000006,
+      1.4910999999999994,
+      1.7333999999999996,
+      1.508300000000002,
+      1.4857000000000014
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 41.6245,
+     "q1": 35.8724,
+     "q3": 41.6245,
+     "n": 5,
+     "values": [
+      35.8724,
+      41.6245,
+      35.8724,
+      41.6245,
+      41.6245
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 25.4626,
+     "q1": 25.4626,
+     "q3": 26.267,
+     "n": 5,
+     "values": [
+      26.267,
+      25.4626,
+      26.267,
+      25.4626,
+      25.4626
+     ]
+    },
+    "psnr_terminal": {
+     "median": 44.445499999999996,
+     "q1": 32.41005,
+     "q3": 44.445499999999996,
+     "n": 5,
+     "values": [
+      32.41005,
+      44.445499999999996,
+      32.41005,
+      44.445499999999996,
+      44.445499999999996
+     ]
+    },
+    "switch_reasons": [
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit",
+     "round_limit"
+    ],
+    "cost": {
+     "replayed_calls": {
+      "median": 34,
+      "q1": 34.0,
+      "q3": 36.0,
+      "n": 5,
+      "values": [
+       36,
+       34,
+       36,
+       34,
+       34
+      ]
+     },
+     "replay_s_per_call": {
+      "median": 0.12112682685256004,
+      "q1": 0.12078742822632194,
+      "q3": 0.12120208982378244,
+      "n": 5,
+      "values": [
+       0.12120208982378244,
+       0.12112682685256004,
+       0.12031216267496347,
+       0.12157992506399751,
+       0.12078742822632194
+      ]
+     },
+     "replay_s_total": {
+      "median": 4.333618498407304,
+      "q1": 4.316542073152959,
+      "q3": 4.545059371739626,
+      "n": 5,
+      "values": [
+       4.545059371739626,
+       4.275119872763753,
+       4.565804488956928,
+       4.333618498407304,
+       4.316542073152959
+      ]
+     },
+     "patches": {
+      "median": 52,
+      "q1": 52.0,
+      "q3": 56.0,
+      "n": 5,
+      "values": [
+       56,
+       52,
+       56,
+       52,
+       52
+      ]
+     },
+     "patch_mb": {
+      "median": 498.40128,
+      "q1": 498.40128,
+      "q3": 536.73984,
+      "n": 5,
+      "values": [
+       536.73984,
+       498.40128,
+       536.73984,
+       498.40128,
+       498.40128
+      ]
+     },
+     "log_mb": {
+      "median": 511.981152,
+      "q1": 511.981152,
+      "q3": 551.118528,
+      "n": 5,
+      "values": [
+       551.118528,
+       511.981152,
+       551.118528,
+       511.981152,
+       511.981152
+      ]
+     },
+     "base_mb": {
+      "median": 1727.636688,
+      "q1": 1727.636688,
+      "q3": 1727.636688,
+      "n": 5,
+      "values": [
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688,
+       1727.636688
+      ]
+     },
+     "switch_mb": {
+      "median": 3.198768,
+      "q1": 3.198768,
+      "q3": 3.198768,
+      "n": 5,
+      "values": [
+       3.198768,
+       3.198768,
+       3.198768,
+       3.198768,
+       3.198768
+      ]
+     },
+     "ready_wait_s": {
+      "median": 4.64532470703125,
+      "q1": 4.57253360748291,
+      "q3": 4.826822996139526,
+      "n": 5,
+      "values": [
+       4.826822996139526,
+       4.64532470703125,
+       5.043217658996582,
+       4.57253360748291,
+       4.52039361000061
+      ]
+     },
+     "stop_to_sent_s": {
+      "median": 1.2390470504760742,
+      "q1": 1.2312798500061035,
+      "q3": 1.478355884552002,
+      "n": 5,
+      "values": [
+       1.5376224517822266,
+       1.2390470504760742,
+       1.478355884552002,
+       1.2156476974487305,
+       1.2312798500061035
+      ]
+     },
+     "src_sink_digest_s": {
+      "median": 0.06404947489500046,
+      "q1": 0.06395262479782104,
+      "q3": 0.06417371332645416,
+      "n": 5,
+      "values": [
+       0.06395262479782104,
+       0.06417371332645416,
+       0.0633891299366951,
+       0.06404947489500046,
+       0.06455088406801224
+      ]
+     },
+     "dst_sink_check_s": {
+      "median": 0.0635731341317296,
+      "q1": 0.06336076464504004,
+      "q3": 0.06417448073625565,
+      "n": 5,
+      "values": [
+       0.06417448073625565,
+       0.0635731341317296,
+       0.06529433559626341,
+       0.06336076464504004,
+       0.06314565613865852
+      ]
+     },
+     "verdict_wait_s": {
+      "median": 0.08411645889282227,
+      "q1": 0.08024239540100098,
+      "q3": 0.10045576095581055,
+      "n": 5,
+      "values": [
+       0.11403608322143555,
+       0.08024239540100098,
+       0.10045576095581055,
+       0.08411645889282227,
+       0.07641911506652832
+      ]
+     },
+     "fallback_mb": {
+      "median": 0.0,
+      "q1": 0.0,
+      "q3": 0.0,
+      "n": 5,
+      "values": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "restore_s": {
+      "median": 0.634117603302002,
+      "q1": 0.6317930221557617,
+      "q3": 0.6484143733978271,
+      "n": 5,
+      "values": [
+       0.6626102924346924,
+       0.6317930221557617,
+       0.6484143733978271,
+       0.634117603302002,
+       0.6257796287536621
+      ]
+     },
+     "dr2_s": {
+      "median": 0.5227774335071445,
+      "q1": 0.521517151966691,
+      "q3": 0.5233385218307376,
+      "n": 5,
+      "values": [
+       0.52353729121387,
+       0.5233385218307376,
+       0.5213272972032428,
+       0.5227774335071445,
+       0.521517151966691
+      ]
+     }
+    },
+    "runs": [
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=1_sinksync_retain_reuse_20261030-193123",
+      "step": "otter",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 26.2682,
+      "delivery_gap_s": 1.7970000000000006,
+      "total_stall_s": 2.167399999999999,
+      "n_stalls": 2,
+      "tx_bytes": 2281953984,
+      "cutover_interruption_s": 1.7970000000000006,
+      "c2": {
+       "first_call_psnr": 33.8451,
+       "min_psnr_first_24": 26.267,
+       "median_psnr_first_24": 35.8724,
+       "terminal_median_psnr": 32.41005,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 36,
+       "replay_s_per_call": 0.12120208982378244,
+       "replay_s_total": 4.545059371739626,
+       "patches": 56,
+       "patch_mb": 536.73984,
+       "log_mb": 551.118528,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.826822996139526,
+       "stop_to_sent_s": 1.5376224517822266,
+       "src_sink_digest_s": 0.06395262479782104,
+       "dst_sink_check_s": 0.06417448073625565,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.11403608322143555,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6626102924346924,
+       "dr2_s": 0.52353729121387
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=2_sinksync_retain_reuse_20261030-194255",
+      "step": "otter",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 24.6245,
+      "delivery_gap_s": 1.5865999999999998,
+      "total_stall_s": 1.8707000000000056,
+      "n_stalls": 2,
+      "tx_bytes": 2242816608,
+      "cutover_interruption_s": 1.4910999999999994,
+      "c2": {
+       "first_call_psnr": 35.8823,
+       "min_psnr_first_24": 25.4626,
+       "median_psnr_first_24": 41.6245,
+       "terminal_median_psnr": 44.445499999999996,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 34,
+       "replay_s_per_call": 0.12112682685256004,
+       "replay_s_total": 4.275119872763753,
+       "patches": 52,
+       "patch_mb": 498.40128,
+       "log_mb": 511.981152,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.64532470703125,
+       "stop_to_sent_s": 1.2390470504760742,
+       "src_sink_digest_s": 0.06417371332645416,
+       "dst_sink_check_s": 0.0635731341317296,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.08024239540100098,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6317930221557617,
+       "dr2_s": 0.5233385218307376
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=3_sinksync_retain_reuse_20261030-195424",
+      "step": "otter",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 25.7796,
+      "delivery_gap_s": 1.7333999999999996,
+      "total_stall_s": 2.099599999999997,
+      "n_stalls": 2,
+      "tx_bytes": 2281953984,
+      "cutover_interruption_s": 1.7333999999999996,
+      "c2": {
+       "first_call_psnr": 33.8451,
+       "min_psnr_first_24": 26.267,
+       "median_psnr_first_24": 35.8724,
+       "terminal_median_psnr": 32.41005,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 36,
+       "replay_s_per_call": 0.12031216267496347,
+       "replay_s_total": 4.565804488956928,
+       "patches": 56,
+       "patch_mb": 536.73984,
+       "log_mb": 551.118528,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 5.043217658996582,
+       "stop_to_sent_s": 1.478355884552002,
+       "src_sink_digest_s": 0.0633891299366951,
+       "dst_sink_check_s": 0.06529433559626341,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.10045576095581055,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6484143733978271,
+       "dr2_s": 0.5213272972032428
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=4_sinksync_retain_reuse_20261030-200619",
+      "step": "otter",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 24.4002,
+      "delivery_gap_s": 1.5741,
+      "total_stall_s": 1.8693000000000048,
+      "n_stalls": 2,
+      "tx_bytes": 2242816608,
+      "cutover_interruption_s": 1.508300000000002,
+      "c2": {
+       "first_call_psnr": 35.8823,
+       "min_psnr_first_24": 25.4626,
+       "median_psnr_first_24": 41.6245,
+       "terminal_median_psnr": 44.445499999999996,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 34,
+       "replay_s_per_call": 0.12157992506399751,
+       "replay_s_total": 4.333618498407304,
+       "patches": 52,
+       "patch_mb": 498.40128,
+       "log_mb": 511.981152,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.57253360748291,
+       "stop_to_sent_s": 1.2156476974487305,
+       "src_sink_digest_s": 0.06404947489500046,
+       "dst_sink_check_s": 0.06336076464504004,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.08411645889282227,
+       "fallback_mb": 0.0,
+       "restore_s": 0.634117603302002,
+       "dr2_s": 0.5227774335071445
+      }
+     },
+     {
+      "run": "policy=precopy_replay_bw=1000_rho=none_tm=inf_rep=5_sinksync_retain_reuse_20261030-201748",
+      "step": "otter",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "0/101",
+       "claim": "Sink exact at the switch; recent KV rebuilt by replay",
+       "checks": {
+        "verdict_SINKOK_or_verified_fallback": true,
+        "sink_blocks_0_of_360_mismatching": true,
+        "positions_equal": true,
+        "base_verified": true,
+        "conditioning_equal": true,
+        "replay_order_ok": true,
+        "no_lost_or_duplicated_calls": true,
+        "meta_consistent_at_switch": true
+       },
+       "verdict": "SINKOK",
+       "fallback": false,
+       "n_block_mismatch": 0,
+       "pass": true
+      },
+      "ttfo_local_s": 24.4492,
+      "delivery_gap_s": 1.5593,
+      "total_stall_s": 1.838999999999991,
+      "n_stalls": 2,
+      "tx_bytes": 2242816608,
+      "cutover_interruption_s": 1.4857000000000014,
+      "c2": {
+       "first_call_psnr": 35.8823,
+       "min_psnr_first_24": 25.4626,
+       "median_psnr_first_24": 41.6245,
+       "terminal_median_psnr": 44.445499999999996,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        1727636688
+       ],
+       "stop_and_copy_bytes": 3198768,
+       "scope_bytes": 1727636688,
+       "switch_reason": "round_limit",
+       "fraction_of_scope": [
+        1.0,
+        0.0018515281726871964
+       ]
+      },
+      "cost": {
+       "replayed_calls": 34,
+       "replay_s_per_call": 0.12078742822632194,
+       "replay_s_total": 4.316542073152959,
+       "patches": 52,
+       "patch_mb": 498.40128,
+       "log_mb": 511.981152,
+       "base_mb": 1727.636688,
+       "switch_mb": 3.198768,
+       "ready_wait_s": 4.52039361000061,
+       "stop_to_sent_s": 1.2312798500061035,
+       "src_sink_digest_s": 0.06455088406801224,
+       "dst_sink_check_s": 0.06314565613865852,
+       "verdict": "SINKOK",
+       "verdict_wait_s": 0.07641911506652832,
+       "fallback_mb": 0.0,
+       "restore_s": 0.6257796287536621,
+       "dr2_s": 0.521517151966691
+      }
+     }
+    ]
+   },
+   "pfull": {
+    "n_valid": 5,
+    "n_runs": 5,
+    "invalid": [],
+    "delivery_gap_s": {
+     "median": 52.57220000000001,
+     "q1": 52.5103,
+     "q3": 52.57640000000001,
+     "n": 5,
+     "values": [
+      52.65989999999999,
+      52.57640000000001,
+      52.5103,
+      43.158500000000004,
+      52.57220000000001
+     ]
+    },
+    "ttfo_local_s": {
+     "median": 219.2069,
+     "q1": 219.1568,
+     "q3": 219.3541,
+     "n": 5,
+     "values": [
+      219.2069,
+      219.1568,
+      219.3541,
+      243.7357,
+      218.68
+     ]
+    },
+    "total_stall_s": {
+     "median": 63.48299999999999,
+     "q1": 63.40849999999992,
+     "q3": 63.519400000000026,
+     "n": 5,
+     "values": [
+      64.23509999999993,
+      63.40849999999992,
+      63.48299999999999,
+      57.59730000000011,
+      63.519400000000026
+     ]
+    },
+    "tx_bytes": {
+     "median": 23554511680,
+     "q1": 23554511680.0,
+     "q3": 23554511680.0,
+     "n": 5,
+     "values": [
+      23554511680,
+      23554511680,
+      23554511680,
+      25844426768,
+      23554511680
+     ]
+    },
+    "cutover_interruption_s": {
+     "median": 52.57220000000001,
+     "q1": 52.5103,
+     "q3": 52.57640000000001,
+     "n": 5,
+     "values": [
+      52.65989999999999,
+      52.57640000000001,
+      52.5103,
+      43.158500000000004,
+      52.57220000000001
+     ]
+    },
+    "psnr_first24_median": {
+     "median": 99.0,
+     "q1": 99.0,
+     "q3": 99.0,
+     "n": 5,
+     "values": [
+      99.0,
+      99.0,
+      99.0,
+      99.0,
+      99.0
+     ]
+    },
+    "psnr_first24_min": {
+     "median": 99.0,
+     "q1": 99.0,
+     "q3": 99.0,
+     "n": 5,
+     "values": [
+      99.0,
+      99.0,
+      99.0,
+      99.0,
+      99.0
+     ]
+    },
+    "psnr_terminal": {
+     "median": 99.0,
+     "q1": 99.0,
+     "q3": 99.0,
+     "n": 5,
+     "values": [
+      99.0,
+      99.0,
+      99.0,
+      99.0,
+      99.0
+     ]
+    },
+    "switch_reasons": [
+     "no_shrink",
+     "no_shrink",
+     "no_shrink",
+     "no_shrink",
+     "no_shrink"
+    ],
+    "cost": null,
+    "runs": [
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261030-192418",
+      "step": "pfull",
+      "rep": 1,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 219.2069,
+      "delivery_gap_s": 52.65989999999999,
+      "total_stall_s": 64.23509999999993,
+      "n_stalls": 10,
+      "tx_bytes": 23554511680,
+      "cutover_interruption_s": 52.65989999999999,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5729244368,
+        5691495632
+       ],
+       "stop_and_copy_bytes": 5670524112,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8864343053120691,
+        0.8805937838709755,
+        0.8773490497370346
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=2_20261030-193551",
+      "step": "pfull",
+      "rep": 2,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 219.1568,
+      "delivery_gap_s": 52.57640000000001,
+      "total_stall_s": 63.40849999999992,
+      "n_stalls": 10,
+      "tx_bytes": 23554511680,
+      "cutover_interruption_s": 52.57640000000001,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5729244368,
+        5691495632
+       ],
+       "stop_and_copy_bytes": 5670524112,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8864343053120691,
+        0.8805937838709755,
+        0.8773490497370346
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=3_20261030-194720",
+      "step": "pfull",
+      "rep": 3,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 219.3541,
+      "delivery_gap_s": 52.5103,
+      "total_stall_s": 63.48299999999999,
+      "n_stalls": 10,
+      "tx_bytes": 23554511680,
+      "cutover_interruption_s": 52.5103,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5729244368,
+        5691495632
+       ],
+       "stop_and_copy_bytes": 5670524112,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8864343053120691,
+        0.8805937838709755,
+        0.8773490497370346
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=4_20261030-195851",
+      "step": "pfull",
+      "rep": 4,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 243.7357,
+      "delivery_gap_s": 43.158500000000004,
+      "total_stall_s": 57.59730000000011,
+      "n_stalls": 13,
+      "tx_bytes": 25844426768,
+      "cutover_interruption_s": 43.158500000000004,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5729244368,
+        4571616464,
+        4546450640
+       ],
+       "stop_and_copy_bytes": 4533867728,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8864343053120691,
+        0.7073249811185324,
+        0.7034313001578033,
+        0.7014844596774388
+       ]
+      },
+      "cost": null
+     },
+     {
+      "run": "policy=precopy_full_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=5_20261030-201045",
+      "step": "pfull",
+      "rep": 5,
+      "valid": true,
+      "validity_why": [],
+      "c1": {
+       "output_bitexact_calls": "101/101",
+       "claim": "whole state exact",
+       "checks": {
+        "switchover": true,
+        "output_bitexact_after_switch": true
+       },
+       "pass": true
+      },
+      "ttfo_local_s": 218.68,
+      "delivery_gap_s": 52.57220000000001,
+      "total_stall_s": 63.519400000000026,
+      "n_stalls": 10,
+      "tx_bytes": 23554511680,
+      "cutover_interruption_s": 52.57220000000001,
+      "c2": {
+       "first_call_psnr": 99.0,
+       "min_psnr_first_24": 99.0,
+       "median_psnr_first_24": 99.0,
+       "terminal_median_psnr": 99.0,
+       "calls_scored": 101
+      },
+      "rounds": {
+       "dirty_bytes": [
+        6463247568,
+        5729244368,
+        5691495632
+       ],
+       "stop_and_copy_bytes": 5670524112,
+       "scope_bytes": 6463247568,
+       "switch_reason": "no_shrink",
+       "fraction_of_scope": [
+        1.0,
+        0.8864343053120691,
+        0.8805937838709755,
+        0.8773490497370346
+       ]
+      },
+      "cost": null
+     }
+    ]
+   }
+  }
+ },
+ "verdicts": {
+  "dog": {
+   "F9_H1": {
+    "n_threshold": 5,
+    "holds": true
+   },
+   "F9_H2": {
+    "gaps": {
+     "wait": 15.0237,
+     "psink": 2.234400000000001,
+     "nosync": 8.828999999999997,
+     "otter": 1.6260999999999999
+    },
+    "holds": true
+   },
+   "F9_H3": {
+    "psnr_first24": {
+     "wait": 42.598600000000005,
+     "psink": 40.55355,
+     "nosync": 41.019949999999994,
+     "otter": 40.9765
+    },
+    "holds": false
+   }
+  },
+  "bfly": {
+   "F9_H1": {
+    "n_threshold": 5,
+    "holds": true
+   },
+   "F9_H2": {
+    "gaps": {
+     "wait": 15.0182,
+     "psink": 2.5178999999999974,
+     "nosync": 10.4011,
+     "otter": 1.5865999999999998
+    },
+    "holds": true
+   },
+   "F9_H3": {
+    "psnr_first24": {
+     "wait": 34.5223,
+     "psink": 41.51235,
+     "nosync": 43.8989,
+     "otter": 41.6245
+    },
+    "holds": true
+   }
+  }
+ },
+ "F9_H1": true,
+ "F9_H2": true,
+ "F9_H3": false
+}

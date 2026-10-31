@@ -75,14 +75,14 @@ def panel_a(C, w, out: Path):
     lo, hi = 10 ** np.floor(np.log10(min(ys + [THRESHOLD_GB]) * 0.8)), 10 ** np.ceil(np.log10(max(ys) * 3))   # every point inside
     ax.set_ylim(lo, hi)
     ax.set_xticks(range(1, xmax + 1))
-    ax.yaxis.set_major_locator(LogLocator(base=10))
+    ax.yaxis.set_major_locator(LogLocator(base=10, numticks=12))   # every decade labelled
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     ax.yaxis.set_minor_formatter(NullFormatter())
     finish_axes(ax, "Dirty state (GB)")
     ax.set_xlabel("Pre-copy round", fontsize=28, labelpad=2)
     hs = [Line2D([], [], color=LINE_A[k][0], ls=LINE_A[k][1], marker=LINE_A[k][2], lw=3.0, ms=9, mec="black", label=LINE_A[k][3]) for k in ("pfull", "psink")]
     hs.append(Line2D([], [], color="black", marker="o", mfc="white", ls="none", ms=10, label="Stop-and-copy"))
-    ax.legend(handles=hs, loc="upper right", frameon=False, fontsize=LEGEND - 4, handlelength=1.8, handletextpad=0.4, labelspacing=0.2,
+    ax.legend(handles=hs, loc="lower left", frameon=False, fontsize=LEGEND - 4, handlelength=1.8, handletextpad=0.4, labelspacing=0.2,
               borderaxespad=0.3)
     save(fig, out)
     return rec
