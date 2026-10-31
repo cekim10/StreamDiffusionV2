@@ -5,6 +5,11 @@ Wait-for-Sink, P-sink (`thr=256:rl=10`), OTTER w/o Sink sync, 5 reps x 2 workloa
 (00f2dd92). Numbers: `fig9_results.{json,md}` (`tools/eval/fig9_report.py`); figures: `figures/` (`tools/eval/plot_fig9.py`);
 descriptive early-PSNR analysis: `early_psnr.json` (`tools/eval/fig9_early_psnr.py`, not preregistered).
 
+Figures used in the paper (user, 2026-10-31): **(a) dog only** (`fig9a_dog`) and **(b)** (`fig9b_gap`); `fig9a_bfly` and
+`fig9c_psnr` are kept for the appendix / record. All panels on Fig. 6a's canvas (5.83 x 4.78 in, axes box left 0.18,
+right 0.97, bottom 0.22, top 0.97, no tight bbox). Panel (a) is drawn in MB (power-of-ten labels) instead of GB so the
+tick labels fit that canvas; the data are the same.
+
 ## 1. Verdicts (frozen rules)
 
 | hypothesis | Low-refresh (dog) | High-refresh (butterfly) | verdict |
