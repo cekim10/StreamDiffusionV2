@@ -62,17 +62,35 @@ calls of 101 in every OTTER run; every baseline run is bit-exact on every scored
 
 ## 4. Figure
 
-- 7a TTFO-local: medians span 9.4x (< one decade) -> **linear** axis by the frozen rule.
-- 7b delivery gap: span 34x -> **log**. Both versions kept: `fig7b_gap_log`, `fig7b_gap_linear`.
-- 7c bytes: span 370x -> **log**.
+- 7a TTFO-local: medians span 9.4x (< one decade) -> **linear** axis by the frozen rule (no broken axis).
+- 7b maximum output gap ("Max. output gap (s)" = the delivery gap metric): span 34x -> **log**. Both versions kept:
+  `fig7b_gap_log`, `fig7b_gap_linear`.
+- 7c transferred data ("Transferred data (GB)" = measured harness bytes): span 370x -> **log**.
 - Tick labels abbreviate Llumnix-style and ServerlessLLM-style as "Llumnix" and "SLLM" (named in the caption).
+- Style (user, 2026-10-30): the EC-LLM evaluation figures (`fig_e3_tiered_layout_a_concentration.pdf`): 7.70 x 4.80 in
+  canvas, axes box [0.19, 0.20, 0.78, 0.73], 28 pt Times axis text, 19 pt italic values, 25 pt legend; OTTER in the
+  accent blue, baselines in grays. Presentation only; data, rules and scale choices unchanged.
 
-**Caption draft.**
-Single migration (A -> B at generation call 30, 1 Gbps LAN; M1 only): (a) time until the user's edge serves locally
-(TTFO-local), (b) the longest output delivery gap after the trigger, (c) measured bytes sent by the harness. Bars:
-median of 5 runs, whiskers: IQR, dots: runs; solid: Low-refresh input, hatched: High-refresh input. Llumnix and SLLM are
-re-implementations in the style of Llumnix (iterative pre-copy of the whole state) and ServerlessLLM (input-history
-transfer and recomputation); Full stops and copies the whole state. Remote serving from A before the move is not charged
-WAN latency. The baselines restore the whole state exactly; OTTER restores the Sink exactly (0 / 360 blocks differing)
-and rebuilds recent state by replay, so its output is not bit-exact: PSNR against the uninterrupted run is 29.3 / 35.9 dB
-on the first call and 48.8 / 44.4 dB at the end (Low- / High-refresh medians).
+**Claim wording.** OTTER reduces the longest output interruption by 11.3-11.5x compared with the strongest migration
+baseline (R-full: 18.47 / 1.63 s dog, 18.33 / 1.59 s butterfly) and starts local service 1.5-1.6x sooner (36.9 / 23.3 s,
+36.8 / 24.6 s). Not "seamless" or "imperceptible": 1.6 s is a visible interruption. OTTER does not minimize traffic
+(21-35x R-full's bytes); it combines Sink transfer with replay to shorten the interruption. P-full's 22.9-23.6 GB is
+iterative pre-copy that never converges (no-shrink: each round re-sends ~5.5 GB of recent KV and VAE state rewritten
+every call). The source keeps serving for 21.6 / 23.1 s (median remote serving) before B serves; WAN latency during
+that period is not charged here.
+
+**Caption.**
+```latex
+\caption{
+\textbf{Single-migration performance at 1~Gbps.}
+(a) Time to first locally generated output,
+(b) maximum output delivery gap, and
+(c) transferred data.
+Bars show medians over five runs, with IQR whiskers and individual measurements.
+Llumnix and SLLM denote Llumnix-style pre-copy and ServerlessLLM-style recomputation baselines.
+All baselines restore the complete state exactly, whereas \sys verifies the Sink and reconstructs recent state by replay.
+For low-/high-refresh inputs, \sys achieves 29.3/35.9~dB PSNR on the first output and 48.8/44.4~dB terminal PSNR against uninterrupted generation.
+}
+```
+The text must give the butterfly terminal-PSNR distribution (2 / 5 runs at 32.4 dB, switch two calls later) next to
+the 44.4 dB median (section 3, item 2).
