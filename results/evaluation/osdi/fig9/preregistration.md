@@ -1,8 +1,11 @@
 # Fig. 9 preregistration: why live replay (M1) (RQ3)
 
-**Status: DRAFT 1 (2026-10-31), not frozen. Nothing run; the 9a re-analysis of the Fig. 7 runs has not been computed.**
-Plan: `osdi/eval_plan/plan.md` (Fig. 9, RQ3, P1). Open decisions: section 10. Labels: [V] verified in code or earlier
-records, [H] hypothesis / expectation, [R] recommendation.
+**Status: FROZEN (2026-10-31), before any Fig. 9 run and before the 9a re-analysis of the Fig. 7 runs.** DRAFT 1 was
+7dcb39e2. Decisions D1-D6 by the user (2026-10-31), section 10. Plan: `osdi/eval_plan/plan.md` (Fig. 9, RQ3, P1).
+Labels: [V] verified in code or earlier records, [H] hypothesis / expectation, [R] recommendation.
+
+**Framing (user).** Fig. 9 is a **design breakdown (mechanism analysis) of M1**, not a strict single-component ablation
+ladder: the steps differ in more than one component (section 3). Text and caption say "design breakdown".
 
 Roles: Fig. 7 = OTTER vs external baselines (end to end); Fig. 8 = continuity and native performance; **Fig. 9 = why
 M1 works: what conventional pre-copy cannot do, and what each part of M1 contributes**; Fig. 10 = M2; Fig. 11 = M3.
@@ -48,7 +51,7 @@ Out of scope: M2 / M3 (one migration only, as Fig. 7); bandwidth (Fig. 12); qual
 | step | label | policy / flags | Sink | recent state at B | new runs |
 |---|---|---|---|---|---|
 | 0 | Wait-for-Sink | `split_wait` | sent after the stop, exact at bind | zero, refills | 10 |
-| 1 | P-sink | `precopy_sink@<D1>` | pre-copied while A serves; dirty rest at the stop | zero, refills | 10 |
+| 1 | P-sink | `precopy_sink@thr=256:rl=10` (D1) | pre-copied while A serves; dirty rest at the stop | zero, refills | 10 |
 | 2 | OTTER w/o Sink sync | `precopy_replay@thr=16:rl=1`, `--replay_window 12 --replay_lag 1` | base + resend of the dirty Sink at the stop | rebuilt by replay | 10 |
 | 3 | OTTER | Fig. 7 OTTER flags | base + patches; digest at the stop | rebuilt by replay | 0 (Fig. 7 runs, D4) |
 | ref. | P-full | Fig. 7 `precopy_full@thr=256:rl=10` | whole state pre-copied | exact | 0 (Fig. 7 runs; 9a only) |
@@ -58,8 +61,10 @@ steps 0-2. New runs: 30 (estimate [H] ~17 min each from Fig. 8: ~9 h).
 
 ## 4. Panel 9a: dirty state per pre-copy round (P-full: re-analysis; P-sink: new runs)
 
-Per run: the sequence of `dirty_bytes` of every pre-copy round, then the stop-and-copy bytes at the switch, as a
-fraction of the scope's size (full state 6.46 GB, Sink 1.73 GB) and in GB; the switch reason.
+Per run: the sequence of `dirty_bytes` of every pre-copy round, then the stop-and-copy bytes at the switch, in GB and as
+a fraction of the scope's size (= round 1, which sends every fragment of the scope); the switch reason. OTTER is not
+drawn in 9a (one base round only). The logic carried to 9b: Sink-only pre-copy converging does not complete a migration,
+because the recent state is not transferred.
 
 **F9-H1 (Sink-only pre-copy converges).** P-sink stops by the threshold (`reason = threshold`) in >= 4 / 5 runs of each
 workload. Predictions [H] (not blind, section 2): P-sink yes on both; P-full stops by `no_shrink` / `round_limit`
@@ -73,11 +78,13 @@ Metrics per run (Fig. 7 definitions): **delivery gap** (longest delivery interva
 and for OTTER steps the cost breakdown of section 2 (replay, patches, verification, DR-2, wait).
 
 **F9-H2 (gap ladder).** median gap(OTTER) < median gap of each of Wait-for-Sink, P-sink, OTTER w/o Sink sync, both
-workloads. Predictions [H]: Wait-for-Sink ~15 s, OTTER w/o sync ~8-9 s, P-sink 2-10 s depending on D1, OTTER ~1.6 s.
+workloads. Predictions [H]: Wait-for-Sink ~15 s, OTTER w/o sync ~8-9 s, P-sink ~2-3 s, OTTER ~1.6 s.
 
 **F9-H3 (recent state matters at the switch).** median over runs of the median PSNR of B's first 24 calls:
 OTTER >= P-sink and OTTER >= Wait-for-Sink, both workloads. Prediction [H]: holds (zeroed recent state); not
-measured under the current commit.
+measured under the current commit. Not guaranteed: OTTER's replayed recent state is not bit-exact with the
+uninterrupted reference, and the adaptive Sink refresh can change the later trajectory (Fig. 7 butterfly analysis). If
+H3 fails, the result is reported as is, nothing is changed, and it is carried into Fig. 13.
 
 **Descriptive.** TTFO-local per step (Wait-for-Sink is expected to reach local service earlier than OTTER, [H] ~15 vs
 ~23 s; reported as is); bytes; total stall; OTTER cost breakdown; P-full and Full from Fig. 7 as references.
@@ -88,37 +95,52 @@ Per cell: median and IQR over valid reps (5 required, else NOT EVALUABLE). Every
 
 ## 7. Validity and state correctness (C1, as each method claims it)
 
-- All runs: the frozen XB validity (`run_validity_xb`), one commit on A-D, GPU 0 idle before the set.
+- All runs: the validity the XB aggregation applied to each policy (`aggregate_xb.run_record`): `run_validity_xb` for the
+  pre-copy family, the W / R / N validity (`run_validity_wrn`) for Wait-for-Sink; one commit on A-D, GPU 0 idle before
+  the set.
 - Wait-for-Sink: Sink digest at bind equals the source's; no B generation before the bind.
 - P-sink: the switchover's component digests (Sink, in-flight, metadata) verified.
 - OTTER w/o Sink sync: base verified, replay order / no lost or duplicated calls, switchover components verified.
 - OTTER: the Fig. 7 C1 (SINKOK or verified fallback, 0 / 360 Sink blocks mismatching, ...).
 - A failing run is excluded and listed with its reason; no rerun unless a harness defect is found (Fig. 7 precedent).
 
-## 8. Procedure and tools (to be written before the freeze)
+## 8. Procedure and tools
 
-`tools/eval/run_fig9.sh preflight | first | rest | dry`, `tools/eval/fig9_report.py` (9a, 9b, C1 per step),
-`tools/eval/plot_fig9.py`. Regression before the freeze: `test_xb`, `test_m1_live`, dry run of steps 0-2 on both
-workloads (each step completes; C1 checks evaluable). First run = dog P-sink rep 1 as the sanity check.
+Tools: `tools/eval/run_fig9.sh preflight | first | rest | dry`, `tools/eval/fig9_report.py` (9a, 9b, C1 per step, OTTER
+cost; `--sanity`), `tools/eval/plot_fig9.py`. No harness code changed for Fig. 9.
 
-## 9. Plot specification
+1. Regression and dry run, then this freeze is committed with the tools. Done: `test_xb` ALL PASS (87), `test_m1_live` ALL
+   PASS (sequentially); `run_fig9.sh dry` rc 0: on both workloads each new step completes and is valid with every C1
+   check passing (Wait-for-Sink: no generation before the bind; P-sink: switch reason threshold; OTTER w/o Sink sync:
+   Sink resent and verified); the report reads the Fig. 7 dry OTTER / P-full runs; verdicts NOT EVALUABLE (1 rep).
+2. elves-01: `d0_remote.py pull` on all hosts, `run_fig9.sh preflight`.
+3. `run_fig9.sh first` (dog P-sink rep 1) + `fig9_report.py --sanity`; counted if it meets section 7.
+4. `run_fig9.sh rest` (29 runs; reps interleaved across steps and workloads).
+5. `fig9_report.py` (the rules as written), `plot_fig9.py`.
 
-Style: Fig. 7 (EC-LLM e3; OTTER blue, baselines / ablations gray).
-- **9a** (one panel per workload): x = pre-copy round (last = stop-and-copy), y = dirty bytes (GB, log); one line per
-  method (median run), the other reps thin; threshold marked.
-- **9b**: grouped bars per ladder step (both workloads): delivery gap (s, log); a second panel for PSNR of B's first 24
-  calls (median); OTTER's cost breakdown as a stacked bar or a table in the text (D6).
+## 9. Plot specification (user: three subfigures)
 
-## 10. Open decisions (user)
+Style: Fig. 7 (EC-LLM e3; OTTER blue, the other steps gray; Low-refresh solid, High-refresh hatched).
+- **(a) Dirty state per pre-copy round** (one panel per workload; dog in the body, butterfly may go to the appendix):
+  x = pre-copy round, y = dirty bytes (GB, log, limits cover every point); P-full and P-sink, the run with the median
+  number of rounds thick, the other reps thin; the stop-and-copy as an open marker after the last round; 256 MiB dashed.
+- **(b) Maximum output gap** per step (4 steps x 2 workloads): bar = median, whisker = IQR, dots = reps, value printed;
+  y log unless the medians span < 1 decade (the Fig. 7 rule).
+- **(c) Post-migration PSNR**: the per-run median PSNR of B's first 24 calls, same layout, linear.
+- TTFO-local, bytes and the OTTER cost breakdown are given as numbers in the text (D6), not as figures.
 
-| | question | options | [R] |
-|---|---|---|---|
-| D1 | P-sink setting | (a) `thr=256:rl=10`, the Fig. 7 P-full rule with only the scope changed; (b) XB-frozen `thr=16:rl=1` (one round: no convergence trace); (c) both (+10 runs) | (a) |
-| D2 | Wait-for-Sink | include `split_wait` as is (older M1-fast path, disclosed) / drop it (Full in Fig. 7 is the stop-and-copy bound) | include |
-| D3 | OTTER w/o Sink sync | include (isolates the Sink sync; = E3) / drop | include |
-| D4 | OTTER cell | reuse the 10 Fig. 7 runs (only timing instrumentation changed) / rerun 10, interleaved (~3 h) | reuse |
-| D5 | rules | F9-H1-H3 as above / all descriptive (as XB's XH1b) / other thresholds | as above |
-| D6 | cost breakdown | figure (stacked bar) / table in the text | table |
+## 10. Decisions (user, 2026-10-31)
+
+| | decision | reason (user) |
+|---|---|---|
+| D1 | P-sink `thr=256:rl=10` | Sink-only convergence under the same rule as P-full |
+| D2 | Wait-for-Sink included (`split_wait`, older M1-fast path, disclosed) | the effect of overlapping transfer with generation |
+| D3 | OTTER w/o Sink sync included | the contribution of the Sink synchronization |
+| D4 | the 10 Fig. 7 OTTER runs reused | same setting; no needless reruns |
+| D5 | F9-H1-H3 kept | each mechanism's effect tested |
+| D6 | cost breakdown as a table in the text | the figure stays on the main results |
+
+E3 (8.80 s) and E5 / E6 (1.56-1.64 s) are earlier settings: never quoted as Fig. 9 results.
 
 ## 11. What Fig. 9 must not claim
 
@@ -126,3 +148,5 @@ Style: Fig. 7 (EC-LLM e3; OTTER blue, baselines / ablations gray).
 - "Equivalent correctness" across steps: the recent state differs by step (zero vs replayed); only the Sink is exact.
 - That OTTER has the shortest TTFO-local among all methods (Wait-for-Sink is expected to be shorter).
 - Convergence beyond 1 Gbps, two workloads and one migration.
+- A strict one-component-per-step ablation (it is a design breakdown).
+- That OTTER's recent state is exact (it is replayed, not bit-exact; H3 is reported whatever its outcome).
