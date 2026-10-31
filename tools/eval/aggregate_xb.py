@@ -40,8 +40,12 @@ def transmitted_bytes(s: dict, ev: list) -> int | None:
     encoded inputs). The output stream is never counted here (it is not transmitted; see the ESTIMATED delivery bytes)."""
     pol = s["policy"]
     if pol.startswith("precopy"):
+        # precopy_replay (M1) also streams the per-call input log and the Sink refresh patches between its base round and
+        # the switch (`log_bytes`, patches included); the other pre-copy policies send no log (Fig. 7 prereg section 4)
+        # (a cancelled task's log is in its `xb_precopy_cancelled` event)
+        log = sum(int(e.get("log_bytes") or 0) for e in ev if e["event"] in ("xb_precopy_switch", "xb_precopy_cancelled")) if pol == "precopy_replay" else 0
         return sum(int(e.get("dirty_bytes") or 0) for e in ev if e["event"] == "xb_precopy_round") + \
-            sum(int(e.get("final_bytes") or 0) for e in ev if e["event"] == "xb_precopy_switch")
+            sum(int(e.get("final_bytes") or 0) for e in ev if e["event"] == "xb_precopy_switch") + log
     if pol.startswith("recompute"):
         return int((s.get("inputs") or {}).get("bytes_sent") or 0)
     fg = sum(int(m.get("fg_bytes") or 0) for m in s.get("moves", []))
