@@ -1,0 +1,15 @@
+[orch] === run policy=full_bw=1000_rho=none_tm=inf_rep=3_20261101-044819: Full migration (stop, transfer all state, resume), bw 1000.0 Mbps, T_m inf s, rho None, path A->B->C->D ===
+[orch] t=   0.88s move A->B (first move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  45.04s move B->C
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t=  90.05s move C->D (final move)
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+[orch] t= 226.56s run end
+        held   A: 100.0%, B:   0.0%, C:   0.0%, D:   0.0%
+        active -
+        next   stop reason: horizon
+[orch] Full migration (stop, transfer all state, resume) @ 1000.0 Mbps rho None: after final move: first output 53.69 s, Sink received None s, bound 53.03 s, continuity-ready 53.69 s, rejoin 53.69 s | traffic 0.00x, waste 0.00x, reused 0 MiB | PSNR after bind 99.0 dB | ingress peak 0 Mbps
