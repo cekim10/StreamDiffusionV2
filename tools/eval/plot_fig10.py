@@ -29,7 +29,7 @@ AXES_POS = [0.18, 0.22, 0.79, 0.75]
 AGES = (10, 60, 150, 240)
 REALIGN = (19, 64, 109, 154, 199, 244)   # ages (calls after S1 = 74) of the realignments at calls 93, 138, ...
 WL = {"dog": ("o", True, "Low-refresh"), "bfly": ("^", False, "High-refresh")}
-METHOD = {"ver": (BLUE, "-", "Versioned (M2)"), "chg": (DIM_GRAY, (0, (5, 2)), "Changed-block"), "full": (DARK_GRAY, "-", "Full")}
+METHOD = {"ver": (BLUE, "-", "Versioned"), "chg": (DIM_GRAY, (0, (5, 2)), "Changed-block"), "full": (DARK_GRAY, "-", "Full")}
 
 
 def save(fig, out: Path):
@@ -89,8 +89,13 @@ def panel_a(C, out: Path):
             if m == "ver":   # refreshed entries at each age
                 for a, y in zip(xs, med):
                     n = C[f"{w}|{a}"]["ver"]["refreshed_entries"]["median"]
-                    if n is not None:
-                        annotate(ax, a, y * (0.5 if w == "dog" else 1.8), f"{n:.0f}", ha="center", va="center", color=BLUE)
+                    if n is None:
+                        continue
+                    if w == "dog":
+                        annotate(ax, a, y * 0.5, f"{n:.0f}", ha="center", va="center", color=BLUE)
+                    else:   # High-refresh: below the point, clear of the Changed-block lines
+                        first = a == xs[0]
+                        annotate(ax, a + (-1.5 if first else 0 if a == xs[-1] else 7), y * (0.4 if first else 0.32), f"{n:.0f}", ha="center", va="center", color=BLUE)
     lo, hi = 10 ** np.floor(np.log10(min(ys) * 0.3)), max(ys) * 300   # headroom above Full for the legend
     ax.set_ylim(lo, hi)
     ax.yaxis.set_major_locator(LogLocator(base=10, numticks=12))
