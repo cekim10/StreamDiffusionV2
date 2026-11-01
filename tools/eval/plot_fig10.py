@@ -3,7 +3,8 @@
 
 fig10a_bytes      Sink base transferred at the second migration (MB, log) vs version age: Versioned (M2, measured), Changed-block
                   (computed from the measured block sets), Full (measured); both workloads; refreshed entries annotated.
-fig10b_readiness  destination readiness (s) vs version age: Full vs Versioned, both workloads.
+fig10b_readiness  destination readiness (s) vs version age: Full vs Versioned, plus Versioned base ready (dashed;
+                  same start as readiness), both workloads.
 Encoding: method by color / line style as Figs. 7-9 (Versioned blue solid, Changed-block gray dashed, Full light gray
 solid); workload by marker (Low-refresh filled circle, High-refresh open triangle). Line = median, points = reps.
 Canvas of Fig. 6a / Fig. 9.
@@ -29,6 +30,7 @@ AXES_POS = [0.18, 0.22, 0.79, 0.75]
 AGES = (10, 60, 150, 240)
 REALIGN = (19, 64, 109, 154, 199, 244)   # ages (calls after S1 = 74) of the realignments at calls 93, 138, ...
 WL = {"dog": ("o", True, "Low-refresh"), "bfly": ("^", False, "High-refresh")}
+BASE_LS = (0, (5, 2))   # 10b: Versioned base ready (same dash as Changed-block in 10a; color tells the method)
 METHOD = {"ver": (BLUE, "-", "Versioned"), "chg": (DIM_GRAY, (0, (5, 2)), "Changed-block"), "full": (DARK_GRAY, "-", "Full")}
 
 
@@ -64,9 +66,12 @@ def common(ax, ylabel):
     ax.set_xlabel("Version age (calls)", fontsize=28, labelpad=2)
 
 
-def legend(ax, loc, methods=(), workloads=False):
-    """Style-size legend (never smaller): 10a lists the methods, 10b the workload markers (the caption covers both)."""
+def legend(ax, loc, methods=(), workloads=False, times=False):
+    """Style-size legend (never smaller): 10a lists the methods (colors), 10b the workload markers and the two times
+    (line style: readiness solid, base ready dashed)."""
     hs = [Line2D([], [], color=METHOD[k][0], ls=METHOD[k][1], lw=2.4, label=METHOD[k][2]) for k in methods]
+    if times:
+        hs += [Line2D([], [], color="black", ls=l, lw=2.4, label=t) for l, t in (("-", "Readiness"), (BASE_LS, "Base ready"))]
     if workloads:
         hs += [Line2D([], [], color="black", marker=WL[w][0], mfc="black" if WL[w][1] else "white", ls="none", ms=10, label=WL[w][2]) for w in WL]
     ax.legend(handles=hs, loc=loc, frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.3, labelspacing=0.15, ncol=1, borderaxespad=0.2)
@@ -118,9 +123,13 @@ def panel_b(C, out: Path):
             col, ls, _ = METHOD[arm]
             draw(ax, xs, med, pts, col, ls, mk, filled, z=5 if arm == "ver" else 3)
             top = max(top, max(p[1] for p in pts))
-    ax.set_ylim(0, top * 1.8 if top else 1)
-    common(ax, "Readiness (s)")
-    legend(ax, "upper left", workloads=True)
+        # Versioned base ready (same start: the second migration's task start), below its readiness at every age
+        xs, med, pts = series(C, w, "ver", "base_ready_s")
+        if xs:
+            draw(ax, xs, med, pts, BLUE, BASE_LS, mk, filled, z=4)
+    ax.set_ylim(0, max(50, top * 2.0) if top else 1)   # headroom for the 4-row legend above Full
+    common(ax, "Time (s)")
+    legend(ax, "upper left", workloads=True, times=True)
     save(fig, out)
 
 
