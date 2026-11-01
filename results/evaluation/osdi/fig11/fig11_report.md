@@ -64,11 +64,74 @@ mismatching, replay order, no lost / duplicated calls) pass in every run. No med
   the user moves to D (90 s), D holds the Sink and gets a 12 MB delta base; D serves locally 9.7 s after the move, close
   to the replay-bound readiness of Fig. 10 (8.8-9.3 s). Before the move to C no plan had run, so nothing was staged for
   C. This matches the preregistered caution ("Chain is a test, not an expected win").
-- **The first move costs more with M3**: +1.4 s (dog) and +2.3-3.3 s (bfly) at B, and +1.4 s at C in Chain bfly. The
-  cause (M3 tracking / advertising on the source, in-flight forwards sharing the link) is not decomposed here. N_post
+- **The first move costs more with M3**: +1.4 s (dog) and +2.3-3.3 s (bfly) at B, and +1.4 s at C in Chain bfly.
+  Section 3b: it comes from M3's entry-path base and its verification, not from staging traffic or the handover. N_post
   excludes the first move by the frozen rule; the total N, which includes it, is also lower for OTTER in every cell.
 - **Stall.** OTTER's total stall (1.6-2.7 s) is below No staging's (5.0-6.4 s) with similar max gaps; the stall
   difference is not decomposed here.
+
+## 3a. Is staging path prediction? (review question; code + all OTTER runs; descriptive, not preregistered)
+
+**The planner does not use the path or the next destination [V] code.** `_m3_plan` (frozen M3-S3 code,
+`mobility_orchestrate.py`) takes as candidates every node of the deployment that is neither the user's current edge nor
+the source, and fills each candidate with every Sink entry it lacks, from any holder of a valid version (never the
+source). The node set is the run's hosts (here all four testbed hosts). `--m3_order fwd` is the fixed host-name order
+A, B, C, D used only to sequence flows and share rates when several candidates lack entries; it is not a path order
+(it coincides with this path's letters, which is why it is stated here). The planner runs at each user move
+(`why: move`) and every 2 s afterwards while another move can still come; it is not called at the first trigger.
+
+**What the runs show [V] measured (plans, Chain / Cancel dog rep 1).** In all 12 OTTER runs the first plan runs at the
+move to C with A as the only holder and forwards A -> D (dog 178 entries; bfly 156-158: entries refreshed since A's
+retained version are not valid and come later from the migration's holders):
+
+| time | event | candidates (not user, not source) | holders (entries) | forwards |
+|---|---|---|---|---|
+| Chain 45.0 s | user -> C | A, D | A 180, C 0, D 0 | A -> D 178 |
+| Chain 65.4 s | periodic | A, D | A 180, C 180, D 180 | none |
+| Chain 74.1 s | periodic (C is the source) | A, B, D | A 180, B 180, D 180 | none |
+| Chain 90.1 s | user -> D | A, B | A 180, B 180, D 180 | none |
+| Cancel 48.0 s | user -> C | A, D | A 180, C 0, D 0 | A -> D 178 |
+| Cancel 60.2 s | user -> D | A, C | A 180, C 129, D 145 | A -> C 43, D -> C 8 |
+
+- From 74 s in Chain every node other than the serving one (A, B, D) held a valid Sink: the user could have moved to
+  any of them. D was ready because it was the only eligible node lacking the Sink at 45 s (A, the old owner, already
+  held its retained version), not because it was known to be next.
+- Cancel shows the same policy on a node the user left: after the move to D, the planner tops up C (A -> C, D -> C),
+  which no path prediction would do.
+- **Limit of this evidence.** With four hosts, "every eligible node" is one node (D) at the second move, so these runs
+  cannot separate stage-everywhere from stage-the-next-hop by outcome; only the code and the Cancel top-up of C do.
+  Stage-everywhere costs a Sink per eligible node: here +0.4-12 % bytes; with more nodes it grows with their number
+  (not measured; Exp T / Fig. 12). "Prediction-free" is accurate for the mechanism; "scales to many edges" is not
+  shown.
+
+**Why C was not staged [V] code + measured.** At the first move (A -> B) no copy exists besides the source, which
+never forwards (it serves); after the A -> B switch (B resumes at 23.9-28.6 s) A holds the retained version
+(handover begun 0.36-0.55 s after B's resume), but the planner runs only on a move, so nothing was planned between the
+switch and the move to C (45 / 48 s). At that move C is the user's edge and is filled by the migration itself; staging
+then covers the others. A plan right after the first switch would have had ~20 s to forward to C and D from A
+(1.7 GB each over A's 1 Gbps uplink, shared); that is a planner-trigger change (M3 frozen), not tested.
+
+## 3b. Why the first move is slower with M3 (review question; all 12 OTTER vs 12 No-staging runs; descriptive)
+
+| (median, s from the task start) | dog No staging | dog OTTER | bfly No staging | bfly OTTER |
+|---|---|---|---|---|
+| base sent (A) | 17.48 | 18.72 (+1.24) | 19.55 | 22.44 (+2.89) |
+| replay ready (A) | 21.49 | 22.78 (+1.29) | 24.24 | 27.57 (+3.33) |
+| B resumes | 22.44 | 23.88 (+1.44) | 25.45 | 28.62 (+3.17) |
+
+- **Not staging traffic.** No M3 forward ran before the second move in any run (0 / 12): the planner had not run yet.
+- **Not the ownership handover.** It begins 0.36-0.55 s after B resumes and its import happens at the next plan (45 s),
+  off B's critical path.
+- **It is the first base itself.** Most of the delay appears before "base sent" (+1.24 / +2.89 s); the steps after it
+  (replay to ready) add +0.05 s (dog) / +0.44 s (bfly). Under M3 the base is sent through the entry path (`mode: m3`: 180 entries with per-entry
+  versions and provenance, the form later holders can serve), same bytes (1,727.6 MB): plan 0.22 s, entry send
+  16.09 s (dog) / 19.69 s (bfly), of which D2H copies 14.95 / 15.80 s, then the destination's DELTAOK check of all
+  entries (verdict wait 0.52 / 0.53 s median, up to 1.09 s) before the base counts as sent. Plan + verdict ~0.75 s
+  explain most of dog's +1.24 s; bfly's remaining ~2 s is a slower entry send (19.7 s for 1.73 GB, ~88 MB/s, below
+  the 1 Gbps link). Why the entry send is slower on the High-refresh source (No staging bfly is also 2.1 s slower than
+  dog) is not determined from these records.
+- So the first-move cost is the metadata / verification side of M3 (making the Sink stageable), on the critical path
+  of the first migration, not link contention.
 
 ## 4. Predictions [H] vs measured
 
