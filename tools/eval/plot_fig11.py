@@ -27,7 +27,7 @@ FIG_SIZE = (5.83, 4.78)
 AXES_POS = [0.18, 0.22, 0.79, 0.75]   # the plot box of Fig. 6a
 XTICK_ROT = 30
 METHODS = ("full", "pfull", "rfull", "base", "otter")
-TICK = {"full": "Full", "pfull": "Llumnix", "rfull": "SLLM", "base": "w/o M3", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt
+TICK = {"full": "Full", "pfull": "Llumnix", "rfull": "SLLM", "base": "No staging", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt; no internal M-names (user)
 FILL = {"full": DIM_GRAY, "pfull": DIM_GRAY, "rfull": DIM_GRAY, "base": "#9DB3F0", "otter": BLUE}
 W, OFF = 0.36, 0.19
 
@@ -77,10 +77,10 @@ def panel_a(C, sc, out: Path):
             ax.scatter(x + np.linspace(-0.08, 0.08, len(n["values"])), n["values"], s=12, color="black", edgecolor="white", lw=0.4, zorder=5)
             hi = max(n["values"])
             top = max(top, hi)
-            lab = f"{n['median']:.0f}" if n["median"] >= 10 else f"{n['median']:.1f}"
-            annotate(ax, x, hi * 1.02 + 2, lab + (" n.c." if c["n_not_converged"] else ""), rotation=90, va="bottom")
+            lab = ("\u2265" if n["median_censored"] else "") + (f"{n['median']:.0f}" if n["median"] >= 10 else f"{n['median']:.1f}")
+            annotate(ax, x, hi * 1.02 + 2, lab + (" n.c." if c["n_not_converged"] else ""), rotation=90, va="bottom")   # >= : right-censored
     ax.set_ylim(0, top * 1.9 if top else 1)
-    finish(ax, "Non-local time (s)")
+    finish(ax, "Local-service delay (s)")
     hs = [Patch(fc="#BBBBBB", ec="black", label="remote-served"), Patch(fc=dark("#BBBBBB"), ec="black", label="interrupted")]
     ax.legend(handles=hs, loc="upper right", ncol=1, frameon=False, fontsize=LEGEND, handlelength=1.2, handletextpad=0.3, labelspacing=0.15, borderaxespad=0.2)
     save(fig, out)
@@ -101,13 +101,14 @@ def panel_b(C, sc, out: Path):
             ax.bar(x, s["median"], width=W, color=FILL[m], hatch=HATCH[w], edgecolor="black", linewidth=1.0, zorder=3)
             ax.scatter(x + np.linspace(-0.08, 0.08, len(s["values"])), s["values"], s=12, color="black", edgecolor="white", lw=0.4, zorder=5)
             hi = max(s["values"]); top = max(top, hi)
-            annotate(ax, x, hi * (1.15 if scale == "log" else 1.0) + (0 if scale == "log" else 1), f"{s['median']:.1f}", rotation=90, va="bottom")
+            lab = ("\u2265" if s["median_censored"] else "") + f"{s['median']:.1f}"
+            annotate(ax, x, hi * (1.15 if scale == "log" else 1.0) + (0 if scale == "log" else 1), lab, rotation=90, va="bottom")
     if scale == "log":
         ax.set_ylim(min(meds) / 3, top * 30)
         ax.yaxis.set_major_locator(LogLocator(base=10)); ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}")); ax.yaxis.set_minor_formatter(NullFormatter())
     else:
         ax.set_ylim(0, top * 1.9 if top else 1)
-    finish(ax, "Final readiness (s)")
+    finish(ax, "Final-edge readiness (s)")
     hs = [Patch(fc="white", ec="black", label=WL_LABEL["dog"]), Patch(fc="white", ec="black", hatch="//", label=WL_LABEL["bfly"])]
     ax.legend(handles=hs, loc="upper right", ncol=1, frameon=False, fontsize=LEGEND, handlelength=1.2, handletextpad=0.3, labelspacing=0.15, borderaxespad=0.2)
     save(fig, out)

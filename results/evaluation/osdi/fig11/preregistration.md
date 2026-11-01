@@ -1,7 +1,10 @@
 # Fig. 11 preregistration: repeated mobility (M3, RQ5)
 
-**Status: DRAFT 1 (2026-10-31), not frozen. Nothing run.** Tools and a local dry run are done (section 8) so the set can
-start right after Fig. 10. Plan: `osdi/eval_plan/plan.md` (Fig. 11, RQ5, P0). Open decisions: section 10. Labels: [V]
+**Status: FROZEN (2026-10-31), before any Fig. 11 run.** DRAFT 1 was ddf88a5e; the user's review is applied: N is a
+local-service delay (locality recovery), not a continuity measure, and is always reported with the max output gap and
+the cumulative stall; non-converged runs are right-censored at a common observation horizon and never pooled as
+completed values; H2 measures staging on the moves after the first. Runs start after Fig. 10 ends (A / B busy). Plan:
+`osdi/eval_plan/plan.md` (Fig. 11, RQ5, P0). Decisions: section 10. Labels: [V]
 verified in code or earlier records, [H] hypothesis / expectation, [R] recommendation.
 
 Roles: Fig. 7 = one migration vs external baselines; Fig. 9 = M1; Fig. 10 = M2; **Fig. 11 = the whole system when the
@@ -12,9 +15,12 @@ conditions** (plan: "separate the gain over external baselines from the effect o
 
 RQ5: can lineage-based staging accelerate repeated GPU mobility?
 
-- **11a, time without local service.** Over a run in which the user moves A -> B -> C -> D, how long is the user not
-  served by the GPU at their current edge, and how much of that time is served remotely vs interrupted? Message to test:
-  OTTER keeps this far below the external baselines, and M3 staging shortens it further than OTTER without staging.
+- **11a, local-service delay.** Over a run in which the user moves A -> B -> C -> D, how long until the user is served
+  by the GPU at their current edge, summed over the moves, and how much of that time is served remotely vs interrupted?
+  This is a locality-recovery cost, **not** a continuity measure (20 s of remote serving is not worse for the viewer than
+  10 s of interruption), so the two parts stay separate and the continuity measures (max output gap, cumulative stall)
+  are reported with it. Message to test: OTTER keeps this far below the external baselines, and staging shortens it on the
+  moves after the first.
 - **11b, final readiness.** After the last move, how long until the final edge serves locally (TTFO-local at D)?
 
 Out of scope: one migration (Fig. 7); the return path A -> B -> A (Fig. 10, M2's case); bandwidth and mobility frequency
@@ -48,7 +54,7 @@ Path A -> B -> C -> D, 1 Gbps, first trigger at call 30 (user to B), Fig. 7 work
 | Full | `full` |
 | Llumnix-style (P-full) | `precopy_full@thr=256:rl=10` (Fig. 7); non-convergence marked (plan) |
 | ServerlessLLM-style (R-full) | `recompute_full@lag=1:rl=1` (Fig. 7) |
-| OTTER w/o staging | `precopy_replay@thr=16:rl=1` + Fig. 7 OTTER flags (M1 + M2) |
+| No staging (OTTER w/o staging) | `precopy_replay@thr=16:rl=1` + Fig. 7 OTTER flags (M1 + M2) |
 | OTTER | the same + `--m3 --m3_owner --m3_staging S2 --m3_order fwd --m3_replan_s 2` (M3-S3) |
 
 All: `--hops 3 --tm 1e9 --bw 1000 --migration_chunk 30 --post_chunks 800 --max_run_s 2400 --xb_horizon 100
@@ -58,21 +64,32 @@ Estimate [H] ~13 min per run (reference ~8 min): ~13 h.
 
 ## 4. Metrics (per run)
 
-- **Time without local service** N (figure label "Non-local time") = sum over the three edge changes (B, C, D) of the time from the change to the first
-  output generated at the new edge, truncated at the next change (and at the run's last delivery for D). Split into
-  **remote-served** (the user receives chunks from another edge: `remote_wall_s`) and **interrupted** (N - remote).
-- **Final readiness** R_D = TTFO-local at D (the last change).
-- Descriptive: max delivery gap, total stall (Fig. 8 rule), bytes (all / into D after the move to D), per-move TTFO-local,
-  remote-delivery estimate, M3 staged / reused entries, fallbacks.
+- **Local-service delay** N (figure label "Local-service delay") = sum over the three edge changes (B, C, D) of the time
+  from the change to the first output generated at the new edge, truncated at the next change; the final edge D is
+  observed for **T_obs = 300 s** after its change. Split into **remote-served** (the user receives chunks from another
+  edge: `remote_wall_s`) and **interrupted** (N - remote), always shown separately.
+- **N_post** = the same over the 2nd and 3rd changes (C and D): the moves on which staging can act.
+- **Final-edge readiness** R_D = TTFO-local at D (the last change).
+- **Continuity, reported with N in every table and in the text** (Figs. 7-8): max output gap, total stall (Fig. 8 rule).
+- Descriptive: bytes (all / into D after the move to D), per-move TTFO-local, remote-delivery estimate, staged / reused
+  entries, fallbacks.
+- **Right-censoring (non-convergence).** Every method has the same observation horizon: T_obs after the final move. A run
+  whose final edge has not served locally by then is "not converged": R_D > T_obs, and its N, N_post are lower bounds.
+  Censored values are never pooled as completed values: a median whose rank falls on a censored run is reported as a
+  lower bound (">="). A run that ends before T_obs without local service at D is invalid (harness), not censored.
 
 ## 5. Hypotheses (each scenario x workload)
 
 - **F11-H1 (vs external).** median N(OTTER) <= 0.5 x min(median N of Full, P-full, R-full). Predictions [H]: Chain OTTER
   ~35-45 s, Full ~145 s (redirected twice, ~53 s per resend), R-full >= 100 s (recomputes ~180 calls at D), P-full
   >= 200 s; Cancel similar.
-- **F11-H2 (staging).** median N(OTTER) <= 0.80 x median N(OTTER w/o staging) (M3-S3's R-D1 margin). Predictions [H]:
-  Chain ~0.6 (the first move is identical in both, ~22 s; later moves ~8 vs ~22 s); Cancel ~0.75.
-- **F11-H3 (final readiness).** median R_D(OTTER) < median R_D(OTTER w/o staging).
+- **F11-H2 (staging, moves after the first; user).** median N_post(OTTER) <= 0.80 x median N_post(No staging). The first
+  move cannot benefit from staging and is excluded; the total N is reported separately. Predictions [H], with caution:
+  Cancel ~0.4-0.6 (M3-S3's 21.3 -> 8.2 s was measured on this pattern); **Chain is a test, not an expected win**: if the
+  destination holds few valid entries or staging is late, the gain may be small.
+- **F11-H3 (final readiness).** median R_D(OTTER) < median R_D(No staging).
+- **Censoring in the rules.** OTTER's median must be uncensored for H1-H3 to hold; a censored baseline median enters as
+  its lower bound (conservative: the comparison can only understate OTTER's advantage).
 
 Descriptive: the same comparisons for every method pair; R_D of all methods; bytes (M3 is not a traffic reduction,
 M3-S3: +5-10 %).
@@ -84,8 +101,9 @@ Per cell: median and range over 3 valid reps (3 required, else NOT EVALUABLE); e
 ## 7. Validity and correctness (as each method claims it)
 
 - XB validity for the XB policies, the W / R / N validity for Full (as in Fig. 7); one commit on A-D; GPU 0 idle.
-- **Non-convergence is a result, not an exclusion:** a run whose final edge never serves locally before the run ends is
-  kept, marked "not converged", with N truncated at its last delivery; it counts in the medians.
+- **Non-convergence is a result, not an exclusion, and is right-censored:** a run without local service at D within
+  T_obs after the final move is kept as "not converged" with R_D > T_obs (section 4); a run that ends earlier without
+  local service at D is invalid. `--post_chunks 800` lets every method be observed past T_obs.
 - Full: whole-state digests at every resume, final Sink digest equal to the source's.
 - P-full: every completed switchover verified (component digests). R-full: inputs exact at every switchover.
 - OTTER (both): every switch SINKOK or verified fallback (0 / 360 mismatching blocks at each `sink_sync_check`), replay
@@ -111,23 +129,26 @@ Per cell: median and range over 3 valid reps (3 required, else NOT EVALUABLE); e
 
 ## 9. Plot specification
 
-Canvas of Fig. 6a / 9 / 10 (5.83 x 4.78 in); OTTER blue, OTTER w/o staging light blue, external baselines gray.
-- **11a**: stacked bars, N split into remote-served (method color) and interrupted (darkened), per method; one panel
-  per scenario, workloads side by side (Low-refresh solid, High-refresh hatched) (D5); not-converged runs marked. Method
-  names 28 pt, rotated 30 degrees, short (Full, Llumnix, SLLM, w/o M3, OTTER) so they fit Fig. 6a's plot box; fonts never
-  reduced.
-- **11b**: R_D per method (log if the medians span >= 1 decade, the Fig. 7 rule).
+Canvas of Fig. 6a / 9 / 10 (5.83 x 4.78 in); OTTER blue, No staging light blue, external baselines gray.
+Two subfigures (user): **11(a) local-service delay**, **11(b) final-edge readiness**; Chain and Cancel as separate
+graphs of each (D5).
+- **11a**: stacked bars, N split into remote-served (method color) and interrupted (darkened), per method; workloads side
+  by side (Low-refresh solid, High-refresh hatched); censored medians labelled ">=" and "n.c.". Max gap and total stall
+  in the text / table.
+- **11b**: R_D per method, OTTER vs No staging emphasized (log if the medians span >= 1 decade, the Fig. 7 rule).
+- No internal mechanism names in figures ("No staging", not "w/o M3"). Fonts never reduced; names at 28 pt in Fig. 6a's
+  plot box (layout of the method names to be settled with the user).
 
-## 10. Open decisions (user)
+## 10. Decisions (user, 2026-10-31)
 
-| | question | options | [R] |
-|---|---|---|---|
-| D1 | scenarios | Chain + Cancel / Cancel only (= M3-S3 on the wall clock) / + Return (Fig. 10 covers it) | Chain + Cancel |
-| D2 | move schedule | wall clock `--move_times` for every method (new flag) / call-based (XB methods only; not comparable across methods) | wall clock |
-| D3 | methods | the five above / without P-full (it never finishes a move before the next; ~10 % of the run time) | the five (plan: include, mark non-convergence) |
-| D4 | reps | 3 / 5 for the OTTER pair only (+8 runs) | 3 |
-| D5 | layout | one panel per scenario (methods x workloads) / one panel per workload | per scenario |
-| D6 | thresholds | H1 0.5, H2 0.80 / others | as above |
+| | decision |
+|---|---|
+| D1 | Chain + Cancel (regular repeated moves and a cancelled migration) |
+| D2 | wall-clock moves (`--move_times`) for every method |
+| D3 | the five methods |
+| D4 | 3 reps |
+| D5 | one graph per scenario for each subfigure |
+| D6 | H1 kept (0.5); H2 on N_post (moves after the first, 0.80); H3 kept |
 
 ## 11. What Fig. 11 must not claim
 
@@ -136,3 +157,5 @@ Canvas of Fig. 6a / 9 / 10 (5.83 x 4.78 in); OTTER blue, OTTER w/o staging light
   recent state by replay).
 - Results for other mobility frequencies, bandwidths, unpredicted paths or more edges (four hosts; Fig. 12).
 - That the user's network latency during remote serving is measured (it is not: LAN; deferred to the network evaluation).
+- That N measures streaming continuity (it measures locality recovery; continuity = max gap, cumulative stall).
+- A censored value as a completed one, or a readiness for a method that did not converge within T_obs.
