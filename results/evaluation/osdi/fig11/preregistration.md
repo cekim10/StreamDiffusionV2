@@ -159,3 +159,9 @@ graphs of each (D5).
 - That the user's network latency during remote serving is measured (it is not: LAN; deferred to the network evaluation).
 - That N measures streaming continuity (it measures locality recovery; continuity = max gap, cumulative stall).
 - A censored value as a completed one, or a readiness for a method that did not converge within T_obs.
+
+## Note 1 (2026-10-31, after the freeze, before any run; cosmetic)
+
+User chose option (b) for the method names in Fig. 6a's plot box at 28 pt: the No-staging condition is labelled
+**"Unstaged"** on the x axis (30-degree rotation, fits; "No staging" did not). Text and tables keep "No staging". No rule,
+metric or run setting changes.

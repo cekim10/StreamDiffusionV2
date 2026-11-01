@@ -27,7 +27,7 @@ FIG_SIZE = (5.83, 4.78)
 AXES_POS = [0.18, 0.22, 0.79, 0.75]   # the plot box of Fig. 6a
 XTICK_ROT = 30
 METHODS = ("full", "pfull", "rfull", "base", "otter")
-TICK = {"full": "Full", "pfull": "Llumnix", "rfull": "SLLM", "base": "No staging", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt; no internal M-names (user)
+TICK = {"full": "Full", "pfull": "Llumnix", "rfull": "SLLM", "base": "Unstaged", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt; no internal M-names (user)
 FILL = {"full": DIM_GRAY, "pfull": DIM_GRAY, "rfull": DIM_GRAY, "base": "#9DB3F0", "otter": BLUE}
 W, OFF = 0.36, 0.19
 
@@ -57,6 +57,7 @@ def finish(ax, ylabel):
     ax.set_xticks(range(len(METHODS)))
     ax.set_xticklabels([TICK[m] for m in METHODS])
     finish_axes(ax, ylabel)
+    ax.yaxis.set_label_coords(-0.155, 0.5)   # clear of three-digit ticks at 28 pt
     ax.tick_params(axis="x", length=0)
     plt.setp(ax.get_xticklabels(), rotation=XTICK_ROT, ha="right", rotation_mode="anchor")   # never a smaller font
 
