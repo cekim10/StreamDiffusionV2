@@ -5,7 +5,7 @@ B = elves-02): A -> B -> A, seed 0, trigger 30, first switch s1 = 74, ages 10 / 
 vs Versioned (`--replay_retain --replay_reuse`), 3 reps, both workloads. Numbers: `fig10_results.{json,md}`
 (`tools/eval/fig10_report.py`); figures: `figures/` (`tools/eval/plot_fig10.py`, Fig. 6a canvas and axes box, style
 font sizes; legend label "Versioned", no mechanism name; (a) y range 0.1-5,000 MB with the legend at the bottom
-right).
+right; (b) adds Versioned base ready, dashed, y label "Time (s)").
 
 ## 1. Verdicts (frozen rules)
 
@@ -114,8 +114,14 @@ at age 240 vs readiness 8.99 s), not a speedup that decays with age. Full sends 
 **Caption draft.** *Fig. 10. Versioned Sink reuse vs version age (A -> B -> A, 1 Gbps). (a) Sink bytes sent at the
 second migration (log scale). Versioned and Full are measured; Changed-block is an offline estimate based on measured
 modified K / V blocks (what reusing every unchanged block would send). Circles: Low-refresh; triangles: High-refresh.
-Numbers indicate refreshed Sink entries. (b) Destination readiness; lines are medians of 3 runs, markers individual
-runs.*
+Numbers indicate refreshed Sink entries. (b) Destination readiness (solid) for Full and Versioned, and Versioned base
+ready (dashed), both measured from the second migration's start; lines are medians of 3 runs, markers individual runs.
+Versioned base ready grows with age but stays below readiness at every age.*
+
+Panel (b) (user review, 2026-11-01) also draws Versioned base ready as a separate dashed line, not as a shaded band to
+readiness: the gap between the two is not the replay time alone (replay overlaps the base transfer and scheduling).
+Both times share one start (the second `xb_task_start`): base ready ends at A's accepted `replay_delta_base` (rebuild
+and 360-block check done), readiness at B's `replay_ready`. Base ready < readiness in all 24 Versioned runs [V].
 
 ## 5. Limits
 
