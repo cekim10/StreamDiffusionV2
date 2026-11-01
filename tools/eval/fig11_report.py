@@ -119,10 +119,14 @@ def run_record(d: Path, dry: bool) -> dict | None:
     rem = min(D["remote_wall_s"], N)
     n_post = sum(p["without_local_s"] for p in per[1:])
     sw_d = [e for e in ev if e["node"] == "D" and e["event"] in ("resume",)]
+    # M3 staging forwards (holder -> candidate entries, partial bytes of cancelled flows included) are sent on the testbed
+    # too; transmitted_bytes() counts only the migration tasks, so they are added here (bytes = entries sent x entry size)
+    m3_fwd = sum(int(e.get("bytes") or 0) for e in ev if e["event"] == "m3_forward_done")
     return {"run": d.name, "method": meth, "rep": s.get("rep"), "status": status, "validity_why": why, "c1": C1, "converged": not cens,
             "censored": cens, "N_s": N, "N_post_s": n_post, "remote_served_s": rem, "interrupted_s": N - rem, "per_move": per,
             "R_D_s": T_OBS if cens else D["ttfo_local_final_s"],
-            "gap_s": D["delivery_gap_s"], "total_stall_s": stalls(rows)["total_stall_s"] if rows else None, "tx_bytes": transmitted_bytes(s, ev),
+            "gap_s": D["delivery_gap_s"], "total_stall_s": stalls(rows)["total_stall_s"] if rows else None, "tx_bytes": (transmitted_bytes(s, ev) or 0) + m3_fwd,
+            "m3_forward_bytes": m3_fwd,
             "moves": [mv.get("t_req") for mv in s.get("moves", [])], "stop_reason": (s.get("validation") or {}).get("stop_reason"),
             "m3": {k: s.get(k) for k in ("m3",) if s.get(k) is not None}, "d_resumes": len(sw_d)}
 
@@ -159,7 +163,7 @@ def cells(C):
             kept = [r for r in mine if r["status"] in ("valid", "not_converged")]
             R[key][m] = {"n_kept": len(kept), "n_runs": len(mine), "n_not_converged": sum(r["status"] == "not_converged" for r in kept),
                          **{k: stats([r[k] for r in kept], [r["censored"] for r in kept]) for k in ("N_s", "N_post_s", "remote_served_s", "interrupted_s", "R_D_s")},
-                         **{k: stats([r[k] for r in kept]) for k in ("gap_s", "total_stall_s", "tx_bytes")},
+                         **{k: stats([r[k] for r in kept]) for k in ("gap_s", "total_stall_s", "tx_bytes", "m3_forward_bytes")},
                          "invalid": [(r["run"], r["validity_why"], {k: v for k, v in r["c1"]["checks"].items() if not v}) for r in mine if r["status"] == "invalid"],
                          "runs": mine}
     return R

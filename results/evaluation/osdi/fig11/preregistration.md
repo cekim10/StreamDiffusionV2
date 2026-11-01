@@ -165,3 +165,10 @@ graphs of each (D5).
 User chose option (b) for the method names in Fig. 6a's plot box at 28 pt: the No-staging condition is labelled
 **"Unstaged"** on the x axis (30-degree rotation, fits; "No staging" did not). Text and tables keep "No staging". No rule,
 metric or run setting changes.
+
+## Note 2 (cosmetic, after the runs, 2026-11-01)
+
+At 28 pt the y labels "Local-service delay (s)" and "Final-edge readiness (s)" overflow the Fig. 6a axes box and were
+clipped in the real-data figures. Figure labels only: "Locality delay (s)" (11a) and "Final readiness (s)" (11b, with
+power-of-ten tick labels). Metric definitions, names in text and tables, rules and verdicts are unchanged. Separately,
+the report tool's byte totals now include M3 staging forwards (descriptive metric; see `fig11_report.md` section 5).
