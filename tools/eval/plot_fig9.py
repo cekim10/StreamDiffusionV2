@@ -28,17 +28,17 @@ from plot_fig7_migration import (BLUE, DARK_GRAY, DIM_GRAY, HATCH, LEGEND, OFF, 
                                  finish_axes)
 
 STEPS = ("wait", "psink", "nosync", "otter")
-TICK = {"wait": "Wait-for-Sink", "psink": "P-sink", "nosync": "w/o Sink sync", "otter": "OTTER"}
+TICK = {"wait": "Wait", "psink": "P-sink", "nosync": "w/o sync", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt (caption spells them out)
 FILL = {k: (DIM_GRAY, DARK_GRAY) for k in STEPS}
 FILL["otter"] = (BLUE, "#9DB3F0")
 LINE_A = {"pfull": ("#3A3A3A", "-", "o", "P-full"), "psink": (DARK_GRAY, (0, (5, 2)), "s", "P-sink")}
 THRESHOLD_MB = 256 * 2**20 / 1e6
-XTICK_ROT = 40   # narrow canvas: rotate the step names (never a smaller font)
+XTICK_ROT = 30   # narrow canvas: rotate the step names (never a smaller font)
 # canvas and axes box of Fig. 6a (make_background_figures.F4_SIZE / F4_ADJUST: left 0.18, right 0.97, bottom 0.22, top 0.97),
 # saved without a tight bbox so the page size matches
 FIG_SIZE = (5.83, 4.78)
 AXES_POS = [0.18, 0.22, 0.79, 0.75]
-AXES_POS_BARS = [0.18, 0.37, 0.79, 0.60]   # (b), (c): same canvas, a taller bottom margin for the rotated step names
+AXES_POS_BARS = AXES_POS   # (b), (c): the same plot box as Fig. 6a
 
 
 def save(fig, out: Path):
@@ -115,7 +115,7 @@ def bars(C, key, ylabel, fmt, scale, lim, out: Path, legend=True):
             assert hi < top, (key, k, w, hi, top)
             annotate(ax, x, hi * 1.12 if scale == "log" else hi + top * 0.02, fmt(s["median"]), rotation=90)   # vertical: no pair collisions
     ax.set_ylim(lo, top)
-    ax.set_xlim(-0.85, len(STEPS) - 0.45)   # room on the left for the first rotated name
+    ax.set_xlim(-0.55, len(STEPS) - 0.45)
     ax.set_xticks(range(len(STEPS)))
     ax.set_xticklabels([TICK[k] for k in STEPS])
     finish_axes(ax, ylabel)
