@@ -179,7 +179,7 @@ def md(R, v, agg):
     word = {True: "SUPPORTED", False: "NOT SUPPORTED", None: "NOT EVALUABLE"}
     L = ["# Fig. 10 results", "", "Rules: `preregistration.md`. " + "; ".join(f"**{h.replace('_', '-')}: {word[agg[h]]}**" for h in agg), ""]
     for w, lab in WORKLOADS.items():
-        L += [f"## {lab} ({w})", "", "| age | arm | valid | base (MB) | total mig. 2 (MB) | readiness (s) | base ready (s) | interruption (s) | refreshed / shifted entries | changed-block (MB) | unchanged-only entry (MB) | fallbacks |",
+        L += [f"## {lab} ({w})", "", "| age | arm | valid | base (MB) | total mig. 2 (MB) | readiness (s) | base ready (s) | interruption (s) | refreshed entries / distinct shifted entries / shift events | changed-block (MB) | unchanged-only entry (MB) | fallbacks |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for a in AGES:
             for arm in ARMS:
@@ -187,7 +187,7 @@ def md(R, v, agg):
                 mb = lambda k: f(x[k]["median"] / 1e6, 1) if x[k]["median"] is not None else "-"  # noqa: E731
                 rng = lambda k: f"{f(x[k]['median'])} [{f(x[k]['min'])}-{f(x[k]['max'])}]"  # noqa: E731
                 L.append(f"| {a} | {LABEL[arm]} | {x['n_valid']} / {x['n_runs']} | {mb('base_bytes')} | {mb('total_bytes_mig2')} | {rng('readiness_s')} | {rng('base_ready_s')} | "
-                         f"{rng('interruption_s')} | {f(x['refreshed_entries']['median'], 0)} / {f(x['distinct_shifted_entries']['median'], 0)} | {mb('changed_block_bytes')} | "
+                         f"{rng('interruption_s')} | {f(x['refreshed_entries']['median'], 0)} / {f(x['distinct_shifted_entries']['median'], 0)} / {f(x['shift_events']['median'], 0)} | {mb('changed_block_bytes')} | "
                          f"{mb('unchanged_only_entry_bytes')} | {x['fallbacks']} |")
             L.append(f"| {a} | equivalence (B's outputs S1..S2 equal per rep) | {R[(w, a)]['equivalence_by_rep']} | | | | | | | | | |")
         L += ["", f"changed vs retained (Versioned): " + "; ".join(f"a{a}: {R[(w, a)]['ver']['changed_vs_retained']}" for a in AGES), ""]

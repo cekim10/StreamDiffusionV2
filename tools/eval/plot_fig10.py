@@ -96,14 +96,13 @@ def panel_a(C, out: Path):
                     else:   # High-refresh: below the point, clear of the Changed-block lines
                         first = a == xs[0]
                         annotate(ax, a + (-1.5 if first else 0 if a == xs[-1] else 7), y * (0.4 if first else 0.32), f"{n:.0f}", ha="center", va="center", color=BLUE)
-    lo, hi = 10 ** np.floor(np.log10(min(ys) * 0.3)), max(ys) * 300   # headroom above Full for the legend
-    ax.set_ylim(lo, hi)
+    ax.set_ylim(0.1, 5000)   # top just above Full (1,727.6 MB); the legend goes to the empty bottom right
     ax.yaxis.set_major_locator(LogLocator(base=10, numticks=12))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"$10^{{{int(round(np.log10(v)))}}}$"))
     ax.yaxis.set_minor_formatter(NullFormatter())
     common(ax, "Sink transferred (MB)")
     ax.yaxis.set_label_coords(-0.14, 0.5)
-    legend(ax, "upper right", methods=("ver", "chg", "full"))
+    legend(ax, "lower right", methods=("ver", "chg", "full"))
     save(fig, out)
 
 
