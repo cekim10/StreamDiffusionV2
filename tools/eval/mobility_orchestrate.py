@@ -915,6 +915,14 @@ class Run:
         self.log(f"  fresh snapshot S_{snap['k']} from {frm} (call {mv['call']}): {len(dirty)} / {n} fragments changed; valid elsewhere {snap['valid_by_node']}; "
                  f"invalidated {stale}; {len(cancelled)} flows cancelled; install {t_i1 - t_i0:.2f} s")
 
+    def _move_due(self, k: int, now: float) -> bool:
+        """The k-th move after the first (k >= 1): at t0 + k x T_m, or at t0 + the k-th --move_times entry (Fig. 11: the same
+        wall-clock user mobility for every method; seconds after the trigger)."""
+        mt = [float(x) for x in self.a.move_times.split(",") if x.strip()] if self.a.move_times else []
+        if mt:
+            return k - 1 < len(mt) and now >= self.t0 + mt[k - 1]
+        return now >= self.t0 + k * self.tm
+
     def full_handoff(self, frm: str, to: str, i: int, t_req: float) -> dict:
         """Full migration. If `frm` is generating, it stops, packs the whole state and sends it to `to`. If the state is
         still in transit (the user moved on before it arrived), the node holding the packed state cancels that transfer
@@ -1030,7 +1038,7 @@ class Run:
             self.tick(now)
             if now - last_pcur >= 1.0:
                 self.p_current_row(now); last_pcur = now
-            if next_move <= n_moves and now >= self.t0 + next_move * self.tm:
+            if next_move <= n_moves and self._move_due(next_move, now):
                 frm, to = self.edges[next_move], self.edges[next_move + 1]
                 self.handoff(frm, to, next_move + 1)
                 d = self.plan("move")
@@ -1387,7 +1395,7 @@ class Run:
             mc = [int(x) for x in a.move_calls.split(",") if x.strip()] if a.move_calls else []
             by_call = bool(mc) and next_move <= n_moves and next_move - 1 < len(mc) and self.running is not None and \
                 any(m_["owner"] == self.running and int(m_["call"]) >= mc[next_move - 1] for m_ in self.metrics[-4:])
-            if next_move <= n_moves and (by_call if mc else now >= self.t0 + next_move * self.tm):
+            if next_move <= n_moves and (by_call if mc else self._move_due(next_move, now)):
                 self.user_idx = next_move + 1
                 to = self.edges[self.user_idx]
                 self.moves.append({"i": self.user_idx, "from": self.edges[next_move], "to": to, "t_req": now, "t_stop": None, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "xb"})
@@ -2244,6 +2252,7 @@ def main():
     ap.add_argument("--allow_return", action="store_true", help="M2 / E9: allow a precopy_replay path that returns to A (e.g. --path A,B,A)")
     ap.add_argument("--replay_switch_calls", type=str, default="", help="M2 / E9: planned switch call per migration, e.g. '64,164'")
     ap.add_argument("--move_calls", type=str, default="", help="M2 / E9: trigger the 2nd, 3rd, ... migration when the serving node reaches these calls (replaces T_m)")
+    ap.add_argument("--move_times", type=str, default="", help="Fig. 11: the 2nd, 3rd, ... moves at these seconds after the trigger, every policy (replaces T_m; ignored with --move_calls)")
     ap.add_argument("--replay_retain", action="store_true", help="M2: the source retains its Sink version at a digest-equal switch; the new owner tracks changes since it")
     ap.add_argument("--replay_reuse", action="store_true", help="M2: a destination holding a retained version gets a delta base")
     ap.add_argument("--replay_delta_test_mismatch", action="store_true", help="protocol test only: corrupt the delta base's expected digest (exercise the full-base fallback)")

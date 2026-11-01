@@ -64,10 +64,12 @@ def common(ax, ylabel):
     ax.set_xlabel("Version age (calls)", fontsize=28, labelpad=2)
 
 
-def legend(ax, loc):
-    hs = [Line2D([], [], color=METHOD[k][0], ls=METHOD[k][1], lw=2.4, label=METHOD[k][2]) for k in METHOD if k in loc[1]]
-    hs += [Line2D([], [], color="black", marker=WL[w][0], mfc="black" if WL[w][1] else "white", ls="none", ms=8, label=WL[w][2]) for w in WL]
-    ax.legend(handles=hs, loc=loc[0], frameon=False, fontsize=LEGEND - 9, handlelength=1.6, handletextpad=0.3, labelspacing=0.15, ncol=1, borderaxespad=0.2)
+def legend(ax, loc, methods=(), workloads=False):
+    """Style-size legend (never smaller): 10a lists the methods, 10b the workload markers (the caption covers both)."""
+    hs = [Line2D([], [], color=METHOD[k][0], ls=METHOD[k][1], lw=2.4, label=METHOD[k][2]) for k in methods]
+    if workloads:
+        hs += [Line2D([], [], color="black", marker=WL[w][0], mfc="black" if WL[w][1] else "white", ls="none", ms=10, label=WL[w][2]) for w in WL]
+    ax.legend(handles=hs, loc=loc, frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.3, labelspacing=0.15, ncol=1, borderaxespad=0.2)
 
 
 def panel_a(C, out: Path):
@@ -88,16 +90,15 @@ def panel_a(C, out: Path):
                 for a, y in zip(xs, med):
                     n = C[f"{w}|{a}"]["ver"]["refreshed_entries"]["median"]
                     if n is not None:
-                        annotate(ax, a, y * (0.62 if w == "dog" else 1.45), f"{n:.0f}", fontsize=13, ha="center", va="center", color=BLUE)
-    lo, hi = 10 ** np.floor(np.log10(min(ys) * 0.4)), 10 ** np.ceil(np.log10(max(ys) * 2))
+                        annotate(ax, a, y * (0.5 if w == "dog" else 1.8), f"{n:.0f}", ha="center", va="center", color=BLUE)
+    lo, hi = 10 ** np.floor(np.log10(min(ys) * 0.3)), max(ys) * 300   # headroom above Full for the legend
     ax.set_ylim(lo, hi)
     ax.yaxis.set_major_locator(LogLocator(base=10, numticks=12))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"$10^{{{int(round(np.log10(v)))}}}$"))
     ax.yaxis.set_minor_formatter(NullFormatter())
     common(ax, "Sink transferred (MB)")
-    ax.tick_params(axis="y", labelsize=24)
-    ax.yaxis.set_label_coords(-0.135, 0.5)
-    legend(ax, ("lower right", ("ver", "chg", "full")))
+    ax.yaxis.set_label_coords(-0.14, 0.5)
+    legend(ax, "upper right", methods=("ver", "chg", "full"))
     save(fig, out)
 
 
@@ -113,9 +114,9 @@ def panel_b(C, out: Path):
             col, ls, _ = METHOD[arm]
             draw(ax, xs, med, pts, col, ls, mk, filled, z=5 if arm == "ver" else 3)
             top = max(top, max(p[1] for p in pts))
-    ax.set_ylim(0, top * 1.35 if top else 1)
+    ax.set_ylim(0, top * 1.8 if top else 1)
     common(ax, "Readiness (s)")
-    legend(ax, ("upper left", ("ver", "full")))
+    legend(ax, "upper left", workloads=True)
     save(fig, out)
 
 

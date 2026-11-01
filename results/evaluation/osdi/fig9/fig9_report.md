@@ -7,8 +7,9 @@ descriptive early-PSNR analysis: `early_psnr.json` (`tools/eval/fig9_early_psnr.
 
 Figures used in the paper (user, 2026-10-31): **(a) dog only** (`fig9a_dog`) and **(b)** (`fig9b_gap`); `fig9a_bfly` and
 `fig9c_psnr` are kept for the appendix / record. All panels on Fig. 6a's canvas (5.83 x 4.78 in, axes box left 0.18,
-right 0.97, bottom 0.22, top 0.97, no tight bbox). Panel (a) is drawn in MB (power-of-ten labels) instead of GB so the
-tick labels fit that canvas; the data are the same.
+right 0.97, bottom 0.22, top 0.97, no tight bbox; (b) and (c) use bottom 0.37 for the 40-degree rotated step names).
+All text at the style sizes (28 pt axes / ticks, 19 pt values, 25 pt legends; never reduced). Panel (a) is drawn in MB
+(power-of-ten labels) instead of GB; the data are the same.
 
 ## 1. Verdicts (frozen rules)
 

@@ -28,16 +28,17 @@ from plot_fig7_migration import (BLUE, DARK_GRAY, DIM_GRAY, HATCH, LEGEND, OFF, 
                                  finish_axes)
 
 STEPS = ("wait", "psink", "nosync", "otter")
-TICK = {"wait": "Wait-for-\nSink", "psink": "P-sink", "nosync": "OTTER\nw/o sync", "otter": "OTTER"}
+TICK = {"wait": "Wait", "psink": "P-sink", "nosync": "w/o sync", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt (caption spells them out)
 FILL = {k: (DIM_GRAY, DARK_GRAY) for k in STEPS}
 FILL["otter"] = (BLUE, "#9DB3F0")
 LINE_A = {"pfull": ("#3A3A3A", "-", "o", "P-full"), "psink": (DARK_GRAY, (0, (5, 2)), "s", "P-sink")}
 THRESHOLD_MB = 256 * 2**20 / 1e6
-XTICK_SIZE = 20
+XTICK_ROT = 30   # narrow canvas: rotate the step names (never a smaller font)
 # canvas and axes box of Fig. 6a (make_background_figures.F4_SIZE / F4_ADJUST: left 0.18, right 0.97, bottom 0.22, top 0.97),
 # saved without a tight bbox so the page size matches
 FIG_SIZE = (5.83, 4.78)
 AXES_POS = [0.18, 0.22, 0.79, 0.75]
+AXES_POS_BARS = AXES_POS   # (b), (c): the same plot box as Fig. 6a
 
 
 def save(fig, out: Path):
@@ -74,21 +75,20 @@ def panel_a(C, w, out: Path):
             xmax = max(xmax, len(rd) + 1)
         rec[k] = {"median_rep": main["rep"], "rounds": len(main["rounds"]["dirty_bytes"]), "reason": main["rounds"]["switch_reason"]}
     ax.axhline(THRESHOLD_MB, color="black", ls=(0, (2, 2)), lw=1.2, zorder=1)
-    annotate(ax, xmax + 0.4, THRESHOLD_MB * 1.15, "256 MiB", ha="right", fontsize=16)
+    annotate(ax, xmax + 0.4, THRESHOLD_MB * 1.15, "256 MiB", ha="right")
     ax.set_xlim(0.5, xmax + 0.5)
-    lo, hi = 10 ** np.floor(np.log10(min(ys + [THRESHOLD_MB]) * 0.8)), max(ys) * 3   # every point inside
+    lo, hi = 10 ** np.floor(np.log10(min(ys + [THRESHOLD_MB]) * 0.8)), max(ys) * 1000   # every point inside; headroom for the legend
     ax.set_ylim(lo, hi)
     ax.set_xticks(range(1, xmax + 1))
     ax.yaxis.set_major_locator(LogLocator(base=10, numticks=12))   # every decade labelled
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"$10^{{{int(round(np.log10(v)))}}}$"))   # narrow labels (Fig. 6a canvas)
     ax.yaxis.set_minor_formatter(NullFormatter())
     finish_axes(ax, "Dirty state (MB)")
-    ax.tick_params(axis="y", labelsize=24)   # power-of-ten labels on the narrow Fig. 6a canvas
-    ax.yaxis.set_label_coords(-0.135, 0.5)
+    ax.yaxis.set_label_coords(-0.14, 0.5)
     ax.set_xlabel("Pre-copy round", fontsize=28, labelpad=2)
     hs = [Line2D([], [], color=LINE_A[k][0], ls=LINE_A[k][1], marker=LINE_A[k][2], lw=3.0, ms=9, mec="black", label=LINE_A[k][3]) for k in ("pfull", "psink")]
     hs.append(Line2D([], [], color="black", marker="o", mfc="white", ls="none", ms=10, label="Stop-and-copy"))
-    ax.legend(handles=hs, loc="lower left", frameon=False, fontsize=LEGEND - 5, handlelength=1.8, handletextpad=0.4, labelspacing=0.2,
+    ax.legend(handles=hs, loc="upper right", ncol=1, frameon=False, fontsize=LEGEND, handlelength=1.8, handletextpad=0.4, labelspacing=0.2,
               borderaxespad=0.3)
     save(fig, out)
     return rec
@@ -96,7 +96,7 @@ def panel_a(C, w, out: Path):
 
 def bars(C, key, ylabel, fmt, scale, lim, out: Path, legend=True):
     fig = plt.figure(figsize=FIG_SIZE)
-    ax = fig.add_axes(AXES_POS)
+    ax = fig.add_axes(AXES_POS_BARS)
     ax.set_yscale(scale)
     lo, top = lim
     for i, k in enumerate(STEPS):
@@ -113,20 +113,21 @@ def bars(C, key, ylabel, fmt, scale, lim, out: Path, legend=True):
             hi = max(max(vals), s["q3"])
             assert lo < min(vals) or scale == "linear", (key, k, w)
             assert hi < top, (key, k, w, hi, top)
-            annotate(ax, x + (2 * j - 1) * 0.06, hi * 1.12 if scale == "log" else hi + top * 0.03, fmt(s["median"]), fontsize=15)
+            annotate(ax, x, hi * 1.12 if scale == "log" else hi + top * 0.02, fmt(s["median"]), rotation=90)   # vertical: no pair collisions
     ax.set_ylim(lo, top)
     ax.set_xlim(-0.55, len(STEPS) - 0.45)
     ax.set_xticks(range(len(STEPS)))
     ax.set_xticklabels([TICK[k] for k in STEPS])
     finish_axes(ax, ylabel)
-    ax.tick_params(axis="x", length=0, labelsize=XTICK_SIZE)
+    ax.tick_params(axis="x", length=0)
+    plt.setp(ax.get_xticklabels(), rotation=XTICK_ROT, ha="right", rotation_mode="anchor")
     if scale == "log":
         ax.yaxis.set_major_locator(LogLocator(base=10))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.yaxis.set_minor_formatter(NullFormatter())
     if legend:
         hs = [Patch(fc=DIM_GRAY, ec="black", lw=1.2, label=WL_LABEL["dog"]), Patch(fc=DARK_GRAY, ec="black", lw=1.2, hatch="//", label=WL_LABEL["bfly"])]
-        ax.legend(handles=hs, loc="upper right", ncol=1, frameon=False, fontsize=LEGEND - 5, handlelength=1.4, handletextpad=0.4, labelspacing=0.2,
+        ax.legend(handles=hs, loc="upper right", ncol=1, frameon=False, fontsize=LEGEND, handlelength=1.4, handletextpad=0.4, labelspacing=0.2,
                   borderaxespad=0.3)
     save(fig, out)
 
@@ -143,7 +144,7 @@ def main():
     meds = [C[w][k]["delivery_gap_s"]["median"] for w in WORKLOADS for k in STEPS if C[w][k]["delivery_gap_s"]["n"]]
     scale = "log" if meds and max(meds) / min(meds) >= 10 else "linear"
     top = max(max(C[w][k]["delivery_gap_s"]["values"] or [0]) for w in WORKLOADS for k in STEPS)
-    lim = (0.5, top * 4) if scale == "log" else (0, top * 1.25)
+    lim = (0.5, top * 8) if scale == "log" else (0, top * 1.7)   # vertical value labels + legend
     rec["9b"] = {"scale": scale, "median_span": round(max(meds) / min(meds), 2) if meds else None, "rule": "log unless the medians span < 1 decade"}
     bars(C, "delivery_gap_s", "Max. output gap (s)", lambda v: f"{v:.2f}" if v < 10 else f"{v:.1f}", scale, lim, out / "fig9b_gap")
     bars(C, "psnr_first24_median", "PSNR, first 24 calls (dB)", lambda v: f"{v:.1f}", "linear", (0, 62), out / "fig9c_psnr", legend=True)
