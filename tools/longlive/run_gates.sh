@@ -4,8 +4,9 @@
 #   elves-01:   bash tools/longlive/run_gates.sh gate0     # feasibility: FPS, memory, state inventory, recache cost
 #   elves-01:   bash tools/longlive/run_gates.sh gate1     # determinism, full import, reconstruction variants
 #   elves-02:   bash tools/longlive/run_gates.sh gate1     # same, second host: compare the printed "R chain" lines
-#   elves-0N:   bash tools/longlive/run_gates.sh ablate P S   # state-component ablation, prompt index P, seed S
-#               (osdi/longlive/ablation_prereg.md: elves-01 0 0, elves-02 1 0, elves-03 0 1, elves-04 1 1; ~70 min each)
+#   elves-0N:   bash tools/longlive/run_gates.sh ablate P S PH   # state-component ablation, prompt P, seed S, phase PH
+#               (osdi/longlive/ablation_prereg.md: elves-01 0 0, elves-02 1 0, elves-03 0 1, elves-04 1 1;
+#                phase 1 ~40 min, phase 2 only after phase 1's sanity rule passes on all four, ~45 min)
 #   local:      bash tools/longlive/run_gates.sh test      # tiny CPU models (no weights, no GPU)
 set -u
 cd "$(dirname "$0")/../.."
@@ -28,10 +29,10 @@ case "${1:-}" in
   gate1)
     idle; CUDA_VISIBLE_DEVICES=0 $PY tools/longlive/ll_gate.py gate1 --calls 60 --at 30 --replay_windows 3,6,12 --out $OUT/gate1_$H.json 2>&1 | tee $OUT/gate1_$H.log ;;
   ablate)
-    P=${2:?prompt index}; S=${3:?seed}; idle
-    CUDA_VISIBLE_DEVICES=0 $PY tools/longlive/ll_gate.py ablate --calls 220 --at 120 --prompt_idx $P --seed $S \
-      --out $OUT/ablate_p${P}_s${S}.json 2>&1 | grep -v "peft_config\|LoRA target\|trainable params" | tee $OUT/ablate_p${P}_s${S}.log ;;
+    P=${2:?prompt index}; S=${3:?seed}; PH=${4:?phase 1 or 2}; idle
+    CUDA_VISIBLE_DEVICES=0 $PY tools/longlive/ll_gate.py ablate --calls 220 --at 120 --prompt_idx $P --seed $S --phase $PH \
+      --out $OUT/ablate_p${P}_s${S}_ph${PH}.json 2>&1 | grep -v "peft_config\|LoRA target\|trainable params" | tee $OUT/ablate_p${P}_s${S}_ph${PH}.log ;;
   test)
     $PY tools/longlive/test_ll_runtime.py && $PY tools/longlive/test_ll_ablate.py ;;
-  *) echo "usage: $0 setup|gate0|gate1|ablate P S|test"; exit 2 ;;
+  *) echo "usage: $0 setup|gate0|gate1|ablate P S PH|test"; exit 2 ;;
 esac

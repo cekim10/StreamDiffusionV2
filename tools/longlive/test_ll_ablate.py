@@ -31,7 +31,15 @@ chk("w48" not in c and "w96" not in c, "W > M skipped")
 chk(all(c[n]["state_at_M"]["sink_exact"] for n in c if n != "eps_sink"), "sink exact in every other condition")
 chk(c["eps_vae"]["state_at_M"]["vae_exact"] is False and c["eps_vae"]["state_at_M"]["vae_rel_err"] > 0, "eps_vae: VAE cache perturbed")
 chk(c["eps_sink"]["state_at_M"]["vae_exact"] and c["eps_sink"]["state_at_M"]["window_layers_exact"] == 2, "eps_sink after eps_vae: snapshot not modified (VAE, window exact)")
-chk(c["sink"]["state_at_M"]["vae_rel_err"] == 1.0 and c["sink"]["frames_missing"] == 3, "sink only: VAE cache missing (rel err 1), cold decoder drops 3 frames")
+chk(c["sink"]["state_at_M"]["vae_rel_err"] == 1.0 and c["sink"]["frames_missing"] == 3 and not c["sink"]["frames_complete"],
+    "sink only: VAE cache missing (rel err 1), cold decoder drops 3 frames, frames incomplete")
+chk(set(c["sink"]["psnr_aligned_diag"]) == {1} and c["sink"]["psnr"][1] != c["sink"]["psnr_aligned_diag"][1],
+    "missing frames scored as held frames on the first call; the aligned PSNR is kept separately as a diagnostic")
+chk(c["full"]["frames_complete"] and c["full"]["frames_expected"] == 14 * 12, "full: frames complete")
+p_ = c["eps_win"]["perturbation"]
+chk(p_ and 0 < p_["changed_fraction"] <= 1 and p_["realized_rel_err"] > 0, f"eps_win: realized perturbation recorded ({p_})")
+chk(c["full"]["perturbation"] is None and c["w12"]["shipped"]["replay_log_calls"] == 12, "perturbation only on eps_*; shipped log recorded")
+chk(G.PHASES[1] + G.PHASES[2] == G.ABLATE and len(set(G.ABLATE)) == 16, "two phases cover the 16 conditions once")
 json.dumps(out)
 print("ALL PASS" if not fails else f"FAILED {fails}")
 sys.exit(1 if fails else 0)

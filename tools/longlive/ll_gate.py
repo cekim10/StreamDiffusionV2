@@ -172,8 +172,17 @@ def gate1(a, model):
     return out
 
 
-ABLATE = ["full", "sink_win_vae", "sink", "sink_win", "sink_vae", "w12", "w12_vaeX", "winX_vaeR12", "winX_vae1",
-          "eps_win", "eps_vae", "eps_sink", "recache", "w24", "w48", "w96"]
+# Phase 1 state dependency diagnosis; Phase 2 reconstruction feasibility and sensitivity (run after Phase 1's sanity)
+PHASES = {1: ["full", "sink_win_vae", "sink", "sink_win", "sink_vae", "w12", "w12_vaeX", "winX_vaeR12"],
+          2: ["winX_vae1", "eps_win", "eps_vae", "eps_sink", "recache", "w24", "w48", "w96"]}
+ABLATE = PHASES[1] + PHASES[2]
+# components shipped to the destination per condition (+ replay log blocks), for the estimated 1 Gbps readiness screen
+ALL = ["sink_kv", "window_kv", "crossattn_kv", "vae_decoder_cache", "latent_buffer"]
+SHIPPED = {"full": (ALL, 0), "sink_win_vae": (["sink_kv", "window_kv", "vae_decoder_cache"], 0), "sink": (["sink_kv"], 0),
+           "sink_win": (["sink_kv", "window_kv"], 0), "sink_vae": (["sink_kv", "vae_decoder_cache"], 0),
+           "w12": (["sink_kv"], 12), "w12_vaeX": (["sink_kv", "vae_decoder_cache"], 12), "winX_vaeR12": (["sink_kv", "window_kv"], 12),
+           "winX_vae1": (["sink_kv", "window_kv"], 1), "eps_win": (ALL, 0), "eps_vae": (ALL, 0), "eps_sink": (ALL, 0),
+           "recache": (["sink_kv", "latent_buffer"], 0), "w24": (["sink_kv"], 24), "w48": (["sink_kv"], 48), "w96": (["sink_kv"], 96)}
 
 
 def rel_err(xs, ys) -> float | None:
@@ -188,14 +197,22 @@ def rel_err(xs, ys) -> float | None:
     return None if den == 0 else math.sqrt(num / den)
 
 
-def perturb_(ts, eps: float, seed: int) -> None:
-    """In place: every element times (1 + eps * random sign), rounded back to the tensor's dtype (bf16)."""
+def perturb_(ts, eps: float, seed: int, stats: dict) -> None:
+    """In place: every element times (1 + eps * random sign), rounded back to the tensor's dtype (bf16). Not exactly one
+    ulp for every value: `stats` gets the elements actually changed and the realized relative error."""
+    changed = total = 0
+    num = den = 0.0
     for i, t in enumerate(ts):
         if not torch.is_tensor(t):
             continue
         g = torch.Generator(device=t.device); g.manual_seed(seed * 1000 + i)
         sign = torch.randint(0, 2, t.shape, generator=g, device=t.device).to(torch.float32) * 2 - 1
-        t.copy_((t.float() * (1 + eps * sign)).to(t.dtype))
+        old = t.float()
+        t.copy_((old * (1 + eps * sign)).to(t.dtype))
+        changed += int((t.float() != old).sum().item()); total += t.numel()
+        num += torch.sum((t.float() - old) ** 2).item(); den += torch.sum(old ** 2).item()
+    stats.update({"eps": eps, "elements_changed": changed, "elements": total, "changed_fraction": changed / max(1, total),
+                  "realized_rel_err": math.sqrt(num / den) if den else None})
 
 
 def windows(v: dict) -> dict:
@@ -235,19 +252,23 @@ def ablate(a, model):
         "w12_vaeX": (lambda s: (W[12](s), s.import_state({"tensors": {"vae_decoder_cache": vae}}))) if 12 in W else None,
         "winX_vaeR12": lambda s: exact(["sink_kv", "window_kv"])(s).warm_decoder_from(lats[max(0, M - 12):M]),
         "winX_vae1": lambda s: exact(["sink_kv", "window_kv"])(s).warm_decoder_from(lats[M - 1:M]),
-        "eps_win": lambda s: (s.import_state(snap), perturb_(s.components()["window_kv"][1], a.eps, 1)),
-        "eps_vae": lambda s: (s.import_state(snap), perturb_(s.components()["vae_decoder_cache"][1], a.eps, 2)),
-        "eps_sink": lambda s: (s.import_state(snap), perturb_(s.components()["sink_kv"][1], a.eps, 3)),
+        "eps_win": lambda s: (s.import_state(snap), perturb_(s.components()["window_kv"][1], a.eps, 1, pst)),
+        "eps_vae": lambda s: (s.import_state(snap), perturb_(s.components()["vae_decoder_cache"][1], a.eps, 2, pst)),
+        "eps_sink": lambda s: (s.import_state(snap), perturb_(s.components()["sink_kv"][1], a.eps, 3, pst)),
         "recache": lambda s: (s.import_state({"counters": C, "tensors": {"sink_kv": sink, "latent_buffer": lb}}), s.recache(), s.warm_decoder()),
         "w24": W.get(24), "w48": W.get(48), "w96": W.get(96),
     }
-    out = {"mode": "ablate", "env": env(), "args": vars(a), "R": rR, "conditions": {},
-           "snapshot_bytes": {k: sum(llr.nbytes(t) for t in v if t is not None) for k, v in T.items()}}
+    sbytes = {k: sum(llr.nbytes(t) for t in v if t is not None) for k, v in T.items()}
+    log_b = llr.nbytes(lats[0])
+    out = {"mode": "ablate", "env": env(), "args": vars(a), "R": rR, "conditions": {}, "snapshot_bytes": sbytes,
+           "replay_log_bytes_per_call": log_b}
+    pst = {}
     for name in a.conditions:
         b = builds.get(name)
         if b is None:
             print(f"[ablate] {name}: skipped (W > M or unknown)")
             continue
+        pst.clear()
         s = llr.LLSession(model, [prompt], seed=a.seed).start()
         model.sync(); t0 = time.perf_counter()
         b(s)
@@ -262,7 +283,7 @@ def ablate(a, model):
         state = {"sink_exact": all(torch.equal(x, y) for x, y in zip(got["sink_kv"], sink)), "sink_rel_err": rel_err(got["sink_kv"], sink),
                  "window_layers_exact": sum(w["exact"] for w in wl), "layers": L, "window_rel_err": rel_err(got["window_kv"], win),
                  "window_per_layer": wl, "vae_exact": vx, "vae_rel_err": rel_err(got["vae_decoder_cache"], vae)}
-        ps, tp, le, leq, missing = {}, {}, {}, 0, 0
+        ps, ps_al, tp, le, leq, missing, expected = {}, {}, {}, {}, 0, 0, 0
         prev_d, prev_r = fR[M - 1][-1], fR[M - 1][-1]
         xattn_exact = None
         for k in range(1, N - M + 1):
@@ -272,24 +293,34 @@ def ablate(a, model):
                 xattn_exact = all(torch.equal(xa[kk], T["crossattn_kv"][2 * i + j].to(xa[kk].device))
                                   for i, xa in enumerate(s.xattn) for j, kk in enumerate(("k", "v")))
             fd, fr = o["frames"], fR[c].to(o["frames"].device)
+            expected += fr.shape[0]
             if fd.shape[0] < fr.shape[0]:   # a cold VAE decoder restarts: its first latent frame decodes to 1 frame, not 4
-                missing += fr.shape[0] - fd.shape[0]
-                fr = fr[-fd.shape[0]:]       # aligned to the reference's last frames of the call
+                n_miss = fr.shape[0] - fd.shape[0]
+                missing += n_miss
+                ps_al[k] = psnr(fd, fr[-fd.shape[0]:])   # diagnostic only: aligned to the reference's last frames
+                fd = torch.cat([prev_d[None].to(fd.device).expand(n_miss, *fd.shape[1:]), fd])   # scored as held frames
             ps[k] = psnr(fd, fr)
             tp[k] = psnr(tdiff(prev_d, fd), tdiff(prev_r, fr))
             prev_d, prev_r = fd[-1], fr[-1]
             le[k] = rel_err([o["latents"]], [lats[c]])
             leq += int(llr.digest(o["latents"]) == rR[c]["lat"])
-        r = {"t_build_ms": t_ms, "state_at_M": state, "xattn_recomputed_exact": xattn_exact, "psnr": ps, "tpsnr": tp,
-             "latent_rel_err": le, "latents_equal_calls": leq, "scored_calls": N - M, "frames_missing": missing,
-             "psnr_windows": windows(ps), "tpsnr_windows": windows(tp), "t_boundary": tp.get(1)}
+        comps, n_log = SHIPPED[name]
+        shipped = sum(sbytes[cn] for cn in comps) + n_log * log_b
+        r = {"t_build_ms": t_ms, "state_at_M": state, "xattn_recomputed_exact": xattn_exact, "psnr": ps, "psnr_aligned_diag": ps_al,
+             "tpsnr": tp, "latent_rel_err": le, "latents_equal_calls": leq, "scored_calls": N - M,
+             "frames_expected": expected, "frames_missing": missing, "frames_complete": missing == 0,
+             "psnr_windows": windows(ps), "tpsnr_windows": windows(tp), "t_boundary": tp.get(1),
+             "perturbation": dict(pst) or None, "shipped": {"components": comps, "replay_log_calls": n_log, "bytes": shipped},
+             "est_ready_s_1gbps": shipped * 8 / 1e9 + t_ms / 1e3}   # estimated screen: transfer at 1 Gbps + build
         out["conditions"][name] = r
         pw = r["psnr_windows"]
         f = lambda x: "-" if x is None else f"{x:.1f}"  # noqa: E731
         print(f"[ablate] {name:13s} build {t_ms:7.0f} ms; window exact {state['window_layers_exact']:2d}/{L} (rel {state['window_rel_err'] or 0:.2e}), "
               f"VAE exact {vx} (rel {state['vae_rel_err'] or 0:.2e}); PSNR first {f(pw['first'])} W1 {f(pw['W1'])} W2 {f(pw['W2'])} "
               f"W3 {f(pw['W3'])} min {f(pw['min'])}; tPSNR bnd {f(r['t_boundary'])} W3 {f(r['tpsnr_windows']['W3'])}; "
-              f"latent rel err k1 {le[1]:.1e} k{N - M} {le[N - M]:.1e}; equal {leq}/{N - M}; frames missing {missing}", flush=True)
+              f"latent rel err k1 {le[1]:.1e} k{N - M} {le[N - M]:.1e}; equal {leq}/{N - M}; frames {expected - missing}/{expected}; "
+              f"shipped {shipped / 2 ** 30:.2f} GiB, est. ready @1 Gbps {r['est_ready_s_1gbps']:.1f} s"
+              + (f"; perturbed {pst['changed_fraction']:.3f} of elements, rel {pst['realized_rel_err']:.2e}" if pst else ""), flush=True)
         del s
         if a.out:   # partial results survive a crash
             Path(a.out).parent.mkdir(parents=True, exist_ok=True)
@@ -318,7 +349,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--prompt", default=None, help="default: first prompt of interactive_example.jsonl set --prompt_idx")
     ap.add_argument("--prompt_idx", type=int, default=0)
-    ap.add_argument("--conditions", type=lambda s: s.split(","), default=ABLATE, help="ablate: conditions in order")
+    ap.add_argument("--conditions", type=lambda s: s.split(","), default=None, help="ablate: conditions in order (default: --phase)")
+    ap.add_argument("--phase", type=int, choices=[1, 2], default=1, help="ablate: condition set of osdi/longlive/ablation_prereg.md")
     ap.add_argument("--eps", type=float, default=2.0 ** -8, help="ablate: relative perturbation of the eps_* conditions")
     ap.add_argument("--config", default=str(llr.DEFAULT_CFG))
     ap.add_argument("--ckpt_dir", default=str(llr.CKPT_DIR))
@@ -326,6 +358,8 @@ def main():
     a = ap.parse_args()
     if a.prompt is None:
         a.prompt = PROMPTS[a.prompt_idx]
+    if a.conditions is None:
+        a.conditions = PHASES[a.phase]
     if a.mode == "compare":
         compare(a); return
     torch.backends.cudnn.benchmark = False
