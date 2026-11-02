@@ -1,4 +1,12 @@
-# LongLive migration feasibility: exact window snapshot + catch-up replay (FROZEN 2026-11-02; DRAFT 1 e0435066 + user D1-D6; nothing run)
+# LongLive migration feasibility: exact window snapshot + catch-up replay (FROZEN 2026-11-02; ON HOLD 2026-11-02 by the user before any run)
+
+**ON HOLD (user, 2026-11-02).** Not run. Reason: the hybrid ships the whole window exactly, a different state-transfer
+policy from the frozen OTTER design (M1 Continuity Replay, M2 Versioned Sink Reconstruction, M3 Continuity Wavefront);
+success would show that LongLive can be migrated with an exact window snapshot and catch-up replay, not that the frozen
+OTTER design generalizes to LongLive. The frozen claims and mechanisms are unchanged and no LongLive-specific mechanism
+is added. The state-component ablation (`ablation_results.md`) is kept as a completed diagnostic: a generality /
+limitation result on which state dependencies OTTER's bounded reconstruction covers. Any run started before the hold
+is kept as a record and not analysed. The protocol, tools and rules below stay as written if the study is resumed.
 
 ## 1. Question
 
