@@ -204,6 +204,7 @@ def source(a, model):
     del snap
     for c in sorted(pre):
         snd.put("LOG", {"call": c, "pre": True}, tensor_bytes(pre[c]))
+    log_copy_s = []
     if a.method in LIVE:
         switch = None
         while switch is None:
@@ -216,8 +217,10 @@ def source(a, model):
                 pass
             o, t = step()
             t_last = t
-            snd.put("LOG", {"call": o["call"], "t_done": t, "src_next": s.call},
-                    tensor_bytes(o["latents"].cpu()) if a.method != "recache" else b"")
+            t1 = time.time()   # logging cost on the source's serving path: device -> host copy of the output latents
+            lat = tensor_bytes(o["latents"].cpu()) if a.method != "recache" else b""
+            log_copy_s.append(time.time() - t1)
+            snd.put("LOG", {"call": o["call"], "t_done": t, "src_next": s.call}, lat)
     s_call = s.call
     if a.method == "recache":   # what LongLive's recache needs at the switch call: counters and the latent buffer
         queue_state(snd, s.export_state(["latent_buffer"]), "STOPSTATE")
@@ -228,7 +231,7 @@ def source(a, model):
         fr = o["frames"].cpu()
         snd.put("SHADOW", {"call": o["call"], "lat": llr.digest(o["latents"]), "frm": frame_digest(o["frames"]),
                            "n_frames": int(fr.shape[0]), "shape": list(fr.shape)}, tensor_bytes(fr))
-    snd.put("DONE", {"calls": calls, "stall_export_s": stall_s, "t_marks": snd.t_marks, "byte_marks": snd.byte_marks,
+    snd.put("DONE", {"calls": calls, "stall_export_s": stall_s, "log_copy_s": log_copy_s, "t_marks": snd.t_marks, "byte_marks": snd.byte_marks,
                      "env": env(a), "sent_bytes_before_done": snd.sent_bytes})
     snd.put(None)
     snd.join()
@@ -354,7 +357,8 @@ def destination(a, model):
                     break
             nxt = s.call
             caught_up = latest_next is not None and latest_next - nxt <= 1
-            if not switch_sent and time.time() - ev["state_recv_t"] > a.max_catchup_s:   # not converging: switch anyway
+            # catch-up timeout: recorded as a migration failure (switch_forced); the switch that follows is a diagnostic only
+            if not switch_sent and time.time() - ev["state_recv_t"] > a.max_catchup_s:
                 send_msg(sock, lock, "SWITCH_REQ", {"at_call": nxt, "t": time.time(), "forced": True})
                 switch_sent, ev["switch_req_t"], ev["switch_forced"] = True, time.time(), True
                 if not vae_ready:   # rebuild the decoder now; the remaining calls are replayed with decode
@@ -423,6 +427,8 @@ def destination(a, model):
     t_state_sent = done["t_marks"].get("state_sent")
     during = [c["t_done"] for c in src_calls if c["call"] >= a.at and (t_state_sent is None or c["t_done"] <= t_state_sent)]
     iv_during = st.median([y - x for x, y in zip(during, during[1:])]) if len(during) > 2 else None
+    mig = [c["t_done"] for c in src_calls if a.at - 1 <= c["call"] < stop["s"]]   # the source's serving during the migration
+    iv_mig = st.median([y - x for x, y in zip(mig, mig[1:])]) if len(mig) > 2 else None
     import ll_gate
     sf = shadow_frames.get(first["call"])
     first_psnr = ll_gate.psnr(first_frames, sf) if sf is not None and sf.shape == first_frames.shape else None
@@ -448,7 +454,9 @@ def destination(a, model):
            "frames_complete": all(c["n_frames"] == 4 * model.F for c in cmp),
            "readiness_s": ev["ready_t"] - t_trigger, "ttfo_s": first["t_done"] - t_trigger,
            "delivery_gap_s": first["t_done"] - to_dst(stop["t_last_frame"]),
-           "src_call_interval_s": {"before": iv_before, "during_state_send": iv_during},
+           "src_call_interval_s": {"before": iv_before, "during_state_send": iv_during, "during_migration": iv_mig},
+           "src_log_copy_s_median": st.median(done["log_copy_s"]) if done.get("log_copy_s") else None,
+           "src_log_calls": len(done.get("log_copy_s") or []),
            "src_export_stall_s": done["stall_export_s"],
            "state_transfer_s": ev["state_recv_t"] - t_trigger, "import_s": ev["import_s"],
            "replayed_calls": len(replay_log), "vae_rebuild_blocks": ev.get("vae_rebuild_blocks"), "vae_rebuild_s": ev.get("vae_rebuild_s"),
@@ -493,7 +501,7 @@ def main():
     ap.add_argument("--replay_w", type=int, default=96, help="replay: calls replayed before the trigger (from the sink at M - W)")
     ap.add_argument("--k_vae", type=int, default=12, help="snap: logged blocks decoded to rebuild the VAE decoder cache")
     ap.add_argument("--bw_mbps", type=float, default=1000.0)
-    ap.add_argument("--max_catchup_s", type=float, default=300.0, help="snap: switch anyway this long after the state arrived")
+    ap.add_argument("--max_catchup_s", type=float, default=300.0, help="replay / snap: catch-up timeout after the state arrived (a migration failure; the run then switches as a diagnostic)")
     ap.add_argument("--pings", type=int, default=9)
     ap.add_argument("--burst_bytes", type=int, default=1 << 20, help="token bucket burst (tests: small, so a tiny state is shaped)")
     ap.add_argument("--seed", type=int, default=0)

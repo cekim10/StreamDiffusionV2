@@ -1,4 +1,4 @@
-# LongLive: frozen OTTER M1 (Continuity Replay) with a longer replay horizon (DRAFT 1, not frozen, nothing run)
+# LongLive: frozen OTTER M1 (Continuity Replay) with a longer replay horizon (FROZEN 2026-11-02; DRAFT 1 478e78c3 + user review; nothing run)
 
 ## 1. Question
 
@@ -17,9 +17,13 @@ reconstruction) and M3 (Continuity Wavefront) are not exercised, and nothing her
   about 106 s, because the ablation replayed all 96 calls with decode, stopped.
 - LongLive's sink is written by call 0 only (`global_sink`) [V]: it never changes after the migration starts, so M1's
   Sink synchronisation holds trivially and the refreshes M2 versions do not occur in LongLive.
-- Adaptation of M1 to a T2V model [V, code]: LongLive has no input frames, so the replay log holds each call's output
-  latents and the replay is teacher-forced (the context pass the source ran after each call); on SDV2 the log holds
-  inputs. Replay without decode updates the KV cache exactly; the VAE decoder is rebuilt by decoding the last K_v = 12
+- Adaptation of M1 to a T2V model [V, code]: LongLive has no input frames, so the replay log holds each call's
+  **source-generated output latents** and the replay is teacher-forced (the context pass the source ran after each
+  call): the destination rebuilds the KV state from the source's outputs, it does not regenerate them. On SDV2 the
+  log holds inputs. This is a valid Continuity Replay but not the same reconstruction semantics as SDV2's, and the
+  paper says so. Its costs are measured, not assumed: every log block is in the bytes sent until the switch, and the
+  source's per-call device -> host copy of the latents (logging on the serving path) and its call interval during the
+  migration are recorded. Replay without decode updates the KV cache exactly; the VAE decoder is rebuilt by decoding the last K_v = 12
   logged blocks once the replay has caught up, before the switch (the ablation's 1-block rebuild also worked; 12 blocks
   give a bit-exact first call more often). This is the implementation in `tools/longlive/ll_migrate.py --method
   replay`, a port of M1, not the frozen SDV2 harness code.
@@ -53,17 +57,25 @@ recorded as forced.
 - **Fidelity:** PSNR of every post-cutover call vs the source's shadow (W1 = k 1-8, W2 = 9-24, W3 = 25-100 medians,
   first call); latents equal (digest) on how many of 100 calls; frames complete (12 per call); the sink + window
   fingerprint at s vs the source's.
-- **Bytes** sent on the link until the switch (state, log blocks; the shadow's verification frames are excluded).
+- **Bytes** sent on the link until the switch (state and every log block; the shadow's verification frames are
+  excluded). **Logging cost:** the source's per-call latent copy time; the source call interval before M vs during
+  the migration (M - 1 to the switch).
 
 ## 5. Rules (written before the runs; 40 dB is the operational threshold used throughout, not a perceptual one)
 
-For otter_w96:
-- **R1 exact:** in every run, the state fingerprint at s equals the source's, 100 / 100 post-cutover latents equal the
-  shadow, and frames are complete.
-- **R2 catch-up:** in every run, no forced switch.
-- **R3 short cutover:** median maximum output gap < Full's median, in >= 3 of 4 streams.
-- **R4 readiness:** median readiness < Full's median, in >= 3 of 4 streams.
-- **R5 bytes:** bytes until the switch < Full's in every run.
+For otter_w96 (a run whose destination has not caught up 300 s after the sink arrived is a **migration failure**: it
+counts against R2 and is excluded from R1, R3, R4, R5; the switch it then makes is a diagnostic only, never counted
+as an OTTER migration):
+- **R1 exact,** in every run, split into: **R1a generation state** - the sink + window fingerprint at s equals the
+  source's; **R1b latents** - 100 / 100 post-cutover latents equal the shadow; **R1c frame completeness** - 12 frames
+  in every post-cutover call. **Frame fidelity** (first call PSNR, W1 / W2 / W3, frames bit-exact count) is reported
+  separately and is not part of R1: complete frames and exact latents do not by themselves mean exact output frames
+  (the decoder cache is rebuilt).
+- **R2 catch-up:** no catch-up timeout in any run.
+- **R3 short cutover:** median maximum output gap < Full's median, in >= 3 of 4 streams; the per-stream absolute
+  differences are reported with the verdict (two reps per stream: a near tie is read as a tie, not as a win).
+- **R4 readiness:** median readiness < Full's median, in >= 3 of 4 streams; absolute differences reported likewise.
+- **R5 bytes:** bytes until the switch (state + log) < Full's in every run.
 
 Controls, reported: otter_w12 and recache W3 PSNR (the ablation predicts < 40 dB), their gaps and readiness.
 
@@ -74,7 +86,8 @@ Controls, reported: otter_w12 and recache W3 PSNR (the ablation predicts < 40 dB
   than Full: functional generality of M1 shown, performance generality not.
 - R1 fails: a defect of the port first (fix, rerun, keep both records); if it persists, a replay horizon alone does not
   carry M1 over to LongLive.
-- R2 fails: the replay does not outpace generation here; R1 is still read from the forced runs.
+- R2 fails: the replay does not outpace generation here (migration failures); the diagnostic switches are reported
+  separately and are not migrations.
 - R3 fails with R1 / R2 holding: M1's continuity does not hold on LongLive in this setting.
 
 Never claimed from this study: M2 or M3 work on LongLive; OTTER as a whole generalizes; any model beyond LongLive;
@@ -85,19 +98,25 @@ equivalence of the port with the frozen SDV2 implementation beyond the mechanism
 otter_w96: sink about 7 s at 1 Gbps (+ about 1 s export); 96 + about 4 replayed calls context-only about 28 s, during
 which the source makes about 13 more; VAE rebuild about 9 s; the calls made meanwhile with decode; switch: readiness
 about 45-55 s vs Full about 46-48 s, so R4 is uncertain. Maximum output gap about 2.5-4 s (Full about 48 s); bytes
-about 0.92 GB vs 5.06 GiB; W3 99 dB (exact). otter_w12: readiness about 20-25 s, W3 about 22-31 dB. recache: readiness
+about 0.92 GB vs 5.06 GiB; W3 99 dB (exact). The 0.28 s context-only replay cost is derived, not measured, and the
+replay overlaps the source's generation and the transfer on the destination host only (the source runs on another
+GPU), so R4 is a measurement, not an expectation. otter_w12: readiness about 20-25 s, W3 about 22-31 dB. recache: readiness
 under 10 s, gap about 3-5 s (recache at the cutover), W3 about 22-30 dB.
 
-## 7. Open decisions
+## 7. Decisions (user, 2026-11-02)
 
-| # | decision | recommendation |
-|---|---|---|
-| D1 | reps | 2 (32 runs, about 2.7 h) |
-| D2 | W = 96 | from the ablation's W* (the smallest tested W that was exact); not tuned on these runs |
-| D3 | K_v | 12 (bit-exact first call more often than 1); fixed now |
-| D4 | verified calls after the switch | 100 (the user's fidelity window) |
-| D5 | bandwidth | 1 Gbps only |
-| D6 | thresholds | R3 / R4 on medians, >= 3 / 4 streams; forced-switch safeguard 300 s |
+| # | decision |
+|---|---|
+| D1 | reps 2 (a feasibility study; limited statistical generalization) |
+| D2 | W = 96, the smallest measured horizon that was exact in the ablation |
+| D3 | K_v = 12 |
+| D4 | 100 verified calls after the switch |
+| D5 | 1 Gbps |
+| D6 | R1-R5 kept; 300 s is a catch-up timeout = migration failure (not a forced migration); absolute differences reported for R3 / R4 |
+| added | the log is source-generated latents (costs measured); R1 split into generation state / latents / frame completeness, frame fidelity reported separately |
+
+Run first on the testbed (before Fig. 12a). A positive result is used only as a cross-model check of M1; the frozen
+claims are unchanged.
 
 Tools: `tools/longlive/ll_migrate.py` (methods replay, recache, full; snap kept for the held study),
 `ll_migrate_runs.py --study m1` (run, report). Loopback CPU test `tools/longlive/test_ll_migrate.py`: every method on

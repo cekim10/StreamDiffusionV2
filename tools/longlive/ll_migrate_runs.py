@@ -116,34 +116,53 @@ def cmd_report_m1(a):
     L = ["# LongLive M1 (Continuity Replay) cross-model check: results", "",
          "Rules: `m1_prereg.md` section 5. Measured on the testbed; PSNR vs the source's shadow continuation.", ""]
     v = {}
-    W = [d for ds in runs.get("otter_w96", {}).values() for d in ds]
-    if W:
-        r1 = all(d["state_exact"] and d["lat_equal_calls"] == len(d["post_cutover"]) and d["frames_complete"] for d in W)
-        r2 = all(not d["switch_forced"] for d in W)
+    ALLW = [d for ds in runs.get("otter_w96", {}).values() for d in ds]
+    W = [d for d in ALLW if not d["switch_forced"]]   # a catch-up timeout is a migration failure: never aggregated as a migration
+    if ALLW:
+        r1a = bool(W) and all(d["state_exact"] for d in W)
+        r1b = bool(W) and all(d["lat_equal_calls"] == len(d["post_cutover"]) for d in W)
+        r1c = bool(W) and all(d["frames_complete"] for d in W)
+        r2 = len(W) == len(ALLW)
         per = {}
         for k, ds in runs["otter_w96"].items():
+            ds = [d for d in ds if not d["switch_forced"]]
             fu = runs.get("full", {}).get(k, [])
             per[f"p{k[0]}_s{k[1]}"] = {key: (med([d[key] for d in ds]), med([d[key] for d in fu]))
                                        for key in ("max_output_gap_s", "readiness_s", "bytes_until_switch")}
-        n3 = sum(1 for x in per.values() if None not in x["max_output_gap_s"] and x["max_output_gap_s"][0] < x["max_output_gap_s"][1])
-        n4 = sum(1 for x in per.values() if None not in x["readiness_s"] and x["readiness_s"][0] < x["readiness_s"][1])
+        ok = lambda x: None not in x  # noqa: E731
+        n3 = sum(1 for x in per.values() if ok(x["max_output_gap_s"]) and x["max_output_gap_s"][0] < x["max_output_gap_s"][1])
+        n4 = sum(1 for x in per.values() if ok(x["readiness_s"]) and x["readiness_s"][0] < x["readiness_s"][1])
         fu_b = [d["bytes_until_switch"] for ds in runs.get("full", {}).values() for d in ds]
-        r5 = bool(fu_b) and all(d["bytes_until_switch"] < min(fu_b) for d in W)
-        v = {"R1_exact": r1, "R2_caught_up": r2, "R3_max_gap_lt_full": n3 >= 3, "R3_streams": n3,
-             "R4_readiness_lt_full": n4 >= 3, "R4_streams": n4, "R5_bytes_lt_full": r5, "per_stream": per, "runs": len(W)}
-        L += [f"**otter_w96 ({len(W)} runs):** R1 exact (state at the switch, 100 / 100 latents, frames complete) "
-              f"{'HOLDS' if r1 else 'FAILS'}; R2 catch-up (no forced switch) {'HOLDS' if r2 else 'FAILS'}; R3 max output gap < Full "
-              f"{'HOLDS' if n3 >= 3 else 'FAILS'} ({n3} / {len(per)}); R4 readiness < Full {'HOLDS' if n4 >= 3 else 'FAILS'} "
-              f"({n4} / {len(per)}); R5 bytes < Full {'HOLDS' if r5 else 'FAILS'}.", ""]
-    L += ["| arm | stream | runs | readiness (s) | max output gap (s) | delivery gap (s) | bytes to switch (GiB) | W1 / W2 / W3 PSNR (dB) | first call | latents equal | frames complete | forced |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        r5 = bool(fu_b) and bool(W) and all(d["bytes_until_switch"] < min(fu_b) for d in W)
+        v = {"R1a_generation_state_exact": r1a, "R1b_latents_exact": r1b, "R1c_frames_complete": r1c, "R1": r1a and r1b and r1c,
+             "R2_caught_up": r2, "timeouts": len(ALLW) - len(W), "R3_max_gap_lt_full": n3 >= 3, "R3_streams": n3,
+             "R4_readiness_lt_full": n4 >= 3, "R4_streams": n4, "R5_bytes_lt_full": r5, "per_stream": per, "runs": len(ALLW)}
+        L += [f"**otter_w96 ({len(ALLW)} runs, {len(ALLW) - len(W)} catch-up timeouts = migration failures, excluded below):** "
+              f"R1a generation state (sink + window fingerprint) {'HOLDS' if r1a else 'FAILS'}; R1b latents 100 / 100 "
+              f"{'HOLDS' if r1b else 'FAILS'}; R1c frames complete {'HOLDS' if r1c else 'FAILS'}; R2 catch-up {'HOLDS' if r2 else 'FAILS'}; "
+              f"R3 max output gap < Full {'HOLDS' if n3 >= 3 else 'FAILS'} ({n3} / {len(per)}); R4 readiness < Full "
+              f"{'HOLDS' if n4 >= 3 else 'FAILS'} ({n4} / {len(per)}); R5 bytes < Full {'HOLDS' if r5 else 'FAILS'}. "
+              "Frame fidelity (first call, W1-W3, frames bit-exact) is reported in the table, not part of R1.", "",
+              "| stream | max gap otter_w96 / Full (s) | difference (s) | readiness otter_w96 / Full (s) | difference (s) | bytes otter_w96 / Full (GiB) |",
+              "|---|---|---|---|---|---|"]
+        for k, x in sorted(per.items()):
+            g, r, b = x["max_output_gap_s"], x["readiness_s"], x["bytes_until_switch"]
+            L.append(f"| {k} | {f(g[0])} / {f(g[1])} | {f(g[0] - g[1]) if ok(g) else '-'} | {f(r[0])} / {f(r[1])} | "
+                     f"{f(r[0] - r[1]) if ok(r) else '-'} | {f(b[0] / 2 ** 30 if b[0] else None)} / {f(b[1] / 2 ** 30 if b[1] else None)} |")
+        L.append("")
+    L += ["| arm | stream | runs | readiness (s) | max output gap (s) | delivery gap (s) | src interval before / during migration (s) | log copy (ms) | bytes to switch (GiB) | W1 / W2 / W3 PSNR (dB) | first call | frames bit-exact | latents equal | frames complete | timeouts |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for arm in ARMS:
         for k, ds in sorted(runs.get(arm, {}).items()):
             pw = [d["psnr_windows"] for d in ds]
             L.append(f"| {arm} | p{k[0]} s{k[1]} | {len(ds)} | {f(med([d['readiness_s'] for d in ds]))} | {f(med([d['max_output_gap_s'] for d in ds]))} | "
-                     f"{f(med([d['delivery_gap_s'] for d in ds]))} | {f(med([d['bytes_until_switch'] / 2 ** 30 for d in ds]))} | "
+                     f"{f(med([d['delivery_gap_s'] for d in ds]))} | {f(med([d['src_call_interval_s']['before'] for d in ds]))} / "
+                     f"{f(med([d['src_call_interval_s']['during_migration'] for d in ds if d['src_call_interval_s'].get('during_migration')]))} | "
+                     f"{f(med([1e3 * d['src_log_copy_s_median'] for d in ds if d.get('src_log_copy_s_median')]), 1)} | "
+                     f"{f(med([d['bytes_until_switch'] / 2 ** 30 for d in ds]))} | "
                      f"{f(med([p['W1'] for p in pw]), 1)} / {f(med([p['W2'] for p in pw]), 1)} / {f(med([p['W3'] for p in pw]), 1)} | "
-                     f"{f(med([p['first'] for p in pw]), 1)} | {min(d['lat_equal_calls'] for d in ds)} / {len(ds[0]['post_cutover'])} | "
+                     f"{f(med([p['first'] for p in pw]), 1)} | {min(d['frm_equal_calls'] for d in ds)}-{max(d['frm_equal_calls'] for d in ds)} | "
+                     f"{min(d['lat_equal_calls'] for d in ds)} / {len(ds[0]['post_cutover'])} | "
                      f"{all(d['frames_complete'] for d in ds)} | {sum(d['switch_forced'] for d in ds)} |")
     (out.parent / "m1_results.md").write_text("\n".join(L) + "\n")
     (out.parent / "m1_results.json").write_text(json.dumps(v, indent=1, default=str))
