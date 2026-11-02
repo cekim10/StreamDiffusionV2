@@ -102,20 +102,20 @@ def cmd_report(a):
         R = [d for ds in runs.get(arm, {}).values() for d in ds]
         if not R:
             continue
-        f1 = all(d["state_exact"] and d["lat_equal_calls"] == len(d["post_cutover"]) for d in R)
-        f2 = all(not d["switch_forced"] for d in R)
-        f3 = all(d["frames_complete"] and d["state_exact"] for d in R)
+        q1 = all(d["state_exact"] and d["lat_equal_calls"] == len(d["post_cutover"]) and d["frames_complete"] for d in R)
+        q2 = all(not d["switch_forced"] for d in R)
         per = {}
         for k, ds in runs[arm].items():
             fu = runs.get("full", {}).get(k, [])
-            per[f"p{k[0]}_s{k[1]}"] = (med([d["readiness_s"] for d in ds]), med([d["readiness_s"] for d in fu]))
-        f4n = sum(1 for x, y in per.values() if x is not None and y is not None and x < y)
-        verdict[arm] = {"F1_replay_exact": f1, "F2_caught_up": f2, "F3_cutover_correct": f3,
-                        "F4_readiness_lt_full": f4n >= 3, "F4_streams": f4n, "per_stream_readiness": per, "runs": len(R)}
+            per[f"p{k[0]}_s{k[1]}"] = {"gap": (med([d["delivery_gap_s"] for d in ds]), med([d["delivery_gap_s"] for d in fu])),
+                                       "readiness": (med([d["readiness_s"] for d in ds]), med([d["readiness_s"] for d in fu]))}
+        q3n = sum(1 for v in per.values() if None not in v["gap"] and v["gap"][0] < v["gap"][1])
+        verdict[arm] = {"Q1_exact_recovery": q1, "Q2_caught_up": q2, "Q3_gap_lt_full": q3n >= 3, "Q3_streams": q3n,
+                        "per_stream": per, "runs": len(R)}
         L += [f"## {arm} ({len(R)} runs)", "",
-              f"F1 replay exact: {'HOLDS' if f1 else 'FAILS'}; F2 caught up (no forced switch): {'HOLDS' if f2 else 'FAILS'}; "
-              f"F3 cutover correct (frames complete, state exact): {'HOLDS' if f3 else 'FAILS'}; "
-              f"F4 readiness < Full: {'HOLDS' if f4n >= 3 else 'FAILS'} ({f4n} / {len(per)} streams)", "",
+              f"Q1 exact state recovery (state, 20 latents, frames complete): {'HOLDS' if q1 else 'FAILS'}; "
+              f"Q2 catch-up (no forced switch): {'HOLDS' if q2 else 'FAILS'}; "
+              f"Q3 delivery gap < Full: {'HOLDS' if q3n >= 3 else 'FAILS'} ({q3n} / {len(per)} streams). Readiness reported only.", "",
               "| stream | readiness (s) | Full readiness (s) | gap (s) | Full gap (s) | TTFO (s) | src interval before / during (s) | export stall (s) | replayed | frames equal | first-call PSNR |",
               "|---|---|---|---|---|---|---|---|---|---|---|"]
         for k, ds in sorted(runs[arm].items()):

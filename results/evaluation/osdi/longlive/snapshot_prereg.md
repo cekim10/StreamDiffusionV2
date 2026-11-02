@@ -1,4 +1,4 @@
-# LongLive migration feasibility: exact window snapshot + catch-up replay (DRAFT 1, not frozen, nothing run)
+# LongLive migration feasibility: exact window snapshot + catch-up replay (FROZEN 2026-11-02; DRAFT 1 e0435066 + user D1-D6; nothing run)
 
 ## 1. Question
 
@@ -11,7 +11,9 @@ that follows is OTTER's continuity principle with a different exact part:
 **Ship one exact snapshot of the sink and window K / V while the source keeps serving, then catch the destination up
 by exact teacher-forced replay of the calls made meanwhile; rebuild the VAE decoder from the latent log.**
 
-This study tests whether that works live between two hosts at 1 Gbps. It does not test repeated mobility, staging,
+This study answers three questions only (user, 2026-11-02): (Q1) is exact state recovery possible, (Q2) does the
+destination catch up on a real GPU, (Q3) does it reduce the service interruption compared with Full stop-and-copy.
+It tests this live between two hosts at 1 Gbps. It does not test repeated mobility, staging,
 versioned deltas or other bandwidths, and it does not by itself support a claim that OTTER supports LongLive.
 
 ## 2. Facts and expectations
@@ -71,35 +73,39 @@ call's frames. The destination replays to s and generates calls s..s+19.
 ## 5. Rules (written before the runs)
 
 For each snap arm separately (snap_k12, snap_k1):
-- **F1 replay exact:** in every run, the state fingerprint at s equals the source's and 20 / 20 post-cutover latents
-  equal the shadow.
-- **F2 catch-up:** in every run, the destination catches up (no forced switch).
-- **F3 cutover correctness:** in every run, frames complete (12 per call, 20 calls) and F1's state equality.
-- **F4 readiness:** median readiness < Full's median readiness (same stream, same harness, measured) in >= 3 of 4
-  streams.
+- **Q1 exact state recovery:** in every run, the state fingerprint at s equals the source's, 20 / 20 post-cutover
+  latents equal the shadow, and frames are complete (12 per call, 20 calls).
+- **Q2 catch-up on the GPU:** in every run, the destination catches up (switch requested, not forced by the 300 s
+  safeguard).
+- **Q3 less service interruption than Full:** median delivery gap < Full's median delivery gap (same stream, same
+  harness, measured) in >= 3 of 4 streams.
+
+Reported, not part of the answer: readiness and TTFO vs Full (the [H] in section 2: snap_k12 may not beat Full),
+frames bit-exact count, first-call PSNR, source call interval while the snapshot is sent, export stall, bytes.
 
 **Reading (as written):**
-- F1-F4 hold for an arm: LongLive keeps service continuity during an exact state reconstruction with shorter readiness
-  than Full, in this setting (one move, 1 Gbps, two host pairs) - the second-model case for OTTER's continuity
-  principle, to be extended to E10 (repeated mobility, bandwidths) before any paper claim.
-- F1-F3 hold, F4 fails: exact continuity (gap) without a readiness gain over Full; reported as such.
-- F1 or F3 fails: a runtime / protocol defect first (fix, rerun, keep both records); if it persists, the exact window
+- Q1-Q3 hold for an arm: LongLive keeps service continuity during an exact state reconstruction, with a shorter
+  interruption than Full, in this setting (one move, 1 Gbps, two host pairs): the second-model case for OTTER's
+  continuity principle, to be extended to E10 (repeated mobility, bandwidths) before any paper claim.
+- Q1 fails: a runtime / protocol defect first (fix, rerun, keep both records); if it persists, the exact window
   snapshot does not carry over and the cost of the exact window limits OTTER's applicability.
-- F2 fails: replay does not outpace generation in this setting; the run is still read for F1 / F3.
+- Q2 fails: replay does not outpace generation in this setting; Q1 is still read from the forced runs.
+- Q3 fails with Q1 / Q2 holding: exact catch-up works but does not shorten the interruption; reported as such.
 
 Never claimed from this study alone: OTTER supports LongLive; generality across models; equivalent correctness of
 any method with Full beyond these runs.
 
-## 6. Open decisions
+## 6. Decisions (user, 2026-11-02: D1-D6 approved; success = Q1-Q3)
 
-| # | decision | recommendation |
-|---|---|---|
-| D1 | reps | 2 (4 streams x 3 arms x 2 = 24 runs; timing spread is small in gate1) |
-| D2 | arms | snap_k12 (exact output), snap_k1 (fast), full; K_v fixed now, never chosen from the results |
-| D3 | bandwidth | 1 Gbps only here; 10 Gbps later in E10 (snapshot 2.8 s, replay overheads dominate) |
-| D4 | lanes | A > B and C > D in parallel (independent pairs; gate1 cross-host determinism) |
-| D5 | thresholds | F2 max_catchup 300 s; F4 >= 3 / 4 streams on medians |
-| D6 | order | after the ablation's Phase 2 (both use GPU 0 on every host) |
+| # | decision |
+|---|---|
+| D1 | reps 2 (4 streams x 3 arms x 2 = 24 runs) |
+| D2 | arms snap_k12, snap_k1, full; K_v fixed now, never chosen from the results |
+| D3 | 1 Gbps only; 10 Gbps later in E10 |
+| D4 | lanes A > B and C > D in parallel |
+| D5 | catch-up safeguard 300 s; Q3 on medians, >= 3 / 4 streams |
+| D6 | after the ablation's Phase 2 |
+| added | success = the three questions Q1-Q3 (readiness vs Full reported, not part of the answer) |
 
 Tools: `tools/longlive/ll_migrate.py` (src / dst), `ll_migrate_runs.py` (run, report). Loopback CPU test
 `tools/longlive/test_ll_migrate.py` (tiny model on 127.0.0.1: both methods, a fast and a slow link; state exact,
