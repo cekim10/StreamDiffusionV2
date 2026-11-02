@@ -1,0 +1,280 @@
+{
+ "run_id": "policy=precopy_sink_bw=1000_rho=none_tm=inf_thr=256_rl=10_rep=1_20261102-045900",
+ "policy": "precopy_sink",
+ "policy_label": "Llumnix-style pre-copy of the Sink, M1-based hybrid (source keeps serving; rest by M1 at switchover)",
+ "bw_mbps": 1000.0,
+ "tm_s": 1000000000.0,
+ "rho": null,
+ "rep": 1,
+ "path": [
+  "A",
+  "B"
+ ],
+ "hosts": {
+  "A": "elves-03",
+  "B": "elves-04"
+ },
+ "t0_wall": 1793624361.3240898,
+ "migration_chunk": 30,
+ "xb_params": {
+  "threshold_mib": 256.0,
+  "round_limit": 10,
+  "min_shrink": 0.1,
+  "lag": 1,
+  "W": 3,
+  "horizon": 101,
+  "codec": "ffv1",
+  "verify_state": false
+ },
+ "rtt_measured_lan": {
+  "A-B": {
+   "median_ms": 0.1414567232131958,
+   "p95_ms": 2.2039711475372314,
+   "min_ms": 0.13434141874313354,
+   "n": 20
+  }
+ },
+ "codecs": {
+  "A": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  },
+  "B": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  }
+ },
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0,
+   "t_stop": null,
+   "t_fg_sent": null,
+   "call": 30,
+   "fg_bytes": 0,
+   "mode": "xb"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "x1",
+   "kind": "precopy_sink",
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.00670623779296875,
+   "state": "done",
+   "rounds": 3,
+   "t_end": 33.57866406440735,
+   "outcome": "switched",
+   "prepare_s": 0.003007650375366211,
+   "dest_version": null,
+   "switch": {
+    "call": 74,
+    "final_bytes": 48936752,
+    "reason": "threshold",
+    "rounds": 3
+   },
+   "verified": true,
+   "components_ok": {
+    "sink": true,
+    "inflight": true,
+    "meta": true
+   }
+  }
+ ],
+ "switchovers": [
+  {
+   "task": "x1",
+   "dst": "B",
+   "t": 33.57866406440735,
+   "call": 74,
+   "mode": "precopy_sink"
+  }
+ ],
+ "inputs": null,
+ "replay": null,
+ "cutover": {
+  "M": 74,
+  "rounds": 3,
+  "round_bytes": [
+   1725236640,
+   781518240,
+   121634816
+  ],
+  "final_bytes": 48936752,
+  "switch_reason": "threshold",
+  "t_switch_sent_rel": 33.34404110908508,
+  "t_first_output_rel": 34.42763876914978,
+  "interruption_s": 2.7382547855377197,
+  "switch_decision_to_first_output_s": 6.593819856643677,
+  "source_stop_to_first_output_s": 2.7324578762054443,
+  "trigger_to_first_output_s": 34.42763876914978,
+  "bytes_before_switch": 2628389696,
+  "bytes_at_switch": 48936752
+ },
+ "validation": {
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "gpu0_before_run": {
+   "A": {
+    "util_pct": 0.0,
+    "mem_used_mib": 20911.0,
+    "others_mib": 0,
+    "others": []
+   },
+   "B": {
+    "util_pct": 0.0,
+    "mem_used_mib": 20911.0,
+    "others_mib": 0,
+    "others": []
+   }
+  },
+  "gpu0_idle_before_run": true,
+  "switchovers_verified": true,
+  "n_switchovers": 1,
+  "final_edge_served": true,
+  "stop_reason": "horizon",
+  "source_served_after_trigger": 44,
+  "source_served_until_switch": true,
+  "codecs_ok": true
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1793624462.1868424,
+   "label": "A",
+   "host": "elves-03",
+   "cmd_id": "A7",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 30,
+   "rejoin_call": 30,
+   "gpu_mem_alloc_mb": 20194.72705078125,
+   "peak_allocated_mb": 28775.1630859375,
+   "peak_reserved_mb": 29902.0,
+   "promotion_calls": [],
+   "snapshots": [
+    {
+     "k": 0,
+     "digest": "3bf795621af38a73d6592ff1a04d6836417303fa4fef06fc836c003b2f555dd8",
+     "sink_version": "3bf795621af38a73",
+     "t": 1793624359.9476137,
+     "call": 30
+    }
+   ],
+   "versions_seen": [
+    "3bf795621af38a73"
+   ],
+   "dump": {
+    "retained_bytes_at_end": null
+   },
+   "t_recv_start": 1793624462.229093,
+   "t_recv": 1793624462.2290964
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1793624462.6826568,
+   "label": "B",
+   "host": "elves-04",
+   "cmd_id": "B5",
+   "ok": true,
+   "have": 0,
+   "n_frags": 0,
+   "sink_verified": null,
+   "bound_call": 74,
+   "rejoin_call": 84,
+   "gpu_mem_alloc_mb": 26448.61572265625,
+   "peak_allocated_mb": 28660.0419921875,
+   "peak_reserved_mb": 29842.0,
+   "promotion_calls": [],
+   "snapshots": [],
+   "versions_seen": [],
+   "dump": {
+    "retained_bytes_at_end": null
+   },
+   "t_recv_start": 1793624462.7723904,
+   "t_recv": 1793624462.7723958
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1793624359.9481285,
+  "label": "A",
+  "host": "elves-03",
+  "cmd_id": "A2",
+  "ok": true,
+  "t_prepared": 1793624359.9476137,
+  "t_recv_start": 1793624359.9516172,
+  "t_recv": 1793624359.951618
+ },
+ "delivery": {
+  "ttfo_local": [
+   {
+    "edge": "B",
+    "t_change": 0.0,
+    "ttfo_local_s": 34.42763876914978,
+    "first_call": 74
+   }
+  ],
+  "ttfo_local_final_s": 34.42763876914978,
+  "delivery_gap_s": 2.7382547855377197,
+  "delivery_gap_at_s": 31.68938398361206,
+  "delivered_chunks": 146,
+  "t_last_delivery_s": 99.28762125968933,
+  "remote_chunks": 44,
+  "remote_content_s": 11.0,
+  "remote_wall_s": 31.68938398361206,
+  "remote_stretches": [
+   {
+    "serving": "A",
+    "edge": "B",
+    "t_start": 0.0,
+    "t_last": 31.68938398361206,
+    "chunks": 44
+   }
+  ],
+  "remote_delivery_bytes_ESTIMATED": {
+   "crf23": 3230516,
+   "crf28": 1942772,
+   "remote_chunks_not_encoded": 0,
+   "note": "H.264 encoded size of remotely served output; not transmitted on the testbed"
+  },
+  "delivery_encode_cpu_s": 2.325048938393593,
+  "rtt_measured_lan": {
+   "A-B": {
+    "median_ms": 0.1414567232131958,
+    "p95_ms": 2.2039711475372314,
+    "min_ms": 0.13434141874313354,
+    "n": 20
+   }
+  },
+  "output_equivalence": [
+   {
+    "node": "B",
+    "resume_call": 74,
+    "mode": "precopy_sink",
+    "calls": 102,
+    "checked": 102,
+    "matching": 0,
+    "first_call_match": false,
+    "first_mismatch_call": 74
+   }
+  ],
+  "trajectory_final": {
+   "edge": "B",
+   "calls": 102,
+   "first_ge35_idx": 10,
+   "sustained10_idx": 32,
+   "terminal_median_psnr": 38.818737254726756,
+   "median_psnr": 38.310958425942104
+  }
+ }
+}
