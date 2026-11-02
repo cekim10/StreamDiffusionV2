@@ -351,6 +351,26 @@ class LLSession:
                 self.latbuf = ts[0].to(dev, copy=True)
         return self
 
+    @torch.no_grad()
+    def fingerprint(self, names=("sink_kv", "window_kv")) -> list:
+        """Cheap on-device bit-pattern fingerprint per tensor (integer sums of the 16-bit patterns and of their squares,
+        plus a strided sample digest): equal states give equal fingerprints on any host; used at a live cutover, where
+        checksums() (a full device -> host copy and hash) would sit on the critical path."""
+        comps = self.components()
+        out = []
+        for n in names:
+            for t in comps[n][1]:
+                if not torch.is_tensor(t):
+                    out.append(str(t)); continue
+                x = t.contiguous().view(-1).view(torch.int16) if t.element_size() == 2 else t.contiguous().view(-1).view(torch.int32)
+                s1 = s2 = 0
+                for ch in x.split(1 << 24):
+                    c = ch.to(torch.int64)
+                    s1 += int(c.sum().item()); s2 += int((c * c).sum().item())
+                smp = hashlib.blake2b(x[::9973].cpu().numpy().tobytes(), digest_size=16).hexdigest()   # numpy: no stride issue
+                out.append([s1, s2, smp])
+        return out
+
     def checksums(self) -> dict:
         """Per-component digests; the KV ones per layer and per latent-frame slot (frame_seq_length tokens)."""
         fs = self.m.frame_seq_length

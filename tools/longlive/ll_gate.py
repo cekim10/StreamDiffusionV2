@@ -174,7 +174,7 @@ def gate1(a, model):
 
 # Phase 1 state dependency diagnosis; Phase 2 reconstruction feasibility and sensitivity (run after Phase 1's sanity)
 PHASES = {1: ["full", "sink_win_vae", "sink", "sink_win", "sink_vae", "w12", "w12_vaeX", "winX_vaeR12"],
-          2: ["winX_vae1", "eps_win", "eps_vae", "eps_sink", "recache", "w24", "w48", "w96"]}
+          2: ["w24", "w48", "w96", "eps_win", "eps_vae", "eps_sink", "winX_vae1", "recache"]}   # run order = user priority
 ABLATE = PHASES[1] + PHASES[2]
 # components shipped to the destination per condition (+ replay log blocks), for the estimated 1 Gbps readiness screen
 ALL = ["sink_kv", "window_kv", "crossattn_kv", "vae_decoder_cache", "latent_buffer"]
