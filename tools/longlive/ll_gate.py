@@ -13,10 +13,17 @@ gate1   determinism and state completeness, all in one process:
             replay_all   teacher-forced replay (context pass + decode per logged block) of calls 0..M-1 (exact)
             replay_wW    OTTER-style: sink, then teacher-forced replay of the last W calls (window rebuilt approximately)
         The JSON keeps every digest so two hosts can be compared with `compare`.
+ablate  state-component ablation at call M (osdi/longlive/ablation_prereg.md): which component's absence causes the
+        sink + last-W replay loss. A fresh session gets a subset of R's exact state at M (the rest empty / cold /
+        recomputed / replayed / perturbed), then calls M..N-1 are scored against R: per-call PSNR, reference-relative
+        temporal PSNR (boundary = first frame after the cutover), latent relative error, window medians W1 k 1-8,
+        W2 9-24, W3 25-100; the state at M vs R per component (per layer for the window). Cross-attention K / V is
+        never shipped (recomputed from the prompt; checked against R after the first call).
 compare A.json B.json   cross-host determinism: R's digests equal call by call?
 
     python tools/longlive/ll_gate.py gate0 --calls 60 --out results/evaluation/longlive/gate0_<host>.json
     python tools/longlive/ll_gate.py gate1 --calls 60 --at 30 --out results/evaluation/longlive/gate1_<host>.json
+    python tools/longlive/ll_gate.py ablate --calls 220 --at 120 --seed 0 --prompt_idx 0 --out results/evaluation/osdi/longlive/ablate_p0_s0.json
     python tools/longlive/ll_gate.py compare results/evaluation/longlive/gate1_A.json results/evaluation/longlive/gate1_B.json
 """
 
@@ -36,7 +43,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ll_runtime as llr  # noqa: E402
 
-DEFAULT_PROMPT = json.loads((llr.LL_DIR / "example/interactive_example.jsonl").read_text().splitlines()[0])["prompts"][0]
+PROMPTS = [json.loads(x)["prompts"][0] for x in (llr.LL_DIR / "example/interactive_example.jsonl").read_text().splitlines() if x.strip()]
+DEFAULT_PROMPT = PROMPTS[0]
 
 
 def psnr(a: torch.Tensor, b: torch.Tensor) -> float:
@@ -164,6 +172,131 @@ def gate1(a, model):
     return out
 
 
+ABLATE = ["full", "sink_win_vae", "sink", "sink_win", "sink_vae", "w12", "w12_vaeX", "winX_vaeR12", "winX_vae1",
+          "eps_win", "eps_vae", "eps_sink", "recache", "w24", "w48", "w96"]
+
+
+def rel_err(xs, ys) -> float | None:
+    """||x - y|| / ||y|| over a list of tensors; an entry missing in x (None, or the VAE's 'Rep' marker) counts as zero."""
+    num = den = 0.0
+    for x, y in zip(xs, ys):
+        if not torch.is_tensor(y):
+            continue
+        y = y.float()
+        d = y if not torch.is_tensor(x) else x.float().to(y.device) - y
+        num += torch.sum(d ** 2).item(); den += torch.sum(y ** 2).item()
+    return None if den == 0 else math.sqrt(num / den)
+
+
+def perturb_(ts, eps: float, seed: int) -> None:
+    """In place: every element times (1 + eps * random sign), rounded back to the tensor's dtype (bf16)."""
+    for i, t in enumerate(ts):
+        if not torch.is_tensor(t):
+            continue
+        g = torch.Generator(device=t.device); g.manual_seed(seed * 1000 + i)
+        sign = torch.randint(0, 2, t.shape, generator=g, device=t.device).to(torch.float32) * 2 - 1
+        t.copy_((t.float() * (1 + eps * sign)).to(t.dtype))
+
+
+def windows(v: dict) -> dict:
+    """Window medians over k (1-based calls after the cutover)."""
+    def med(lo, hi):
+        xs = [x for k, x in v.items() if lo <= k <= hi]
+        return st.median(xs) if xs else None
+    return {"first": v.get(1), "W1": med(1, 8), "W2": med(9, 24), "W3": med(25, 100), "min": min(v.values()) if v else None}
+
+
+def tdiff(prev: torch.Tensor, fr: torch.Tensor) -> torch.Tensor:
+    """Frame-to-frame differences of a call's frames [T, H, W, 3] uint8, the first against `prev` (last frame before)."""
+    x = torch.cat([prev[None].to(fr.device), fr]).to(torch.int16)
+    return (x[1:] - x[:-1]).float()
+
+
+def ablate(a, model):
+    import time
+
+    M, N = a.at, a.calls
+    prompt = a.prompt
+    R = llr.LLSession(model, [prompt], seed=a.seed).start()
+    rR, fR, snap = run(R, N, keep_frames_from=M - 1, export_at=M)
+    lats = run.latents
+    del R
+    T, C = snap["tensors"], snap["counters"]
+    sink, win, vae, lb = T["sink_kv"], T["window_kv"], T["vae_decoder_cache"], T["latent_buffer"]
+    W = {n: (lambda n: lambda s: s.from_sink(sink, call=M - n).replay(lats[M - n:M]))(n) for n in (12, 24, 48, 96) if n <= M}
+    exact = lambda names: lambda s: s.import_state({"counters": C, "tensors": {n: T[n] for n in names}}).reset_crossattn()  # noqa: E731
+    builds = {
+        "full": lambda s: s.import_state(snap),
+        "sink_win_vae": exact(["sink_kv", "window_kv", "vae_decoder_cache"]),
+        "sink": lambda s: s.from_sink(sink, call=M),
+        "sink_win": exact(["sink_kv", "window_kv"]),
+        "sink_vae": lambda s: s.from_sink(sink, call=M).import_state({"tensors": {"vae_decoder_cache": vae}}),
+        "w12": W.get(12),
+        "w12_vaeX": (lambda s: (W[12](s), s.import_state({"tensors": {"vae_decoder_cache": vae}}))) if 12 in W else None,
+        "winX_vaeR12": lambda s: exact(["sink_kv", "window_kv"])(s).warm_decoder_from(lats[max(0, M - 12):M]),
+        "winX_vae1": lambda s: exact(["sink_kv", "window_kv"])(s).warm_decoder_from(lats[M - 1:M]),
+        "eps_win": lambda s: (s.import_state(snap), perturb_(s.components()["window_kv"][1], a.eps, 1)),
+        "eps_vae": lambda s: (s.import_state(snap), perturb_(s.components()["vae_decoder_cache"][1], a.eps, 2)),
+        "eps_sink": lambda s: (s.import_state(snap), perturb_(s.components()["sink_kv"][1], a.eps, 3)),
+        "recache": lambda s: (s.import_state({"counters": C, "tensors": {"sink_kv": sink, "latent_buffer": lb}}), s.recache(), s.warm_decoder()),
+        "w24": W.get(24), "w48": W.get(48), "w96": W.get(96),
+    }
+    out = {"mode": "ablate", "env": env(), "args": vars(a), "R": rR, "conditions": {},
+           "snapshot_bytes": {k: sum(llr.nbytes(t) for t in v if t is not None) for k, v in T.items()}}
+    for name in a.conditions:
+        b = builds.get(name)
+        if b is None:
+            print(f"[ablate] {name}: skipped (W > M or unknown)")
+            continue
+        s = llr.LLSession(model, [prompt], seed=a.seed).start()
+        model.sync(); t0 = time.perf_counter()
+        b(s)
+        model.sync(); t_ms = 1e3 * (time.perf_counter() - t0)
+        assert s.call == M, (name, s.call)
+        got = s.export_state(["sink_kv", "window_kv", "vae_decoder_cache"])["tensors"]
+        L = len(win) // 2
+        wl = [{"exact": bool(torch.equal(got["window_kv"][2 * i], win[2 * i]) and torch.equal(got["window_kv"][2 * i + 1], win[2 * i + 1])),
+               "rel_err": rel_err(got["window_kv"][2 * i:2 * i + 2], win[2 * i:2 * i + 2])} for i in range(L)]
+        vx = len(got["vae_decoder_cache"]) == len(vae) and all(torch.equal(x, y) if torch.is_tensor(x) and torch.is_tensor(y) else x == y
+                                                                for x, y in zip(got["vae_decoder_cache"], vae))
+        state = {"sink_exact": all(torch.equal(x, y) for x, y in zip(got["sink_kv"], sink)), "sink_rel_err": rel_err(got["sink_kv"], sink),
+                 "window_layers_exact": sum(w["exact"] for w in wl), "layers": L, "window_rel_err": rel_err(got["window_kv"], win),
+                 "window_per_layer": wl, "vae_exact": vx, "vae_rel_err": rel_err(got["vae_decoder_cache"], vae)}
+        ps, tp, le, leq, missing = {}, {}, {}, 0, 0
+        prev_d, prev_r = fR[M - 1][-1], fR[M - 1][-1]
+        xattn_exact = None
+        for k in range(1, N - M + 1):
+            o = s.step()
+            c = o["call"]
+            if k == 1:
+                xattn_exact = all(torch.equal(xa[kk], T["crossattn_kv"][2 * i + j].to(xa[kk].device))
+                                  for i, xa in enumerate(s.xattn) for j, kk in enumerate(("k", "v")))
+            fd, fr = o["frames"], fR[c].to(o["frames"].device)
+            if fd.shape[0] < fr.shape[0]:   # a cold VAE decoder restarts: its first latent frame decodes to 1 frame, not 4
+                missing += fr.shape[0] - fd.shape[0]
+                fr = fr[-fd.shape[0]:]       # aligned to the reference's last frames of the call
+            ps[k] = psnr(fd, fr)
+            tp[k] = psnr(tdiff(prev_d, fd), tdiff(prev_r, fr))
+            prev_d, prev_r = fd[-1], fr[-1]
+            le[k] = rel_err([o["latents"]], [lats[c]])
+            leq += int(llr.digest(o["latents"]) == rR[c]["lat"])
+        r = {"t_build_ms": t_ms, "state_at_M": state, "xattn_recomputed_exact": xattn_exact, "psnr": ps, "tpsnr": tp,
+             "latent_rel_err": le, "latents_equal_calls": leq, "scored_calls": N - M, "frames_missing": missing,
+             "psnr_windows": windows(ps), "tpsnr_windows": windows(tp), "t_boundary": tp.get(1)}
+        out["conditions"][name] = r
+        pw = r["psnr_windows"]
+        f = lambda x: "-" if x is None else f"{x:.1f}"  # noqa: E731
+        print(f"[ablate] {name:13s} build {t_ms:7.0f} ms; window exact {state['window_layers_exact']:2d}/{L} (rel {state['window_rel_err'] or 0:.2e}), "
+              f"VAE exact {vx} (rel {state['vae_rel_err'] or 0:.2e}); PSNR first {f(pw['first'])} W1 {f(pw['W1'])} W2 {f(pw['W2'])} "
+              f"W3 {f(pw['W3'])} min {f(pw['min'])}; tPSNR bnd {f(r['t_boundary'])} W3 {f(r['tpsnr_windows']['W3'])}; "
+              f"latent rel err k1 {le[1]:.1e} k{N - M} {le[N - M]:.1e}; equal {leq}/{N - M}; frames missing {missing}", flush=True)
+        del s
+        if a.out:   # partial results survive a crash
+            Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+            Path(a.out).write_text(json.dumps(out, indent=1))
+    return out
+
+
 def compare(a):
     x, y = (json.loads(Path(p).read_text()) for p in (a.a, a.b))
     same = [p["call"] for p, q in zip(x["R"], y["R"]) if p["lat"] == q["lat"] and p["frm"] == q["frm"]]
@@ -175,7 +308,7 @@ def compare(a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["gate0", "gate1", "compare"])
+    ap.add_argument("mode", choices=["gate0", "gate1", "ablate", "compare"])
     ap.add_argument("a", nargs="?"); ap.add_argument("b", nargs="?")
     ap.add_argument("--calls", type=int, default=60)
     ap.add_argument("--warmup", type=int, default=5)
@@ -183,17 +316,22 @@ def main():
     ap.add_argument("--replay_windows", type=lambda s: [int(x) for x in s.split(",")], default=[3, 6, 12],
                     help="gate1: W of the sink + last-W-calls replay variants")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--prompt", default=DEFAULT_PROMPT)
+    ap.add_argument("--prompt", default=None, help="default: first prompt of interactive_example.jsonl set --prompt_idx")
+    ap.add_argument("--prompt_idx", type=int, default=0)
+    ap.add_argument("--conditions", type=lambda s: s.split(","), default=ABLATE, help="ablate: conditions in order")
+    ap.add_argument("--eps", type=float, default=2.0 ** -8, help="ablate: relative perturbation of the eps_* conditions")
     ap.add_argument("--config", default=str(llr.DEFAULT_CFG))
     ap.add_argument("--ckpt_dir", default=str(llr.CKPT_DIR))
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
+    if a.prompt is None:
+        a.prompt = PROMPTS[a.prompt_idx]
     if a.mode == "compare":
         compare(a); return
     torch.backends.cudnn.benchmark = False
     torch.set_grad_enabled(False)
     model = llr.load_model(a.config, "cuda", a.ckpt_dir)
-    out = gate0(a, model) if a.mode == "gate0" else gate1(a, model)
+    out = {"gate0": gate0, "gate1": gate1, "ablate": ablate}[a.mode](a, model)
     if a.out:
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
         Path(a.out).write_text(json.dumps(out, indent=1))
