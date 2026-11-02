@@ -293,7 +293,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     pub = [{k: v for k, v in r.items() if not k.startswith("_")} for r in recs]
     (OUT / f"{a.prefix}fig13_results.json").write_text(json.dumps({"verdicts": ver, "runs": pub}, indent=1, default=str))
-    L = ["# Fig. 13 results", "", "Rules: `preregistration.md` (DRAFT until frozen). Quality isolation: every OTTER / P-sink run switches at the fixed call S.", "",
+    L = ["# Fig. 13 results", "", "Rules: `preregistration.md` (FROZEN 9f5252e4, implementation 5f45f605). Quality isolation: every OTTER / P-sink run switches at the fixed call S.", "",
          f"F13-H1 {'SUPPORTED' if ver['F13_H1']['holds'] else 'NOT SUPPORTED'} (share {fmt(ver['F13_H1']['share_W3_ge_40'], 3)} of {ver['F13_H1']['n_undiverged']} undiverged); "
          f"F13-H2 {'SUPPORTED' if ver['F13_H2']['holds'] else 'NOT SUPPORTED'} (share {fmt(ver['F13_H2']['share'], 3)} of {ver['F13_H2']['n_divergences']}); "
          f"F13-H3 {'SUPPORTED' if ver['F13_H3']['holds'] else 'NOT SUPPORTED'} (rho {fmt(ver['F13_H3']['rho'], 2)}); "

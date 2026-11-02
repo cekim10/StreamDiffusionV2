@@ -131,12 +131,33 @@ def run_record(d: Path, dry: bool) -> dict | None:
             "m3": {k: s.get(k) for k in ("m3",) if s.get(k) is not None}, "d_resumes": len(sw_d)}
 
 
-def collect(prefix, dry):
+# Harness defect (2026-11-01, E9 D8): `_xb_src_call` fell back to migration_chunk (30) for a task started right after its
+# source resumed, so the third R-full task (C -> D) of every Chain run began its first round at call 30 instead of C's
+# call (145 / 146). These six runs are kept on disk and listed in the report; the re-measured runs (fixed harness,
+# `run_fig11.sh rfull_chain`) replace them in every statistic once they exist.
+SUPERSEDED = {
+    "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=1_20261101-012140",
+    "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=2_20261101-030124",
+    "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=3_20261101-054034",
+    "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=1_20261101-005233",
+    "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=2_20261101-022002",
+    "policy=recompute_full_bw=1000_rho=none_tm=inf_lag=1_rl=1_rep=3_20261101-045913",
+}
+
+
+def collect(prefix, dry, superseded=False):
+    """Runs per (scenario, workload). A superseded run is used only while its replacement (same method and rep, later
+    run) does not exist yet; superseded=True returns only the superseded runs (for the corrections section)."""
     out = {}
     for sc in SCENARIOS:
         for w in WORKLOADS:
-            out[(sc, w)] = [r for d in sorted((EVAL / f"{prefix}expF11_{sc}_{w}").glob("policy=*")) if (d / "summary.json").exists()
-                            for r in [run_record(d, dry)] if r is not None]
+            recs = [r for d in sorted((EVAL / f"{prefix}expF11_{sc}_{w}").glob("policy=*")) if (d / "summary.json").exists()
+                    for r in [run_record(d, dry)] if r is not None]
+            new = {(r["method"], r["rep"]) for r in recs if r["run"] not in SUPERSEDED}
+            if superseded:
+                out[(sc, w)] = [r for r in recs if r["run"] in SUPERSEDED]
+            else:
+                out[(sc, w)] = [r for r in recs if r["run"] not in SUPERSEDED or (r["method"], r["rep"]) not in new]
     return out
 
 
