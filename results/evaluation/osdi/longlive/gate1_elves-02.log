@@ -1,0 +1,11 @@
+LoRA target modules for generator: 300 Linear layers
+peft_config LoraConfig(task_type=None, peft_type=<PeftType.LORA: 'LORA'>, auto_mapping=None, peft_version='0.21.2', base_model_name_or_path=None, revision=None, inference_mode=False, r=256, target_modules={'ffn.2', 'o', 'q', 'k', 'ffn.0', 'v'}, exclude_modules=None, lora_alpha=256, lora_dropout=0.0, fan_in_fan_out=False, bias='none', use_rslora=False, modules_to_save=None, init_lora_weights=True, layers_to_transform=None, layers_pattern=None, rank_pattern={}, alpha_pattern={}, megatron_config=None, megatron_core='megatron.core', trainable_token_indices=None, loftq_config={}, eva_config=None, corda_config=None, lora_ga_config=None, use_dora=False, velora_config=None, alora_invocation_tokens=None, use_qalora=False, qalora_group_size=16, monteclora_config=None, layer_replication=None, runtime_config=LoraRuntimeConfig(ephemeral_gpu_offload=False), lora_bias=False, target_parameters=None, use_bdlora=None, arrow_config=None, kasa_config=None, ensure_weight_tying=False)
+trainable params: 349,962,240 || all params: 1,768,959,040 || trainable%: 19.7835
+[gate1] recache          2022 ms; window exact 1/30 layers, VAE cache exact False; PSNR first 30.8, median 26.6, min 19.5 dB; latents equal on 0/30 calls
+[gate1] replay_all      30410 ms; window exact 30/30 layers, VAE cache exact True; PSNR first 99.0, median 99.0, min 99.0 dB; latents equal on 30/30 calls
+[gate1] replay_w3        3063 ms; window exact 1/30 layers, VAE cache exact False; PSNR first 26.6, median 26.7, min 20.3 dB; latents equal on 0/30 calls
+[gate1] replay_w6        6122 ms; window exact 2/30 layers, VAE cache exact False; PSNR first 39.9, median 28.7, min 22.2 dB; latents equal on 0/30 calls
+[gate1] replay_w12      12271 ms; window exact 5/30 layers, VAE cache exact False; PSNR first 51.2, median 29.4, min 24.1 dB; latents equal on 0/30 calls
+[gate1] rep == R: {'latents': True, 'frames': True, 'state': True}; full import at 30 == R: {'latents': True, 'frames': True, 'state': True}
+[gate1] R chain 1be3fa55268df638 (60 calls, seed 0; equal on two hosts = cross-host determinism)
+[gate1] -> results/evaluation/osdi/longlive/gate1_elves-02.json
