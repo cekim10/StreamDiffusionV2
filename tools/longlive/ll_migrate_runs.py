@@ -33,6 +33,12 @@ def jobs(reps, arms):
     return [(r, p, s, arm) for r in range(1, reps + 1) for p, s in STREAMS for arm in arms]
 
 
+def lane_of(i, job, n):
+    """Job i of the full list -> lane; rep r shifts by r - 1, so every (arm, stream) runs on each lane once over 2 reps
+    and no arm is compared with Full on a different host pair every time."""
+    return (i + job[0] - 1) % n
+
+
 def name(r, p, s, arm, bw):
     return f"{arm}_bw{int(bw)}_p{p}_s{s}_r{r}"
 
@@ -64,11 +70,12 @@ def cmd_run(a):
     from agents import Agent, parse_hosts
     hosts = parse_hosts(None)
     lanes = [tuple(x.split(">")) for x in a.lanes.split(",")]
-    todo = [j for j in jobs(a.reps, a.arms) if not (OUT / f"{name(*j, a.bw_mbps)}.json").exists()]
+    alljobs = list(enumerate(jobs(a.reps, a.arms)))
+    todo = [(lane_of(i, j, len(lanes)), j) for i, j in alljobs if not (OUT / f"{name(*j, a.bw_mbps)}.json").exists()]
     print(f"[runs] {len(todo)} jobs to run on lanes {lanes} (bw {a.bw_mbps} Mbps)", flush=True)
     if a.dry:
-        for i, j in enumerate(todo):
-            print(f"  lane {lanes[i % len(lanes)]}: {name(*j, a.bw_mbps)}")
+        for ln, j in todo:
+            print(f"  lane {lanes[ln]}: {name(*j, a.bw_mbps)}")
         return
     for lb in {x for ln in lanes for x in ln}:
         Agent(lb, *hosts[lb]).mkdir(REL)
@@ -76,7 +83,7 @@ def cmd_run(a):
 
     def lane(i, src, dst):
         ag_s, ag_d = Agent(src, *hosts[src]), Agent(dst, *hosts[dst])
-        for j in todo[i::len(lanes)]:
+        for j in [j for ln, j in todo if ln == i]:
             if not run_job(ag_s, ag_d, hosts[dst][0], 29951 + i, j, a):
                 fails.append(name(*j, a.bw_mbps))
 
