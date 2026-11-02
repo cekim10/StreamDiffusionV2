@@ -267,6 +267,21 @@ class LLSession:
         self.latbuf = self.latbuf[:, :0]
         return self
 
+    def reset_crossattn(self):
+        """Cross-attention K / V recomputed from the prompt on the next call (prompt-derived, history-free)."""
+        for c in self.xattn:
+            c["k"].zero_(); c["v"].zero_(); c["is_init"] = False
+        return self
+
+    @torch.no_grad()
+    def warm_decoder_from(self, latents: list[torch.Tensor]):
+        """VAE decoder cache rebuilt by decoding logged blocks (no generation), frames discarded; cleared first."""
+        self.m.vae.model.clear_cache()
+        self.feat_map = self.m.vae.model._feat_map
+        for lat in latents:
+            self.decode(lat.to(self.m.device, torch.bfloat16))
+        return self
+
     @torch.no_grad()
     def warm_decoder(self, n: int | None = None):
         """Approximate VAE decoder cache: clear it and decode the last n buffered latents, discarding the frames."""
@@ -306,16 +321,18 @@ class LLSession:
         comps = self.components()
         names = list(comps) if names is None else list(names)
         return {"counters": self.counters(),
-                "tensors": {n: [None if t is None else t.detach().to("cpu", copy=True) for t in comps[n][1]] for n in names}}
+                "tensors": {n: [t.detach().to("cpu", copy=True) if torch.is_tensor(t) else t for t in comps[n][1]] for n in names}}
 
     def import_state(self, st: dict):
-        """Restore exported components into this (started) session; components not in `st` keep their current value."""
-        c = st["counters"]
-        self.call, self.frame, self.segment = c["call"], c["frame"], c["segment"]
-        for kv, (g, l) in zip(self.kv, c["end_index"]):
-            kv["global_end_index"].fill_(g); kv["local_end_index"].fill_(l)
-        for xa, ini in zip(self.xattn, c["xattn_init"]):
-            xa["is_init"] = ini
+        """Restore exported components into this (started) session; components not in `st` keep their current value.
+        Without "counters" only the tensors are written (positions and cache indices unchanged)."""
+        c = st.get("counters")
+        if c is not None:
+            self.call, self.frame, self.segment = c["call"], c["frame"], c["segment"]
+            for kv, (g, l) in zip(self.kv, c["end_index"]):
+                kv["global_end_index"].fill_(g); kv["local_end_index"].fill_(l)
+            for xa, ini in zip(self.xattn, c["xattn_init"]):
+                xa["is_init"] = ini
         S = self.m.sink_size * self.m.frame_seq_length
         dev = self.m.device
         for name, ts in st["tensors"].items():
@@ -329,9 +346,9 @@ class LLSession:
                 for i, t in enumerate(ts):
                     self.xattn[i // 2]["kv"[i % 2]].copy_(t)
             elif name == "vae_decoder_cache":
-                self.feat_map[:] = [None if t is None else t.to(dev) for t in ts]
+                self.feat_map[:] = [t.to(dev, copy=True) if torch.is_tensor(t) else t for t in ts]   # never alias `st`; None / 'Rep' kept
             elif name == "latent_buffer":
-                self.latbuf = ts[0].to(dev)
+                self.latbuf = ts[0].to(dev, copy=True)
         return self
 
     def checksums(self) -> dict:
@@ -342,5 +359,5 @@ class LLSession:
             if name in ("sink_kv", "window_kv"):
                 out[name] = [[digest(t[:, s * fs:(s + 1) * fs]) for s in range(t.shape[1] // fs)] for t in ts]
             else:
-                out[name] = [None if t is None else digest(t) for t in ts]
+                out[name] = [digest(t) if torch.is_tensor(t) else t for t in ts]
         return out
