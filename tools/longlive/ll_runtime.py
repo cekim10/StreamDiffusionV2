@@ -72,10 +72,13 @@ def load_model(cfg_path=DEFAULT_CFG, device="cuda", ckpt_dir=CKPT_DIR):
         vae = WanVAEWrapper()
     finally:
         os.chdir(cwd)
-    sd = torch.load(Path(ckpt_dir) / "longlive_base.pt", map_location="cpu")
+    ckpt_dir = Path(ckpt_dir)
+    if not (ckpt_dir / "longlive_base.pt").exists() and (ckpt_dir / "models/longlive_base.pt").exists():
+        ckpt_dir = ckpt_dir / "models"   # the Hugging Face repository keeps both checkpoints under models/
+    sd = torch.load(ckpt_dir / "longlive_base.pt", map_location="cpu")
     gen.load_state_dict(sd["generator_ema" if cfg.use_ema else "generator"])
     gen.model = configure_lora_for_model(gen.model, model_name="generator", lora_config=cfg.adapter, is_main_process=True)
-    lora = torch.load(Path(ckpt_dir) / "lora.pt", map_location="cpu")
+    lora = torch.load(ckpt_dir / "lora.pt", map_location="cpu")
     peft.set_peft_model_state_dict(gen.model, lora["generator_lora"] if isinstance(lora, dict) and "generator_lora" in lora else lora)
     gen = gen.to(device=device, dtype=torch.bfloat16)
     te = te.to(device=device, dtype=torch.bfloat16)
