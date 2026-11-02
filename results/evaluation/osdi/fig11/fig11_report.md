@@ -23,10 +23,10 @@ mismatching, replay order, no lost / duplicated calls) pass in every run. No med
 |---|---|---|---|---|---|---|---|---|
 | Chain dog | Full | 143.4 | 0.0 | 143.4 | 98.4 | 143.45 | 142.85 | 13.37 |
 | | Llumnix-style | 303.6 | 251.6 | 51.9 | 258.6 | 51.19 | 69.26 | 31.74 |
-| | ServerlessLLM-style | 226.0 | 119.6 | 106.2 | 188.7 | 85.82 | 144.36 | 0.53 |
+| | ServerlessLLM-style | 286.2 | 185.6 | 100.5 | 249.4 | 80.43 | 139.30 | 0.68 |
 | | No staging | 69.1 | 64.3 | 4.8 | 46.0 | 1.73 | 6.02 | 5.26 |
 | | **OTTER** | **57.6** | 53.4 | 4.3 | **33.4** | **1.44** | **2.45** | 5.28 |
-| Chain bfly | Full / Llumnix / SLLM | 143.5 / 310.5 / 225.3 | | | | 143.54 / 52.95 / 85.46 | | 13.37 / 32.22 / 0.40 |
+| Chain bfly | Full / Llumnix / SLLM | 143.5 / 310.5 / 285.8 | | | | 143.54 / 52.95 / 80.69 | | 13.37 / 32.22 / 0.51 |
 | | No staging | 76.2 | 70.9 | 5.3 | 49.9 | 1.83 | 6.41 | 6.53 |
 | | **OTTER** | **66.1** | 61.6 | 4.5 | **37.0** | **1.59** | **2.71** | 7.22 |
 | Cancel dog | Full / Llumnix / SLLM | 115.9 / 275.3 / 161.6 | | | | 115.94 / 51.69 / 55.58 | | 9.92 / 28.78 / 0.46 |
@@ -41,11 +41,11 @@ mismatching, replay order, no lost / duplicated calls) pass in every run. No med
 - **N is not a continuity measure** (preregistration section 4). OTTER's N is almost all remote-served (the user keeps
   receiving output from the previous edge); its interruption is 3.1-4.5 s over three moves and its max gap 1.44-1.59 s.
   Full's N is all interruption (max gap 113-144 s: it stops and resends 6.46 GB at every move, redirected twice).
-  P-full serves remotely for 223-257 s and still has a 51-53 s stop-and-copy gap; R-full has 55-86 s gaps (it
+  P-full serves remotely for 223-257 s and still has a 51-53 s stop-and-copy gap; R-full has 55-81 s gaps (it
   recomputes from call 0, so its cost grows with each later move).
 - **Bytes.** OTTER sends +0.4 % (Chain dog) to +12 % (Cancel dog) more than No staging: the staging forwards
   (1.7-2.3 GB) replace, rather than add to, most of the last migration's base (12 MB delta into D in Chain dog). M3 is
-  not a traffic reduction (M3-S3: +5-10 %). R-full sends only inputs (0.35-0.53 GB) and pays in recomputation.
+  not a traffic reduction (M3-S3: +5-10 %). R-full sends only inputs (0.35-0.68 GB) and pays in recomputation.
 
 ## 3. Where staging acts: per-move breakdown [V] measured (median time without local service per edge change, s)
 
@@ -139,7 +139,7 @@ then covers the others. A plan right after the first switch would have had ~20 s
 |---|---|
 | Chain OTTER N ~35-45 s | 57.6 / 66.1 s: **higher**. Only D is shortened; B and C each still take 23-29 s |
 | Full ~145 s | 143.4 / 143.5 s |
-| R-full >= 100 s | 225-226 s (Chain), 161-162 s (Cancel) |
+| R-full >= 100 s | 286 s (Chain; 225-226 s before the D8 correction), 161-162 s (Cancel) |
 | P-full >= 200 s | 275-311 s |
 | H2 Cancel ratio ~0.4-0.6 | 0.62 / 0.66: **slightly above** (still <= 0.80) |
 | H2 Chain: a test, not an expected win | 0.73 / 0.74: holds, all from D |
@@ -154,6 +154,27 @@ then covers the others. A plan right after the first switch would have had ~20 s
   delay (s)" and "Final-edge readiness (s)" are taller than the Fig. 6a axes box and were clipped; they are shortened to
   "Locality delay (s)" and "Final readiness (s)" (never a smaller font). 11b uses power-of-ten tick labels ($10^k$) so
   the label clears the ticks. Text and tables keep the preregistered names. Canvas, axes box and font sizes unchanged.
+
+## 5b. Correction D8 (2026-11-02): R-full Chain re-measured [V] measured
+
+Harness defect (fixed in 669709aa, regression ALL PASS): the orchestrator's next source call fell back to
+migration_chunk (30) when the generating owner had just resumed and reported no METRIC yet. In every original Chain
+R-full run the third task (C -> D) therefore started its first round at call 30 instead of C's resume call (145 / 146),
+i.e. it replayed less than the stream needed before its rounds caught up. No other method or scenario took this path
+(Cancel's second task starts after a METRIC; scan of 43 experiments). Re-measured with `run_fig11.sh rfull_chain` at
+run commit cca4ebda (6 runs, 2026-11-02; every x3 target = C's resume call 146 / 147). The 6 original runs are kept,
+listed as SUPERSEDED in `fig11_report.py` and no longer used for the tables.
+
+| Chain, R-full (median of 3) | N (s) | remote-served | interrupted | N_post | R_D | max gap | total stall | bytes (GB) |
+|---|---|---|---|---|---|---|---|---|
+| dog, original (defect) | 226.0 | 119.6 | 106.2 | 188.7 | 143.7 | 85.82 | 144.36 | 0.53 |
+| dog, re-measured | 286.2 | 185.6 | 100.5 | 249.4 | 204.4 | 80.43 | 139.30 | 0.68 |
+| bfly, original (defect) | 225.3 | 119.8 | 105.5 | 188.5 | 143.5 | 85.46 | 144.04 | 0.40 |
+| bfly, re-measured | 285.8 | 185.4 | 100.5 | 249.2 | 204.2 | 80.69 | 139.27 | 0.51 |
+
+The correct behaviour makes R-full Chain about 60 s slower (the final edge recomputes from C's real position).
+F11-H1 / H2 / H3 are unchanged: they compare OTTER with Full (the best external method in every cell) and with
+No staging; no R-full number enters a verdict. The panel 11 figures are regenerated from the corrected results.
 
 ## 6. Limits
 

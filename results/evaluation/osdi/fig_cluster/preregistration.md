@@ -168,6 +168,15 @@ The tolerance is D3.
     slower, not faster.
 - **Fig. 7 fit:** Full / Llumnix / SLLM within 0.3 %, OTTER −3 % / +6 %.
 
+**Validation after the D8 re-measurement (2026-11-02): gate PASS, 76 / 76 within tolerance** (`validation.json`).
+- Fig. 11 R-full Chain re-measured at run commit cca4ebda (6 runs; every C -> D task now targets C's resume call
+  146 / 147). Measured N 286.2 / 285.8 s, R_D 204.4 / 204.2 s (dog / bfly; 226.0 / 225.3 and 143.7 / 143.5 before).
+- The simulator and `calibration.json` are unchanged since 43a8ef46 (no refit after seeing the new runs); the whole
+  corrected Fig. 11 table is used, not selected values. The 6 former misses are now within tolerance: dog N +7 %,
+  R_D / D's TTFO +10 %; bfly N -8 %, R_D / D's TTFO -12 %. The two workloads measure the same (204 s), while the model
+  splits them (225 vs 180 s): the per-workload R-full constants calibrated from Fig. 7 (t_call, round-1 and finish
+  overheads) differ, which the Chain measurements do not show; noted, not changed.
+
 **Smoke sweep:** E 16, G 4, N 48, C 1 / 10 Gbps, M 0 / 16 GB, dwell 60 / 180 / 600 s, 1 seed, 1.5 h; 72 runs in 36 s.
 - **Model sanity:** R-full is compute-bound (identical at 1 and 10 Gbps); Full stalls > 2 s about 14 times per session-hour at
   10 Gbps (14.3 at dwell 180 s, M 16 GB); OTTER and Unstaged have 0 stalls > 2 s.
@@ -189,7 +198,7 @@ The tolerance is D3.
 
 1. `python3.11 tools/sim/calib.py` → `calibration.json` (committed with the freeze).
 1b. D8: re-measure Fig. 11 R-full Chain (dog, bfly; 3 reps each) with the fixed harness (`run_fig11.sh rfull_chain`); the
-    gate uses the new runs; the old ones stay on disk and in Fig. 11's corrections section.
+    gate uses the new runs; the old ones stay on disk and in Fig. 11's corrections section. **Done 2026-11-02** (gate PASS 76 / 76).
 2. `python3.11 tools/sim/cluster_sim.py validate` → `validation.json`: gate PASS required (section 5).
 3. Freeze (after D1-D9).
 4. `python3.11 tools/sim/cluster_sim.py sweep --grid primary`, then `plot_cluster.py --grid primary`, then a report.
