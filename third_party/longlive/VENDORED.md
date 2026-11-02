@@ -12,5 +12,5 @@ No file in this directory is modified.
 Weights (not in git): the Wan2.1-T2V-1.3B base under `wan_models/Wan2.1-T2V-1.3B/` (the same directory
 StreamDiffusionV2 uses; the vendored code opens it by the relative path `wan_models/...`, so the runtime runs with
 the repository root as its working directory) and the LongLive checkpoints `longlive_base.pt` and `lora.pt` from
-Hugging Face `Efficient-Large-Model/LongLive-1.3B` under `wan_models/LongLive-1.3B/`. The LongLive weights are
+Hugging Face `Efficient-Large-Model/LongLive-1.3B` under `wan_models/LongLive-1.3B/models/` (the repository layout; `ll_runtime.load_model` also accepts them one level up). The LongLive weights are
 licensed CC-BY-NC-SA-4.0 (research use). Extra Python dependency: `peft` (LoRA).
