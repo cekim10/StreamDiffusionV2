@@ -1,0 +1,226 @@
+{
+ "params": {
+  "t_call_s.dog": 0.5559818,
+  "t_call_s.bfly": 0.557063,
+  "full.state_bytes.dog": 6463247568.0,
+  "full.overhead_s.dog": 2.532219456,
+  "full.state_bytes.bfly": 6463247568.0,
+  "full.overhead_s.bfly": 2.515619456000003,
+  "pfull.dirty_fraction.dog": 0.8453343396154845,
+  "pfull.efficiency.dog": 0.8541817850079243,
+  "pfull.final_overhead_s.dog": -0.2545202600478689,
+  "pfull.dirty_fraction.bfly": 0.881459046306693,
+  "pfull.efficiency.bfly": 0.8576002287263889,
+  "pfull.final_overhead_s.bfly": -0.5722637862935755,
+  "rfull.round1_overhead_s.dog": 1.7208460000000017,
+  "rfull.finish_overhead_s.dog": 0.06790000000000163,
+  "rfull.input_bytes_per_call.dog": 1330596.7187117275,
+  "rfull.round1_overhead_s.bfly": 1.7103099999999998,
+  "rfull.finish_overhead_s.bfly": -0.08869999999999933,
+  "rfull.input_bytes_per_call.bfly": 1008360.4226215337,
+  "otter.sink_bytes.dog": 1727636688,
+  "otter.efficiency.dog": 0.8497685170610161,
+  "otter.base_overhead_s.dog": 2.3396160478742303,
+  "otter.tail_s.dog": 3.8678430318832397,
+  "otter.floor_s.dog": 8.829492926597595,
+  "otter.interruption_s.dog": 1.4822500000000076,
+  "otter.delta_bytes.dog": {
+   "10": 11984688,
+   "60": 21569328,
+   "150": 21569328,
+   "240": 50323248
+  },
+  "otter.patch_rate_Bps.dog": 1509705.0523792957,
+  "otter.sink_bytes.bfly": 1727636688,
+  "otter.efficiency.bfly": 0.7840687882491251,
+  "otter.base_overhead_s.bfly": 2.1084912225771006,
+  "otter.tail_s.bfly": 4.355724096298218,
+  "otter.floor_s.bfly": 9.074846029281616,
+  "otter.interruption_s.bfly": 1.5365500000000054,
+  "otter.delta_bytes.bfly": {
+   "10": 98246448,
+   "60": 328277808,
+   "150": 395370288,
+   "240": 433708848
+  },
+  "otter.patch_rate_Bps.bfly": 20921436.78044224,
+  "refresh_per_100_calls": {
+   "dog": 3.6363636363636362,
+   "bfly": 128.1818181818182,
+   "aircraft": 9.090909090909092,
+   "audi": 53.63636363636363,
+   "basketball": 9.090909090909092,
+   "bird": 3.6363636363636362,
+   "boxing": 8.181818181818182,
+   "circus": 89.0909090909091,
+   "cows": 3.6363636363636362,
+   "cricket": 28.181818181818183,
+   "earth": 15.454545454545455,
+   "eiffel": 9.090909090909092,
+   "hockey": 16.363636363636363,
+   "hurdles": 4.545454545454546,
+   "juggling": 33.63636363636363,
+   "mbike": 7.2727272727272725,
+   "seagull": 4.545454545454546,
+   "street": 10.909090909090908,
+   "swimmer": 22.727272727272727,
+   "train": 34.54545454545455
+  },
+  "refresh_anchor": {
+   "dog": 3.6363636363636362,
+   "bfly": 128.1818181818182
+  },
+  "chunk_frames": 4
+ },
+ "sources": {
+  "t_call_s.dog": {
+   "source": "osdi/fig8/fig8_results.json 8b.<w>.otter_per_call",
+   "derivation": "median time per call (generation + tracking), OTTER on host B"
+  },
+  "t_call_s.bfly": {
+   "source": "osdi/fig8/fig8_results.json 8b.<w>.otter_per_call",
+   "derivation": "median time per call (generation + tracking), OTTER on host B"
+  },
+  "full.state_bytes.dog": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.full.tx_gb",
+   "derivation": "median transferred bytes"
+  },
+  "full.overhead_s.dog": {
+   "source": "same, delivery_gap_s",
+   "derivation": "gap - state bytes / 1 Gbps (the rest of the stop-and-copy, not link-bound)"
+  },
+  "full.state_bytes.bfly": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.full.tx_gb",
+   "derivation": "median transferred bytes"
+  },
+  "full.overhead_s.bfly": {
+   "source": "same, delivery_gap_s",
+   "derivation": "gap - state bytes / 1 Gbps (the rest of the stop-and-copy, not link-bound)"
+  },
+  "pfull.dirty_fraction.dog": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.precopy_full.tx_gb",
+   "derivation": "tx = S (1 + 3 f): rounds S, fS, fS and a final stop-and-copy fS"
+  },
+  "pfull.efficiency.dog": {
+   "source": "same, remote_wall_s",
+   "derivation": "pre-copy bytes / 1 Gbps / remote-served time (achieved fraction of the link)"
+  },
+  "pfull.final_overhead_s.dog": {
+   "source": "same, delivery_gap_s",
+   "derivation": "gap - final bytes at the achieved rate"
+  },
+  "pfull.dirty_fraction.bfly": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.precopy_full.tx_gb",
+   "derivation": "tx = S (1 + 3 f): rounds S, fS, fS and a final stop-and-copy fS"
+  },
+  "pfull.efficiency.bfly": {
+   "source": "same, remote_wall_s",
+   "derivation": "pre-copy bytes / 1 Gbps / remote-served time (achieved fraction of the link)"
+  },
+  "pfull.final_overhead_s.bfly": {
+   "source": "same, delivery_gap_s",
+   "derivation": "gap - final bytes at the achieved rate"
+  },
+  "rfull.round1_overhead_s.dog": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.recompute_full.remote_wall_s",
+   "derivation": "remote - a0 t_call (a0 = 30, --migration_chunk 30)"
+  },
+  "rfull.finish_overhead_s.dog": {
+   "source": "same, delivery_gap_s",
+   "derivation": "gap - (calls made during round 1) t_call"
+  },
+  "rfull.input_bytes_per_call.dog": {
+   "source": "same, tx_gb",
+   "derivation": "encoded input bytes / calls sent (a0 + round 1 calls)"
+  },
+  "rfull.round1_overhead_s.bfly": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.recompute_full.remote_wall_s",
+   "derivation": "remote - a0 t_call (a0 = 30, --migration_chunk 30)"
+  },
+  "rfull.finish_overhead_s.bfly": {
+   "source": "same, delivery_gap_s",
+   "derivation": "gap - (calls made during round 1) t_call"
+  },
+  "rfull.input_bytes_per_call.bfly": {
+   "source": "same, tx_gb",
+   "derivation": "encoded input bytes / calls sent (a0 + round 1 calls)"
+  },
+  "otter.sink_bytes.dog": {
+   "source": "osdi/fig10/fig10_results.json cells.<w>|10.full.base_bytes",
+   "derivation": "Sink base bytes (full)"
+  },
+  "otter.efficiency.dog": {
+   "source": "osdi/fig10/fig10_results.json cells.<w>|*.full / ver.base_ready_s",
+   "derivation": "(full base - age-10 delta) / 1 Gbps / (base ready full - base ready age-10 versioned)"
+  },
+  "otter.base_overhead_s.dog": {
+   "source": "same",
+   "derivation": "base ready (age-10 versioned) - its bytes at the achieved rate"
+  },
+  "otter.tail_s.dog": {
+   "source": "same, full arm",
+   "derivation": "readiness - base ready (replay catch-up after a long base), median over ages"
+  },
+  "otter.floor_s.dog": {
+   "source": "same, ver arm",
+   "derivation": "readiness with a small base (replay-window bound), median over ages"
+  },
+  "otter.interruption_s.dog": {
+   "source": "same, interruption_s",
+   "derivation": "cutover interruption, median over arms and ages"
+  },
+  "otter.delta_bytes.dog": {
+   "source": "same, ver.base_bytes",
+   "derivation": "versioned base bytes vs version age (calls since the retained version)"
+  },
+  "otter.patch_rate_Bps.dog": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.precopy_replay.tx_gb",
+   "derivation": "(bytes - Sink base) / TTFO-local: input log + Sink refresh patches per second of migration"
+  },
+  "otter.sink_bytes.bfly": {
+   "source": "osdi/fig10/fig10_results.json cells.<w>|10.full.base_bytes",
+   "derivation": "Sink base bytes (full)"
+  },
+  "otter.efficiency.bfly": {
+   "source": "osdi/fig10/fig10_results.json cells.<w>|*.full / ver.base_ready_s",
+   "derivation": "(full base - age-10 delta) / 1 Gbps / (base ready full - base ready age-10 versioned)"
+  },
+  "otter.base_overhead_s.bfly": {
+   "source": "same",
+   "derivation": "base ready (age-10 versioned) - its bytes at the achieved rate"
+  },
+  "otter.tail_s.bfly": {
+   "source": "same, full arm",
+   "derivation": "readiness - base ready (replay catch-up after a long base), median over ages"
+  },
+  "otter.floor_s.bfly": {
+   "source": "same, ver arm",
+   "derivation": "readiness with a small base (replay-window bound), median over ages"
+  },
+  "otter.interruption_s.bfly": {
+   "source": "same, interruption_s",
+   "derivation": "cutover interruption, median over arms and ages"
+  },
+  "otter.delta_bytes.bfly": {
+   "source": "same, ver.base_bytes",
+   "derivation": "versioned base bytes vs version age (calls since the retained version)"
+  },
+  "otter.patch_rate_Bps.bfly": {
+   "source": "osdi/fig7/fig7_results.json cells.<w>.precopy_replay.tx_gb",
+   "derivation": "(bytes - Sink base) / TTFO-local: input log + Sink refresh patches per second of migration"
+  },
+  "refresh_per_100_calls": {
+   "source": "results/state_migration/figures/background/m123/m123_figures.data.json fig5_inputs",
+   "derivation": "Sink refreshes per 100 calls, seed 0, 20 inputs"
+  },
+  "refresh_anchor": {
+   "source": "same",
+   "derivation": "the two calibrated workloads"
+  },
+  "chunk_frames": {
+   "source": "configs/wan_causal_dmd_v2v.yaml (4 output frames per call); fig8_results 8b_verdict fps x t_call",
+   "derivation": "frames per call"
+  }
+ },
+ "note": "calibration set: Figs. 5, 7, 8, 10 (single migrations at 1 Gbps); Fig. 11 is held out for validation"
+}
