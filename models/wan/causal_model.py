@@ -38,6 +38,10 @@ except (ImportError, ModuleNotFoundError):
 # Experiment VD (results/evaluation/osdi/expVD): an optional probe called before the KV-cache attention with
 # (module, roped_query, k_cache, v_cache, seq_lens, sink_tokens). None in every other experiment (no effect).
 ATTN_PROBE = None
+# Fig. 13 (results/evaluation/osdi/fig13): an optional record-only probe of the Sink refresh / realignment decisions,
+# called as REFRESH_PROBE(module, kind, row, *values) with kind "sim" (the avg K / V cosine similarity per Sink slot),
+# "write" (the cache slot written) or "realign" (the common position shift). None in every other experiment (no effect).
+REFRESH_PROBE = None
 
 flex_attention = torch.compile(
     flex_attention, dynamic=False, mode="max-autotune")
@@ -225,6 +229,8 @@ class CausalWanSelfAttention(nn.Module):
             start, end = s * frame_seqlen, (s + 1) * frame_seqlen
             kv_cache["k"][i, start:end] = _shift_temporal_rope(kv_cache["k"][i, start:end], freqs, delta)
             slot_pos[i, s] = positions[s] + delta
+        if REFRESH_PROBE is not None:
+            REFRESH_PROBE(self, "realign", i, delta, movable)
 
     def forward(
         self,
@@ -349,6 +355,8 @@ class CausalWanSelfAttention(nn.Module):
                         idx = torch.argmin(avg_cos_sim).item()
                         temp_evict_idx = (idx+1) * frame_seqlen
                         self.evict_idx[i].insert(0, temp_evict_idx)
+                    if REFRESH_PROBE is not None:
+                        REFRESH_PROBE(self, "sim", i, avg_cos_sim)
 
                 # If we are using local attention and the current KV cache size is larger than the local attention size, we need to truncate the KV cache
                 if current_end > kv_cache_size or kv_cache["local_end_index"][i]>=kv_cache_size:
@@ -372,6 +380,8 @@ class CausalWanSelfAttention(nn.Module):
                     # Newly added cache covers the oldest one
                     kv_cache["k"][i:i+1, target_end-num_new_tokens:target_end] = roped_key[i:i+1]
                     kv_cache["v"][i:i+1, target_end-num_new_tokens:target_end] = v[i:i+1]
+                    if REFRESH_PROBE is not None:
+                        REFRESH_PROBE(self, "write", i, (target_end - num_new_tokens) // frame_seqlen)
                     if slot_pos is not None:
                         slot0 = (target_end - num_new_tokens) // frame_seqlen
                         slot_pos[i, slot0:slot0 + num_new_frames] = torch.arange(

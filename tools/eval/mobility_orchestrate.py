@@ -1087,6 +1087,11 @@ class Run:
             if e.get("baseline_record"):   # W / R / N: the node's reference record (frame digests, Sink value fingerprints)
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
                 (self.dir / f"node_{lb}" / "baseline_record.json").write_text(json.dumps(e.pop("baseline_record")))
+            if e.get("fidelity_record") is not None:   # Fig. 13 (record only; node --fidelity_log): Full control
+                import gzip
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                with gzip.open(self.dir / f"node_{lb}" / "fidelity_record.json.gz", "wt") as fh:
+                    json.dump(e.pop("fidelity_record"), fh)
         self.trace_state("run end", f"stop reason: {self.stop_reason}")
         summary = self.finish(prep, ends, final_move_t)
         if cold:
@@ -1126,6 +1131,7 @@ class Run:
             task["dest_version"] = dv
             m3x = self._m3_before_migration(src, target, task) if (self.a.m3 and self.policy == "precopy_replay") else {}
             sc = [int(x) for x in self.a.replay_switch_calls.split(",") if x.strip()] if self.a.replay_switch_calls else []
+            ssc = [int(x) for x in self.a.sink_switch_calls.split(",") if x.strip()] if self.a.sink_switch_calls else []   # Fig. 13 D10
             self.node(src).call("PRECOPY_START", task=task["id"], to=target, to_host=nd["host"], to_port=nd["data"], variant=self.policy.split("_")[1],
                                 frag_bytes=self.a.frag_bytes, threshold_bytes=int(self.a.xb_threshold_mib * MB), round_limit=self.a.xb_round_limit,
                                 min_shrink=self.a.xb_min_shrink, rate_bps=rate,
@@ -1134,7 +1140,8 @@ class Run:
                                     "replay_sink_sync_test_mismatch": bool(self.a.replay_sink_sync_test_mismatch),
                                     "replay_sink_sync_test_perturb_dst": bool(self.a.replay_sink_sync_test_perturb_dst),
                                     "replay_switch_call": sc[ti] if ti < len(sc) else None, "replay_retain": bool(self.a.replay_retain), "replay_dest_version": dv,
-                                    "replay_delta_test_mismatch": bool(self.a.replay_delta_test_mismatch), **m3x} if self.policy == "precopy_replay" else {}))
+                                    "replay_delta_test_mismatch": bool(self.a.replay_delta_test_mismatch), **m3x} if self.policy == "precopy_replay" else {}),
+                                **({"switch_call": ssc[ti]} if (self.policy == "precopy_sink" and ti < len(ssc)) else {}))
         else:
             variant = self.policy.split("_")[1]
             c = self._xb_src_call(src)
@@ -1440,6 +1447,11 @@ class Run:
             if e.get("network_csv"):
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
                 (self.dir / f"node_{lb}" / "network.csv").write_text(e["network_csv"])
+            if e.get("fidelity_record") is not None:   # Fig. 13 (record only; node --fidelity_log)
+                import gzip
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                with gzip.open(self.dir / f"node_{lb}" / "fidelity_record.json.gz", "wt") as fh:
+                    json.dump(e.pop("fidelity_record"), fh)
         hosts = {lb: self.node(lb).hello.get("host") for lb in self.nodes_used}
         sw_ok = [e.get("ok") for e in self.node_events if e["event"] == "xb_switch_verified"]
         validation = {"four_hosts_distinct": len(set(hosts.values())) == len(self.nodes_used),
@@ -2251,6 +2263,8 @@ def main():
     ap.add_argument("--replay_sink_sync_test_perturb_dst", action="store_true", help="E6 fallback validation: flip one bit of one shadow-Sink element at the destination before the digest")
     ap.add_argument("--allow_return", action="store_true", help="M2 / E9: allow a precopy_replay path that returns to A (e.g. --path A,B,A)")
     ap.add_argument("--replay_switch_calls", type=str, default="", help="M2 / E9: planned switch call per migration, e.g. '64,164'")
+    ap.add_argument("--sink_switch_calls", type=str, default="", help="Fig. 13 D10: planned switch call per migration for precopy_sink (the source stops exactly "
+                    "there after its pre-copy rounds; missed if the rounds end later); unset = unchanged")
     ap.add_argument("--move_calls", type=str, default="", help="M2 / E9: trigger the 2nd, 3rd, ... migration when the serving node reaches these calls (replaces T_m)")
     ap.add_argument("--move_times", type=str, default="", help="Fig. 11: the 2nd, 3rd, ... moves at these seconds after the trigger, every policy (replaces T_m; ignored with --move_calls)")
     ap.add_argument("--replay_retain", action="store_true", help="M2: the source retains its Sink version at a digest-equal switch; the new owner tracks changes since it")

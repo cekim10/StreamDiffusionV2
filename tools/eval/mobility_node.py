@@ -215,6 +215,44 @@ def sha256_hex(view) -> str:
 
 
 # ----------------------------------------------------------------------------- runtime adapters
+class RefreshLog:
+    """Fig. 13 (record only): collects the model's REFRESH_PROBE calls of one generation call, per (layer, row): the
+    number of similarity evaluations, the smallest avg K / V similarity and its slot, the slots that fell below the
+    threshold (= the refresh decisions queued), the cache slots written and the realignment shift. Generation is not
+    changed; values are copied after the model computed them."""
+
+    def __init__(self, blocks):
+        self.layer = {id(b.self_attn): li for li, b in enumerate(blocks)}
+        self.buf = None
+
+    def __call__(self, mod, kind, row, *vals):
+        if self.buf is None:
+            return
+        e = self.buf.setdefault((self.layer.get(id(mod), -1), int(row)), {"n": 0, "min": None, "arg": None, "ins": [], "w": [], "ra": None})
+        if kind == "sim":
+            sims = [float(x) for x in vals[0].float().reshape(-1).tolist()]
+            m = min(sims); j = sims.index(m)
+            e["n"] += 1
+            if e["min"] is None or m < e["min"]:
+                e["min"], e["arg"] = m, j
+            if m < float(getattr(mod, "adapt_sink_thr", -1)):
+                e["ins"].append(j)
+        elif kind == "write":
+            e["w"].append(int(vals[0]))
+        elif kind == "realign":
+            e["ra"] = int(vals[0])
+
+    def begin(self):
+        self.buf = {}
+
+    def end(self) -> list:
+        """[layer, row, n_eval, min_sim, argmin_slot, queued_slots, written_slots, realign_shift] per (layer, row)."""
+        out = [[li, row, e["n"], None if e["min"] is None else round(e["min"], 5), e["arg"], e["ins"], e["w"], e["ra"]]
+               for (li, row), e in sorted(self.buf.items())] if self.buf is not None else []
+        self.buf = None
+        return out
+
+
 class GpuRuntime:
     """Real StreamDiffusionV2 generation on one GPU (same code paths as Phase 1)."""
 
@@ -248,6 +286,13 @@ class GpuRuntime:
             return video
         self._decode_orig, self._decode_timed = orig, timed_decode
         self.pm._timed_stream_decode = timed_decode
+        self.rlog = self.last_fid = None
+        if getattr(args, "fidelity_log", False):
+            # Fig. 13 (record only): refresh / realignment decisions per call, owned-call Sink comparison with the reference
+            blocks = self.pl.generator.model.blocks
+            self.rlog = RefreshLog(blocks)
+            sys.modules[type(blocks[0].self_attn).__module__].REFRESH_PROBE = self.rlog
+            self._fid_prev = None   # (call, last output frame, last reference frame) of the previous scored call
 
     def instrument(self, on: bool):
         """G9: switch the decode-completion hook (the only per-chunk OTTER instrumentation inside generation)."""
@@ -294,10 +339,13 @@ class GpuRuntime:
         base, times = {}, []
         self.base_record = []
         for c in range(M + N):
+            if self.rlog is not None:
+                self.rlog.begin()
             t0 = time.perf_counter(); fr = self.runner.step(session, c); torch.cuda.synchronize(self.device); times.append(time.perf_counter() - t0)
             self.base_record.append({"call": c, "frame_digest": frame_digest(fr), "sink_vfp": self.sink_value_fp() if self.args.sink_fp else None,
                                      "sink_slot_pos": self.sa.slot_positions(self.pl)["sink_slot_pos"], "service_s": times[-1],
-                                     **(self.block_checksums() if getattr(self.args, "block_ck", False) else {})})
+                                     **(self.block_checksums() if getattr(self.args, "block_ck", False) else {}),
+                                     **({"refresh": self.rlog.end()} if self.rlog is not None else {})})
             if fr is not None and keep_frames:
                 base[c] = fr
             self.runner.noise_hist[c] = float(session.noise_scale)
@@ -425,11 +473,45 @@ class GpuRuntime:
         self.session, frames, ms = self.runner.restart_at(self.session, c)
         return frames, ms
 
+    def fidelity_compare(self, c: int, fr, ref, refresh: list) -> dict:
+        """Fig. 13 (record only): this owned call against the reference call c. Sink: the number of the 360 block checksums
+        that differ (and the first 24 flat indices: ((layer * 2 + kv) * rows + row) * sink + slot) and the (layer, row)
+        whose slot positions differ; temporal: per frame the reference-relative temporal error
+        TE = mean(((O_t - O_t-1) - (R_t - R_t-1))^2) on 0-255 values as tPSNR (99 when 0). The frame before this call's
+        first frame is the previous scored call's last frame; at the first scored call (the destination's first call) it
+        is the reference's last frame of call c - 1, which the source delivered (bit-exact source, Fig. 7)."""
+        base = self.base_record[c] if (self.base_record is not None and c < len(self.base_record)) else {}
+        ck = self.block_checksums()
+        nb = db = None
+        if base.get("blocks") is not None:
+            diff = [i for i, (x, y) in enumerate(zip(ck["blocks"], base["blocks"])) if x != y]
+            nb, db = len(diff), diff[:24]
+        pd = None
+        if base.get("pos_all") is not None:
+            pd = [[li, r_] for li, (pa, pb) in enumerate(zip(ck["pos_all"], base["pos_all"])) for r_, (ra, rb) in enumerate(zip(pa, pb)) if ra != rb]
+        tp = []
+        if ref is not None:
+            prev = self._fid_prev
+            if prev is None or prev[0] != c - 1:
+                pr = self.base.get(c - 1)
+                prev = (c - 1, pr[-1], pr[-1]) if pr is not None else None
+            if prev is not None:
+                po, pf = prev[1].astype(np.float32), prev[2].astype(np.float32)
+                for f in range(min(ref.shape[0], fr.shape[0])):
+                    o, q = fr[f].astype(np.float32), ref[f].astype(np.float32)
+                    te = float(np.mean(((o - po) - (q - pf)) ** 2))
+                    tp.append(99.0 if te == 0 else round(min(99.0, 10 * np.log10(255.0 ** 2 / te)), 3))
+                    po, pf = o, q
+            self._fid_prev = (c, fr[-1], ref[-1])
+        return {"n_blk_diff": nb, "blk_diff": db, "pos_diff": pd, "pos_all": ck["pos_all"], "tpsnr": tp, "refresh": refresh}
+
     def step(self, c: int, override=None, skip: bool = False):
         self.decodes = []
         t0 = time.perf_counter()
         fr = None
         if not skip:   # skip: the cold restart consumed chunk c (Phase 1: no model call at the restart call)
+            if self.rlog is not None:
+                self.rlog.begin()
             fr = self.runner.step(self.session, c)
             self.torch.cuda.synchronize(self.device)
         if override is not None:
@@ -441,6 +523,9 @@ class GpuRuntime:
             ps = float(np.mean([self.sa.psnr(ref[f].astype(np.float32) / 255.0, fr[f].astype(np.float32) / 255.0) for f in range(min(ref.shape[0], fr.shape[0]))]))
             ss = float(self.sa.ssim(ref[-1].astype(np.float32) / 255.0, fr[-1].astype(np.float32) / 255.0))
         self.last_frames = fr   # Experiment RD: decoded output frames of this call (read-only; no effect on generation)
+        if self.rlog is not None:   # Fig. 13 (record only; after the timed call)
+            refresh = self.rlog.end()
+            self.last_fid = self.fidelity_compare(c, fr, ref, refresh) if fr is not None else None
         return fr is not None, ps, ss, dt, self.sa.slot_positions(self.pl)["sink_slot_pos"]
 
     # ---- XB recompute: input history (uint8 camera frames) and replay inputs
@@ -1133,7 +1218,8 @@ class FakeRuntime:
         return [float(self.fp_ver)]
 
     def baseline(self, M, N, keep_frames=True, write_ref=True):
-        self.base_record = [{"call": c, "frame_digest": f"dry{c}", "sink_vfp": [0.0] if self.args.sink_fp else None, "sink_slot_pos": [0, 1, 2], "service_s": self.service_s}
+        self.base_record = [{"call": c, "frame_digest": f"dry{c}", "sink_vfp": [0.0] if self.args.sink_fp else None, "sink_slot_pos": [0, 1, 2], "service_s": self.service_s,
+                             **({"refresh": [[0, 0, 2, 0.5, 0, [], [], None]], "pos_all": [[[0, 1, 2, 3, 4, 5]]]} if getattr(self.args, "fidelity_log", False) else {})}
                             for c in range(M + N)]
         return self.service_s
 
@@ -1230,6 +1316,9 @@ class FakeRuntime:
             ps = 99.0
         else:
             ps = 44.0 + self.rng.normal(0, 0.5) if self.bound else 16.5 + self.rng.normal(0, 0.3)
+        if getattr(self.args, "fidelity_log", False):   # Fig. 13 plumbing test only
+            self.last_fid = {"n_blk_diff": 0 if self.full else 1, "blk_diff": [], "pos_diff": [], "pos_all": [[[0, 1, 2, 3, 4, 5]]], "tpsnr": [round(float(ps), 3)] * 4,
+                             "refresh": [[0, 0, 2, 0.5, 0, [], [], None]]}
         return True, float(ps), 0.9 if self.bound else 0.6, self.args.dry_service_s, [0, 1, 6]
 
     # M1 input-log replay doubles (protocol test only)
@@ -1878,6 +1967,13 @@ class Node(M3NodeMixin):
                "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb(),
                "baseline_record": getattr(self.rt, "base_record", None) if self.a.sink_fp else None, "promotion_calls": list(r["promotions"])}
         out["snapshots"] = list(r["snapshots"]); out["versions_seen"] = sorted(r["versions"])
+        if getattr(self.a, "fidelity_log", False):
+            # Fig. 13 (record only): owned-call comparisons, and the reference's refresh log (every call) with its slot
+            # positions over the destination's owned calls
+            own = r.get("fid") or []
+            lo = own[0]["call"] - 1 if (own and own[0]["call"] > 0) else None
+            out["fidelity_record"] = {"own": own, "ref": [{"call": x["call"], "refresh": x.get("refresh"), "pos_all": x.get("pos_all") if (lo is not None and x["call"] >= lo) else None}
+                                                         for x in (getattr(self.rt, "base_record", None) or [])]}
         if dump_out is not None:
             out["dump"] = dump_out
         self.rt.release()
@@ -1986,7 +2082,8 @@ class Node(M3NodeMixin):
         assert r["owner"], "pre-copy needs the generating owner"
         task = {"id": h["task"], "to": h["to"], "host": h["to_host"], "port": int(h["to_port"]), "variant": h["variant"], "frag_bytes": int(h["frag_bytes"]),
                 "threshold": int(h["threshold_bytes"]), "round_limit": int(h["round_limit"]), "min_shrink": float(h["min_shrink"]),
-                "throttle": Throttle(float(h["rate_bps"])) if float(h["rate_bps"]) > 0 else None, "cancel": False, "switching": False, "held": {}, "rounds": [], "done": False}
+                "throttle": Throttle(float(h["rate_bps"])) if float(h["rate_bps"]) > 0 else None, "cancel": False, "switching": False, "held": {}, "rounds": [], "done": False,
+                "switch_call": h.get("switch_call")}   # Fig. 13 D10: planned switch call of a non-replay pre-copy (precopy_sink); None = unchanged
         if task["variant"] == "replay":
             # M1 input-log replay (osdi/m1_continuity/e3_plan.md): Sink pre-copy as precopy_sink, plus the base metadata, the
             # per-call input log and the destination's shadow replay; switchover only when the replay is caught up
@@ -2067,9 +2164,10 @@ class Node(M3NodeMixin):
         # atomic switchover at a chunk boundary: stop after the current call, serialize, send the final dirty set
         task["switching"] = True
         t_req = time.time()
+        plan_sc = rp.get("switch_call") if rp is not None else task.get("switch_call")
         if r["gen_thread"] is not None and r["gen_thread"].is_alive():
-            if rp is not None and rp.get("switch_call") is not None:
-                r["stop_at"] = int(rp["switch_call"])   # stop exactly at the planned switch call (if not already past it)
+            if plan_sc is not None:
+                r["stop_at"] = int(plan_sc)   # stop exactly at the planned switch call (if not already past it)
                 r["gen_thread"].join()
             else:
                 r["stop_owner"] = True; r["gen_thread"].join()
@@ -2077,8 +2175,8 @@ class Node(M3NodeMixin):
         t_stop = time.time()
         c = r["call"]
         extra = {}
-        if rp is not None and rp.get("switch_call") is not None:
-            extra["switch_call_planned"] = int(rp["switch_call"]); extra["switch_call_missed"] = c != int(rp["switch_call"])
+        if plan_sc is not None:
+            extra["switch_call_planned"] = int(plan_sc); extra["switch_call_missed"] = c != int(plan_sc)
         if rp is not None and rp.get("base"):
             extra["base"] = rp["base"]
         if rp is not None:
@@ -3241,6 +3339,8 @@ class Node(M3NodeMixin):
             else:
                 produced, ps, ss, dt, pos = self.rt.step(c)
             t_out = time.time()
+            if getattr(self.rt, "last_fid", None) is not None:   # Fig. 13 (record only)
+                r.setdefault("fid", []).append({"call": c, **self.rt.last_fid}); self.rt.last_fid = None
             t_trk = time.perf_counter()
             if r.get("m3s") is not None:
                 self._m3_after_step(c)
@@ -3298,6 +3398,8 @@ def parse_args(argv=None):
     p.add_argument("--sink_fp", action="store_true", help="W / R / N: per-call Sink value fingerprints (baseline and owned calls) and owner-side promotion events")
     p.add_argument("--recent_slots", type=int, default=0, help="(unused: Experiment A passes recent_slots per run in EXEC_HANDOFF; kept for the dry-run driver)")
     p.add_argument("--block_ck", action="store_true", help="Task B: per-call block checksums of every (layer, key, row, sink slot) and all slot positions in the baseline record")
+    p.add_argument("--fidelity_log", action="store_true", help="Fig. 13 (record only): refresh / realignment decisions per call (reference and owned calls) and per owned "
+                   "call the Sink block / position comparison with the reference and the reference-relative temporal error; use with --block_ck")
     p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
     p.add_argument("--launch_id", type=str, default="", help="token of the orchestrator invocation that started this node (echoed in HELLO; identity check)")
     # model / workload (same defaults as Phase 1)
