@@ -1,4 +1,4 @@
-# Fig. 13 preregistration: output fidelity after a verified cutover (DRAFT 2, not frozen, nothing run)
+# Fig. 13 preregistration: output fidelity after a verified cutover (FROZEN 2026-11-01, DRAFT 2 + implementation 5f45f605, nothing run)
 
 Plan: `osdi/eval_plan/plan.md` (Fig. 13, RQ6, P0). Draft 1: 930590e8. Draft 2 applies the user's review (2026-11-01):
 D1-D4, D6, D8-D10 approved (D1 conditional on a pair-equivalence check, D8 / D9 extended); D5 and D7 revised; H1
@@ -87,6 +87,9 @@ test_m3v2 28. Local dry run: all four conditions valid; fixes it found (harness 
 pre-copy switchover, by design); (2) Full runs end on the non-XB orchestrator path, which now also writes
 `fidelity_record.json.gz` (record only); (3) `run_fig13.sh dry` clears earlier dry runs; (4) 13a x ticks 1 / 25 / 50 /
 75 / 100 (the window edges are the vertical lines; "100" was clipped at 28 pt).
+Regression at the committed state 5f45f605 (after fix 2): test_m1_live 50, test_xb 87, test_m2_track_cpu, test_m3v2
+28 ALL PASS; test_m2_live 42 / 45 once (_m2dmm_test, the DELTANO full-base fallback, switched B -> A at 165 instead of
+the planned 164 in the dry timing; fix 2 is not on that path) and 45 / 45 in two reruns of the same code.
 
 ## 5. Metrics (k = call - S + 1; k = 1 is B's first generated call; Full: k from B's first call)
 
