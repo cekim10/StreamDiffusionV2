@@ -232,6 +232,39 @@ class LLSession:
             c["k"].zero_(); c["v"].zero_(); c["is_init"] = False
 
     @torch.no_grad()
+    def replay(self, latents: list[torch.Tensor], decode: bool = True):
+        """Teacher-forced replay of logged output blocks: per block only the clean context pass the source ran after
+        generating it (and the decode, which advances the VAE cache), no denoising. Started from the true state at call
+        c (e.g. call 0) it reproduces the source's state; started from `from_sink` it rebuilds the window approximately."""
+        m = self.m
+        for lat in latents:
+            if self.segment < len(self.switch_calls) and self.call >= self.switch_calls[self.segment]:
+                self.segment += 1
+                self.recache()
+            lat = lat.to(m.device, torch.bfloat16)
+            self._forward(lat, torch.ones([1, m.F], device=m.device, dtype=torch.int64) * m.context_noise, self.cond[self.segment])
+            if decode:
+                self.decode(lat)
+            self.latbuf = torch.cat([self.latbuf, lat], dim=1)[:, -max(m.local_attn_size, m.F):]
+            self.frame += m.F
+            self.call += 1
+
+    def from_sink(self, sink: list[torch.Tensor], call: int, segment: int = 0):
+        """A started session holding only the durable sink, positioned at `call` as if the stream's history before it
+        were truncated to the sink: empty window (local end = sink), VAE decoder cache cleared, empty latent buffer."""
+        m, S = self.m, self.m.sink_size * self.m.frame_seq_length
+        for i, t in enumerate(sink):
+            self.kv[i // 2]["kv"[i % 2]][:, :S].copy_(t)
+        for c in self.kv:
+            c["global_end_index"].fill_(call * m.F * m.frame_seq_length)
+            c["local_end_index"].fill_(S)
+        self.call, self.frame, self.segment = call, call * m.F, segment
+        m.vae.model.clear_cache()
+        self.feat_map = m.vae.model._feat_map
+        self.latbuf = self.latbuf[:, :0]
+        return self
+
+    @torch.no_grad()
     def warm_decoder(self, n: int | None = None):
         """Approximate VAE decoder cache: clear it and decode the last n buffered latents, discarding the frames."""
         self.m.vae.model.clear_cache()

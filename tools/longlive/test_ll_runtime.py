@@ -151,6 +151,22 @@ def main():
     check(len(orc) == 5 and all(torch.isfinite(o["latents"].float()).all() for o in orc), "recache path runs, finite output")
     check(rc.checksums()["sink_kv"] == r.checksums()["sink_kv"], "recache keeps the sink (global_sink)")
 
+    print("- teacher-forced replay (M1 analogue)")
+    lats = [o["latents"] for o in oa]               # reference session a, calls 0-7
+    t0 = llr.LLSession(m, P[:1], seed=0).start()
+    t0.replay(lats[:5])
+    ref5 = llr.LLSession(m, P[:1], seed=0).start()
+    run(ref5, 5)
+    check(t0.checksums() == ref5.checksums(), "replay of calls 0-4 from the start: state equal to the run's state at call 5 (exact)")
+    check(frm(run(t0, 8)) == frm(oa[5:8]), "and the next calls' frames equal the reference")
+    tw = llr.LLSession(m, P[:1], seed=0).start().from_sink(snap["tensors"]["sink_kv"], call=2)
+    tw.replay(lats[2:5])
+    ckw = tw.checksums()
+    check(tw.call == 5 and ckw["sink_kv"] == ref5.checksums()["sink_kv"], "replay of the last 3 calls from the sink: at call 5, sink exact")
+    check(tw.kv[0]["local_end_index"].item() == 12 * m.frame_seq_length and tw.kv[0]["global_end_index"].item() == 15 * m.frame_seq_length,
+          f"window refilled to 12 frames, global end at frame 15 ({tw.counters()['end_index'][0]})")
+    check(ckw["window_kv"][:2] == ref5.checksums()["window_kv"][:2], "layer 0 window exact after the sink-based replay")
+
     print("- prompt switch")
     sw = llr.LLSession(m, P, seed=0, switch_calls=[5]).start()
     osw = run(sw, 8)
