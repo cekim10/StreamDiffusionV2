@@ -203,16 +203,30 @@ The tolerance is D3.
 3. Freeze (after D1-D9).
 4. `python3.11 tools/sim/cluster_sim.py sweep --grid primary`, then `plot_cluster.py --grid primary`, then a report.
 
-## 11. Decisions (D1, D4, D8 decided 2026-11-01; D2, D3, D5, D6, D7, D9 after Fig. 12a / 14 are prepared)
+## 11. Decisions (D1, D4, D8 decided 2026-11-01; D2, D3, D5, D6, D7, D9 decided 2026-11-02; NOT frozen: CL-H1 question open, section 12)
 
 | # | decision | options / recommendation [R] |
 |---|---|---|
 | D1 | mobility source | **DECIDED (user, 2026-11-01): parametric grid random walk with exponential dwell (implemented) is primary.** Public traces (Berlin V2X / UCC 4G) later as a sensitivity block if time allows. The paper says "simulated mobility" and does not claim it represents real user movement. |
-| D2 | sweep ranges and primary point | section 7; real edge links are 10-100 Gbps (ExpT deployment model) |
-| D3 | gate tolerance | max(15 %, 2 s) |
+| D2 | sweep ranges and primary point | **DECIDED (user, 2026-11-02):** section 7 as written (link 1 / 10 / 25 Gbps, memory 0-128 GB, dwell 60 / 180 / 600 s, N 32-120) |
+| D3 | gate tolerance | **DECIDED (user, 2026-11-02):** max(15 %, 2 s) |
 | D4 | stall threshold X for CL-H1 | **DECIDED (user, 2026-11-01): primary X = 1 s** (counts OTTER's ~1.5 s cutovers; X = 2 s would exclude them all and favour OTTER); sensitivity 2 / 5 / 10 s; total stalled seconds per session-hour reported with them. Operational threshold, not a validated perceptual one. |
-| D5 | delta bytes beyond 240 calls | extrapolate (implemented) vs measure Fig. 10 at ages 1,000 / 3,000 on the testbed first. [R] measure (cheap; affects reuse at minute-scale dwell) |
-| D6 | P-full dirty fraction at high bandwidth | constant (implemented) vs round-length-dependent; [R] constant + sensitivity, or a measured round at 2.5 Gbps from Fig. 12a |
-| D7 | hypotheses CL-H1 to H3 | confirmatory vs descriptive |
+| D5 | delta bytes beyond 240 calls | **DECIDED (user, 2026-11-02):** measure Fig. 10 at ages 1,000 / 3,000 on the testbed as **exploratory calibration**. Until then (and in any result reported without it) the simulator **extrapolates** delta bytes beyond the measured 240 calls, stated with the result. If the new measurements change the simulator's model or calibration, the validation gate is re-run and the 76 / 76 PASS is not carried over; the report separates (1) how delta bytes grow at long ages from (2) whether that changes the methods' order |
+| D6 | P-full dirty fraction at high bandwidth | **DECIDED (user, 2026-11-02):** constant (implemented) + a sensitivity block |
+| D7 | hypotheses CL-H1 to H3 | **DECIDED (user, 2026-11-02):** CL-H1 and CL-H2 confirmatory, CL-H3 descriptive |
 | D8 | R-full Chain gate miss | **DECIDED (user, 2026-11-01): (a)** confirm, fix, regression, re-measure Fig. 11 R-full Chain dog / bfly, keep both records, re-run the gate on the new runs. If the new runs change Fig. 11's R-full numbers, Fig. 11 is corrected; measured values are never swapped selectively to pass the gate. Defect confirmed and fixed (section 8). |
-| D9 | staging candidate rule at scale | k = 4 nearest sites to the user (implemented; the testbed planner stages every non-user, non-owner node, infeasible at 16 sites); staging traffic at equal max-min weight (harness) vs lower priority |
+| D9 | staging candidate rule at scale | **DECIDED (user, 2026-11-02):** k = 4 nearest sites to the user; staging traffic at equal max-min weight (as the harness) |
+
+## 12. Open before the freeze (2026-11-02)
+
+**CL-H1 at X = 1 s, as written, is already contradicted by the smoke sweep (simulated, seen).** The simulator counts
+OTTER's calibrated cutover interruption (1.48 / 1.54 s, Fig. 10) as a stall, as D4 intends, so every OTTER migration is
+one stall > 1 s. Smoke medians (stalls > 1 s per session-hour): Full 12.3, Llumnix 3.3, SLLM 0.54, Unstaged 12.5,
+OTTER 10.3, Replicate 5.2; > 2 s: OTTER 0, Full 12.2. SLLM's count is low because its long recompute rarely completes
+within a dwell (the session stays served remotely), not because it migrates without stalls. CL-H1 requires OTTER <= 0.1 x
+the minimum over Full / Llumnix / SLLM, i.e. <= 0.054 here: it would fail by about 200x. Because the outcome is known
+in direction from a seen (if small) run, freezing CL-H1 unchanged would make it a confirmatory test whose answer is
+already expected; changing it after seeing the smoke would be post hoc. Either is the user's choice and is recorded:
+(a) keep CL-H1 as written (expected NOT SUPPORTED, reported); (b) reformulate before the freeze with the smoke
+disclosed as [K] (e.g. total stalled seconds per session-hour, or stalls > 1 s per migration completed, as the primary
+service measure, with the X = 1 s count reported).

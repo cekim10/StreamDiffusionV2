@@ -11,6 +11,8 @@
 #   elves-01:  bash tools/eval/run_fig14.sh first      # one native-track run (dog, rep 1) + one memory run (single, dog, rep 1)
 #   elves-01:  python tools/eval/fig14_report.py --sanity
 #   elves-01:  bash tools/eval/run_fig14.sh native     # the other 29 throughput runs on A
+#   elves-02:  LB=B bash tools/eval/run_fig14.sh native_only   # native on B, 10 runs (the integrated runs' baseline), at the same time
+#   elves-01:  bash tools/eval/run_fig14.sh integrated # OTTER integrated: Fig. 8b's configuration, A -> B, 5 reps x 2 (after both)
 #   elves-01:  bash tools/eval/run_fig14.sh memory     # the other 9 memory runs on A-D (after `native`; A's GPU is shared)
 #   local:     bash tools/eval/run_fig14.sh dry
 set -u
@@ -57,6 +59,18 @@ case "${1:-}" in
         done
       done
     done ;;
+  native_only)   # native on this host (LB), 5 reps x 2 workloads: the baseline of the integrated configuration
+    guard "$LB"
+    for rep in 1 2 3 4 5; do for w in dog bfly; do nat $w $rep native; done; done ;;
+  integrated)   # the whole OTTER harness (M1 + M2 + M3, Fig. 8b's command), one migration A -> B; B's steady state after the cutover
+    guard A,B
+    for rep in 1 2 3 4 5; do
+      for w in dog bfly; do
+        echo "[F14] === expF14_int_$w rep $rep"
+        $PY tools/eval/mobility_orchestrate.py --experiment "expF14_int_$w" $SINGLE --xb_policy_settings "precopy_replay@thr=16:rl=1" \
+          $OTTER $M3 --policies precopy_replay --rep_start $rep --reps 1 --node_extra="$(wl $w)" || echo "[F14] int $w rep $rep: exit $?"
+      done
+    done ;;
   memory)
     guard A,B,C,D
     for rep in 1 2 3; do
@@ -83,5 +97,5 @@ case "${1:-}" in
       kill $(jobs -p) 2>/dev/null; wait
     done
     $PY tools/eval/fig14_report.py --prefix _dryrun_ --dry --sanity ;;
-  *) echo "usage: $0 preflight|first|native|memory|dry"; exit 2 ;;
+  *) echo "usage: $0 preflight|first|native|native_only|integrated|memory|dry"; exit 2 ;;
 esac

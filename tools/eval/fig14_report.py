@@ -64,7 +64,8 @@ def native(prefix: str) -> dict:
     cells = {}
     for w in WORKLOADS:
         for v in VARIANTS:
-            rs = [r for r in runs if r["workload"] == w and r["variant"] == v and r.get("rc") == 0 and r.get("n_window", 0) >= WINDOW[1] - WINDOW[0] + 1]
+            rs = [r for r in runs if r["workload"] == w and r["variant"] == v and r.get("label", "A") == "A" and r.get("rc") == 0
+                  and r.get("n_window", 0) >= WINDOW[1] - WINDOW[0] + 1]
             cells[f"{w}|{v}"] = {"n": len(rs), "median_chunk_s": med([r["median_chunk_s"] for r in rs]), "values": [r["median_chunk_s"] for r in rs],
                                  "track_ms": med([(r.get("tracking") or {}).get("track_ms_median") for r in rs]) if v == "track" else None}
     out = {"cells": cells, "ratios": {}}
@@ -73,8 +74,36 @@ def native(prefix: str) -> dict:
         out["ratios"][w] = {"track/native": ratio(c("track"), c("native")), "track/wrap": ratio(c("track"), c("wrap")), "wrap/native": ratio(c("wrap"), c("native"))}
     out["H1"] = {w: (out["ratios"][w]["track/native"] is not None and out["ratios"][w]["track/native"] <= H1_BOUND) for w in WORKLOADS}
     out["F14-H1"] = all(out["H1"].values()) and all(cells[f"{w}|{v}"]["n"] for w in WORKLOADS for v in ("native", "track"))
+    for w in WORKLOADS:   # host B native, re-measured in the same session: the baseline of the integrated configuration
+        rs = [r for r in runs if r["workload"] == w and r["variant"] == "native" and r.get("label") == "B" and r.get("rc") == 0
+              and r.get("n_window", 0) >= WINDOW[1] - WINDOW[0] + 1]
+        cells[f"{w}|native_B"] = {"n": len(rs), "median_chunk_s": med([r["median_chunk_s"] for r in rs]), "values": [r["median_chunk_s"] for r in rs]}
     f8 = EVAL / "osdi/fig8/fig8_results.json"
     out["fig8b_reference"] = json.loads(f8.read_text()).get("8b") if f8.exists() else None
+    return out
+
+
+def integrated(prefix: str, dry: bool, nat: dict) -> dict:
+    """OTTER integrated (the full harness with M1 + M2 + M3, Fig. 8b's configuration, one migration A -> B): B's
+    steady-state per-call time (generation + tracking) after the cutover vs native on B, and A's uninterrupted harness
+    reference session (no OTTER code) vs native on A; same session, each against its own host's native."""
+    import fig8_report as f8r
+    out = {"cells": {}, "ratios": {}}
+    for w in WORKLOADS:
+        runs = [f8r.otter_run(d, dry) for d in sorted((EVAL / f"{prefix}expF14_int_{w}").glob("policy=*")) if (d / "summary.json").exists()]
+        ok = [r for r in runs if r["valid"]]
+        refA = []
+        for r in ok:
+            br = EVAL / f"{prefix}expF14_int_{w}" / r["run"] / "node_A/baseline_record.json"
+            if br.exists():
+                refA.append(med([x.get("service_s") for x in json.loads(br.read_text()) if WINDOW[0] <= int(x.get("call", -1)) <= WINDOW[1]]))
+        c = {"n_runs": len(runs), "n_valid": len(ok), "invalid_why": [r["validity_why"] for r in runs if not r["valid"]],
+             "otter_B_per_call_s": med([r["median_per_call_s"] for r in ok]), "otter_B_gen_s": med([r["median_gen_s"] for r in ok]),
+             "otter_B_track_ms": med([r["median_track_ms"] for r in ok]), "harness_A_ref_s": med(refA)}
+        out["cells"][w] = c
+        nb, na = nat["cells"].get(f"{w}|native_B", {}).get("median_chunk_s"), nat["cells"].get(f"{w}|native", {}).get("median_chunk_s")
+        out["ratios"][w] = {"integrated_B/native_B": ratio(c["otter_B_per_call_s"], nb), "harness_A/native_A": ratio(c["harness_A_ref_s"], na),
+                            "tracking_only_A/native_A": nat["ratios"][w]["track/native"]}
     return out
 
 
@@ -169,10 +198,11 @@ def main():
     ap.add_argument("--sanity", action="store_true")
     a = ap.parse_args()
     nat = native(a.prefix)
+    integ = integrated(a.prefix, a.dry, nat)
     ph = phases() if not a.dry else {"transfer": [], "staging": [], "transfer_ratio_median": None, "staging_ratio_median": None}
     mem = memory(a.prefix)
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"{a.prefix}fig14_results.json").write_text(json.dumps({"native": nat, "phases": ph, "memory": mem}, indent=1, default=str))
+    (OUT / f"{a.prefix}fig14_results.json").write_text(json.dumps({"native": nat, "integrated": integ, "phases": ph, "memory": mem}, indent=1, default=str))
     L = ["# Fig. 14 results", "", "Rules: `preregistration.md`. 14a native: medians over reps of each run's median per-chunk time (upstream profile, "
          "processed 40-159).", "", f"F14-H1 {'SUPPORTED' if nat['F14-H1'] else 'NOT SUPPORTED'} (track / native <= {H1_BOUND}): {nat['H1']}", "",
          "| workload | native (s) | wrap (s) | track (s) | track / native | track / wrap | wrap / native | tracking (ms / call) |", "|---|---|---|---|---|---|---|---|"]
@@ -181,6 +211,13 @@ def main():
         L.append(f"| {w} | {fmt(c[w + '|native']['median_chunk_s'], 4)} (n {c[w + '|native']['n']}) | {fmt(c[w + '|wrap']['median_chunk_s'], 4)} | "
                  f"{fmt(c[w + '|track']['median_chunk_s'], 4)} | {fmt(r['track/native'], 4)} | {fmt(r['track/wrap'], 4)} | {fmt(r['wrap/native'], 4)} | "
                  f"{fmt(c[w + '|track']['track_ms'], 2)} |")
+    L += ["", "**Three configurations, each against its own host's native (same session; tracking-only does not stand for OTTER's "
+          "whole cost):**", "", "| workload | tracking-only A / native A | OTTER integrated B / native B | harness without OTTER A / native A | "
+          "integrated B per call (s): generation + tracking (ms) | valid integrated runs |", "|---|---|---|---|---|---|"]
+    for w in WORKLOADS:
+        r, c = integ["ratios"][w], integ["cells"][w]
+        L.append(f"| {w} | {fmt(r['tracking_only_A/native_A'], 4)} | {fmt(r['integrated_B/native_B'], 4)} | {fmt(r['harness_A/native_A'], 4)} | "
+                 f"{fmt(c['otter_B_per_call_s'], 4)} = {fmt(c['otter_B_gen_s'], 4)} + {fmt(c['otter_B_track_ms'], 2)} | {c['n_valid']} / {c['n_runs']} |")
     L += ["", f"14a phases (existing runs, descriptive): source during transfer / its reference {fmt(ph['transfer_ratio_median'], 3)} "
           f"(n {len(ph['transfer'])}); owner during staging / outside {fmt(ph['staging_ratio_median'], 3)} (n {len(ph['staging'])}).", "",
           "## 14b memory (measured, node --mem_log)", "", "| run | node | RSS first / peak (MB) | GPU alloc / reserved peak (MB) | retained peak (MB) | staged peak (MB) |",

@@ -65,6 +65,17 @@ def otter_breakdown(d: Path) -> dict:
     return x
 
 
+def peak_rx_mbps(d: Path, label: str = "B") -> float | None:
+    """The destination's highest 10 s mean NIC receive rate during the run: the achieved link throughput (the only
+    measure of 'native', which has no cap)."""
+    import csv
+    p = d / f"node_{label}" / "network.csv"
+    if not p.exists():
+        return None
+    v = [float(r["net_rx_mbps"]) for r in csv.DictReader(open(p, newline="")) if r.get("net_rx_mbps")]
+    return max((st.mean(v[i:i + 10]) for i in range(max(1, len(v) - 9))), default=None) if v else None
+
+
 def records(prefix: str, dry: bool, with_fig7: bool) -> list[dict]:
     out = []
     for base in sorted(EVAL.glob(f"{prefix}expF12_*")):
@@ -74,7 +85,7 @@ def records(prefix: str, dry: bool, with_fig7: bool) -> list[dict]:
         for d in sorted(base.glob("policy=*")):
             if (d / "summary.json").exists():
                 r = f7.run_record(d, dry)
-                r.update(workload=g["w"], bw=int(g["bw"]), source="fig12")
+                r.update(workload=g["w"], bw=int(g["bw"]), source="fig12", peak_rx_mbps=peak_rx_mbps(d))
                 if r["policy"] == "precopy_replay":
                     r["breakdown"] = otter_breakdown(d)
                 out.append(r)
@@ -110,6 +121,7 @@ def analyze(recs: list[dict]) -> dict:
                 c = {"n_runs": len(rs), "n_valid": len(ok), "sources": sorted({r["source"] for r in rs}),
                      **{k: stats([r[k] for r in ok]) for k in ("ttfo_local_s", "delivery_gap_s", "cutover_interruption_s")},
                      "tx_gb": stats([(r["tx_bytes"] or 0) / 1e9 for r in ok]),
+                     "peak_rx_mbps": stats([r.get("peak_rx_mbps") for r in ok]),
                      "pfull_round_limit": sum(1 for r in ok if r["bytes"].get("switch_reason") == "round_limit") if p == "precopy_full" else None}
                 if p == "precopy_replay":
                     c["breakdown"] = {k: stats([(r.get("breakdown") or {}).get(k) for r in ok]) for k in ("sink_s", "caught_s", "first_s", "sink_share")}
@@ -152,8 +164,8 @@ def write(res: dict, recs, prefix: str):
          f"F12-H1 {'SUPPORTED' if v['F12-H1'] else 'NOT SUPPORTED'} {v['H1']}; F12-H2 {'SUPPORTED' if v['F12-H2'] else 'NOT SUPPORTED'} {v['H2']}; "
          f"F12-H3 {'SUPPORTED' if v['F12-H3'] else 'NOT SUPPORTED'} {v['H3']}; B* {v['B_star']}; benefit-shrink region {v['shrink']}", ""]
     for w in WORKLOADS:
-        L += [f"## {WORKLOADS[w]} ({w})", "", "| bandwidth | method | valid / runs | TTFO-local (s) | gap (s) | bytes (GB) | OTTER sink / first (s), share |",
-              "|---|---|---|---|---|---|---|"]
+        L += [f"## {WORKLOADS[w]} ({w})", "", "| bandwidth | method | valid / runs | TTFO-local (s) | gap (s) | bytes (GB) | peak 10 s rx at B (Gbps) | OTTER sink / first (s), share |",
+              "|---|---|---|---|---|---|---|---|"]
         for bw in BWS:
             for p in METHODS:
                 c = res["cells"][f"{w}|{bw}|{p}"]
@@ -161,7 +173,8 @@ def write(res: dict, recs, prefix: str):
                 bd = (f"{fmt(b['sink_s']['median'], 1)} / {fmt(b['first_s']['median'], 1)}, {fmt(b['sink_share']['median'])}") if b else ""
                 rl = f" (round limit {c['pfull_round_limit']})" if c.get("pfull_round_limit") else ""
                 L.append(f"| {bw_label(bw)} | {LABEL[p]}{rl} | {c['n_valid']} / {c['n_runs']} | {fmt(c['ttfo_local_s']['median'], 1)} | "
-                         f"{fmt(c['delivery_gap_s']['median'])} | {fmt(c['tx_gb']['median'])} | {bd} |")
+                         f"{fmt(c['delivery_gap_s']['median'])} | {fmt(c['tx_gb']['median'])} | "
+                         f"{fmt((c['peak_rx_mbps']['median'] or 0) / 1e3 if c['peak_rx_mbps']['median'] else None)} | {bd} |")
         L += ["", "Gap ratio OTTER / best baseline: " + ", ".join(f"{bw_label(b)} {fmt(v['ratio'].get(f'{w}|{b}'), 3)}" for b in BWS),
               "TTFO-local OTTER / ServerlessLLM-style (exploratory): " + ", ".join(f"{bw_label(b)} {fmt(v['ttfo_vs_rfull'].get(f'{w}|{b}'), 2)}" for b in BWS), ""]
     (OUT / f"{prefix}fig12_results.md").write_text("\n".join(L) + "\n")

@@ -1,4 +1,4 @@
-# Fig. 14 preregistration: OTTER's overheads (DRAFT 1, not frozen, nothing run)
+# Fig. 14 preregistration: OTTER's overheads (FROZEN 2026-11-02; DRAFT 1 + user D1-D5; nothing run)
 
 Plan: `osdi/eval_plan/plan.md` (Fig. 14, RQ2, P0; "overhead is measured, never assumed negligible"). Follows Fig. 8b:
 F8-H2 was NOT SUPPORTED. OTTER on B ran 5.4 % slower than native, but the harness path without any OTTER code was
@@ -46,6 +46,19 @@ existing runs before this draft).
 - Grid: dog and butterfly x 5 reps x 3 variants. The variant order is rotated per rep.
 - Wall time [H]: about 3 min per run, about 1.5 h.
 
+**14a three configurations (user, 2026-11-02): native, tracking-only, OTTER integrated.** Tracking-only (the `track`
+variant above, host A) measures the metadata bookkeeping only; it never stands for OTTER's whole cost. Fig. 8b found
+OTTER integrated about 5.4 % slower than native while tracking was about 0.1 %, so the integrated cost is measured in
+the same session and decomposed:
+- `native_only` on host B (`LB=B`, 5 reps x 2 workloads = 10 runs, at the same time as A's runs): B's native baseline.
+- `integrated` (10 runs, after both): Fig. 8b's OTTER command unchanged (M1 + M2 + M3 flags, one migration A -> B,
+  1,500 post calls), experiments `expF14_int_<w>`; B's steady-state per-call time after the cutover = generation +
+  tracking (Fig. 8b's window and validity, `fig8_report.otter_run`), and A's uninterrupted harness reference session
+  (no OTTER code, `node_A/baseline_record.json`, calls 40-159).
+- Each ratio uses its own host's native, measured in this session: tracking-only A / native A; integrated B /
+  native B; harness without OTTER A / native A. The last separates the harness's own cost from OTTER's within the
+  integrated gap; if integrated B / native B stays about 1.05, its source is analysed (reported, not hypothesised).
+
 **14a phases (no new runs):**
 - Fig. 7 OTTER runs (10): the source's per-call time over the migration window, calls 30 to the switch, divided by its
   own uninterrupted reference session (`node_A/baseline_record.json` `service_s`, calls 40-159). The window's maximum
@@ -87,7 +100,8 @@ existing runs before this draft).
 |---|---|---|
 | F14-H1 | track / native <= 1.01 (median per-chunk time) on both workloads | about 1.001 (0.57 ms on 528 ms per call) |
 
-**Reported, not tested:** track / wrap, wrap / native, 14a phases, all of 14b.
+**Reported, not tested:** track / wrap, wrap / native, integrated B / native B, harness A / native A, 14a phases,
+all of 14b. H1 tests tracking-only; it is never reported as OTTER's overall overhead.
 - If wrap / native > 1.01, the wrapper itself costs and H1's comparison is conservative. track / wrap is then the
   tracking cost; this is stated, and H1 is not re-evaluated.
 - Predictions for 14b:
@@ -125,12 +139,13 @@ existing runs before this draft).
 - **fig14b_cluster:** Chain, retained + staged Sink per node at the run end (GB).
 - Dry renders fit at 28 / 25 pt (no rotation).
 
-## 9. Decisions (open)
+## 9. Decisions (user, 2026-11-02)
 
-| # | decision | recommendation |
-|---|---|---|
-| D1 | 14a host: A (simple, local to the run terminal) vs B (Fig. 8b's headline host) | [R] A, with native re-measured in the same session. Fig. 8b's B values stay as a reference |
-| D2 | Reps: 5 per variant (as Fig. 8b) | [R] 5 |
-| D3 | H1 threshold 1.01 (Fig. 8's integrated rule was 1.03) | [R] 1.01. Isolated tracking is predicted at about 0.1 %; native run-to-run IQR is about 0.1 % |
-| D4 | 14a phases: existing Fig. 7 / 11 runs, descriptive (values already seen [K]), vs new runs with an unseen hypothesis | [R] existing runs, descriptive. They are frozen protocol runs; a test on them would not be blind |
-| D5 | 14b: OTTER only, vs also the baselines' memory (GPU peaks of Full / P-full / R-full already exist in Fig. 7 node_end; host RSS would need new runs) | [R] OTTER with --mem_log, plus the baselines' existing GPU peaks as a reference row; no new baseline runs |
+| # | decision |
+|---|---|
+| D1 | 14a tracking-only on host A with native re-measured on A in the same session; the integrated configuration on B with native re-measured on B in the same session (each comparison on one host) |
+| D2 | 5 reps per variant |
+| D3 | F14-H1 tracking-only / native <= 1.01 |
+| D4 | 14a phases from the existing Fig. 7 / 11 runs, descriptive |
+| D5 | 14b OTTER with --mem_log. The baselines' GPU peaks from Fig. 7 `node_end` are a reference row only: their workload length, instrumentation and sampling differ, so they are not a direct comparison and no claim compares them with OTTER's |
+| added | three configurations native / tracking-only / OTTER integrated, each against its own host's native |

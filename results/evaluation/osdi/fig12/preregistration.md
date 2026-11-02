@@ -1,4 +1,4 @@
-# Fig. 12a preregistration: bandwidth sensitivity of one migration (DRAFT 1, not frozen, nothing run)
+# Fig. 12a preregistration: bandwidth sensitivity of one migration (FROZEN 2026-11-02; DRAFT 1 + user D1-D6; nothing run)
 
 Plan: `osdi/eval_plan/plan.md` (Fig. 12, RQ6, P1; constraint "report the region where the benefit shrinks"). User ask
 (2026-11-01): find where the Sink transfer becomes the bottleneck. Fig. 12b (time between moves) is not part of this
@@ -49,6 +49,9 @@ by the Sink transfer, and where (if anywhere) does OTTER's continuity advantage 
   - `B:replay_caught_up` (`caught`),
   - `B:first_output` (`first`).
   - `sink_share = sink / first`.
+- **Achieved link throughput:** the destination's highest 10 s mean NIC receive rate per run (`network.csv`), reported
+  per cell. For the shaped cells it checks the cap; for **native** (no cap; NIC 9.4 Gbps) it is the only measure of
+  what "native" was, so it is always given with the native results (never "native" alone).
 - **Per cell:** median [IQR] over valid reps. P-full runs that end by the round limit (`switch_reason = round_limit`)
   are counted and marked as non-convergent; they are still scored.
 
@@ -57,7 +60,7 @@ by the Sink transfer, and where (if anywhere) does OTTER's continuity advantage 
 | id | rule | prediction (Fig. 7-based) |
 |---|---|---|
 | F12-H1 | OTTER median gap <= 2.5 s at every bandwidth, both workloads | about 1.6 s everywhere (the snapshot stall does not depend on the link) |
-| F12-H2 | OTTER median sink_share >= 0.5 at 0.25, 0.5 and 1 Gbps, both workloads | 0.25: about 0.78, 0.5: about 0.77, 1: 0.73 [K], 2.5: about 0.6, native: about 0.4-0.6 |
+| F12-H2 | OTTER median sink_share >= 0.5 at 0.25, 0.5 and 1 Gbps, both workloads. **Previously informed threshold:** 0.5 was set knowing Fig. 7's 1 Gbps value 0.73 [K], so H2 is not an independent prior hypothesis; it is reported as a check against a threshold chosen with that knowledge | 0.25: about 0.78, 0.5: about 0.77, 1: 0.73 [K], 2.5: about 0.6, native: about 0.4-0.6 |
 | F12-H3 | OTTER median gap < each baseline's median gap at every bandwidth, both workloads | Full gap about 6.5 GB / bw + 2.5 s (native about 8 s); R-full about 18 s flat; P-full scales with 1 / bw |
 
 Reported but not tested:
@@ -103,13 +106,13 @@ Reported but not tested:
 - The dry figures render within the canvas at 28 / 25 pt with unrotated tick labels. "Native" is close to the right
   edge of the gap and TTFO panels.
 
-## 10. Decisions (open)
+## 10. Decisions (user, 2026-11-02)
 
-| # | decision | recommendation |
-|---|---|---|
-| D1 | Bandwidths: 0.25 / 0.5 / 1 / 2.5 Gbps / native (plan). Add 5 Gbps? | [R] as planned; native already covers > 2.5 |
-| D2 | Two pairs, one workload each (P1 dog, P2 butterfly) vs both workloads on P1 only (about 7 h) | [R] two pairs. Timing metrics are compared within a workload, so within one pair. Fig. 13's pair equivalence shows output equality, not timing equality: the cross-workload comparison carries a pair difference, stated in the caption |
-| D3 | Reps: 3 (vs 5 in Fig. 7) | [R] 3. Fig. 7's IQRs are under 2 % of the median for every method |
-| D4 | 1 Gbps: re-measure (120 runs) or count Fig. 7's runs (96 runs; `--with_fig7`) | [R] re-measure. The commit differs (record-only changes since), butterfly would move pairs, and Fig. 7 stays as a consistency check |
-| D5 | P-full at 0.25 / 0.5 Gbps: run to the round limit (about 14 / 7 min per run) or skip and mark "not run" | [R] run. Non-convergence at low bandwidth is part of the answer |
-| D6 | Thresholds: H1 2.5 s, H2 share 0.5, shrink ratio 0.5 | [R] as written. The share threshold was set knowing the Fig. 7 value 0.73 [K] |
+| # | decision |
+|---|---|
+| D1 | 0.25 / 0.5 / 1 / 2.5 Gbps / native (no 5 Gbps); native reported with its measured throughput |
+| D2 | two pairs, one workload each (P1 dog, P2 butterfly), fixed |
+| D3 | 3 reps |
+| D4 | 1 Gbps re-measured |
+| D5 | P-full at 0.25 / 0.5 Gbps run to the round limit |
+| D6 | H1 2.5 s, H2 share 0.5, shrink ratio 0.5 kept; H2's threshold is stated as previously informed (Fig. 7's 0.73 [K]) |
