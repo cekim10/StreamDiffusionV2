@@ -1087,6 +1087,9 @@ class Run:
             if e.get("baseline_record"):   # W / R / N: the node's reference record (frame digests, Sink value fingerprints)
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
                 (self.dir / f"node_{lb}" / "baseline_record.json").write_text(json.dumps(e.pop("baseline_record")))
+            if e.get("memory_csv"):   # Fig. 14 (record only; node --mem_log)
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                (self.dir / f"node_{lb}" / "memory.csv").write_text(e.pop("memory_csv"))
             if e.get("fidelity_record") is not None:   # Fig. 13 (record only; node --fidelity_log): Full control
                 import gzip
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
@@ -1103,9 +1106,13 @@ class Run:
         return min(self.caps[("out", src)], self.caps[("in", dst)]) if self.caps else 0.0
 
     def _xb_src_call(self, src):
-        """Next call the generating owner `src` will run (from its latest METRIC)."""
+        """Next call the generating owner `src` will run: after its latest METRIC, or its resume call when it has just
+        resumed and reported no call yet (a chained move right after a switch; before 2026-11-01 this fell back to
+        migration_chunk, so the third R-full task of every Fig. 11 Chain run started its first round at call 30)."""
         rows = [m for m in self.metrics if m["owner"] == src]
-        return (rows[-1]["call"] + 1) if rows else self.a.migration_chunk
+        res = [e.get("call") for e in self.node_events if e["event"] == "resume" and e["node"] == src and e.get("call") is not None]
+        cands = ([rows[-1]["call"] + 1] if rows else []) + ([res[-1]] if res else [])
+        return max(cands) if cands else self.a.migration_chunk
 
     def _xb_start(self, target):
         src = self.running
@@ -1447,6 +1454,9 @@ class Run:
             if e.get("network_csv"):
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)
                 (self.dir / f"node_{lb}" / "network.csv").write_text(e["network_csv"])
+            if e.get("memory_csv"):   # Fig. 14 (record only; node --mem_log)
+                (self.dir / f"node_{lb}").mkdir(exist_ok=True)
+                (self.dir / f"node_{lb}" / "memory.csv").write_text(e.pop("memory_csv"))
             if e.get("fidelity_record") is not None:   # Fig. 13 (record only; node --fidelity_log)
                 import gzip
                 (self.dir / f"node_{lb}").mkdir(exist_ok=True)

@@ -6,6 +6,7 @@
 #   elves-01:  bash tools/eval/run_fig11.sh first          # Chain, dog, OTTER, rep 1 (counted if valid)
 #   elves-01:  python tools/eval/fig11_report.py --sanity
 #   elves-01:  bash tools/eval/run_fig11.sh rest           # the other 59 runs (reps outermost; scenarios, workloads, methods interleaved)
+#   elves-01:  bash tools/eval/run_fig11.sh rfull_chain    # E9 D8: R-full Chain dog / bfly x 3 reps again (fixed harness)
 #   local:     bash tools/eval/run_fig11.sh dry            # dog, both scenarios, all five methods, against dry-run nodes
 set -u
 cd "$(dirname "$0")/../.."
@@ -42,6 +43,11 @@ case "${1:-}" in
         done
       done
     done ;;
+  rfull_chain)   # E9 D8 (2026-11-01): re-measure R-full Chain with the fixed harness (_xb_src_call); old runs are kept
+    guard
+    for rep in 1 2 3; do
+      for w in dog bfly; do orch chain $w recompute_full $rep; done
+    done ;;
   dry)
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     for scen in chain cancel; do
@@ -62,5 +68,5 @@ case "${1:-}" in
       done
     done
     $PY tools/eval/fig11_report.py --prefix _dryrun_ --dry --sanity ;;
-  *) echo "usage: $0 preflight|first|rest|dry"; exit 2 ;;
+  *) echo "usage: $0 preflight|first|rest|rfull_chain|dry"; exit 2 ;;
 esac

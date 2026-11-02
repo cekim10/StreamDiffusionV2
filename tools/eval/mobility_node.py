@@ -1193,6 +1193,50 @@ class GpuRuntime:
         return out
 
 
+class MemLog(threading.Thread):
+    """Fig. 14 (record only; node --mem_log): 2 Hz process memory samples -> node_<X>/memory.csv at run end. Process RSS
+    (/proc/self/status VmRSS; the peak RSS where /proc is absent), GPU allocated / reserved (torch, this process), and the
+    host bytes this node holds for migration: the retained Sink version and the staged Sink entries (M3 entry store)."""
+
+    COLS = ["t_wall", "rss_mb", "gpu_alloc_mb", "gpu_reserved_mb", "retained_mb", "staged_mb", "staged_entries"]
+
+    def __init__(self, node, period: float = 0.5):
+        super().__init__(daemon=True)
+        self.node, self.period, self.rows, self.stop = node, period, [], threading.Event()
+
+    @staticmethod
+    def rss_mb():
+        try:
+            for ln in open("/proc/self/status"):
+                if ln.startswith("VmRSS:"):
+                    return int(ln.split()[1]) / 1024
+        except OSError:
+            import resource
+
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2 ** 20   # macOS: bytes, peak
+        return None
+
+    def sample(self):
+        rt, r = self.node.rt, self.node.run or {}
+        torch = getattr(rt, "torch", None)
+        ga = gr = None
+        if torch is not None and not self.node.a.dry_run:
+            ga, gr = torch.cuda.memory_allocated(rt.device) / MB, torch.cuda.memory_reserved(rt.device) / MB
+        ret, m3s = r.get("retained"), r.get("m3s")
+        held = list(m3s["store"].held.values()) if m3s is not None else []
+        staged = sum((getattr(x.get("payload"), "nbytes", None) or len(x.get("payload") or b"")) if x.get("payload") is not None else 0 for x in held) / MB
+        self.rows.append([f"{time.time():.3f}", self.rss_mb(), ga, gr, (len(ret["buf"]) / MB) if ret else 0.0, staged, len(held)])
+
+    def run(self):
+        while not self.stop.wait(self.period):
+            self.sample()
+
+    def finish(self) -> str:
+        self.stop.set(); self.join(timeout=5); self.sample()
+        fmt = lambda v: "" if v is None else (f"{v:.1f}" if isinstance(v, float) else str(v))  # noqa: E731
+        return "\n".join([",".join(self.COLS)] + [",".join(fmt(v) for v in row) for row in self.rows]) + "\n"
+
+
 class FakeRuntime:
     """Protocol test double (no torch): fixed-size random Sink, sleep-based generation, PSNR marker values.
     Never used for reported results."""
@@ -1591,7 +1635,8 @@ class Node(M3NodeMixin):
             (rd / "baseline_record.json").write_text(json.dumps(self.rt.base_record))
         frag_log = CsvLog(rd / "fragments.csv", ["t", "event", "session_id", "sink_version", "fragment_id", "src", "dst", "bytes", "flow", "ok"])
         sampler = ResourceSampler(rd / "network.csv", self.me, self.a.gpu_id if not self.a.dry_run else None, self.a.iface); sampler.start()
-        self.run = {"id": h["run_id"], "dir": rd, "ev": ev, "metrics": metrics, "frag_log": frag_log, "sampler": sampler, "session_id": h["session_id"],
+        memlog = MemLog(self) if getattr(self.a, "mem_log", False) else None   # Fig. 14 (record only)
+        self.run = {"id": h["run_id"], "dir": rd, "ev": ev, "metrics": metrics, "frag_log": frag_log, "sampler": sampler, "memlog": memlog, "session_id": h["session_id"],
                     "manifest": None, "sink": None, "have": set(), "frag_ok": {}, "sink_complete_t": None, "sink_verified": None, "sink_verified_t": None,
                     "owner": False, "stop_owner": False, "gen_thread": None, "call": None, "bound_call": None, "rejoin_call": None, "first_out_t": None,
                     "sink_unpacked": False, "bind_requested": False, "pending_handoff": None,
@@ -1599,6 +1644,8 @@ class Node(M3NodeMixin):
                     "last_fp": None, "bind_at": None, "promotions": [], "snapshots": [], "versions": set(), "await_manifest": False, "unpacked_version": None,
                     "xb": None, "xb_snap_req": None, "xb_store": None, "xb_rc": None, "wait_sink": False,
                     "exact_check": bool(h.get("exact_check")), "delivery": h.get("delivery"), "user_edge": h.get("user_edge"), "deliv_q": None, "deliv_thread": None}
+        if memlog is not None:
+            memlog.start()
         if h.get("dump"):
             # M1 replay validation (osdi/m1_continuity/e3_plan.md): this node's output frames of the calls it generates in
             # [lo, hi] and, at the run end, the same-seed reference frames of [lo, hi]; written by a background thread
@@ -1914,6 +1961,7 @@ class Node(M3NodeMixin):
         r = self.run
         if r is None:
             return {}
+        mem_csv = r["memlog"].finish() if r.get("memlog") is not None else None   # Fig. 14 (record only): before anything is released
         if r["gen_thread"] is not None and r["gen_thread"].is_alive():
             r["stop_owner"] = True; r["gen_thread"].join()
         for fl in list(self.flows.values()):
@@ -1967,6 +2015,8 @@ class Node(M3NodeMixin):
                "bound_call": r["bound_call"], "rejoin_call": r["rejoin_call"], "network_csv": net, "gpu_mem_alloc_mb": self.rt.gpu_mem_mb(), **self.rt.peak_mem_mb(),
                "baseline_record": getattr(self.rt, "base_record", None) if self.a.sink_fp else None, "promotion_calls": list(r["promotions"])}
         out["snapshots"] = list(r["snapshots"]); out["versions_seen"] = sorted(r["versions"])
+        if mem_csv is not None:   # Fig. 14 (record only)
+            out["memory_csv"] = mem_csv
         if getattr(self.a, "fidelity_log", False):
             # Fig. 13 (record only): owned-call comparisons, and the reference's refresh log (every call) with its slot
             # positions over the destination's owned calls
@@ -3398,6 +3448,7 @@ def parse_args(argv=None):
     p.add_argument("--sink_fp", action="store_true", help="W / R / N: per-call Sink value fingerprints (baseline and owned calls) and owner-side promotion events")
     p.add_argument("--recent_slots", type=int, default=0, help="(unused: Experiment A passes recent_slots per run in EXEC_HANDOFF; kept for the dry-run driver)")
     p.add_argument("--block_ck", action="store_true", help="Task B: per-call block checksums of every (layer, key, row, sink slot) and all slot positions in the baseline record")
+    p.add_argument("--mem_log", action="store_true", help="Fig. 14 (record only): 2 Hz process RSS, GPU allocated / reserved and retained-Sink bytes -> node_<X>/memory.csv")
     p.add_argument("--fidelity_log", action="store_true", help="Fig. 13 (record only): refresh / realignment decisions per call (reference and owned calls) and per owned "
                    "call the Sink block / position comparison with the reference and the reference-relative temporal error; use with --block_ck")
     p.add_argument("--cold_start", action="store_true", help="OTTER cold destination: no baseline run; PSNR reference from the warm node's cache")
