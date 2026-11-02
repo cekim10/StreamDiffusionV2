@@ -11,6 +11,14 @@ Throttle) on the source -> destination link.
          the rest and generates the next call.
   full   at M the source stops and sends the whole state (sink, window, cross-attention, VAE cache, latent buffer); the
          destination imports it and generates call M.
+  replay M1 (Continuity Replay) on LongLive (osdi/longlive/m1_prereg.md): the source sends the sink at M and keeps
+         serving; the destination starts from the sink positioned at M - W and replays the logged calls M - W, ... (the
+         W pre-trigger blocks, then every call the source serves) teacher-forced, context pass only, rebuilds the VAE
+         decoder from the last K_v logged blocks once caught up, and switches as snap does. LongLive's sink is written by
+         call 0 only, so it needs no synchronisation after M.
+  recache LongLive-native: the source sends the sink at M and keeps serving; the destination asks to switch at once;
+         at the switch the source sends its counters and latent buffer, the destination runs LongLive's KV recache and
+         warms the VAE on the last block, then generates.
 
 After the cutover the source keeps generating V calls in shadow (no output) and sends their latent and frame digests;
 the destination compares its own (bit-exactness after the cutover). The source also sends a state fingerprint at the
@@ -41,6 +49,8 @@ import ll_runtime as llr  # noqa: E402
 from common import Throttle  # noqa: E402
 
 SNAP = ["sink_kv", "window_kv"]
+SHIP = {"snap": SNAP, "replay": ["sink_kv"], "recache": ["sink_kv"]}   # full: FULL
+LIVE = ("snap", "replay", "recache")   # the source keeps serving until the destination asks to switch
 FULL = ["sink_kv", "window_kv", "crossattn_kv", "vae_decoder_cache", "latent_buffer"]
 DT = {str(d): d for d in (torch.bfloat16, torch.float16, torch.float32, torch.int64, torch.uint8)}
 
@@ -90,7 +100,7 @@ class Sender(threading.Thread):
         self.sock, self.lock, self.q = sock, threading.Lock(), queue.Queue()
         self.throttle = Throttle(bw_bps, burst_bytes) if bw_bps > 0 else None
         self.chunk = min(1 << 20, burst_bytes)
-        self.sent_bytes, self.t_marks = 0, {}
+        self.sent_bytes, self.t_marks, self.byte_marks = 0, {}, {}
 
     def put(self, kind, meta=None, payload=b"", mark=None):
         self.q.put((kind, meta, payload, mark))
@@ -104,6 +114,7 @@ class Sender(threading.Thread):
             self.sent_bytes += len(payload)
             if mark:
                 self.t_marks[mark] = time.time()
+                self.byte_marks[mark] = self.sent_bytes
 
 
 def queue_state(snd: Sender, snap: dict, kind: str):
@@ -120,7 +131,7 @@ def queue_state(snd: Sender, snap: dict, kind: str):
             if torch.is_tensor(t):
                 last = (name, i)
                 snd.put("TENSOR", {"name": name, "i": i}, tensor_bytes(t))
-    snd.put("STATE_END", {}, mark="state_sent")
+    snd.put("STATE_END", {}, mark=f"{kind.lower()}_sent")
     return last
 
 
@@ -176,22 +187,24 @@ def source(a, model):
         calls.append({"call": o["call"], "t_done": t, "t_gen_s": o["t_gen_s"], "t_dec_s": o["t_dec_s"]})
         return o, t
 
-    pre = {}   # the last k_vae output latents before the trigger: lets the destination rebuild its VAE decoder
+    # the last pre-trigger output latents the destination needs: K_v (VAE rebuild); replay: max(W, K_v) (replay start)
+    npre = {"snap": a.k_vae, "replay": max(a.replay_w, a.k_vae)}.get(a.method, 0)
+    pre = {}
     while s.call < a.at:
         o, _ = step()
-        pre[o["call"]] = o["latents"].cpu()
-        pre.pop(o["call"] - a.k_vae, None)
+        if npre:
+            pre[o["call"]] = o["latents"].cpu()
+            pre.pop(o["call"] - npre, None)
     t_trigger = time.time()
     t_last = calls[-1]["t_done"]
     t0 = time.time()
-    snap = s.export_state(FULL if a.method == "full" else SNAP)
+    snap = s.export_state(SHIP.get(a.method, FULL))
     stall_s = time.time() - t0
     queue_state(snd, snap, "STATE")
     del snap
-    if a.method == "snap":
-        for c in sorted(pre):
-            snd.put("LOG", {"call": c, "pre": True}, tensor_bytes(pre[c]))
-    if a.method == "snap":
+    for c in sorted(pre):
+        snd.put("LOG", {"call": c, "pre": True}, tensor_bytes(pre[c]))
+    if a.method in LIVE:
         switch = None
         while switch is None:
             try:
@@ -203,17 +216,20 @@ def source(a, model):
                 pass
             o, t = step()
             t_last = t
-            snd.put("LOG", {"call": o["call"], "t_done": t, "src_next": s.call}, tensor_bytes(o["latents"].cpu()))
+            snd.put("LOG", {"call": o["call"], "t_done": t, "src_next": s.call},
+                    tensor_bytes(o["latents"].cpu()) if a.method != "recache" else b"")
     s_call = s.call
+    if a.method == "recache":   # what LongLive's recache needs at the switch call: counters and the latent buffer
+        queue_state(snd, s.export_state(["latent_buffer"]), "STOPSTATE")
     snd.put("STOP", {"s": s_call, "t_last_frame": t_last, "t_trigger": t_trigger}, mark="stop_sent")
     snd.put("STATE_FP", {"fp": s.fingerprint()})
-    for v in range(a.verify):   # shadow: the source's continuation, never served (first call's frames sent for PSNR)
+    for v in range(a.verify):   # shadow: the source's continuation, never served; its frames for the per-call PSNR
         o = s.step()
         fr = o["frames"].cpu()
         snd.put("SHADOW", {"call": o["call"], "lat": llr.digest(o["latents"]), "frm": frame_digest(o["frames"]),
-                           "n_frames": int(fr.shape[0]), "shape": list(fr.shape)}, tensor_bytes(fr) if v == 0 else b"")
-    snd.put("DONE", {"calls": calls, "stall_export_s": stall_s, "t_marks": snd.t_marks, "env": env(a),
-                     "sent_bytes_before_done": snd.sent_bytes})
+                           "n_frames": int(fr.shape[0]), "shape": list(fr.shape)}, tensor_bytes(fr))
+    snd.put("DONE", {"calls": calls, "stall_export_s": stall_s, "t_marks": snd.t_marks, "byte_marks": snd.byte_marks,
+                     "env": env(a), "sent_bytes_before_done": snd.sent_bytes})
     snd.put(None)
     snd.join()
     while True:   # the destination's BYE (read by ctl_recv: one reader per socket)
@@ -254,7 +270,7 @@ def destination(a, model):
             while True:
                 h, payload = recv_msg(sock)
                 k = h["kind"]
-                if k == "STATE":
+                if k in ("STATE", "STOPSTATE"):
                     st_meta = h
                     tensors = {}
                 elif k == "TENSOR":
@@ -264,9 +280,10 @@ def destination(a, model):
                     out = {}
                     for e in st_meta["entries"]:
                         out.setdefault(e["name"], []).append(tensors.get((e["name"], e["i"]), e.get("value")))
-                    inbox.put(({"kind": "STATE", "t": time.time()}, {"counters": st_meta["counters"], "tensors": out}))
+                    inbox.put(({"kind": st_meta["kind"], "t": time.time()}, {"counters": st_meta["counters"], "tensors": out}))
                 elif k == "LOG":
-                    inbox.put((dict(h, t=time.time()), from_bytes(payload, "torch.bfloat16", [1, model.F, *model.latent]).clone()))
+                    inbox.put((dict(h, t=time.time()), from_bytes(payload, "torch.bfloat16", [1, model.F, *model.latent]).clone()
+                               if h["n"] else None))
                 elif k == "SHADOW" and h["n"]:
                     inbox.put((dict(h, t=time.time()), from_bytes(payload, "torch.uint8", h["shape"]).clone()))
                 else:
@@ -277,7 +294,7 @@ def destination(a, model):
             inbox.put(({"kind": "ERROR", "err": repr(exc), "t": time.time()}, None))
 
     threading.Thread(target=recv_loop, daemon=True).start()
-    ev, logs, shadow, stop, fp_src, done, shadow_frames = {}, {}, {}, None, None, None, {}
+    ev, logs, shadow, stop, fp_src, done, shadow_frames, stopstate = {}, {}, {}, None, None, None, {}, [None]
     latest_next = None
 
     def pump(block=True):
@@ -287,8 +304,11 @@ def destination(a, model):
         except queue.Empty:
             return None
         k = h["kind"]
-        if k == "LOG":
-            logs[h["call"]] = x
+        if k == "STOPSTATE":
+            stopstate[0] = x
+        elif k == "LOG":
+            if x is not None:
+                logs[h["call"]] = x
             if not h.get("pre"):
                 latest_next = h["src_next"]
                 ev.setdefault("first_log_t", h["t"])
@@ -313,14 +333,17 @@ def destination(a, model):
             break
     t0 = time.time()
     s = llr.LLSession(model, [a.prompt], seed=a.seed).start()
-    s.import_state(snapshot)
+    M = snapshot["counters"]["call"]
+    if a.method == "replay":   # the sink positioned at M - W: empty window, cold VAE, cross-attention from the prompt
+        s.from_sink(snapshot["tensors"]["sink_kv"], call=M - a.replay_w)
+    elif a.method != "recache":
+        s.import_state(snapshot)
     if a.method == "snap":
         s.reset_crossattn()
     model.sync()
     ev["import_s"] = time.time() - t0
-    del snapshot
     replay_log, vae_ready, decoded, switch_sent = [], False, 0, False
-    if a.method == "snap":
+    if a.method in ("snap", "replay"):
         # 1. replay the log context-only (no decode) until the backlog is <= 1 call; 2. rebuild the VAE decoder from the
         # last k_vae logged blocks (pre-trigger + replayed) while the source still serves; 3. replay the calls made
         # meanwhile with decode (the decoder stays in step); 4. caught up again: ask to switch. The decoder rebuild is
@@ -357,6 +380,18 @@ def destination(a, model):
                 send_msg(sock, lock, "SWITCH_REQ", {"at_call": s.call, "t": time.time(), "forced": False})
                 switch_sent, ev["switch_req_t"], ev["switch_forced"] = True, time.time(), False
             pump(block=True)
+    elif a.method == "recache":
+        send_msg(sock, lock, "SWITCH_REQ", {"at_call": M, "t": time.time(), "forced": False})
+        ev["switch_req_t"], ev["switch_forced"] = time.time(), False
+        while stop is None or stopstate[0] is None:
+            pump()
+        t1 = time.time()
+        st2 = stopstate[0]
+        s.import_state({"counters": st2["counters"], "tensors": {"sink_kv": snapshot["tensors"]["sink_kv"],
+                                                                 "latent_buffer": st2["tensors"]["latent_buffer"]}})
+        s.recache(); s.warm_decoder()
+        model.sync()
+        ev["recache_s"] = time.time() - t1
     else:
         while stop is None:
             pump()
@@ -364,12 +399,13 @@ def destination(a, model):
     ev["ready_t"] = time.time()   # the state at the switch call is complete on the destination
     fp_dst = s.fingerprint()
     outs = []
-    first_frames = None
+    first_frames, dest_frames = None, {}
     for v in range(a.verify):   # call s .. s + verify - 1, the calls the source ran in shadow
         o = s.step()
         model.sync()
+        dest_frames[o["call"]] = o["frames"].cpu()
         if v == 0:
-            first_frames = o["frames"].cpu()
+            first_frames = dest_frames[o["call"]]
         outs.append({"call": o["call"], "t_done": time.time(), "lat": llr.digest(o["latents"]), "frm": frame_digest(o["frames"]),
                      "n_frames": int(o["frames"].shape[0])})
     while done is None:
@@ -390,12 +426,25 @@ def destination(a, model):
     import ll_gate
     sf = shadow_frames.get(first["call"])
     first_psnr = ll_gate.psnr(first_frames, sf) if sf is not None and sf.shape == first_frames.shape else None
+    ps = {}   # k = 1.. after the switch: PSNR vs the source's shadow (frames held if the destination delivered fewer)
+    for k, o in enumerate(outs, 1):
+        fd, fr = dest_frames[o["call"]], shadow_frames.get(o["call"])
+        if fr is None:
+            continue
+        if fd.shape[0] < fr.shape[0]:
+            fd = torch.cat([fd[:1].expand(fr.shape[0] - fd.shape[0], *fd.shape[1:]), fd])
+        ps[k] = ll_gate.psnr(fd, fr)
+    served = sorted([to_dst(c["t_done"]) for c in done["calls"] if a.at - 5 <= c["call"] < stop["s"]] +
+                    [o["t_done"] for o in outs[:5]])
+    max_gap = max(y - x for x, y in zip(served, served[1:])) if len(served) > 1 else None
     res = {"mode": "ll_migrate", "method": a.method, "args": vars(a), "env_dst": env(a), "env_src": done["env"],
            "clock": {"rtt_s": rtt, "offset_s": off},
            "switch_call": stop["s"], "trigger_call": a.at,
            "state_exact": fp_src == fp_dst,
            "post_cutover": cmp, "lat_equal_calls": sum(c["lat_equal"] for c in cmp), "frm_equal_calls": sum(c["frm_equal"] for c in cmp),
-           "first_call_psnr_vs_shadow": first_psnr,
+           "first_call_psnr_vs_shadow": first_psnr, "psnr_vs_shadow": ps, "psnr_windows": ll_gate.windows(ps),
+           "max_output_gap_s": max_gap, "recache_s": ev.get("recache_s"),
+           "bytes_until_switch": done["byte_marks"].get("stop_sent"),
            "frames_complete": all(c["n_frames"] == 4 * model.F for c in cmp),
            "readiness_s": ev["ready_t"] - t_trigger, "ttfo_s": first["t_done"] - t_trigger,
            "delivery_gap_s": first["t_done"] - to_dst(stop["t_last_frame"]),
@@ -436,11 +485,12 @@ def _commit():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("role", choices=["src", "dst"])
-    ap.add_argument("--method", choices=["snap", "full"], required=True)
+    ap.add_argument("--method", choices=["snap", "full", "replay", "recache"], required=True)
     ap.add_argument("--peer", default=None, help="src: destination host:port")
     ap.add_argument("--port", type=int, default=29951, help="dst: listen port")
     ap.add_argument("--at", type=int, default=120, help="trigger call M")
     ap.add_argument("--verify", type=int, default=20, help="post-cutover calls compared with the source's shadow")
+    ap.add_argument("--replay_w", type=int, default=96, help="replay: calls replayed before the trigger (from the sink at M - W)")
     ap.add_argument("--k_vae", type=int, default=12, help="snap: logged blocks decoded to rebuild the VAE decoder cache")
     ap.add_argument("--bw_mbps", type=float, default=1000.0)
     ap.add_argument("--max_catchup_s", type=float, default=300.0, help="snap: switch anyway this long after the state arrived")

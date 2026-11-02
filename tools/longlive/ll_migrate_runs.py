@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Runs the LongLive migration feasibility experiment (osdi/longlive/snapshot_prereg.md) from elves-01 through the
+"""Runs a LongLive live-migration study from elves-01 through the
 per-host agents (tools/eval/agent.py; no ssh between the hosts): two lanes in parallel (source > destination), each
 running its job list in order; every job starts the destination, then the source, waits for both, and copies the
-destination's JSON and both logs back to elves-01 (results/evaluation/osdi/longlive/migrate/). Jobs whose JSON already
-exists are skipped (a re-invocation resumes); `report` applies the preregistered rules.
+destination's JSON and both logs back to elves-01 (results/evaluation/osdi/longlive/<study dir>/). Jobs whose JSON
+already exists are skipped (a re-invocation resumes); `report` applies the study's preregistered rules.
 
-    elves-01:  python tools/longlive/ll_migrate_runs.py run            # all jobs, lanes A>B and C>D
+  --study m1        osdi/longlive/m1_prereg.md: frozen OTTER M1 (Continuity Replay) with replay horizon W = 96 vs W = 12,
+                    LongLive-native recache and Full; 100 post-cutover calls verified (default)
+  --study snapshot  osdi/longlive/snapshot_prereg.md (ON HOLD): exact window snapshot + catch-up replay
+
     elves-01:  python tools/longlive/ll_migrate_runs.py run --dry      # print the job list only
+    elves-01:  python tools/longlive/ll_migrate_runs.py run            # all jobs, lanes A>B and C>D
     any:       python tools/longlive/ll_migrate_runs.py report
 """
 
@@ -22,10 +26,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/eval"))
-OUT = ROOT / "results/evaluation/osdi/longlive/migrate"
-REL = "results/evaluation/osdi/longlive/migrate"
 STREAMS = [(0, 0), (1, 0), (0, 1), (1, 1)]   # (prompt index, seed), as the ablation
-ARMS = {"snap_k12": ["--method", "snap", "--k_vae", "12"], "snap_k1": ["--method", "snap", "--k_vae", "1"], "full": ["--method", "full"]}
+STUDIES = {
+    "m1": {"dir": "migrate_m1", "verify": 100,
+           "arms": {"otter_w96": ["--method", "replay", "--replay_w", "96", "--k_vae", "12"],
+                    "otter_w12": ["--method", "replay", "--replay_w", "12", "--k_vae", "12"],
+                    "recache": ["--method", "recache"], "full": ["--method", "full"]}},
+    "snapshot": {"dir": "migrate", "verify": 20,
+                 "arms": {"snap_k12": ["--method", "snap", "--k_vae", "12"], "snap_k1": ["--method", "snap", "--k_vae", "1"],
+                          "full": ["--method", "full"]}},
+}
+OUT = REL = ARMS = None   # set from --study in main()
 
 
 def jobs(reps, arms):
@@ -93,6 +104,52 @@ def cmd_run(a):
     print(f"[runs] done; failed: {fails or 'none'}", flush=True)
 
 
+def cmd_report_m1(a):
+    """Rules of m1_prereg.md section 5."""
+    out = Path(a.out_dir) if a.out_dir else OUT
+    runs = {}
+    for f in sorted(out.glob("*.json")):
+        d = json.loads(f.read_text())
+        runs.setdefault(f.name.split("_bw")[0], {}).setdefault((d["args"]["prompt_idx"], d["args"]["seed"]), []).append(d)
+    med = lambda xs: st.median(xs) if xs else None  # noqa: E731
+    f = lambda x, n=2: "-" if x is None else f"{x:.{n}f}"  # noqa: E731
+    L = ["# LongLive M1 (Continuity Replay) cross-model check: results", "",
+         "Rules: `m1_prereg.md` section 5. Measured on the testbed; PSNR vs the source's shadow continuation.", ""]
+    v = {}
+    W = [d for ds in runs.get("otter_w96", {}).values() for d in ds]
+    if W:
+        r1 = all(d["state_exact"] and d["lat_equal_calls"] == len(d["post_cutover"]) and d["frames_complete"] for d in W)
+        r2 = all(not d["switch_forced"] for d in W)
+        per = {}
+        for k, ds in runs["otter_w96"].items():
+            fu = runs.get("full", {}).get(k, [])
+            per[f"p{k[0]}_s{k[1]}"] = {key: (med([d[key] for d in ds]), med([d[key] for d in fu]))
+                                       for key in ("max_output_gap_s", "readiness_s", "bytes_until_switch")}
+        n3 = sum(1 for x in per.values() if None not in x["max_output_gap_s"] and x["max_output_gap_s"][0] < x["max_output_gap_s"][1])
+        n4 = sum(1 for x in per.values() if None not in x["readiness_s"] and x["readiness_s"][0] < x["readiness_s"][1])
+        fu_b = [d["bytes_until_switch"] for ds in runs.get("full", {}).values() for d in ds]
+        r5 = bool(fu_b) and all(d["bytes_until_switch"] < min(fu_b) for d in W)
+        v = {"R1_exact": r1, "R2_caught_up": r2, "R3_max_gap_lt_full": n3 >= 3, "R3_streams": n3,
+             "R4_readiness_lt_full": n4 >= 3, "R4_streams": n4, "R5_bytes_lt_full": r5, "per_stream": per, "runs": len(W)}
+        L += [f"**otter_w96 ({len(W)} runs):** R1 exact (state at the switch, 100 / 100 latents, frames complete) "
+              f"{'HOLDS' if r1 else 'FAILS'}; R2 catch-up (no forced switch) {'HOLDS' if r2 else 'FAILS'}; R3 max output gap < Full "
+              f"{'HOLDS' if n3 >= 3 else 'FAILS'} ({n3} / {len(per)}); R4 readiness < Full {'HOLDS' if n4 >= 3 else 'FAILS'} "
+              f"({n4} / {len(per)}); R5 bytes < Full {'HOLDS' if r5 else 'FAILS'}.", ""]
+    L += ["| arm | stream | runs | readiness (s) | max output gap (s) | delivery gap (s) | bytes to switch (GiB) | W1 / W2 / W3 PSNR (dB) | first call | latents equal | frames complete | forced |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for arm in ARMS:
+        for k, ds in sorted(runs.get(arm, {}).items()):
+            pw = [d["psnr_windows"] for d in ds]
+            L.append(f"| {arm} | p{k[0]} s{k[1]} | {len(ds)} | {f(med([d['readiness_s'] for d in ds]))} | {f(med([d['max_output_gap_s'] for d in ds]))} | "
+                     f"{f(med([d['delivery_gap_s'] for d in ds]))} | {f(med([d['bytes_until_switch'] / 2 ** 30 for d in ds]))} | "
+                     f"{f(med([p['W1'] for p in pw]), 1)} / {f(med([p['W2'] for p in pw]), 1)} / {f(med([p['W3'] for p in pw]), 1)} | "
+                     f"{f(med([p['first'] for p in pw]), 1)} | {min(d['lat_equal_calls'] for d in ds)} / {len(ds[0]['post_cutover'])} | "
+                     f"{all(d['frames_complete'] for d in ds)} | {sum(d['switch_forced'] for d in ds)} |")
+    (out.parent / "m1_results.md").write_text("\n".join(L) + "\n")
+    (out.parent / "m1_results.json").write_text(json.dumps(v, indent=1, default=str))
+    print("\n".join(L))
+
+
 def cmd_report(a):
     """Rules of snapshot_prereg.md section 5."""
     out = Path(a.out_dir) if a.out_dir else OUT
@@ -149,15 +206,25 @@ def main():
     ap.add_argument("cmd", choices=["run", "report"])
     ap.add_argument("--lanes", default="A>B,C>D", help="source>destination agent labels, one lane per pair")
     ap.add_argument("--reps", type=int, default=2)
-    ap.add_argument("--arms", type=lambda s: s.split(","), default=list(ARMS))
+    ap.add_argument("--study", choices=list(STUDIES), default="m1")
+    ap.add_argument("--arms", type=lambda s: s.split(","), default=None)
     ap.add_argument("--bw_mbps", type=float, default=1000.0)
     ap.add_argument("--at", type=int, default=120)
-    ap.add_argument("--verify", type=int, default=20)
+    ap.add_argument("--verify", type=int, default=None, help="default: the study's")
     ap.add_argument("--max_catchup_s", type=float, default=300.0)
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--out_dir", default=None, help="report: directory of run JSONs (default results/.../longlive/migrate)")
     a = ap.parse_args()
-    (cmd_run if a.cmd == "run" else cmd_report)(a)
+    global OUT, REL, ARMS
+    S = STUDIES[a.study]
+    REL = f"results/evaluation/osdi/longlive/{S['dir']}"
+    OUT, ARMS = ROOT / REL, S["arms"]
+    a.arms = a.arms or list(ARMS)
+    a.verify = a.verify or S["verify"]
+    if a.cmd == "run":
+        cmd_run(a)
+    else:
+        (cmd_report_m1 if a.study == "m1" else cmd_report)(a)
 
 
 if __name__ == "__main__":
