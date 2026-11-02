@@ -1,4 +1,4 @@
-# Cluster-scale evaluation (E9): what OTTER buys at service level — preregistration DRAFT 1 (not frozen; simulation smoke-tested only)
+# Cluster-scale evaluation (E9): what OTTER buys at service level — preregistration FROZEN 2026-11-02 (DRAFT 1 + user D1-D9, CL-H1 reformulated; simulation smoke-tested only)
 
 **Everything in this experiment is SIMULATED.** The simulator is calibrated from measured single-migration records of
 this repository and gated against held-out measured multi-move records. Every figure, caption, table and sentence that
@@ -134,8 +134,13 @@ The tolerance is D3.
 - **Primary point** (figure, hypotheses): N 64, C 10 Gbps, M 32 GB, dwell 180 s.
 
 **Hypotheses (DRAFT, [H]; D7):**
-- **CL-H1 (service).** At the primary point, OTTER's stalls > 1 s per session-hour ≤ 0.1 × the minimum over Full, Llumnix and
-  SLLM, and OTTER's local-service share ≥ that of each of them.
+- **CL-H1 (service; reformulated 2026-11-02 before the freeze, user choice (b), smoke values disclosed [K] in section
+  12).** At the primary point, OTTER's **total stalled seconds per session-hour** < that of each of Full, Llumnix and
+  SLLM, and OTTER's local-service share ≥ that of each of them. An order, not a ratio: no ratio threshold was chosen
+  after the smoke. Always reported with it: the ratio to the best of the three, and the stalls > 1 s per
+  session-hour (X = 1 s, D4) with 2 / 5 / 10 s, which count OTTER's ~1.5 s cutovers: OTTER is not claimed to cause
+  fewer interruptions over 1 s, only less stalled time. (Before: stalls > 1 s ≤ 0.1 × the minimum, which the smoke
+  already contradicted, section 12.)
 - **CL-H2 (versioned vs naive under one budget).** At every M > 0, OTTER's mean delay per move ≤ Replicate's, and OTTER's
   staging bytes per session-hour ≤ Replicate's.
 - **CL-H3 (where staging helps; descriptive).** The region of (C, dwell, M) where OTTER's delay per move < Unstaged's by ≥ 10 %.
@@ -203,21 +208,21 @@ The tolerance is D3.
 3. Freeze (after D1-D9).
 4. `python3.11 tools/sim/cluster_sim.py sweep --grid primary`, then `plot_cluster.py --grid primary`, then a report.
 
-## 11. Decisions (D1, D4, D8 decided 2026-11-01; D2, D3, D5, D6, D7, D9 decided 2026-11-02; NOT frozen: CL-H1 question open, section 12)
+## 11. Decisions (D1, D4, D8 decided 2026-11-01; D2, D3, D5, D6, D7, D9 and CL-H1 (b) decided 2026-11-02; FROZEN)
 
 | # | decision | options / recommendation [R] |
 |---|---|---|
 | D1 | mobility source | **DECIDED (user, 2026-11-01): parametric grid random walk with exponential dwell (implemented) is primary.** Public traces (Berlin V2X / UCC 4G) later as a sensitivity block if time allows. The paper says "simulated mobility" and does not claim it represents real user movement. |
 | D2 | sweep ranges and primary point | **DECIDED (user, 2026-11-02):** section 7 as written (link 1 / 10 / 25 Gbps, memory 0-128 GB, dwell 60 / 180 / 600 s, N 32-120) |
 | D3 | gate tolerance | **DECIDED (user, 2026-11-02):** max(15 %, 2 s) |
-| D4 | stall threshold X for CL-H1 | **DECIDED (user, 2026-11-01): primary X = 1 s** (counts OTTER's ~1.5 s cutovers; X = 2 s would exclude them all and favour OTTER); sensitivity 2 / 5 / 10 s; total stalled seconds per session-hour reported with them. Operational threshold, not a validated perceptual one. |
+| D4 | stall threshold X for CL-H1 | **DECIDED (user, 2026-11-01): primary X = 1 s** (counts OTTER's ~1.5 s cutovers; X = 2 s would exclude them all and favour OTTER); sensitivity 2 / 5 / 10 s; total stalled seconds per session-hour reported with them. Operational threshold, not a validated perceptual one. **2026-11-02:** with CL-H1 reformulated, total stalled seconds is CL-H1's primary measure; X = 1 s stays the primary stall count, reported with 2 / 5 / 10 s. |
 | D5 | delta bytes beyond 240 calls | **DECIDED (user, 2026-11-02):** measure Fig. 10 at ages 1,000 / 3,000 on the testbed as **exploratory calibration**. Until then (and in any result reported without it) the simulator **extrapolates** delta bytes beyond the measured 240 calls, stated with the result. If the new measurements change the simulator's model or calibration, the validation gate is re-run and the 76 / 76 PASS is not carried over; the report separates (1) how delta bytes grow at long ages from (2) whether that changes the methods' order |
 | D6 | P-full dirty fraction at high bandwidth | **DECIDED (user, 2026-11-02):** constant (implemented) + a sensitivity block |
 | D7 | hypotheses CL-H1 to H3 | **DECIDED (user, 2026-11-02):** CL-H1 and CL-H2 confirmatory, CL-H3 descriptive |
 | D8 | R-full Chain gate miss | **DECIDED (user, 2026-11-01): (a)** confirm, fix, regression, re-measure Fig. 11 R-full Chain dog / bfly, keep both records, re-run the gate on the new runs. If the new runs change Fig. 11's R-full numbers, Fig. 11 is corrected; measured values are never swapped selectively to pass the gate. Defect confirmed and fixed (section 8). |
 | D9 | staging candidate rule at scale | **DECIDED (user, 2026-11-02):** k = 4 nearest sites to the user; staging traffic at equal max-min weight (as the harness) |
 
-## 12. Open before the freeze (2026-11-02)
+## 12. CL-H1 before the freeze (2026-11-02): decided (b)
 
 **CL-H1 at X = 1 s, as written, is already contradicted by the smoke sweep (simulated, seen).** The simulator counts
 OTTER's calibrated cutover interruption (1.48 / 1.54 s, Fig. 10) as a stall, as D4 intends, so every OTTER migration is
@@ -230,3 +235,13 @@ already expected; changing it after seeing the smoke would be post hoc. Either i
 (a) keep CL-H1 as written (expected NOT SUPPORTED, reported); (b) reformulate before the freeze with the smoke
 disclosed as [K] (e.g. total stalled seconds per session-hour, or stalls > 1 s per migration completed, as the primary
 service measure, with the X = 1 s count reported).
+
+**Decision (user, 2026-11-02): (b).** Primary service measure = total stalled seconds per session-hour, an order
+against each of Full / Llumnix / SLLM, plus the local-share condition (section 7). Disclosed [K], smoke medians over its
+12 grid points (E 16, G 4, N 48, C 1 / 10 Gbps, M 0 / 16 GB, dwell 60 / 180 / 600 s, seed 0; stalled seconds = stall
+fraction x 3,600): Full 315.2, Llumnix 87.2, SLLM 133.8, Unstaged 18.8, OTTER 15.6, Replicate 7.8 s per session-hour;
+local share Full 0.593, Llumnix 0.308, SLLM 0.087, Unstaged 0.640, OTTER 0.630, Replicate 0.585; stalls > 1 s per
+completed migration 1.00 for OTTER, 1.05-1.37 for the baselines (not discriminating, so not chosen). In the smoke the
+reformulated CL-H1 holds; the confirmatory test is the primary sweep at the primary point (G 8, 3 seeds, longer
+horizon), which the smoke does not cover. Replicate's lower stalled time than OTTER's is reported (CL-H2 compares
+delay per move and bytes, not stalls).
