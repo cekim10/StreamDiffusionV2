@@ -1,0 +1,11 @@
+LoRA target modules for generator: 300 Linear layers
+peft_config LoraConfig(task_type=None, peft_type=<PeftType.LORA: 'LORA'>, auto_mapping=None, peft_version='0.21.2', base_model_name_or_path=None, revision=None, inference_mode=False, r=256, target_modules={'q', 'v', 'k', 'ffn.2', 'ffn.0', 'o'}, exclude_modules=None, lora_alpha=256, lora_dropout=0.0, fan_in_fan_out=False, bias='none', use_rslora=False, modules_to_save=None, init_lora_weights=True, layers_to_transform=None, layers_pattern=None, rank_pattern={}, alpha_pattern={}, megatron_config=None, megatron_core='megatron.core', trainable_token_indices=None, loftq_config={}, eva_config=None, corda_config=None, lora_ga_config=None, use_dora=False, velora_config=None, alora_invocation_tokens=None, use_qalora=False, qalora_group_size=16, monteclora_config=None, layer_replication=None, runtime_config=LoraRuntimeConfig(ephemeral_gpu_offload=False), lora_bias=False, target_parameters=None, use_bdlora=None, arrow_config=None, kasa_config=None, ensure_weight_tying=False)
+trainable params: 349,962,240 || all params: 1,768,959,040 || trainable%: 19.7835
+[gate0] 50 calls after 10 warm-up: 5.69 FPS, call 2112 ms (generate 1365, decode 748); recache 1227 ms; peak 24197.5263671875 MiB
+  sink_kv            durable       822.7 MiB
+  window_kv          ephemeral    2468.0 MiB
+  crossattn_kv       ephemeral      90.0 MiB
+  vae_decoder_cache  ephemeral    1801.1 MiB
+  latent_buffer      immediate       2.3 MiB
+  by role (MiB): durable 822.7, ephemeral 4359.1, immediate 2.3
+[gate0] -> results/evaluation/osdi/longlive/gate0_elves-01.json
