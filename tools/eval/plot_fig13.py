@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Fig. 13 (osdi/fig13/preregistration.md section 10). Reads osdi/fig13/fig13_results.json (tools/eval/fig13_report.py).
 
-fig13a_time      PSNR vs k after the fixed cutover: OTTER median of the undiverged conditions with their min-max range,
-                 each diverged condition as its own thin line, P-sink (S = 74) median dashed; windows W1 / W2 / W3 marked.
+fig13a_time      PSNR vs k after the fixed cutover: OTTER median over all its conditions with the P10-P90 band (user
+                 decision 2026-11-02; the preregistered draw-diverged-separately layout is replaced in the main text,
+                 and the low tail is the P10 edge and the per-input table), P-sink (S = 74) median dashed; windows marked.
 fig13b_inputs    W3 PSNR of every OTTER condition vs the input's refresh intensity (Fig. 5, log x): filled = Sink
                  schedule followed the reference, open = diverged. Inputs are named in the caption (no per-input ticks:
                  ten names do not fit at 28 pt).
@@ -49,34 +50,33 @@ def series(r):
     return {int(k): v for k, v in r["psnr"].items() if v is not None and 1 <= int(k) <= 100}
 
 
+def pct(xs, q):
+    return float(np.percentile(xs, q)) if xs else np.nan
+
+
 def panel_a(runs, out):
+    """User decision 2026-11-02 (main text): OTTER's median over all its conditions (150, diverged or not) with the
+    P10-P90 band, and P-sink's median (S = 74) dashed; windows marked. Per-input detail is a table in the text."""
     fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
-    ot = [r for r in runs if r["method"] == "otter" and r["rep"] == 1 and r["valid"]]
-    und = [series(r) for r in ot if not r["schedule_diverged"]]
-    for r in ot:
-        if r["schedule_diverged"]:
-            s = series(r); ks = sorted(s)
-            ax.plot(ks, [s[k] for k in ks], color=LIGHT_BLUE, lw=0.8, alpha=0.7, zorder=2)
-    if und:
-        ks = list(range(1, 101))
-        med = [st.median([s[k] for s in und if k in s]) if any(k in s for s in und) else np.nan for k in ks]
-        lo = [min([s[k] for s in und if k in s], default=np.nan) for k in ks]
-        hi = [max([s[k] for s in und if k in s], default=np.nan) for k in ks]
-        ax.fill_between(ks, lo, hi, color=BLUE, alpha=0.15, lw=0, zorder=1)
-        ax.plot(ks, med, color=BLUE, lw=2.4, zorder=4)
+    ks = list(range(1, 101))
+    ot = [series(r) for r in runs if r["method"] == "otter" and r["rep"] == 1 and r["valid"]]
+    if ot:
+        col = {k: [s[k] for s in ot if k in s] for k in ks}
+        ax.fill_between(ks, [pct(col[k], 10) for k in ks], [pct(col[k], 90) for k in ks], color=BLUE, alpha=0.18, lw=0, zorder=1)
+        ax.plot(ks, [pct(col[k], 50) for k in ks], color=BLUE, lw=2.4, zorder=4)
     ps = [series(r) for r in runs if r["method"] == "psink" and r["valid"]]
     if ps:
-        ks = list(range(1, 101))
-        ax.plot(ks, [st.median([s[k] for s in ps if k in s]) if any(k in s for s in ps) else np.nan for k in ks], color=DIM_GRAY, ls=(0, (5, 2)), lw=2.4, zorder=3)
+        ax.plot(ks, [pct([s[k] for s in ps if k in s], 50) for k in ks], color=DIM_GRAY, ls=(0, (5, 2)), lw=2.4, zorder=3)
     for xb in (8.5, 24.5):
         ax.axvline(xb, color="black", lw=0.8, alpha=0.35, zorder=0)
     ax.set_xlim(-1, 105); ax.set_xticks([1, 25, 50, 75, 100])   # window edges (8 | 9, 24 | 25) are the vertical lines
     ax.set_ylim(15, 60)
     finish_axes(ax, "PSNR (dB)")
     ax.set_xlabel("Calls after the cutover", fontsize=28, labelpad=2)
-    hs = [Line2D([], [], color=BLUE, lw=2.4, label="OTTER"), Line2D([], [], color=LIGHT_BLUE, lw=1.2, label="Diverged"),
+    from matplotlib.patches import Patch
+    hs = [Line2D([], [], color=BLUE, lw=2.4, label="OTTER"), Patch(color=BLUE, alpha=0.18, lw=0, label="P10-P90"),
           Line2D([], [], color=DIM_GRAY, ls=(0, (5, 2)), lw=2.4, label="No replay")]
-    legend(ax, hs, "lower right")
+    legend(ax, hs, "upper right")
     save(fig, out)
 
 
