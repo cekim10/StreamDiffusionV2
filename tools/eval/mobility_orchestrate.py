@@ -958,6 +958,35 @@ class Run:
         return {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": t_req, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "full",
                 "state_from": holder, "redirect": True, "xfer": xid}
 
+    def _barrier(self):
+        """--barrier DIR:N (concurrency pilot): N orchestrators of concurrent sessions on one host meet here before their
+        migration starts. Each writes DIR/<k>_<experiment>.ready (k = this process's run index) with its arrival time and waits
+        until N files of round k exist, then sleeps until the last arrival + 2 s, so the triggers are aligned to the host
+        clock. The wait (untimed, before t0) and the common start time are recorded."""
+        if not self.a.barrier:
+            return
+        d, n = self.a.barrier.rsplit(":", 1)
+        d, n = Path(d), int(n)
+        d.mkdir(parents=True, exist_ok=True)
+        k = self.o.__dict__.setdefault("barrier_round", 0)
+        self.o.barrier_round = k + 1
+        t_arr = time.time()
+        (d / f"{k}_{self.a.experiment}.ready").write_text(json.dumps({"t": t_arr, "run": self.run_id}))
+        deadline = t_arr + self.a.barrier_timeout_s
+        while True:
+            fs = sorted(d.glob(f"{k}_*.ready"))
+            if len(fs) >= n:
+                break
+            if time.time() > deadline:
+                raise SystemExit(f"[orch] barrier {d} round {k}: {len(fs)} / {n} sessions after {self.a.barrier_timeout_s:.0f} s")
+            self.drain(0.2)
+        t_start = max(json.loads(f.read_text())["t"] for f in fs) + 2.0
+        while time.time() < t_start:
+            self.drain(min(0.05, max(0.0, t_start - time.time())))
+        self.barrier_info = {"dir": str(d), "round": k, "n": n, "arrived": t_arr, "start": t_start, "wait_s": t_start - t_arr,
+                             "peers": [json.loads(f.read_text()) for f in fs]}
+        print(f"[orch] barrier round {k}: {n} sessions, start at {t_start:.3f} (waited {t_start - t_arr:.1f} s)", flush=True)
+
     def execute(self):
         if self.mode == "xb":
             return self.execute_xb()
@@ -987,6 +1016,7 @@ class Run:
             self.net = NetSessions(self, self.o.net, a.hybrid_net)
             self.net.prepare(self.manifest["nbytes"])
         self.drain(0.5)
+        self._barrier()   # concurrency pilot (osdi/concurrency/pilot_protocol.md): aligned start of two sessions; no-op without --barrier
         # ---- migration start
         self.t0 = time.time(); self.ev.set_ref(self.t0)
         self.ev.log("migration_start", self.t0, policy=policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, sink_version=self.manifest["sink_version"], sink_nbytes=self.manifest["nbytes"], n_frags=len(self.manifest["frags"]),
@@ -1391,6 +1421,7 @@ class Run:
         if a.m3 and a.m3_owner:
             for lb in self.nodes_used:   # M3-S3: any node that becomes the owner starts its own lineage at its switch call
                 self.node(lb).call("M3_OWNER_ARM", timeout=60)
+        self._barrier()   # concurrency pilot: aligned start of two sessions; no-op without --barrier
         self.t0 = time.time(); self.ev.set_ref(self.t0)
         self.ev.log("migration_start", self.t0, policy=self.policy, bw_mbps=self.bw, tm=self.tm, rho=self.rho, path=self.edges,
                     xb={"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window})
@@ -1488,7 +1519,7 @@ class Run:
             validation["input_check"] = all(v is True for v in self.input_check.values())
             validation["codec_lossless"] = a.xb_codec in XB_LOSSLESS
             validation["inputs_exact_at_switchovers"] = (all(sw.get("inputs_exact") is True for sw in inputs["switchovers"]) if inputs["switchovers"] else None)
-        summary = {"run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
+        summary = {"barrier": getattr(self, "barrier_info", None), "run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
                    "path": self.edges, "hosts": hosts, "t0_wall": self.t0, "migration_chunk": a.migration_chunk,
                    "xb_params": {"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window, "horizon": a.xb_horizon,
                                  "codec": a.xb_codec, "verify_state": bool(a.xb_verify_state)},
@@ -1993,7 +2024,7 @@ class Run:
                "t0_wall_by_node": {lb: self.t0 + self.node(lb).off for lb in self.nodes_used if lb in self.o.nodes},
                "known_caps_unchanged": self.known_caps == self.known_caps0}
         summary = {
-            "wrn": wrn, "vacw": vacw,
+            "wrn": wrn, "vacw": vacw, "barrier": getattr(self, "barrier_info", None),
             "d0": d0, "per_move": per_move, "gpu_peak_mem_mb": {lb: {k: e.get(k) for k in ("peak_allocated_mb", "peak_reserved_mb")} for lb, e in ends.items()}, "execution_state": execution_state, "revisit": revisit, "cold_destination": cold_dest,
             "hybrid": None if self.net is None else {"n_network_sessions": self.net.N, "network_policy": self.net.policy, "network_run_dir": str(self.net.dir.relative_to(REPO_ROOT)),
                                                      "network_summary": {k: self.net_summary.get(k) for k in ("restored_sessions", "first_restored", "makespan_s", "bytes", "normalized", "validation", "stop_reason")},
@@ -2241,6 +2272,8 @@ def main():
     ap.add_argument("--launch", action="store_true", help="start the node processes through the per-host agents")
     ap.add_argument("--agent_hosts", type=str, default=None)
     ap.add_argument("--gpus", type=str, default="A=0,B=0,C=0,D=0")
+    ap.add_argument("--barrier", type=str, default="", help="concurrency pilot: DIR:N, align this run's migration start with N - 1 other orchestrators on this host")
+    ap.add_argument("--barrier_timeout_s", type=float, default=3600.0)
     ap.add_argument("--py", type=str, default="auto")
     ap.add_argument("--node_extra", type=str, default="")
     ap.add_argument("--connect_timeout", type=float, default=2400.0)

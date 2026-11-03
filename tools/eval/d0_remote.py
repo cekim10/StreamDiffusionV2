@@ -4,7 +4,9 @@ instead of ssh, which is not available between the testbed hosts. Run on elves-0
 
     status                 agent reachability, repo commit and GPU 0 processes on every host
     gpu_idle [--hosts A,B] exit 1 unless GPU 0 has no compute process on the listed hosts (default: all four) and all four
-                           repos are on one commit (a job checks only the GPUs it uses, so XB on A / B and VC on D can share the testbed)
+                           repos are on one commit (a job checks only the GPUs it uses, so XB on A / B and VC on D can share the testbed);
+                           a label may name its GPU, e.g. --hosts A:0,A:1,C:1 (default GPU 0; GPU 1 is usable on elves-01 / 03 / 04
+                           since 2026-11-03, not on elves-02)
     pull                   git pull --ff-only on the hosts whose repo is behind. If it is blocked by local copies of result files
                            (VC / VD runs write them on the host, elves-01 commits the same files), the blocking files under
                            results/ that are byte-identical to the incoming commit are restored / removed and the pull retried;
@@ -64,20 +66,20 @@ def status(a):
 
 def gpu_idle(a):
     ags = agents(("A",) + REMOTE, a.agent_hosts)
-    check = [x for x in (getattr(a, "hosts", "") or "A,B,C,D").split(",") if x]
+    check = [(x.split(":") + ["0"])[:2] for x in (getattr(a, "hosts", "") or "A,B,C,D").split(",") if x]   # [label, gpu]
     bad, commits = [], set()
     for lb, ag in ags.items():
         commits.add(sh(ag, ["git", "rev-parse", "HEAD"])["stdout"].strip())
-        if lb not in check:
-            continue
-        g = sh(ag, ["nvidia-smi", "-i", "0", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"])
-        if g["rc"] != 0 or g["stdout"].strip():
-            bad.append(f"{lb} {host_of(ag)} GPU 0: {g['stdout'].strip() or g['stderr'].strip()}")
+        for _, gpu in (c for c in check if c[0] == lb):
+            g = sh(ag, ["nvidia-smi", "-i", gpu, "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"])
+            if g["rc"] != 0 or g["stdout"].strip():
+                bad.append(f"{lb} {host_of(ag)} GPU {gpu}: {g['stdout'].strip() or g['stderr'].strip()}")
     if len(ags) < 4:
         bad.append("not all four agents reachable")
     if len(commits) != 1:
         bad.append(f"repos on different commits: {sorted(c[:7] for c in commits)}")
-    print("\n".join(bad) if bad else f"GPU 0 idle on {','.join(check)}; one commit on all four hosts")
+    named = ",".join(lb if gpu == "0" else f"{lb}:{gpu}" for lb, gpu in check)
+    print("\n".join(bad) if bad else (f"GPU 0 idle on {named}" if all(g == "0" for _, g in check) else f"GPUs idle on {named}") + "; one commit on all four hosts")
     sys.exit(1 if bad else 0)
 
 
@@ -164,7 +166,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--agent_hosts", default=None)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("status"); sub.add_parser("gpu_idle").add_argument("--hosts", default="", help="comma list of labels whose GPU 0 must be idle (default all four)"); sub.add_parser("pull"); sub.add_parser("recover").add_argument("--pattern", default="restore_*"); sub.add_parser("codecs")
+    sub.add_parser("status"); sub.add_parser("gpu_idle").add_argument("--hosts", default="", help="comma list of labels whose GPU must be idle, label[:gpu] (default all four, GPU 0)"); sub.add_parser("pull"); sub.add_parser("recover").add_argument("--pattern", default="restore_*"); sub.add_parser("codecs")
     p = sub.add_parser("probe"); p.add_argument("name"); p.add_argument("script")
     a = ap.parse_args()
     {"status": status, "gpu_idle": gpu_idle, "pull": pull, "probe": probe, "recover": recover, "codecs": codecs}[a.cmd](a)

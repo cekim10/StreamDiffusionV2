@@ -1,6 +1,7 @@
-# Concurrent migration on the testbed: feasibility pilot (DRAFT 2, 2026-11-03; not frozen; nothing run or implemented)
+# Concurrent migration on the testbed: feasibility pilot (DRAFT 3, 2026-11-03; not frozen; stage-1 tools implemented, nothing run)
 
-DRAFT 2 replaces DRAFT 1 (e83a267a) after the user's update the same day: **GPU 1 is usable on elves-01, 03 and 04
+DRAFT 3 adds the user's review of DRAFT 2 (03c8a97e): coordinator verification, C4 flow-overlap evidence, the 2 x 2
+M3 comparison, pilot success criteria. DRAFT 2 replaced DRAFT 1 (e83a267a) after the user's update the same day: **GPU 1 is usable on elves-01, 03 and 04
 (not on elves-02)**. That makes 7 GPUs, two sessions per host on three hosts, and M3 under concurrency feasible in one
 form (C4).
 
@@ -44,12 +45,51 @@ Rate coordinator (needs approval; a harness change, no mechanism change):
 - Both orchestrators register their active flows with it. It runs one max-min allocation over all flows under
   per-host egress / ingress caps, so a host is one site uplink, as in E9.
 - Each orchestrator pushes the rates it gets back (`FLOW_SET_RATE`), as today.
-- Regression: a coordinator with one session must allocate exactly as today (`test_xb`, Fig. 7 dry run).
+- Regression: `test_xb` and the Fig. 7 dry run. Any change to the existing allocation code is regression-tested
+  against the Fig. 7-12 configurations.
+- **Verification 1, shared cap.** At every allocation, the coordinator's rates on each shared host egress / ingress sum
+  to <= the cap. This is exact, from its allocation log. The measured NIC rates are compared to the cap after the
+  header factor (1.0477 at MSS 1,388):
+  - a 1 s sample up to 1.15 x the cap counts as a burst and is reported;
+  - a 10 s mean above 1.05 x the cap is sustained excess, and the run does not count.
+- **Verification 2, single-session equivalence.** For the same flow events, the coordinator with one session must
+  produce exactly the allocation of today's per-orchestrator max-min (`maxmin_caps`):
+  - a unit test replays the flow sets of recorded Fig. 7 and Fig. 11 runs through both allocators and requires
+    identical rates;
+  - a one-session dry run with and without the coordinator must produce identical `flow_rate` events.
+  - If this fails, C3b / C4 are not comparable with Fig. 7 / 11, and stage 2 stops.
 
 Methods:
 - C2, C3a, C3b: both sessions run the same method (Full / Full, R-full / R-full, OTTER / OTTER).
 - C4: S1 runs OTTER or OTTER w/o M3 (Fig. 11's two OTTER arms); S2 runs OTTER.
-- Workload dog for both sessions in the pilot. Triggers aligned at the same wall-clock time.
+- Workload dog for both sessions in the pilot. Triggers aligned at the same wall-clock time (`--barrier`).
+
+**C4 design (2 x 2, same day).** S1 runs Fig. 11's Chain (A -> B -> C -> D, moves at 45 / 90 s). Its first M3 plan
+fires at the move to C, and A then forwards the retained Sink to D. S2's migration (elves-03:1 -> elves-04:1) is
+timed to start with that forward: a barrier offset of +45 s, a stage-2 option. Its flows then share elves-04's
+ingress with S1's staging and S1's later move to D.
+
+| S1 arm | S1 alone (same day) | S1 + S2 |
+|---|---|---|
+| OTTER (with M3) | C4-alone-M3 | C4-M3 |
+| OTTER w/o M3 | C4-alone-noM3 | C4-noM3 |
+
+- The M3 effect under concurrency is (alone - concurrent) per arm, and the change in the with / without difference
+  between the two columns.
+- Fig. 11's runs are a reference only. The pilot re-measures "alone" the same day, so the comparison does not mix
+  test environments.
+
+**C4 flow-overlap evidence (required; logged by the coordinator).** Each flow is logged with:
+- session and kind: S1 staging forward, S1 migration (each move), S2 migration;
+- source and destination hosts;
+- start and end;
+- every allocated-rate change.
+Each shared host's egress / ingress utilization is logged as well. The report computes:
+- the seconds in which S1 staging flows and S2 migration flows were active on a common host link;
+- the seconds in which either was held below the rate it would get alone.
+
+A C4 run with zero overlap did not test contention. It is reported as such and does not count as evidence of
+"M3 under contention"; the offset is adjusted for the next run.
 
 ## 3. Metrics (per session, both sessions)
 
@@ -77,9 +117,11 @@ Methods:
 ## 5. Pilot size, order and stop rules
 
 Order:
-1. Without new code (after a `--gpu` option in the guard and a two-session runner): C1, C2 OTTER, C3a with each of
-   the 3 methods. That is 5 runs, about 40 min.
-2. With the coordinator: C3b with each of the 3 methods, then C4 with each of the 2 S1 arms. That is 5 runs, about 1 h.
+1. Stage 1, without the coordinator: C1 and C3a with each of the 3 methods, and C2 with OTTER. That is 7 runs.
+   Tools: `run_conc.sh stage1`, `conc_report.py`, `d0_remote.py gpu_idle --hosts A:1,...`, orchestrator `--barrier`.
+   The dry test of two sessions through the barrier gave a trigger offset of 0.000 s.
+   Each run carries Fig. 7's reference generation (1,530 calls), so the stage takes about 2 h.
+2. Stage 2, with the coordinator: C3b with each of the 3 methods, then C4's four cells. That is 7 runs.
 
 Rules:
 - **Fig. 14 first:** no run on elves-01 GPU 1 while Fig. 14 measures throughput on elves-01 GPU 0. A neighbour on
@@ -89,7 +131,41 @@ Rules:
   - If the coordinator cannot hold the shared cap (NIC > 1.15 x cap), C3b and C4 are not run formally.
   - If the pilot fails, the paper states that two-session contention is simulated only (E9).
 
-## 6. Open decisions (user)
+## 6. Pilot success criteria (feasibility, not performance)
+
+1. Both sessions run normally on their own GPUs.
+2. No GPU OOM and no abnormal throughput loss on a shared host (served calls / s vs C1).
+3. The coordinator tracks both sessions' flows (every flow in its log, with start and end).
+4. The shared 1 Gbps cap holds (verification 1).
+5. Both migrations complete.
+6. C4: real overlap of staging and migration traffic is shown (flow-overlap evidence).
+
+An OTTER gap larger than the predicted 1.6 s is **not** a pilot failure by itself: it may be the contention the
+pilot is meant to expose. Workloads, repetitions and contention levels of a formal experiment are decided only after
+the pilot, and nothing is frozen before then.
+
+## 7. Relation to E9 (how results are labelled)
+
+- **Measured:** the 7-GPU testbed's concurrent migrations (this pilot and any formal follow-up).
+- **Calibrated:** bandwidth / compute contention parameters fitted from these measurements, if the simulator needs
+  them.
+- **Simulated:** the 16-128 GPU cluster results.
+
+Two sessions do not validate the whole cluster-scale contention model. They test the equal max-min sharing
+assumption on two sessions only, and the paper says so.
+
+## 8. Decisions (user, 2026-11-03)
+
+| # | decision |
+|---|---|
+| P1 | rate coordinator: approved |
+| P2 | per-host shared egress / ingress caps, equal max-min: approved |
+| P3 | dog / dog: approved |
+| P4 | proceed on GPU 1's current availability; re-check before any formal experiment; no long-term booking |
+| P5 | order: Fig. 14 -> stage-1 tools -> pilot stage 1 (C1 / C2 / C3a) -> Fig. 10 long-age -> Fig. 13 strips -> coordinator + regression -> pilot stage 2 (C3b / C4) -> decide the formal experiment -> E9 contention calibration and scalability sweeps |
+| added | C4 must show real flow overlap; M3 compared as with / without M3 x alone / concurrent (2 x 2, same day) |
+
+## 9. Open decisions (superseded table of DRAFT 2, kept for the record)
 
 | # | decision | recommendation |
 |---|---|---|
