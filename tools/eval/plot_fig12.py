@@ -3,6 +3,7 @@
 
 fig12a_gap_<w>        max. output gap vs link bandwidth, the four methods (log-log; median, IQR whiskers)
 fig12a_ttfo_<w>       TTFO-local vs link bandwidth, the four methods
+fig12a_ready_cmp_bw250  the same split for dog and butterfly at 0.25 Gbps, side by side (where F12-H2 fails), with time and bytes
 fig12a_ready_<w>      OTTER's time to the destination's first output split into Sink transfer / replay catch-up / switch
                       (stacked medians per bandwidth): where the Sink transfer stops being the bottleneck
 Canvas and axes box of Fig. 6a, style font sizes (never reduced); "Native" = unshaped link, drawn at x = 9.4 Gbps
@@ -21,7 +22,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-from plot_fig7_migration import BLUE, DARK_GRAY, DIM_GRAY, LEGEND, ROOT, configure, finish_axes
+from plot_fig7_migration import BLUE, DARK_GRAY, DIM_GRAY, LEGEND, ROOT, annotate, configure, finish_axes
 
 FIG_SIZE = (5.83, 4.78)
 AXES_POS = [0.18, 0.22, 0.79, 0.75]
@@ -99,6 +100,36 @@ def ready(cells, w, out):
     save(fig, out)
 
 
+def ready_cmp(cells, b, out):
+    """Same split for both workloads at one bandwidth (user request 2026-11-03: where F12-H2 fails, butterfly at
+    0.25 Gbps, next to dog); each bar labelled with the time to the first output and OTTER's transmitted bytes."""
+    fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
+    parts, tops = [], []
+    for w in WL:
+        bd = cells[f"{w}|{b}|precopy_replay"]["breakdown"]
+        s, c, f = (bd[k]["median"] for k in ("sink_s", "caught_s", "first_s"))
+        parts.append((s, max(0, c - s), max(0, f - c)))
+        tops.append((f, cells[f"{w}|{b}|precopy_replay"]["tx_gb"]["median"]))
+    bottom = [0.0] * len(WL)
+    for i, (col, hatch) in enumerate(((BLUE, ""), ("#9DB3F0", "//"), (DARK_GRAY, ""))):
+        vals = [p[i] for p in parts]
+        ax.bar(range(len(WL)), vals, 0.5, bottom=bottom, color=col, edgecolor="black", lw=1.2, hatch=hatch, zorder=3)
+        bottom = [a + v for a, v in zip(bottom, vals)]
+    top = max(bottom) * 1.45
+    for x, (f, gb) in enumerate(tops):
+        annotate(ax, x, f + top * 0.02, f"{f:.0f} s\n{gb:.2f} GB")
+    ax.set_xticks(range(len(WL))); ax.set_xticklabels(["Low-refresh", "High-refresh"])
+    ax.set_xlim(-0.45, len(WL) - 0.55)   # the two 28 pt tick labels need the room
+    ax.set_xlabel(f"Input at {X[b]:g} Gbps", fontsize=28, labelpad=2)
+    finish_axes(ax, "Time (s)")
+    ax.tick_params(axis="x", length=0)
+    ax.set_ylim(0, top)
+    ax.legend(handles=[Patch(facecolor=BLUE, edgecolor="black", label="Sink transfer"), Patch(facecolor="#9DB3F0", edgecolor="black", hatch="//", label="Catch-up"),
+                       Patch(facecolor=DARK_GRAY, edgecolor="black", label="Switch")], loc="upper left", frameon=False, fontsize=LEGEND,
+              handlelength=1.2, handletextpad=0.3, labelspacing=0.15, borderaxespad=0.2)
+    save(fig, out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--prefix", default="")
@@ -113,6 +144,8 @@ def main():
         lines(cells, w, "delivery_gap_s", "Max. output gap (s)", out / f"fig12a_gap_{w}")
         lines(cells, w, "ttfo_local_s", "TTFO-local (s)", out / f"fig12a_ttfo_{w}")
         ready(cells, w, out / f"fig12a_ready_{w}")
+    if all(cells[f"{w}|250|precopy_replay"]["n_valid"] for w in WL):
+        ready_cmp(cells, 250, out / "fig12a_ready_cmp_bw250")
 
 
 if __name__ == "__main__":
