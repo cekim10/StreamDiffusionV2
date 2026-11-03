@@ -1,0 +1,312 @@
+{
+ "run_id": "policy=recompute_full_bw=250_rho=none_tm=inf_lag=1_rl=1_rep=3_20261103-052907",
+ "policy": "recompute_full",
+ "policy_label": "ServerlessLLM-style recompute from call 0 (source keeps serving until the destination catches up)",
+ "bw_mbps": 250.0,
+ "tm_s": 1000000000.0,
+ "rho": null,
+ "rep": 3,
+ "path": [
+  "A",
+  "B"
+ ],
+ "hosts": {
+  "A": "elves-01",
+  "B": "elves-02"
+ },
+ "t0_wall": 1793712569.1817024,
+ "migration_chunk": 30,
+ "xb_params": {
+  "threshold_mib": 256.0,
+  "round_limit": 1,
+  "min_shrink": 0.1,
+  "lag": 1,
+  "W": 3,
+  "horizon": 100,
+  "codec": "ffv1",
+  "verify_state": false
+ },
+ "rtt_measured_lan": {
+  "A-B": {
+   "median_ms": 0.257343053817749,
+   "p95_ms": 1.909591257572174,
+   "min_ms": 0.1682192087173462,
+   "n": 20
+  }
+ },
+ "codecs": {
+  "A": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  },
+  "B": {
+   "av": "13.1.0",
+   "ffv1_roundtrip": true,
+   "libx264": true,
+   "libx264_delivery": true
+  }
+ },
+ "moves": [
+  {
+   "i": 1,
+   "from": "A",
+   "to": "B",
+   "t_req": 0.0,
+   "t_stop": null,
+   "t_fg_sent": null,
+   "call": 30,
+   "fg_bytes": 0,
+   "mode": "xb"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "x1",
+   "kind": "recompute_full",
+   "src": "A",
+   "dst": "B",
+   "t_start": 0.005965709686279297,
+   "state": "done",
+   "rounds": 1,
+   "t_end": 38.097066164016724,
+   "outcome": "switched",
+   "target": 30,
+   "rate": 250000000.0,
+   "codec": "ffv1",
+   "frame_ranges": [
+    [
+     0,
+     125
+    ],
+    [
+     125,
+     249
+    ]
+   ],
+   "sent_hi": 249,
+   "stop_call": 61,
+   "finish_reason": "round_limit"
+  }
+ ],
+ "switchovers": [
+  {
+   "task": "x1",
+   "dst": "B",
+   "t": 38.097066164016724,
+   "call": 61,
+   "mode": "recompute_full"
+  }
+ ],
+ "inputs": {
+  "codec": "ffv1",
+  "lossless": true,
+  "tasks": {
+   "x1": {
+    "dst": "B",
+    "outcome": "switched",
+    "frame_ranges": [
+     [
+      0,
+      125
+     ],
+     [
+      125,
+      249
+     ]
+    ],
+    "bytes_sent": 85282223,
+    "raw_bytes": 298321920,
+    "frames": 249,
+    "enc_cpu_s": 3.7062900736927986,
+    "send_wall_s": 3.6431987285614014,
+    "bytes_decoded": 85282223,
+    "decode_cpu_s": 1.6390402810648084,
+    "bytes_discarded": 0,
+    "segments_exact": 8,
+    "segments": 8,
+    "min_psnr": null
+   }
+  },
+  "switchovers": [
+   {
+    "task": "x1",
+    "dst": "B",
+    "inputs_exact": true,
+    "input_error": null,
+    "input_wait_s": 1.1164288520812988,
+    "replayed": 61
+   }
+  ],
+  "bytes_sent": 85282223,
+  "raw_bytes": 298321920,
+  "bytes_abandoned_targets": 0,
+  "enc_cpu_s": 3.7062900736927986,
+  "decode_cpu_s": 1.6390402810648084
+ },
+ "replay": null,
+ "cutover": null,
+ "validation": {
+  "four_hosts_distinct": true,
+  "nodes_same_commit": true,
+  "gpu0_before_run": {
+   "A": {
+    "util_pct": 0.0,
+    "mem_used_mib": 18026.0,
+    "others_mib": 0,
+    "others": []
+   },
+   "B": {
+    "util_pct": 0.0,
+    "mem_used_mib": 18073.0,
+    "others_mib": 0,
+    "others": []
+   }
+  },
+  "gpu0_idle_before_run": true,
+  "switchovers_verified": null,
+  "n_switchovers": 1,
+  "final_edge_served": true,
+  "stop_reason": "horizon",
+  "source_served_after_trigger": 31,
+  "source_served_until_switch": true,
+  "codecs_ok": true,
+  "input_check": true,
+  "codec_lossless": true,
+  "inputs_exact_at_switchovers": true
+ },
+ "node_end": {
+  "A": {
+   "kind": "REPLY",
+   "t_send": 1793712669.926661,
+   "label": "A",
+   "host": "elves-01",
+   "cmd_id": "A20",
+   "ok": true,
+   "have": 412,
+   "n_frags": 412,
+   "sink_verified": true,
+   "bound_call": 30,
+   "rejoin_call": 30,
+   "gpu_mem_alloc_mb": 20135.31298828125,
+   "peak_allocated_mb": 26506.60888671875,
+   "peak_reserved_mb": 26682.0,
+   "promotion_calls": [],
+   "snapshots": [
+    {
+     "k": 0,
+     "digest": "ae58e37e00bb71e26462833c6b1e4a5c47f6d9b557f356fe1032ceedfd4cd94a",
+     "sink_version": "ae58e37e00bb71e2",
+     "t": 1793712566.8048024,
+     "call": 30
+    }
+   ],
+   "versions_seen": [
+    "ae58e37e00bb71e2"
+   ],
+   "dump": {
+    "retained_bytes_at_end": null
+   },
+   "t_recv_start": 1793712669.9272175,
+   "t_recv": 1793712669.9272194
+  },
+  "B": {
+   "kind": "REPLY",
+   "t_send": 1793712671.1150851,
+   "label": "B",
+   "host": "elves-02",
+   "cmd_id": "B15",
+   "ok": true,
+   "have": 0,
+   "n_frags": 0,
+   "sink_verified": null,
+   "bound_call": 61,
+   "rejoin_call": 61,
+   "gpu_mem_alloc_mb": 26479.18701171875,
+   "peak_allocated_mb": 28690.61328125,
+   "peak_reserved_mb": 30044.0,
+   "promotion_calls": [],
+   "snapshots": [],
+   "versions_seen": [],
+   "dump": {
+    "retained_bytes_at_end": null
+   },
+   "t_recv_start": 1793712671.1160212,
+   "t_recv": 1793712671.1160235
+  }
+ },
+ "source_prep": {
+  "kind": "REPLY",
+  "t_send": 1793712566.805403,
+  "label": "A",
+  "host": "elves-01",
+  "cmd_id": "A13",
+  "ok": true,
+  "t_prepared": 1793712566.8048024,
+  "t_recv_start": 1793712566.8066928,
+  "t_recv": 1793712566.8066933
+ },
+ "delivery": {
+  "ttfo_local": [
+   {
+    "edge": "B",
+    "t_change": 0.0,
+    "ttfo_local_s": 38.725982904434204,
+    "first_call": 61
+   }
+  ],
+  "ttfo_local_final_s": 38.725982904434204,
+  "delivery_gap_s": 19.79621124267578,
+  "delivery_gap_at_s": 18.929771661758423,
+  "delivered_chunks": 132,
+  "t_last_delivery_s": 99.24189591407776,
+  "remote_chunks": 31,
+  "remote_content_s": 7.75,
+  "remote_wall_s": 18.929771661758423,
+  "remote_stretches": [
+   {
+    "serving": "A",
+    "edge": "B",
+    "t_start": 0.0,
+    "t_last": 18.929771661758423,
+    "chunks": 31
+   }
+  ],
+  "remote_delivery_bytes_ESTIMATED": {
+   "crf23": 1505119,
+   "crf28": 706845,
+   "remote_chunks_not_encoded": 0,
+   "note": "H.264 encoded size of remotely served output; not transmitted on the testbed"
+  },
+  "delivery_encode_cpu_s": 1.4789140671491623,
+  "rtt_measured_lan": {
+   "A-B": {
+    "median_ms": 0.257343053817749,
+    "p95_ms": 1.909591257572174,
+    "min_ms": 0.1682192087173462,
+    "n": 20
+   }
+  },
+  "output_equivalence": [
+   {
+    "node": "B",
+    "resume_call": 61,
+    "mode": "recompute_full",
+    "calls": 101,
+    "checked": 101,
+    "matching": 101,
+    "first_call_match": true,
+    "first_mismatch_call": null
+   }
+  ],
+  "trajectory_final": {
+   "edge": "B",
+   "calls": 101,
+   "first_ge35_idx": 0,
+   "sustained10_idx": 0,
+   "terminal_median_psnr": 99.0,
+   "median_psnr": 99.0
+  }
+ }
+}
