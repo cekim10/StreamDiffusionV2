@@ -12,6 +12,11 @@
 #   elves-01:  bash tools/eval/run_fig13.sh rest1      # P1's list (terminal 1)
 #   elves-01:  bash tools/eval/run_fig13.sh rest2      # P2's list (terminal 2, at the same time)
 #   local:     bash tools/eval/run_fig13.sh dry
+# 13d frame strips (osdi/fig13/strip_protocol.md; extraction only, not part of the 150 conditions): the four conditions of
+# `fig13_strip.py select` re-run on P1 with the roles swapped (A = elves-02, B = elves-01, so the frames land next to
+# the orchestrator), --dump_frames; experiments expF13D_<input>_s<seed>_S<S>.
+#   elves-01:  bash tools/eval/run_fig13.sh dump
+#   elves-01:  python tools/eval/fig13_strip.py check && python tools/eval/fig13_strip.py plot
 set -u
 cd "$(dirname "$0")/../.."
 PY=${PY:-python}
@@ -38,6 +43,8 @@ SETV="precopy_sink@thr=256:rl=10;precopy_replay@thr=16:rl=1"
 COMMON="--launch --hops 1 --tm 1e9 --bw 1000 --migration_chunk 30 --post_chunks 160 --max_run_s 2400 --xb_horizon 101 --horizon_calls 130 --dyn_probe 4 --xb_policy_settings $SETV"
 OTTER="--replay_window 12 --replay_lag 1 --replay_sink_sync --replay_retain --replay_reuse"   # Fig. 7 OTTER flags
 P2NODES="--nodes A=elves-03.be.ucsc.edu,B=elves-04.be.ucsc.edu --agent_hosts A=elves-03.be.ucsc.edu,B=elves-04.be.ucsc.edu"
+DUMPNODES="--nodes A=elves-02.be.ucsc.edu,B=elves-01.be.ucsc.edu --agent_hosts A=elves-02.be.ucsc.edu,B=elves-01.be.ucsc.edu"
+STRIPS="dog:0:79 dog:0:77 train:1:76 train:0:72"   # = fig13_strip.py select (median and lowest W3 per input; rule in strip_protocol.md)
 guard() { $PY tools/eval/d0_remote.py gpu_idle --hosts "$1" || { echo "[F13] hosts not on one commit or GPU 0 busy ($1); run d0_remote.py pull first"; exit 1; }; }
 pairargs() { if [ "$1" = P2 ]; then echo "$P2NODES"; fi; }
 nodex() { set -- $(inp "$1") "$2"; echo "--video_path $1 --prompt_file_path $2 --seed $3 --block_ck --fidelity_log"; }
@@ -66,7 +73,16 @@ rest() {    # pair, own inputs, the other pair's inputs (repeated here)
   for x in $own; do full $P $x 0; full $P $x 1; psink $P $x; done
   for x in $other; do [ "$x" = dog ] || otter $P $x 0 74 2; done   # repeats of the other pair's inputs (dog's repeat = first on P2)
 }
+strip() {   # input, seed, S: the sweep condition's command with dumps on the destination (record only)
+  echo "[F13D] === strip OTTER $1 seed $2 S $3 (A = elves-02, B = elves-01)"
+  $PY tools/eval/mobility_orchestrate.py --experiment "expF13D_$1_s$2_S$3" $COMMON $DUMPNODES $OTTER --policies precopy_replay \
+    --replay_switch_calls "$3" --rep_start 1 --reps 1 --dump_frames results/evaluation/osdi/fig13/_dumps --dump_calls 160 \
+    --node_extra="$(nodex "$1" "$2")" || echo "[F13D] strip $1 s$2 S$3: exit $?"
+}
 case "${1:-}" in
+  dump)
+    guard A,B
+    for c in $STRIPS; do IFS=: read -r x sd S <<< "$c"; strip "$x" "$sd" "$S"; done ;;
   preflight)
     $PY tools/eval/d0_remote.py status
     guard A,B,C,D && echo "[F13] preflight: one commit, GPU 0 idle on A-D" ;;
@@ -100,5 +116,5 @@ case "${1:-}" in
       kill $(jobs -p) 2>/dev/null; wait
     done
     $PY tools/eval/fig13_report.py --prefix _dryrun_ --dry --sanity ;;
-  *) echo "usage: $0 preflight|first|rest1|rest2|dry"; exit 2 ;;
+  *) echo "usage: $0 preflight|first|rest1|rest2|dry|dump"; exit 2 ;;
 esac

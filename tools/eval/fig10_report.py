@@ -16,6 +16,7 @@ Extra-rep rule: a (workload, age) cell whose readiness ranges overlap between th
     python tools/eval/fig10_report.py            # -> results/evaluation/osdi/fig10/fig10_results.{json,md}
     python tools/eval/fig10_report.py --sanity   # per-run detail of whatever exists so far
     python tools/eval/fig10_report.py --prefix _dryrun_ --dry
+    python tools/eval/fig10_report.py --long [--sanity]   # long ages (longage_protocol.md; exploratory, no verdicts)
 """
 
 from __future__ import annotations
@@ -102,11 +103,37 @@ def run_record(d: Path, age: int, dry: bool) -> dict:
     return rec
 
 
-def collect(prefix, dry):
+def retained_record(d: Path, t_second_trigger):
+    """Long ages (record only, node --mem_log): the version A retains after the first cutover, from its first nonzero
+    sample to the second trigger: whether it was held the whole time, its size, and the nodes' memory peaks."""
+    import csv as _csv
+    p = d / "node_A" / "memory.csv"
+    if not p.exists():
+        return None
+    rows = [(float(r["t_wall"]), float(r["retained_mb"] or 0)) for r in _csv.DictReader(open(p, newline="")) if r.get("t_wall")]
+    held = [(t, mb) for t, mb in rows if t_second_trigger is None or t <= t_second_trigger]
+    first = next((i for i, (_, mb) in enumerate(held) if mb > 0), None)
+    span = held[first:] if first is not None else []
+    peaks = {}
+    for q in sorted(d.glob("node_*/memory.csv")):
+        rr = list(_csv.DictReader(open(q, newline="")))
+        num = lambda k: [float(r[k]) for r in rr if r.get(k) not in ("", None)]  # noqa: E731
+        peaks[q.parent.name[5:]] = {"rss_peak_mb": max(num("rss_mb"), default=None), "gpu_reserved_peak_mb": max(num("gpu_reserved_mb"), default=None)}
+    return {"retained_held_to_trigger": bool(span) and min(mb for _, mb in span) > 0, "retained_mb": span[-1][1] if span else None,
+            "retained_from_s": (span[0][0] - rows[0][0]) if span else None, "peaks": peaks}
+
+
+def collect(prefix, dry, exp="expF10"):
     out = {}
     for w in WORKLOADS:
         for a in AGES:
-            out[(w, a)] = [run_record(d, a, dry) for d in sorted((EVAL / f"{prefix}expF10_{w}_a{a}").glob("policy=*")) if (d / "summary.json").exists()]
+            out[(w, a)] = [run_record(d, a, dry) for d in sorted((EVAL / f"{prefix}{exp}_{w}_a{a}").glob("policy=*")) if (d / "summary.json").exists()]
+            if exp == "expF10L":
+                for r in out[(w, a)]:
+                    d = EVAL / f"{prefix}{exp}_{w}_a{a}" / r["run"]
+                    _, ev, _ = load(d)
+                    starts = [e for e in ev if e["event"] == "xb_task_start"]
+                    r["retained"] = retained_record(d, starts[1]["t"] if len(starts) >= 2 else None)
     return out
 
 
@@ -201,11 +228,52 @@ def md(R, v, agg):
     return "\n".join(L)
 
 
+def md_long(R, C):
+    """osdi/fig10/longage_protocol.md (E9 D5): exploratory calibration, no verdicts. Measured delta bytes next to the
+    simulator's extrapolation of the 150-240 slope (tools/sim/cluster_sim.Cal.delta_bytes, refresh intensity of Fig. 5)."""
+    sys.path.insert(0, str(ROOT / "tools/sim"))
+    from cluster_sim import Cal  # noqa: E402
+    cal = Cal()
+    refresh = {"dog": 3.6, "bfly": 128.2}
+    L = ["# Fig. 10 long ages (exploratory calibration for E9 D5; measured)", "",
+         "Protocol: `longage_protocol.md`. No hypothesis is tested. Medians [min-max] over valid reps; E9 = the simulator's "
+         "current extrapolation (150-240 slope, capped at the Sink).", ""]
+    for w, lab in WORKLOADS.items():
+        L += [f"## {lab} ({w})", "", "| age | arm | valid | base (MB) | E9 extrapolated delta (MB) | readiness (s) | interruption (s) | fallbacks | "
+              "retained held to 2nd trigger | retained (MB) | 2nd cutover SINKOK / DELTAOK / mismatched blocks | peak RSS / GPU reserved A, B (GB) |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        for a in AGES:
+            for arm in ARMS:
+                x, rs = R[(w, a)][arm], [r for r in C[(w, a)] if r["arm"] == arm]
+                mb = lambda k: f(x[k]["median"] / 1e6, 1) if x[k]["median"] is not None else "-"  # noqa: E731
+                rng = lambda k: f"{f(x[k]['median'])} [{f(x[k]['min'])}-{f(x[k]['max'])}]"  # noqa: E731
+                ret = [r.get("retained") or {} for r in rs]
+                pk = lambda lb, k: f(max([(q.get("peaks") or {}).get(lb, {}).get(k) or 0 for q in ret], default=0) / 1024, 1)  # noqa: E731
+                e9 = f(cal.delta_bytes(refresh[w], a) / 1e6, 1) if arm == "ver" else ""
+                L.append(f"| {a} | {LABEL[arm]} | {x['n_valid']} / {x['n_runs']} | {mb('base_bytes')} | {e9} | {rng('readiness_s')} | {rng('interruption_s')} | "
+                         f"{x['fallbacks']} | {[q.get('retained_held_to_trigger') for q in ret]} | {[f(q.get('retained_mb'), 0) for q in ret]} | "
+                         f"{[(r['checks'].get('cutover2_SINKOK'), r['delta_ok'], r['n_block_mismatch']) for r in rs]} | "
+                         f"{pk('A', 'rss_peak_mb')} / {pk('A', 'gpu_reserved_peak_mb')}, {pk('B', 'rss_peak_mb')} / {pk('B', 'gpu_reserved_peak_mb')} |")
+            L.append(f"| {a} | equivalence (B's outputs S1..S2 equal per rep) | {R[(w, a)]['equivalence_by_rep']} | | | | | | | | | |")
+        inv = [i for a in AGES for arm in ARMS for i in R[(w, a)][arm]["invalid"]]
+        if inv:
+            L += ["", "Excluded runs:", ""] + [f"- {i}" for i in inv]
+        L.append("")
+    L += ["Reading (protocol section 4): a fallback (base sent in full) is counted, never mixed into the delta medians' "
+          "interpretation; the simulator is re-gated only if these values change its delta model."]
+    return "\n".join(L)
+
+
 def main():
+    global AGES, N_REPS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--prefix", default=""); ap.add_argument("--dry", action="store_true"); ap.add_argument("--sanity", action="store_true")
+    ap.add_argument("--long", action="store_true", help="long ages (expF10L_*; longage_protocol.md): exploratory, no verdicts")
+    ap.add_argument("--ages", default="1000,3000", help="with --long: the ages (the dry protocol test uses 100)")
     a = ap.parse_args()
-    C = collect(a.prefix, a.dry)
+    if a.long:
+        AGES, N_REPS = tuple(int(x) for x in a.ages.split(",")), 2
+    C = collect(a.prefix, a.dry, "expF10L" if a.long else "expF10")
     if a.sanity:
         for (w, age), rs in C.items():
             for r in rs:
@@ -215,11 +283,21 @@ def main():
                 print(f"   refreshed {r['refreshed_entries']}, shift events {r['shift_events']}, distinct shifted {r['distinct_shifted_entries']}, changed vs retained {r['changed_vs_retained']}")
                 print(f"   changed-block {f((r['changed_block_bytes'] or 0) / 1e6, 1)} MB, unchanged-only entry {f((r['unchanged_only_entry_bytes'] or 0) / 1e6, 1)} MB")
                 print(f"   readiness {f(r['readiness_s'])} s, base ready {f(r['base_ready_s'])} s, interruption {f(r['interruption_s'])} s, rebuild {r['rebuild']}")
+                if r.get("retained") is not None:
+                    print(f"   retained {r['retained']}")
             eq = pair_checks(rs)
             if eq:
                 print(f"   equivalence {w} age {age}: {eq}")
         return
     R = cells(C, a.dry)
+    if a.long:
+        OUT.mkdir(parents=True, exist_ok=True)
+        stem = f"{a.prefix}fig10_longage_results"
+        json.dump({"cells": {f"{w}|{age}": c for (w, age), c in R.items()}, "runs": {f"{w}|{age}": rs for (w, age), rs in C.items()}},
+                  open(OUT / f"{stem}.json", "w"), indent=1, default=str)
+        (OUT / f"{stem}.md").write_text(md_long(R, C) + "\n")
+        print(md_long(R, C))
+        return
     v, agg = verdicts(R)
     OUT.mkdir(parents=True, exist_ok=True)
     stem = f"{a.prefix}fig10_results"
