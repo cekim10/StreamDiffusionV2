@@ -6,7 +6,7 @@ fig12a_ttfo_<w>       TTFO-local vs link bandwidth, the four methods
 fig12a_ready_cmp_bw250  the same split for dog and butterfly at 0.25 Gbps, side by side (where F12-H2 fails), with time and bytes
 fig12a_ready_<w>      OTTER's time to the destination's first output split into Sink transfer / replay catch-up / switch
                       (stacked medians per bandwidth): where the Sink transfer stops being the bottleneck
-Canvas and axes box of Fig. 6a, style font sizes (never reduced); "Native" = unshaped link, drawn at x = 9.4 Gbps
+Canvas and axes box of Fig. 7 / 8, style font sizes (never reduced); "Native" = unshaped link, drawn at x = 9.4 Gbps
 (the Phase 0 measured single-NIC capacity) and labelled, not scaled.
 
 Usage: python tools/eval/plot_fig12.py [--prefix _dryrun_]
@@ -22,10 +22,9 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-from plot_fig7_migration import BLUE, DARK_GRAY, DIM_GRAY, LEGEND, ROOT, YLABEL_X, annotate, configure, finish_axes
+from plot_fig7_migration import AXES_POS, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE, LEGEND, ROOT, YLABEL_X, annotate, configure, finish_axes
 
-FIG_SIZE = (5.83, 4.78)
-AXES_POS = [0.18, 0.22, 0.79, 0.75]
+# canvas and axes box of Fig. 7 / Fig. 8 (user 2026-11-03: Fig. 12a panels the same size as Fig. 8a, b)
 BWS = (250, 500, 1000, 2500, 0)
 X = {250: 0.25, 500: 0.5, 1000: 1.0, 2500: 2.5, 0: 9.4}
 XT = ["0.25", "0.5", "1", "2.5", "Native"]
@@ -35,7 +34,7 @@ STYLE = {"full": (DIM_GRAY, "s", (0, (5, 2))), "precopy_full": (DARK_GRAY, "D", 
          "precopy_replay": (BLUE, "o", "-")}
 WL = ("dog", "bfly")
 TTFO_LABEL = "Time to first local output (s)"   # user 2026-11-03; 4.4 in at 28 pt: longer than the axes,
-TTFO_LABEL_Y = 0.373   # so centred on the figure instead (axes coordinates), never a smaller font
+TTFO_LABEL_Y = (0.5 - AXES_POS[1]) / AXES_POS[3]   # so centred on the figure instead (axes coordinates), never a smaller font
 
 
 def ttfo_label(ax):
