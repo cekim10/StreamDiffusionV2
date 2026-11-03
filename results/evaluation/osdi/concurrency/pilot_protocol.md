@@ -1,4 +1,4 @@
-# Concurrent migration on the testbed: feasibility pilot (DRAFT 3, 2026-11-03; not frozen; stage-1 tools implemented, nothing run)
+# Concurrent migration on the testbed: feasibility pilot (DRAFT 3, 2026-11-03; not frozen; stage-1 and stage-2 tools implemented, nothing run)
 
 DRAFT 3 adds the user's review of DRAFT 2 (03c8a97e): coordinator verification, C4 flow-overlap evidence, the 2 x 2
 M3 comparison, pilot success criteria. DRAFT 2 replaced DRAFT 1 (e83a267a) after the user's update the same day: **GPU 1 is usable on elves-01, 03 and 04
@@ -130,6 +130,39 @@ Rules:
   - Stop at the first harness failure; fix it, rerun, and keep the record.
   - If the coordinator cannot hold the shared cap (NIC > 1.15 x cap), C3b and C4 are not run formally.
   - If the pilot fails, the paper states that two-session contention is simulated only (E9).
+
+## 5b. Stage-2 implementation (2026-11-03; harness only, no method change)
+
+- `tools/eval/rate_coord.py`: the coordinator.
+  - A TCP JSON-line server on elves-01.
+  - One `restore_planner.maxmin` over the active flows of all sessions, under per-site (host) egress / ingress caps.
+  - Logs every open / close with the full allocation, the site sums and `cap_ok`.
+- Orchestrator `--coord HOST:PORT` (`--coord_sites` for dry tests, `--coord_poll_s` 0.25):
+  - Every transfer it starts registers with the coordinator and runs at the coordinator's rate: the XB pre-copy
+    task, the recompute input stream, the Full state transfer and every M3 forward.
+  - Finished transfers are closed: task end, `full_send_end`, `m3_forward_done`.
+  - Changed rates are pushed to the senders: the new node command `COORD_SET_RATE` re-rates the running pacer;
+    M3 forwards use the existing `M3_FORWARD_RATE`.
+  - `_m3_rerate` is off under `--coord`.
+  - Without `--coord`, every path is unchanged.
+- `--barrier_offset_s` (C4: S2 at +45 s).
+- Runner `run_conc.sh stage2 / c3b / c4`: it starts and stops one coordinator per condition, logged to
+  `coord_<cond>_*.jsonl`. Report `conc_report.py`: verification 1 (allocation level and host NIC), the seconds two
+  sessions shared a site link by flow kind, and the time a shared flow was held below the cap.
+- Verification results:
+  - **Verification 2, replay** (`test_rate_coord.py`): ALL PASS.
+    - Fig. 7 / 12a: 48 migration tasks, each alone on its link; coordinator rate = cap = today's.
+    - Fig. 11: 180 M3 allocation points; 0 rates differ from today's cap-conserving equal shares; 0 cap violations.
+  - **Two-session dry test through the coordinator** (`dry_coord`): the first flow got 1,000 Mbps; both got
+    500 / 500 Mbps while sharing; the survivor got 1,000 Mbps back after the other closed. The re-rate was applied
+    on the node, every site sum was <= cap, and both migrations completed.
+  - **Verification 2, live** (`run_conc.sh dry_coord1`): one session, Fig. 11 Chain dry (Full, R-full, OTTER, and
+    OTTER with M3) through the coordinator. All 34 allocations equal today's rule on the same flows.
+    - The first try found 2 allocations where a task that had just ended (a switch or a cancel) was still
+      registered when the next opened. The new task got half the cap for at most one poll (0.25 s).
+    - Fixed: ended transfers are closed before every open, and a Full redirect closes the cancelled transfer.
+    - Rerun: 34 / 34 identical.
+  - **Regression:** `test_xb` ALL PASS (87 checks), rerun after the fix.
 
 ## 6. Pilot success criteria (feasibility, not performance)
 

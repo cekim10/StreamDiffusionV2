@@ -28,7 +28,9 @@ from fig12_report import peak_rx_mbps  # noqa: E402
 
 EVAL = ROOT / "results/evaluation"
 OUT = EVAL / "osdi/concurrency"
-NAME = re.compile(r"^(?P<pre>_dryrun_)?expCONC_(?P<cond>[A-Za-z0-9]+)_(?P<m>[a-z_]+)_s(?P<s>[12])$")
+NAME = re.compile(r"^(?P<pre>_dryrun_)?expCONC_(?P<cond>C1|C2|C3a|C3b|C4_(?:m3|nom3)_(?:alone|conc)|dry|drycoord)_(?P<m>[a-z_]+)_s(?P<s>[12])$")
+HEADER_FACTOR = (1388 + 66) / 1388   # NIC / payload at MSS 1,388 (fig7_report)
+CAP_MBPS = 1000.0
 LABEL = {"full": "Full", "recompute_full": "R-full", "precopy_replay": "OTTER"}
 
 
@@ -65,7 +67,8 @@ def record(d: Path, dry: bool):
     return {**{k: r[k] for k in ("run", "policy", "valid", "validity_why", "failed", "ttfo_local_s", "delivery_gap_s", "tx_bytes")},
             "trigger_wall": t_trig, "window_wall": None if (win is None or t_trig is None) else (t_trig + win[0], t_trig + win[1]),
             "calls_per_s_window": rate(*win) if win else None,
-            "peak_rx_mbps_B": None if dry else peak_rx_mbps(d, "B"), "mem": mem_peaks(d), "barrier": s.get("barrier")}
+            "peak_rx_mbps_B": None if dry else peak_rx_mbps(d, "B"), "mem": mem_peaks(d), "barrier": s.get("barrier"),
+            "nic": None if dry else nic_check(d), "coord": s.get("coord")}
 
 
 def collect(prefix, dry):
@@ -78,6 +81,48 @@ def collect(prefix, dry):
             if (rd / "summary.json").exists():
                 out.setdefault((g["cond"], g["m"]), {}).setdefault(int(g["s"]), []).append(record(rd, dry))
     return out
+
+
+def nic_check(d: Path):
+    """Verification 1, measured part: every node's host NIC (both sessions' traffic on a shared host) against the cap
+    after the header factor: the largest 1 s sample (a burst up to 1.15 x is reported) and the largest 10 s mean
+    (above 1.05 x = sustained excess)."""
+    out = {}
+    lim = CAP_MBPS * HEADER_FACTOR
+    for p in sorted(d.glob("node_*/network.csv")):
+        rows = list(csv.DictReader(open(p, newline="")))
+        host = rows[0]["host"] if rows else p.parent.name
+        for k in ("net_tx_mbps", "net_rx_mbps"):
+            v = [float(r[k]) for r in rows if r.get(k)]
+            m10 = max((sum(v[i:i + 10]) / 10 for i in range(max(1, len(v) - 9))), default=0.0) if len(v) >= 10 else (max(v) if v else 0.0)
+            out[f"{host}:{k[4:6]}"] = {"peak_1s_x_cap": max(v, default=0.0) / lim, "peak_10s_x_cap": m10 / lim}
+    return out
+
+
+def coord_analysis(log: Path):
+    """From the coordinator log: allocation-level cap compliance and, between consecutive allocations, the seconds in
+    which flows of different sessions shared a site link (by kind pair) and in which a shared flow was held below the cap."""
+    ents = [json.loads(x) for x in open(log) if x.strip()]
+    if not ents:
+        return None
+    shared, held, pairs = 0.0, 0.0, {}
+    for a, b in zip(ents, ents[1:]):
+        dt = b["t"] - a["t"]
+        links = {}
+        for g, f in a["flows"].items():
+            for k in (f"out:{f['src']}", f"in:{f['dst']}"):
+                links.setdefault(k, []).append(f)
+        sh = [fl for fl in links.values() if len({f["session"] for f in fl}) >= 2]
+        if sh:
+            shared += dt
+            if any(f["rate_bps"] < a["cap_bps"] - 1 for fl in sh for f in fl):
+                held += dt
+            for kinds in {" + ".join(sorted({f"{f['session'].split('/')[0][-2:]}:{f['kind']}" for f in fl})) for fl in sh}:
+                pairs[kinds] = pairs.get(kinds, 0.0) + dt   # once per interval and kind combination (not per link)
+    loads = [v for e in ents for v in e["site_load_bps"].values()]
+    return {"entries": len(ents), "cap_ok_all": all(e["cap_ok"] for e in ents), "max_site_load_x_cap": max(loads, default=0.0) / ents[0]["cap_bps"],
+            "shared_link_s": shared, "shared_and_held_below_cap_s": held, "shared_by_kinds_s": pairs,
+            "flows": sorted({(g, f["kind"]) for e in ents for g, f in e["flows"].items()})}
 
 
 def overlap(a, b):
@@ -93,6 +138,7 @@ def f(x, n=2):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--prefix", default=""); ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--coord_log", action="append", default=[], help="coordinator logs to analyze (default: osdi/concurrency/coord_*.jsonl)")
     a = ap.parse_args()
     C = collect(a.prefix, a.dry)
     L = ["# Concurrency pilot (measured; pilot, not a hypothesis test)", "", "Protocol: `pilot_protocol.md`. One run per session; "
@@ -121,9 +167,26 @@ def main():
     for p in pairs:
         L.append(f"| {p['cond']} | {LABEL.get(p['method'], p['method'])} | {f(p['trigger_offset_s'], 3)} | {f(p['window_overlap_s'])} | {f(p['overlap_share_of_shorter'])} | "
                  f"{p['both_completed']} | {p['both_valid']} |")
+    nic = [(c, m, s, k, v) for (c, m), ss in sorted(C.items()) for s, rs in ss.items() for k, v in ((rs[-1].get("nic") or {}).items())]
+    if nic:
+        L += ["", "Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1.15, sustained 10 s <= 1.05):", "",
+              "| cond | method | session | host:dir | peak 1 s | peak 10 s mean | ok |", "|---|---|---|---|---|---|---|"]
+        for c, m, s, k, v in nic:
+            if c in ("C3b",) or c.startswith("C4"):
+                L.append(f"| {c} | {LABEL.get(m, m)} | S{s} | {k} | {v['peak_1s_x_cap']:.2f} | {v['peak_10s_x_cap']:.2f} | "
+                         f"{v['peak_1s_x_cap'] <= 1.15 and v['peak_10s_x_cap'] <= 1.05} |")
+    logs = [Path(x) for x in a.coord_log] or sorted(OUT.glob("coord_*.jsonl"))
+    coords = {str(p.name): coord_analysis(p) for p in logs}
+    if coords:
+        L += ["", "Coordinator logs (verification 1 at the allocation level; flow overlap between sessions):", "",
+              "| log | allocations | all sums <= cap | max site load / cap | shared-link s | shared and held below cap s | shared by kinds (s) |", "|---|---|---|---|---|---|---|"]
+        for n, c in coords.items():
+            if c:
+                L.append(f"| {n} | {c['entries']} | {c['cap_ok_all']} | {c['max_site_load_x_cap']:.3f} | {c['shared_link_s']:.1f} | {c['shared_and_held_below_cap_s']:.1f} | "
+                         f"{', '.join(f'{k} {v:.1f}' for k, v in c['shared_by_kinds_s'].items()) or '-'} |")
     OUT.mkdir(parents=True, exist_ok=True)
     stem = f"{a.prefix}conc_pilot_results"
-    (OUT / f"{stem}.json").write_text(json.dumps({"runs": {f"{c}|{m}": ss for (c, m), ss in C.items()}, "pairs": pairs}, indent=1, default=str))
+    (OUT / f"{stem}.json").write_text(json.dumps({"runs": {f"{c}|{m}": ss for (c, m), ss in C.items()}, "pairs": pairs, "coord_logs": coords}, indent=1, default=str))
     (OUT / f"{stem}.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
 

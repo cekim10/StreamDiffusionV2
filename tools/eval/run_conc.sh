@@ -11,6 +11,14 @@
 #   elves-01:  bash tools/eval/run_conc.sh stage1        # C1 x 3 methods, C2 OTTER, C3a x 3 methods (7 runs)
 #   elves-01:  python tools/eval/conc_report.py
 #   local:     bash tools/eval/run_conc.sh dry           # two dry-run sessions on 127.0.0.1 through the barrier
+# Stage 2 (rate coordinator tools/eval/rate_coord.py on elves-01, per-host shared 1 Gbps egress / ingress, max-min over
+# both sessions' flows; started and stopped by this script, log results/evaluation/osdi/concurrency/coord_<cond>_*.jsonl):
+#   C3b  as C3a, with --coord on both sessions (shared link)
+#   C4   S1 = Fig. 11 Chain A -> B -> C -> D (GPU 0 of elves-01..04, moves at 45 / 90 s), OTTER with M3 or w/o M3;
+#        S2 = one OTTER migration elves-03:1 -> elves-04:1 starting 45 s after S1 (--barrier_offset_s), with the
+#        forward to D; four cells: {M3, noM3} x {alone, +S2}; every cell with --coord (one code path)
+#   elves-01:  bash tools/eval/run_conc.sh stage2        # C3b x 3 methods, C4 x 4 cells (7 runs)
+#   local:     bash tools/eval/run_conc.sh dry_coord     # two dry sessions on shared sites through the coordinator
 set -u
 cd "$(dirname "$0")/../.."
 PY=${PY:-python}
@@ -23,18 +31,45 @@ S1="--nodes A=$H1:29811:29812,B=$H3:29811:29812 --agent_hosts A=$H1,B=$H3 --gpus
 S2_C2="--nodes A=$H4:29811:29812,B=$H2:29811:29812 --agent_hosts A=$H4,B=$H2 --gpus A=0,B=0"
 S2_C3A="--nodes A=$H1:29841:29842,B=$H3:29841:29842 --agent_hosts A=$H1,B=$H3 --gpus A=1,B=1"
 METHODS="full recompute_full precopy_replay"
+CHAIN="--launch --hops 3 --tm 1e9 --bw 1000 --migration_chunk 30 --post_chunks 800 --max_run_s 2400 --xb_horizon 100 --horizon_calls 130 --dyn_probe 4 --move_times 45,90"
+M3="--m3 --m3_owner --m3_staging S2 --m3_order fwd --m3_replan_s 2"   # Fig. 11 (M3-S3)
+S1_CHAIN="--nodes A=$H1:29811:29812,B=$H2:29811:29812,C=$H3:29811:29812,D=$H4:29811:29812 --agent_hosts A=$H1,B=$H2,C=$H3,D=$H4 --gpus A=0,B=0,C=0,D=0"
+S2_C4="--nodes A=$H3:29841:29842,B=$H4:29841:29842 --agent_hosts A=$H3,B=$H4 --gpus A=1,B=1"
+CPORT=29960
 guard() { $PY tools/eval/d0_remote.py gpu_idle --hosts "$1" || { echo "[CONC] GPUs busy or hosts on different commits ($1)"; exit 1; }; }
-sess() {   # experiment, method, node placement, barrier ("" = none)
+sess() {   # experiment, method, node placement, barrier ("" = none), [run flags (default the single-migration COMMON)], [extra flags]
   local B=""; [ -n "$4" ] && B="--barrier $4:2"
-  $PY tools/eval/mobility_orchestrate.py --experiment "$1" $COMMON $3 --xb_policy_settings "$SETV" $OTTER --policies "$2" \
+  $PY tools/eval/mobility_orchestrate.py --experiment "$1" ${5:-$COMMON} $3 --xb_policy_settings "$SETV" $OTTER ${6:-} --policies "$2" \
     --rep_start 1 --reps 1 $B --node_extra="$DOG" || echo "[CONC] $1: exit $?"
 }
-pair() {   # condition, method, S2 placement: both sessions at once, aligned
+pair() {   # condition, method, S2 placement, [extra flags of both sessions]: both sessions at once, aligned
   local bar="results/evaluation/_barrier/$1_$2_$(date +%Y%m%d-%H%M%S)"
   echo "[CONC] === $1 $2 (two sessions, barrier $bar)"
-  sess "expCONC_$1_$2_s1" "$2" "$S1" "$bar" > "/tmp/conc_$1_$2_s1.log" 2>&1 &
-  sess "expCONC_$1_$2_s2" "$2" "$3" "$bar" > "/tmp/conc_$1_$2_s2.log" 2>&1 &
-  wait; tail -n 2 "/tmp/conc_$1_$2_s1.log"; tail -n 2 "/tmp/conc_$1_$2_s2.log"
+  sess "expCONC_$1_$2_s1" "$2" "$S1" "$bar" "$COMMON" "${4:-}" > "/tmp/conc_$1_$2_s1.log" 2>&1 & local p1=$!
+  sess "expCONC_$1_$2_s2" "$2" "$3" "$bar" "$COMMON" "${4:-}" > "/tmp/conc_$1_$2_s2.log" 2>&1 & local p2=$!
+  wait $p1 $p2; tail -n 2 "/tmp/conc_$1_$2_s1.log"; tail -n 2 "/tmp/conc_$1_$2_s2.log"
+}
+coord_up() {   # condition tag: start the coordinator (127.0.0.1:CPORT, cap 1 Gbps) with its own log
+  local log="results/evaluation/osdi/concurrency/coord_$1_$(date +%Y%m%d-%H%M%S).jsonl"
+  $PY tools/eval/rate_coord.py serve --port $CPORT --cap_mbps 1000 --log "$log" > "/tmp/conc_coord_$1.log" 2>&1 & CPID=$!
+  sleep 1; echo "[CONC] coordinator pid $CPID, log $log"
+}
+coord_down() { kill $CPID 2>/dev/null; wait $CPID 2>/dev/null; }
+c4cell() {   # arm (m3 | nom3), with S2 (0 | 1)
+  local X=""; [ "$1" = m3 ] && X="$M3"
+  local tag="C4_$1_$([ "$2" = 1 ] && echo conc || echo alone)"
+  coord_up "$tag"
+  if [ "$2" = 1 ]; then
+    local bar="results/evaluation/_barrier/${tag}_$(date +%Y%m%d-%H%M%S)"
+    echo "[CONC] === $tag (S1 Chain + S2 at +45 s, barrier $bar)"
+    sess "expCONC_${tag}_precopy_replay_s1" precopy_replay "$S1_CHAIN" "$bar" "$CHAIN" "$X --coord 127.0.0.1:$CPORT" > "/tmp/conc_${tag}_s1.log" 2>&1 & local p1=$!
+    sess "expCONC_${tag}_precopy_replay_s2" precopy_replay "$S2_C4" "$bar" "$COMMON" "--coord 127.0.0.1:$CPORT --barrier_offset_s 45" > "/tmp/conc_${tag}_s2.log" 2>&1 & local p2=$!
+    wait $p1 $p2; tail -n 2 "/tmp/conc_${tag}_s1.log"; tail -n 2 "/tmp/conc_${tag}_s2.log"
+  else
+    echo "[CONC] === $tag (S1 Chain alone)"
+    sess "expCONC_${tag}_precopy_replay_s1" precopy_replay "$S1_CHAIN" "" "$CHAIN" "$X --coord 127.0.0.1:$CPORT"
+  fi
+  coord_down
 }
 case "${1:-}" in
   preflight)
@@ -48,6 +83,59 @@ case "${1:-}" in
   c1)  guard A:0,C:0; for m in ${2:-$METHODS}; do sess "expCONC_C1_${m}_s1" "$m" "$S1" ""; done ;;
   c2)  guard A:0,B:0,C:0,D:0; pair C2 "${2:-precopy_replay}" "$S2_C2" ;;
   c3a) guard A:0,A:1,C:0,C:1; for m in ${2:-$METHODS}; do pair C3a "$m" "$S2_C3A"; done ;;
+  stage2)
+    guard A:0,A:1,B:0,C:0,C:1,D:0,D:1
+    for m in $METHODS; do coord_up "C3b_$m"; pair C3b "$m" "$S2_C3A" "--coord 127.0.0.1:$CPORT"; coord_down; done
+    for arm in m3 nom3; do for conc in 0 1; do c4cell $arm $conc; done; done ;;
+  c3b) guard A:0,A:1,C:0,C:1; for m in ${2:-$METHODS}; do coord_up "C3b_$m"; pair C3b "$m" "$S2_C3A" "--coord 127.0.0.1:$CPORT"; coord_down; done ;;
+  c4)  guard A:0,B:0,C:0,C:1,D:0,D:1; c4cell "${2:?m3|nom3}" "${3:?0|1}" ;;
+  dry_coord)   # two dry sessions whose nodes sit on the same two sites (--coord_sites), through the coordinator
+    trap 'kill $(jobs -p) 2>/dev/null' EXIT
+    rm -rf results/evaluation/_dryrun_expCONC_drycoord_* results/evaluation/_barrier/drycoord_*
+    for p in 29911 29921 29931 29941; do
+      lb=$( [ $p = 29911 ] || [ $p = 29931 ] && echo A || echo B )
+      $PY tools/eval/mobility_node.py --label $lb --bind 127.0.0.1 --ctl_port $p --data_port $((p + 1)) --mss 0 --dry_run --dry_sink_mb 256 \
+        --dry_service_s 0.05 --migration_chunk 30 --post_chunks 300 > "/tmp/conc_dryc_node_$p.log" 2>&1 &
+    done
+    log="results/evaluation/_dryrun_coord_$(date +%s).jsonl"
+    $PY tools/eval/rate_coord.py serve --port 29961 --cap_mbps 1000 --log "$log" > /tmp/conc_dryc_coord.log 2>&1 &
+    sleep 3
+    bar="results/evaluation/_barrier/drycoord_$(date +%s)"; pids=""
+    for i in 1 2; do
+      n1=$((29891 + 20 * i)); n2=$((n1 + 10))
+      $PY tools/eval/mobility_orchestrate.py --experiment "expCONC_drycoord_precopy_replay_s$i" --dry_run --mss 0 --dyn_probe 1 \
+        --nodes A=127.0.0.1:$n1:$((n1 + 1)),B=127.0.0.1:$n2:$((n2 + 1)) --hops 1 --tm 1e9 --bw 1000 --migration_chunk 30 --post_chunks 300 \
+        --max_run_s 600 --xb_horizon 20 --horizon_calls 40 --xb_policy_settings "$SETV" $OTTER --policies precopy_replay --rep_start 1 --reps 1 \
+        --barrier "$bar:2" --coord 127.0.0.1:29961 --coord_sites A=siteA,B=siteB > "/tmp/conc_dryc_orch_$i.log" 2>&1 &
+      pids="$pids $!"
+    done
+    wait $pids; sleep 1
+    grep -h "barrier round\|done:" /tmp/conc_dryc_orch_1.log /tmp/conc_dryc_orch_2.log
+    $PY tools/eval/conc_report.py --prefix _dryrun_ --dry --coord_log "$log" ;;
+  dry_coord1)   # verification 2, live: one session (Fig. 11 Chain dry, M3 and every method) through the coordinator
+    trap 'kill $(jobs -p) 2>/dev/null' EXIT
+    log="results/evaluation/_dryrun_coord1_$(date +%s).jsonl"
+    $PY tools/eval/rate_coord.py serve --port 29962 --cap_mbps 1000 --log "$log" > /tmp/conc_dryc1_coord.log 2>&1 & CP=$!
+    sleep 1
+    for x in ext m3; do
+      for i in 0 1 2 3; do
+        lb=$(echo ABCD | cut -c$((i + 1)))
+        $PY tools/eval/mobility_node.py --label $lb --bind 127.0.0.1 --ctl_port $((29911 + 10 * i)) --data_port $((29912 + 10 * i)) --mss 0 \
+          --dry_run --dry_sink_mb 64 --dry_service_s 0.2 --migration_chunk 30 --post_chunks 800 > "/tmp/conc_dryc1_node_$lb.log" 2>&1 & NP="${NP:-} $!"
+      done
+      sleep 3
+      if [ $x = ext ]; then P="full,recompute_full,precopy_replay"; XF=""; else P=precopy_replay; XF="$M3"; fi
+      $PY tools/eval/mobility_orchestrate.py --experiment "expCONC_drychain_$x" --dry_run --mss 0 --dyn_probe 1 \
+        --nodes A=127.0.0.1:29911:29912,B=127.0.0.1:29921:29922,C=127.0.0.1:29931:29932,D=127.0.0.1:29941:29942 \
+        --coord_sites A=sA,B=sB,C=sC,D=sD --coord 127.0.0.1:29962 \
+        --hops 3 --tm 1e9 --bw 1000 --migration_chunk 30 --post_chunks 800 --max_run_s 900 --xb_horizon 20 --horizon_calls 60 --move_times 12,24 \
+        --xb_policy_settings "$SETV" $OTTER $XF --policies "$P" --rep_start 1 --reps 1 || echo "[CONC] dry chain $x: exit $?"
+      kill $NP 2>/dev/null; wait $NP 2>/dev/null; NP=""
+    done
+    kill $CP 2>/dev/null
+    grep -h "done:" results/evaluation/_dryrun_expCONC_drychain_*/ 2>/dev/null; ls -d results/evaluation/_dryrun_expCONC_drychain_*/policy=* | sed 's#.*/##'
+    for d in results/evaluation/_dryrun_expCONC_drychain_*/policy=*; do $PY -c "import json,sys; s=json.load(open(sys.argv[1]+'/summary.json')); v=s.get('validation') or {}; print(sys.argv[1].split('/')[-1][:60], 'stop', s.get('stop_reason'), 'switchovers', s.get('n_switchovers'), 'verified', v.get('switchovers_verified', s.get('switchovers_verified')))" "$d"; done
+    $PY tools/eval/test_rate_coord.py --live "$log" ;;
   dry)
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     rm -rf results/evaluation/_dryrun_expCONC_* results/evaluation/_barrier/dry_*
@@ -69,5 +157,5 @@ case "${1:-}" in
     wait $pids; sleep 1
     grep -h "barrier round\|done:" /tmp/conc_dry_orch_1.log /tmp/conc_dry_orch_2.log
     $PY tools/eval/conc_report.py --prefix _dryrun_ --dry ;;
-  *) echo "usage: $0 preflight|stage1|c1 [methods]|c2 [method]|c3a [methods]|dry"; exit 2 ;;
+  *) echo "usage: $0 preflight|stage1|c1 [methods]|c2 [method]|c3a [methods]|stage2|c3b [methods]|c4 m3|nom3 0|1|dry|dry_coord|dry_coord1"; exit 2 ;;
 esac

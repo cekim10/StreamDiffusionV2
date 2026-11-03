@@ -935,6 +935,9 @@ class Run:
         if redirect:
             holder = self.state_holder
             c = self.node(holder).call("FULL_CANCEL", timeout=60)
+            if getattr(self, "coord_client", None) is not None:
+                for fid in [k for k, f in self.coord_flows.items() if f["kind"] == "full"]:
+                    self._cclose(fid)   # the cancelled transfer stops sending now
             if c.get("completed"):
                 # the transfer finished just before this move: wait for the destination to resume, then hand off from it
                 t_wait = time.time() + 60
@@ -944,6 +947,8 @@ class Run:
         if not redirect:
             if self.caps:
                 rate = min(self.caps[("out", frm)], self.caps[("in", to)])
+            if self._coord():
+                rate = self._copen(xid, frm, to, "full")
             self.state_xfers[xid] = {"xfer": xid, "src": frm, "dst": to, "move": i, "t_req": t_req}
             r = self.node(frm).call("EXEC_HANDOFF", to=to, to_host=nd["host"], to_port=nd["data"], mode="full", xfer=xid, rate_bps=rate, timeout=300)
             self.state_holder = frm; self.running = None
@@ -953,10 +958,86 @@ class Run:
         holder = self.state_holder
         if self.caps:
             rate = min(self.caps[("out", holder)], self.caps[("in", to)])
+        if self._coord():
+            rate = self._copen(xid, holder, to, "full")
         self.state_xfers[xid] = {"xfer": xid, "src": holder, "dst": to, "move": i, "t_req": t_req, "state_bytes": self.packed_bytes}
         self.node(holder).call("FULL_SEND", to=to, to_host=nd["host"], to_port=nd["data"], xfer=xid, rate_bps=rate, timeout=60)
         return {"i": i, "from": frm, "to": to, "t_req": t_req, "t_stop": t_req, "t_fg_sent": None, "call": None, "fg_bytes": 0, "mode": "full",
                 "state_from": holder, "redirect": True, "xfer": xid}
+
+    # ---------------- rate coordinator (osdi/concurrency/pilot_protocol.md stage 2; --coord HOST:PORT; no-op without it)
+    def _coord(self):
+        if not self.a.coord:
+            return None
+        if getattr(self, "coord_client", None) is None:
+            from rate_coord import CoordClient
+
+            assert self.caps, "--coord needs a shaped link (--bw > 0)"
+            self.coord_client = CoordClient(self.a.coord, f"{self.a.experiment}/{self.run_id}", float(self.bw) * 1e6)
+            self.coord_flows, self.coord_version, self.coord_t = {}, -1, 0.0
+            self.coord_site = dict(x.split("=") for x in self.a.coord_sites.split(",") if x) if self.a.coord_sites else {}
+        return self.coord_client
+
+    def _site(self, lb):
+        return self.coord_site.get(lb) or self.o.node_spec[lb]["host"]
+
+    def _copen(self, fid, src, dst, kind):
+        """Register a transfer with the coordinator; its rate replaces the static per-session rate."""
+        c = self._coord()
+        self._coord_sweep()   # a transfer that just ended (switch, cancel) is closed before the next one opens
+        rate = c.open(fid, self._site(src), self._site(dst), kind)
+        self.coord_flows[fid] = {"kind": kind, "src": src, "dst": dst, "rate": rate}
+        self.ev.log("coord_open", flow=fid, kind=kind, src=src, dst=dst, src_site=self._site(src), dst_site=self._site(dst), rate_bps=rate)
+        return rate
+
+    def _cclose(self, fid):
+        if self.coord_flows.pop(fid, None) is not None:
+            self.coord_client.close(fid)
+            self.ev.log("coord_close", flow=fid)
+
+    def _coord_tick(self, force=False):
+        """Close finished transfers, then fetch this session's rates and push the changed ones to the senders."""
+        if not self.a.coord or getattr(self, "coord_client", None) is None:
+            return
+        now = time.time()
+        if not force and now - self.coord_t < self.a.coord_poll_s:
+            return
+        self.coord_t = now
+        tasks = self._coord_sweep()
+        ver, rates = self.coord_client.rates()
+        if ver == self.coord_version:
+            return
+        self.coord_version = ver
+        for fid, r in rates.items():
+            f = self.coord_flows.get(fid)
+            if f is None or abs(r - f["rate"]) <= 1.0:
+                continue
+            f["rate"] = r
+            if f["kind"] == "m3":
+                self.node(f["src"]).cast("M3_FORWARD_RATE", rates={fid: r})
+            else:
+                self.node(f["src"]).cast("COORD_SET_RATE", flow_kind=f["kind"], id=fid, rate_bps=r)
+                if f["kind"] == "inputs" and fid in tasks:
+                    tasks[fid]["rate"] = r   # later input parts of this task start at the current rate
+            self.ev.log("coord_rate", flow=fid, kind=f["kind"], rate_bps=r, version=ver)
+
+    def _coord_sweep(self):
+        """Close the transfers that have ended: XB task with t_end (switched or cancelled), Full transfer with
+        full_send_end or superseded by a newer Full transfer of this session (a redirect cancels the old one), M3 forward
+        with m3_forward_done."""
+        ended_full = {e.get("xfer") for e in self.node_events if e["event"] == "full_send_end"}
+        ended_m3 = {e.get("flow") for e in self.node_events if e["event"] == "m3_forward_done"}
+        tasks = {t["id"]: t for t in getattr(self, "xb_tasks", [])}
+        for fid, f in list(self.coord_flows.items()):
+            k = f["kind"]
+            if (k in ("precopy", "inputs") and tasks.get(fid, {}).get("t_end") is not None) or (k == "full" and fid in ended_full) or (k == "m3" and fid in ended_m3):
+                self._cclose(fid)
+        return tasks
+
+    def _coord_close_all(self):
+        if getattr(self, "coord_client", None) is not None:
+            for fid in list(self.coord_flows):
+                self._cclose(fid)
 
     def _barrier(self):
         """--barrier DIR:N (concurrency pilot): N orchestrators of concurrent sessions on one host meet here before their
@@ -980,7 +1061,7 @@ class Run:
             if time.time() > deadline:
                 raise SystemExit(f"[orch] barrier {d} round {k}: {len(fs)} / {n} sessions after {self.a.barrier_timeout_s:.0f} s")
             self.drain(0.2)
-        t_start = max(json.loads(f.read_text())["t"] for f in fs) + 2.0
+        t_start = max(json.loads(f.read_text())["t"] for f in fs) + 2.0 + self.a.barrier_offset_s
         while time.time() < t_start:
             self.drain(min(0.05, max(0.0, t_start - time.time())))
         self.barrier_info = {"dir": str(d), "round": k, "n": n, "arrived": t_arr, "start": t_start, "wait_s": t_start - t_arr,
@@ -1064,6 +1145,7 @@ class Run:
         last_pcur = 0.0
         while True:
             self.drain(0.05)
+            self._coord_tick()
             now = time.time()
             self.tick(now)
             if now - last_pcur >= 1.0:
@@ -1152,6 +1234,8 @@ class Run:
         task = {"id": f"x{self.nxfer}", "kind": self.policy, "src": src, "dst": target, "t_start": time.time(), "state": "copy", "rounds": 0, "t_end": None, "outcome": None}
         nd = self.o.node_spec[target]
         rate = self._xb_rate(src, target)
+        if self._coord():
+            rate = self._copen(task["id"], src, target, "precopy" if self.policy.startswith("precopy") else "inputs")
         if self.policy.startswith("precopy"):
             ti = len(self.xb_tasks)   # index of this task (0 = first migration)
             prev_src = any(t_["src"] == target for t_ in self.xb_tasks)
@@ -1436,6 +1520,7 @@ class Run:
         while True:
             self.drain(0.05)
             self._xb_step()
+            self._coord_tick()
             now = time.time()
             mc = [int(x) for x in a.move_calls.split(",") if x.strip()] if a.move_calls else []
             by_call = bool(mc) and next_move <= n_moves and next_move - 1 < len(mc) and self.running is not None and \
@@ -1519,7 +1604,8 @@ class Run:
             validation["input_check"] = all(v is True for v in self.input_check.values())
             validation["codec_lossless"] = a.xb_codec in XB_LOSSLESS
             validation["inputs_exact_at_switchovers"] = (all(sw.get("inputs_exact") is True for sw in inputs["switchovers"]) if inputs["switchovers"] else None)
-        summary = {"barrier": getattr(self, "barrier_info", None), "run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
+        self._coord_close_all()
+        summary = {"barrier": getattr(self, "barrier_info", None), "coord": self.a.coord or None, "run_id": self.run_id, "policy": self.policy, "policy_label": POLICY_LABEL[self.policy], "bw_mbps": self.bw, "tm_s": self.tm, "rho": self.rho, "rep": self.rep,
                    "path": self.edges, "hosts": hosts, "t0_wall": self.t0, "migration_chunk": a.migration_chunk,
                    "xb_params": {"threshold_mib": a.xb_threshold_mib, "round_limit": a.xb_round_limit, "min_shrink": a.xb_min_shrink, "lag": a.xb_lag, "W": a.xb_window, "horizon": a.xb_horizon,
                                  "codec": a.xb_codec, "verify_state": bool(a.xb_verify_state)},
@@ -1611,6 +1697,8 @@ class Run:
                 n_out[p] += 1; n_in[cand] += 1
                 rate = min(self.caps[("out", p)] / n_out[p], self.caps[("in", cand)] / n_in[cand]) if self.caps else 0.0
                 fid = f"m3f{len(self.m3_flows) + 1}_{p}{cand}"
+                if self._coord():
+                    rate = self._copen(fid, p, cand, "m3")
                 fail = self.a.m3_fail_after if ((self.a.m3_test_fault == "holder_fail" or (self.a.m3_test_fault == "old_owner_fail" and p in self.m3_old_owners))
                                                 and not any(f.get("fail") for f in self.m3_flows.values())) else None
                 nd = self.o.node_spec[cand]
@@ -1659,7 +1747,7 @@ class Run:
         """Equal shares that never exceed a node cap: every active forward flow gets min(out cap / active flows out of its
         sender, in cap / active flows into its receiver); flows started earlier are re-rated, so a new flow is never added
         on top of a full link."""
-        if not self.caps:
+        if not self.caps or self._coord():   # with --coord the coordinator re-rates every flow (all sessions, one max-min)
             return {}
         done = {e.get("flow") for e in self.node_events if e["event"] == "m3_forward_done"}
         act = [f for f in self.m3_flows.values() if f["id"] not in done]
@@ -2023,8 +2111,9 @@ class Run:
                "applicable_single_version": len(before_final_bind) == 0, "progress_trigger": ptrig, "exposure": exposure, "termination": termination,
                "t0_wall_by_node": {lb: self.t0 + self.node(lb).off for lb in self.nodes_used if lb in self.o.nodes},
                "known_caps_unchanged": self.known_caps == self.known_caps0}
+        self._coord_close_all()
         summary = {
-            "wrn": wrn, "vacw": vacw, "barrier": getattr(self, "barrier_info", None),
+            "wrn": wrn, "vacw": vacw, "barrier": getattr(self, "barrier_info", None), "coord": self.a.coord or None,
             "d0": d0, "per_move": per_move, "gpu_peak_mem_mb": {lb: {k: e.get(k) for k in ("peak_allocated_mb", "peak_reserved_mb")} for lb, e in ends.items()}, "execution_state": execution_state, "revisit": revisit, "cold_destination": cold_dest,
             "hybrid": None if self.net is None else {"n_network_sessions": self.net.N, "network_policy": self.net.policy, "network_run_dir": str(self.net.dir.relative_to(REPO_ROOT)),
                                                      "network_summary": {k: self.net_summary.get(k) for k in ("restored_sessions", "first_restored", "makespan_s", "bytes", "normalized", "validation", "stop_reason")},
@@ -2274,6 +2363,10 @@ def main():
     ap.add_argument("--gpus", type=str, default="A=0,B=0,C=0,D=0")
     ap.add_argument("--barrier", type=str, default="", help="concurrency pilot: DIR:N, align this run's migration start with N - 1 other orchestrators on this host")
     ap.add_argument("--barrier_timeout_s", type=float, default=3600.0)
+    ap.add_argument("--coord", type=str, default="", help="concurrency pilot stage 2: HOST:PORT of tools/eval/rate_coord.py; every transfer's rate comes from its max-min over all sessions")
+    ap.add_argument("--coord_sites", type=str, default="", help="with --coord: label=site overrides (default: the node's host); used by the local dry test")
+    ap.add_argument("--coord_poll_s", type=float, default=0.25)
+    ap.add_argument("--barrier_offset_s", type=float, default=0.0, help="with --barrier: start this session's migration this many seconds after the common start (C4: S2 at +45 s)")
     ap.add_argument("--py", type=str, default="auto")
     ap.add_argument("--node_extra", type=str, default="")
     ap.add_argument("--connect_timeout", type=float, default=2400.0)

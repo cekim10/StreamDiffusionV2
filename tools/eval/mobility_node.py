@@ -1921,6 +1921,25 @@ class Node(M3NodeMixin):
                 fl["throttle"].rate = rate / 8.0
         return {}
 
+    def cmd_coord_set_rate(self, h):
+        """Rate coordinator (osdi/concurrency/pilot_protocol.md stage 2): re-rate a running transfer of this node. kind
+        precopy = the current XB pre-copy task's pacer (Sink rounds, log, patches share it), inputs = the recompute task's
+        input-stream pacers, full = the Full state transfer's pacer. Only the rate changes; nothing is resent."""
+        r, bps, n = self.run, float(h["rate_bps"]), 0
+        if h["flow_kind"] == "precopy":
+            t = r.get("xb")
+            if t is not None and t.get("id") == h["id"] and t.get("throttle") is not None:
+                t["throttle"].rate = bps / 8.0; n = 1
+        elif h["flow_kind"] == "inputs":
+            for thr in (r.get("coord_thr") or {}).get(h["id"], []):
+                thr.rate = bps / 8.0; n += 1
+        elif h["flow_kind"] == "full":
+            st = r.get("full_xfer")
+            if st is not None and st.get("xfer") == h["id"] and st["pacer"].rate > 0:
+                st["pacer"].rate = bps / 8.0; n = 1
+        self.event("coord_rate_applied", flow_kind=h["flow_kind"], id=h["id"], rate_bps=bps, updated=n)
+        return {"updated": n}
+
     def cmd_flow_cancel(self, h):
         fl = self.flows.get(h["flow_id"])
         if fl is None:
@@ -2869,6 +2888,8 @@ class Node(M3NodeMixin):
         futs = [self._codec_pool().submit(enc, a, b) for a, b in segs]
         conn = tcp_connect(h["to_host"], int(h["to_port"]), self.a.mss, timeout=60)
         thr = Throttle(float(h["rate_bps"])) if float(h.get("rate_bps") or 0) > 0 else None
+        if thr is not None:   # rate coordinator (concurrency pilot): this part's pacer can be re-rated while it sends
+            self.run.setdefault("coord_thr", {}).setdefault(h["task"], []).append(thr)
         sent = raw = 0
         enc_s = 0.0
         for i, ((a, b), fu) in enumerate(zip(segs, futs)):
