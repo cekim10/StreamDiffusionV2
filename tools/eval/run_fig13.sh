@@ -74,7 +74,7 @@ case "${1:-}" in
     guard A,B,C,D
     otter P1 dog 0 74 1 > /tmp/f13_first_P1.log 2>&1 &
     otter P2 dog 0 74 2 > /tmp/f13_first_P2.log 2>&1 &
-    wait; tail -3 /tmp/f13_first_P1.log /tmp/f13_first_P2.log ;;
+    wait; tail -n 3 /tmp/f13_first_P1.log /tmp/f13_first_P2.log ;;
   rest1)
     guard A,B; rest P1 "$IN_P1" "$IN_P2" ;;
   rest2)
