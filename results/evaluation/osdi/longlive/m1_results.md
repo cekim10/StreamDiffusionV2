@@ -11,6 +11,14 @@ Rules: `m1_prereg.md` section 5. Measured on the testbed; PSNR vs the source's s
 | p1_s0 | 3.24 / 49.72 | -46.48 | 59.23 / 47.47 | 11.75 | 0.87 / 5.06 |
 | p1_s1 | 3.24 / 49.53 | -46.28 | 59.22 / 47.28 | 11.94 | 0.87 / 5.06 |
 
+**Reading (section 5, as written):** M1 works on LongLive (exact, continuous, fewer bytes) but is not faster to be ready than Full: functional generality of M1 shown, performance generality not.
+
+Readiness of otter_w96, medians over its runs (s; measured, destination clock):
+
+| sink transfer | import | context-only replay | VAE rebuild | decode-replay | other | readiness | Full: transfer / import / readiness |
+|---|---|---|---|---|---|---|---|
+| 7.22 | 0.26 | 31.56 (113 calls, 0.280 s each) | 8.77 | 10.28 (10 calls) | 0.75 | 58.69 | 46.89 / 0.54 / 47.45 |
+
 | arm | stream | runs | readiness (s) | max output gap (s) | delivery gap (s) | src interval before / during migration (s) | log copy (ms) | bytes to switch (GiB) | W1 / W2 / W3 PSNR (dB) | first call | frames bit-exact | latents equal | frames complete | timeouts |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | otter_w96 | p0 s0 | 2 | 59.43 | 3.23 | 3.23 | 2.11 / 2.12 | 0.1 | 0.87 | 99.0 / 99.0 / 99.0 | 99.0 | 100-100 | 100 / 100 | True | 0 |

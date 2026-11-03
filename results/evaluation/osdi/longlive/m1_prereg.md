@@ -144,3 +144,16 @@ the 9 clock pings (small) passed, the sink snapshot never arrived, the destinati
 served until its RoPE budget (rerun: source-forced stop at call 241, destination still waiting for the state, both
 sockets' queues empty). Fixed: `tcp_listen` / `tcp_accept` / `tcp_connect` with the default MSS cap (`--mss`; 0 only
 for the macOS loopback test). The rerun's p0 s0 r1 logs are kept with the first failure's in `_failed_20261102/`.
+
+## Outcome (2026-11-02, 32 runs at 4b2c2d9b; rules above unchanged; `m1_results.md`)
+
+otter_w96: R1a / R1b / R1c, R2, R3 (4 / 4 streams, gap 3.23-3.24 s vs Full 49.5-49.8 s), R5 (0.87 vs 5.06 GiB) HOLD;
+R4 FAILS (0 / 4: readiness 58.4-59.4 s vs Full 47.3-47.6 s, +11.1 to +11.9 s). Reading as written: M1 works on LongLive
+(exact, continuous, fewer bytes) but is not faster to be ready than Full; functional generality of M1 shown,
+performance generality not. Frame fidelity (separate): 100 / 100 frames bit-exact in every run. Logging cost: latent
+copy 0.1-0.2 ms per call, source call interval 2.11-2.13 s before and during the migration. Readiness (medians): sink
+7.2 + context-only replay 31.6 (113 calls x 0.280 s; the derived 0.28 s confirmed) + VAE rebuild 8.8 + decode-replay of
+the calls made meanwhile 10.3 (10 calls) + 0.8 s; the prediction (45-55 s) left out most of the decode-replay. Controls
+as predicted: otter_w12 W3 23.8-30.3 dB, recache W3 20.2-30.8 dB (readiness 31.9 / 10.6 s, gaps 3.2 / 4.1 s). One move at
+1 Gbps; a faster link shortens Full's transfer and not the replay. The two failed jobs' logs (harness defect above) are
+kept on elves-01 (`migrate_m1/_failed_20261102/`; logs are not tracked by git).

@@ -149,6 +149,32 @@ def cmd_report_m1(a):
             g, r, b = x["max_output_gap_s"], x["readiness_s"], x["bytes_until_switch"]
             L.append(f"| {k} | {f(g[0])} / {f(g[1])} | {f(g[0] - g[1]) if ok(g) else '-'} | {f(r[0])} / {f(r[1])} | "
                      f"{f(r[0] - r[1]) if ok(r) else '-'} | {f(b[0] / 2 ** 30 if b[0] else None)} / {f(b[1] / 2 ** 30 if b[1] else None)} |")
+        r134 = v["R1"] and r2 and n3 >= 3 and r5
+        reading = ("not applicable (R1 / R2 / R3 / R5 do not all hold; see section 5)" if not r134 else
+                   "M1 carries over to LongLive with a longer replay horizon: shorter readiness, a short cutover and fewer bytes than Full "
+                   "(one move, 1 Gbps)" if n4 >= 3 else
+                   "M1 works on LongLive (exact, continuous, fewer bytes) but is not faster to be ready than Full: functional generality "
+                   "of M1 shown, performance generality not")
+        v["reading"] = reading
+        # readiness components (record only): per-call replay times come from the destination's replay log
+        def parts(d):
+            rp = d.get("replay") or []
+            ctx, dec = [x["dt_s"] for x in rp if not x["decoded"]], [x["dt_s"] for x in rp if x["decoded"]]
+            known = d["state_transfer_s"] + d["import_s"] + sum(ctx) + (d.get("vae_rebuild_s") or 0) + sum(dec)
+            return {"xfer": d["state_transfer_s"], "import": d["import_s"], "n_ctx": len(ctx), "ctx": sum(ctx),
+                    "ctx_call": st.median(ctx) if ctx else None, "vae": d.get("vae_rebuild_s") or 0, "n_dec": len(dec),
+                    "dec": sum(dec), "other": d["readiness_s"] - known, "ready": d["readiness_s"]}
+        P = [parts(d) for d in W]
+        if P:
+            m = {k: med([p[k] for p in P]) for k in P[0]}
+            fu = [d for ds in runs.get("full", {}).values() for d in ds]
+            L += ["", f"**Reading (section 5, as written):** {reading}.", "",
+                  "Readiness of otter_w96, medians over its runs (s; measured, destination clock):", "",
+                  "| sink transfer | import | context-only replay | VAE rebuild | decode-replay | other | readiness | Full: transfer / import / readiness |",
+                  "|---|---|---|---|---|---|---|---|",
+                  f"| {f(m['xfer'])} | {f(m['import'])} | {f(m['ctx'])} ({m['n_ctx']:.0f} calls, {f(m['ctx_call'], 3)} s each) | {f(m['vae'])} | "
+                  f"{f(m['dec'])} ({m['n_dec']:.0f} calls) | {f(m['other'])} | {f(m['ready'])} | "
+                  f"{f(med([d['state_transfer_s'] for d in fu]))} / {f(med([d['import_s'] for d in fu]))} / {f(med([d['readiness_s'] for d in fu]))} |"]
         L.append("")
     L += ["| arm | stream | runs | readiness (s) | max output gap (s) | delivery gap (s) | src interval before / during migration (s) | log copy (ms) | bytes to switch (GiB) | W1 / W2 / W3 PSNR (dB) | first call | frames bit-exact | latents equal | frames complete | timeouts |",
           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
