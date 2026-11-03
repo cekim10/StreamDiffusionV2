@@ -88,7 +88,7 @@ grow about linearly in k. At 1 Gbps, larger k hurts more (staging competes with 
 |---|---|---|---|
 | shared-link bandwidth | yes (fluid max-min per site link) | one session's own flows (Fig. 11 gate) | two sessions via the concurrency pilot's C3 (if approved); compare the simulator on the same two-session schedule |
 | destination GPU replay contention | not applicable: one session per GPU, migrations go to a free GPU | same (two sessions do not fit one L40S) | stated as a model scope, not modelled |
-| staging vs migration traffic | yes (equal-weight flows on the same links) | no (needs M3 + two sessions = 6 GPUs) | sensitivity only (S-B slow-link cell); not claimed as validated |
+| staging vs migration traffic | yes (equal-weight flows on the same links) | not yet; feasible with GPU 1 (concurrency pilot C4) | compare with C4 if run; else sensitivity only (S-B slow-link cell) |
 | memory pressure -> staging failure | host-memory budget M, LRU | retained / staged bytes recorded (Fig. 14, long-age runs) | S-B reports evictions; GPU memory not involved |
 
 Any simulator change (S-A' core link, or a fix after C3) re-runs the validation gate. The 76 / 76 PASS is not carried
