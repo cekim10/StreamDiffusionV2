@@ -116,3 +116,22 @@ Reported but not tested:
 | D4 | 1 Gbps re-measured |
 | D5 | P-full at 0.25 / 0.5 Gbps run to the round limit |
 | D6 | H1 2.5 s, H2 share 0.5, shrink ratio 0.5 kept; H2's threshold is stated as previously informed (Fig. 7's 0.73 [K]) |
+
+## Outcome (2026-11-03; 120 / 120 runs valid at 355ce187; rules above unchanged; `fig12_results.md`)
+
+- **F12-H1 SUPPORTED:** OTTER median gap 1.59-1.79 s at every bandwidth, both workloads (prediction about 1.6 s).
+- **F12-H2 NOT SUPPORTED:** dog's sink_share is 0.75-0.78 at 0.25 / 0.5 / 1 Gbps, but butterfly's is 0.45 at 0.25 Gbps
+  (0.72 at 0.5, 0.74 at 1). There the catch-up is 83 s (sink 70.2 s, first output 154.9 s) and OTTER sends 4.67 GB vs
+  2.25 GB at 1 Gbps. [H, derived from bytes, not separately measured] At 0.25 Gbps the high-refresh input's Sink
+  refreshes made during the long transfer accumulate, and shipping them (about 2.4 GB, about 80 s at 0.25 Gbps)
+  becomes the catch-up. B*: dog native, butterfly 0.25 Gbps. (H2's threshold was previously informed.)
+- **F12-H3 SUPPORTED:** OTTER's gap < every baseline's at every bandwidth, both workloads. OTTER / best baseline is
+  0.085-0.093 when shaped, 0.22 at native (vs Full 7.3 s); benefit-shrink region: none.
+- **Native** (always with its throughput): Full peaks at 5.3 Gbps at B, OTTER at 1.4-1.6 Gbps; OTTER's 2.5 Gbps and
+  native cells also peak at 1.4-1.6 Gbps, so above about 1.5 Gbps OTTER's transfer is not link-bound. Full reaches local
+  service sooner at native (TTFO-local 7.3 vs 11.4 / 11.6 s).
+- **Exploratory TTFO-local vs R-full (prediction held):** OTTER / R-full is 2.00 / 1.11 (dog) and 4.03 / 1.29
+  (butterfly) at 0.25 / 0.5 Gbps, and 0.63-0.68 at 1 Gbps; log-interpolated crossover about 0.57 Gbps (dog) and
+  0.66 Gbps (butterfly). As written: below about 0.6 Gbps OTTER keeps continuity but reaches local readiness later
+  than recomputation.
+- P-full reached no round limit (0 runs).
