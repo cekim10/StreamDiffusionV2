@@ -136,3 +136,11 @@ its progress (state arrival, every 10th replayed call with backlog and per-call 
 and the runner starts both with `python -u`. Loopback test ALL PASS, plus a source-budget test (tiny model, trigger
 330: the source stops at 337, the run ends with a JSON marked as a failure). The two failed jobs' logs are kept
 (`migrate_m1/_failed_20261102/`); both jobs are rerun.
+
+**Root cause of the failed jobs (found 2026-11-02 on the rerun's first job):** `ll_migrate.py` used plain sockets, not
+the harness transport policy (tools/eval/common.py: TCP_MAXSEG 1,400 on the listening and the connecting socket). The
+elves path drops jumbo frames while the NICs advertise MTU 9,200, so uncapped TCP blackholed every large segment:
+the 9 clock pings (small) passed, the sink snapshot never arrived, the destination never started, and the source
+served until its RoPE budget (rerun: source-forced stop at call 241, destination still waiting for the state, both
+sockets' queues empty). Fixed: `tcp_listen` / `tcp_accept` / `tcp_connect` with the default MSS cap (`--mss`; 0 only
+for the macOS loopback test). The rerun's p0 s0 r1 logs are kept with the first failure's in `_failed_20261102/`.

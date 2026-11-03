@@ -46,7 +46,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "eval"))
 import ll_runtime as llr  # noqa: E402
-from common import Throttle  # noqa: E402
+from common import DEFAULT_MSS, Throttle, tcp_accept, tcp_connect, tcp_listen  # noqa: E402
 
 SNAP = ["sink_kv", "window_kv"]
 SHIP = {"snap": SNAP, "replay": ["sink_kv"], "recache": ["sink_kv"]}   # full: FULL
@@ -149,16 +149,9 @@ def frame_digest(fr):
 # ------------------------------------------------------------------ source
 def source(a, model):
     host, port = a.peer.rsplit(":", 1)
-    t_end = time.time() + 300
-    while True:
-        try:
-            sock = socket.create_connection((host, int(port)), timeout=10); break
-        except OSError:
-            if time.time() > t_end:
-                raise
-            time.sleep(1)
-    sock.settimeout(None)
-    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    # harness transport policy (tools/eval/common.py): MSS capped before connect; the elves path drops jumbo frames
+    # while the NICs advertise MTU 9200, so uncapped TCP blackholes large segments (small messages still pass)
+    sock = tcp_connect(host, int(port), a.mss or None, timeout=300)
     lock = threading.Lock()
     for _ in range(a.pings):   # clock: answer the destination's pings
         h, _ = recv_msg(sock)
@@ -253,13 +246,11 @@ def source(a, model):
 
 # ------------------------------------------------------------------ destination
 def destination(a, model):
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind(("0.0.0.0", a.port)); srv.listen(1)
-    sock, peer = srv.accept()
+    srv = tcp_listen("0.0.0.0", a.port, a.mss or None, backlog=1)   # MSS capped (harness transport policy)
+    sock = tcp_accept(srv, a.mss or None)
+    peer = sock.getpeername()
     t_accept = time.time()
-    print(f"[dst] connected from {peer[0]}", flush=True)
-    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    print(f"[dst] connected from {peer[0]} (MSS cap {a.mss or 'none'})", flush=True)
     lock = threading.Lock()
     best = None
     for _ in range(a.pings):
@@ -524,6 +515,7 @@ def main():
     ap.add_argument("--bw_mbps", type=float, default=1000.0)
     ap.add_argument("--max_catchup_s", type=float, default=300.0, help="replay / snap: catch-up timeout after the state arrived (a migration failure; the run then switches as a diagnostic)")
     ap.add_argument("--pings", type=int, default=9)
+    ap.add_argument("--mss", type=int, default=DEFAULT_MSS, help="TCP_MAXSEG on both sockets (harness policy; 0 = uncapped, loopback tests)")
     ap.add_argument("--burst_bytes", type=int, default=1 << 20, help="token bucket burst (tests: small, so a tiny state is shaped)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--prompt_idx", type=int, default=0)

@@ -24,7 +24,7 @@ def chk(c, m):
 
 def run(method, bw, port, k_vae=12, extra=()):
     out = Path(tempfile.mkdtemp()) / f"{method}.json"
-    common = [*extra, "--method", method, "--tiny", "--at", "14", "--verify", "4", "--k_vae", str(k_vae), "--bw_mbps", str(bw), "--burst_bytes", "256", "--max_catchup_s", "15",
+    common = [*extra, "--method", method, "--tiny", "--at", "14", "--verify", "4", "--k_vae", str(k_vae), "--bw_mbps", str(bw), "--burst_bytes", "256", "--max_catchup_s", "15", "--mss", "0",
               "--prompt", "a boy on a lawn"]
     dst = subprocess.Popen([sys.executable, str(HERE / "ll_migrate.py"), "dst", "--port", str(port), "--out", str(out), *common])
     src = subprocess.Popen([sys.executable, str(HERE / "ll_migrate.py"), "src", "--peer", f"127.0.0.1:{port}", *common],
