@@ -48,7 +48,7 @@ case "${1:-}" in
     guard A,B,C,D
     orch P1 dog 250 precopy_replay 1 > /tmp/f12_first_P1.log 2>&1 &
     orch P2 bfly 0 precopy_replay 1 > /tmp/f12_first_P2.log 2>&1 &
-    wait; tail -3 /tmp/f12_first_P1.log /tmp/f12_first_P2.log ;;
+    wait; tail -n 3 /tmp/f12_first_P1.log /tmp/f12_first_P2.log ;;
   rest1)
     guard A,B; rest P1 dog 250 ;;
   rest2)
