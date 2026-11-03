@@ -205,9 +205,15 @@ def source(a, model):
     for c in sorted(pre):
         snd.put("LOG", {"call": c, "pre": True}, tensor_bytes(pre[c]))
     log_copy_s = []
+    src_forced = False
     if a.method in LIVE:
         switch = None
         while switch is None:
+            if s.call + a.verify >= model.max_calls:   # RoPE budget: stop before the shadow would overflow it
+                src_forced = True
+                print(f"[src] call {s.call}: no switch request; stopping (RoPE budget {model.max_calls} calls, "
+                      f"{a.verify} shadow calls): a migration failure", flush=True)
+                break
             try:
                 h = ctl.get_nowait()
                 if h["kind"] == "SWITCH_REQ":
@@ -224,7 +230,8 @@ def source(a, model):
     s_call = s.call
     if a.method == "recache":   # what LongLive's recache needs at the switch call: counters and the latent buffer
         queue_state(snd, s.export_state(["latent_buffer"]), "STOPSTATE")
-    snd.put("STOP", {"s": s_call, "t_last_frame": t_last, "t_trigger": t_trigger}, mark="stop_sent")
+    print(f"[src] stop at call {s_call} ({'source-forced' if src_forced else 'switch requested'})", flush=True)
+    snd.put("STOP", {"s": s_call, "t_last_frame": t_last, "t_trigger": t_trigger, "src_forced": src_forced}, mark="stop_sent")
     snd.put("STATE_FP", {"fp": s.fingerprint()})
     for v in range(a.verify):   # shadow: the source's continuation, never served; its frames for the per-call PSNR
         o = s.step()
@@ -250,6 +257,8 @@ def destination(a, model):
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(("0.0.0.0", a.port)); srv.listen(1)
     sock, peer = srv.accept()
+    t_accept = time.time()
+    print(f"[dst] connected from {peer[0]}", flush=True)
     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     lock = threading.Lock()
     best = None
@@ -317,6 +326,9 @@ def destination(a, model):
                 ev.setdefault("first_log_t", h["t"])
         elif k == "STOP":
             stop = h
+            if h.get("src_forced"):   # the source stopped on its own (RoPE budget): a migration failure, whatever was requested
+                ev["switch_forced"] = ev["src_forced"] = True
+                print(f"[dst] the source stopped at call {h['s']} on its own (RoPE budget): migration failure", flush=True)
         elif k == "STATE_FP":
             fp_src = h["fp"]
         elif k == "SHADOW":
@@ -333,6 +345,7 @@ def destination(a, model):
         r = pump()
         if r and r[0]["kind"] == "STATE":
             ev["state_recv_t"], snapshot = r[0]["t"], r[1]
+            print(f"[dst] state received {ev['state_recv_t'] - t_accept:.1f} s after the connection", flush=True)
             break
     t0 = time.time()
     s = llr.LLSession(model, [a.prompt], seed=a.seed).start()
@@ -369,6 +382,7 @@ def destination(a, model):
                 s.warm_decoder_from(blocks)
                 model.sync()
                 ev["vae_rebuild_s"], ev["vae_rebuild_blocks"], vae_ready = time.time() - t1, len(blocks), True
+                print(f"[dst] caught up at call {nxt}: VAE rebuilt from {len(blocks)} blocks in {ev['vae_rebuild_s']:.1f} s", flush=True)
                 continue
             if nxt in logs:
                 t1 = time.time()
@@ -377,12 +391,19 @@ def destination(a, model):
                 decoded += int(vae_ready)
                 replay_log.append({"call": nxt, "t": time.time(), "dt_s": time.time() - t1, "decoded": vae_ready,
                                    "backlog": None if latest_next is None else latest_next - s.call})
+                if len(replay_log) % 10 == 1:
+                    rl = replay_log[-1]
+                    print(f"[dst] replayed call {nxt} ({len(replay_log)} so far, {rl['dt_s']:.3f} s, decode {vae_ready}); source next "
+                          f"{latest_next}, backlog {rl['backlog']}; {time.time() - ev['state_recv_t']:.1f} s after the state", flush=True)
                 continue
             if stop is not None and s.call >= stop["s"]:
                 break
+            if stop is not None:
+                switch_sent = True
             if vae_ready and caught_up and not switch_sent:
                 send_msg(sock, lock, "SWITCH_REQ", {"at_call": s.call, "t": time.time(), "forced": False})
                 switch_sent, ev["switch_req_t"], ev["switch_forced"] = True, time.time(), False
+                print(f"[dst] switch requested at call {s.call}, {time.time() - ev['state_recv_t']:.1f} s after the state", flush=True)
             pump(block=True)
     elif a.method == "recache":
         send_msg(sock, lock, "SWITCH_REQ", {"at_call": M, "t": time.time(), "forced": False})
@@ -461,7 +482,7 @@ def destination(a, model):
            "state_transfer_s": ev["state_recv_t"] - t_trigger, "import_s": ev["import_s"],
            "replayed_calls": len(replay_log), "vae_rebuild_blocks": ev.get("vae_rebuild_blocks"), "vae_rebuild_s": ev.get("vae_rebuild_s"),
            "replayed_with_decode": decoded,
-           "switch_forced": ev.get("switch_forced", False),
+           "switch_forced": ev.get("switch_forced", False), "src_forced": ev.get("src_forced", False),
            "switch_req_after_trigger_s": (ev["switch_req_t"] - t_trigger) if "switch_req_t" in ev else None,
            "bytes_sent": done["sent_bytes_before_done"], "replay": replay_log}
     print(f"[ll_migrate] {a.method}: switch at call {stop['s']} (trigger {a.at}); state exact {res['state_exact']}; post-cutover "

@@ -105,6 +105,7 @@ class LLModel:
         self.global_sink = bool(getattr(cfg, "global_sink", False))
         self.latent = tuple(latent)
         self.frame_seq_length = (self.latent[1] // 2) * (self.latent[2] // 2)   # patch (1, 2, 2)
+        self.max_calls = 1024 // self.F   # the RoPE table covers 1,024 latent frames (wan/modules/model.py rope_params(1024))
         base = self.base_model()
         self.num_layers = len(base.blocks)
         self.num_heads = base.num_heads

@@ -123,3 +123,16 @@ Tools: `tools/longlive/ll_migrate.py` (methods replay, recache, full; snap kept 
 127.0.0.1 (replay W8: state exact, post-cutover latents 4 / 4 and frames 4 / 4 equal the shadow, fewer bytes than full;
 recache runs and is complete; per-call PSNR vs the shadow and the maximum output gap recorded): ALL PASS. On the CPU
 tiny model decode-replay is about as fast as generation, so its replay runs switch by the safeguard; GPU costs differ.
+
+## Harness defect and fix (2026-11-02, after the first two jobs; before any valid run)
+
+The first otter_w96 and otter_w12 jobs (p0 s0 r1, one per lane) failed: the destination did not catch up within the
+300 s timeout (cause not yet known: its log was lost because the agent-run process was block-buffered and was killed
+afterwards), the timeout's diagnostic switch came near call 266, and the source's 100 shadow calls then ran past
+LongLive's RoPE table (1,024 latent frames = 341 calls; `causal_rope_apply` shape error), so the source crashed and
+no JSON was written. Fix (no rule changed): the source stops on its own when its next call plus the shadow would
+exceed 341 calls and reports it (`src_forced`; counted as a migration failure, as a timeout); the destination prints
+its progress (state arrival, every 10th replayed call with backlog and per-call time, VAE rebuild, switch request)
+and the runner starts both with `python -u`. Loopback test ALL PASS, plus a source-budget test (tiny model, trigger
+330: the source stops at 337, the run ends with a JSON marked as a failure). The two failed jobs' logs are kept
+(`migrate_m1/_failed_20261102/`); both jobs are rerun.

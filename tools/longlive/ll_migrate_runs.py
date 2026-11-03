@@ -60,11 +60,11 @@ def run_job(ag_src, ag_dst, dst_host, port, job, a):
     nm = name(r, p, s, arm, a.bw_mbps)
     common = [*ARMS[arm], "--at", str(a.at), "--verify", str(a.verify), "--bw_mbps", str(a.bw_mbps), "--prompt_idx", str(p),
               "--seed", str(s), "--max_catchup_s", str(a.max_catchup_s)]
-    py = ".venv/bin/python"
-    pd = ag_dst.run([py, "tools/longlive/ll_migrate.py", "dst", "--port", str(port), "--out", f"{REL}/{nm}.json", *common],
+    py = ".venv/bin/python"   # with -u below: unbuffered, so a killed process still leaves its log
+    pd = ag_dst.run([py, "-u", "tools/longlive/ll_migrate.py", "dst", "--port", str(port), "--out", f"{REL}/{nm}.json", *common],
                     log=f"{REL}/{nm}.dst.log")
     time.sleep(3)
-    ps = ag_src.run([py, "tools/longlive/ll_migrate.py", "src", "--peer", f"{dst_host}:{port}", *common], log=f"{REL}/{nm}.src.log")
+    ps = ag_src.run([py, "-u", "tools/longlive/ll_migrate.py", "src", "--peer", f"{dst_host}:{port}", *common], log=f"{REL}/{nm}.src.log")
     rs, rd = ag_src.wait(ps, 3600), ag_dst.wait(pd, 3600)
     ok = rs.get("rc") == 0 and rd.get("rc") == 0
     OUT.mkdir(parents=True, exist_ok=True)
