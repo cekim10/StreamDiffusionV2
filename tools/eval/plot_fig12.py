@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-from plot_fig7_migration import AXES_POS, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE, LEGEND, ROOT, YLABEL_X, annotate, configure, finish_axes
+from plot_fig7_migration import AXES_POS, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE, LEGEND, ROOT, annotate, configure, finish_axes
 
 # canvas and axes box of Fig. 7 / Fig. 8 (user 2026-11-03: Fig. 12a panels the same size as Fig. 8a, b)
 BWS = (250, 500, 1000, 2500, 0)
@@ -33,13 +33,6 @@ NAME = {"full": "Full", "precopy_full": "Llumnix", "recompute_full": "SLLM", "pr
 STYLE = {"full": (DIM_GRAY, "s", (0, (5, 2))), "precopy_full": (DARK_GRAY, "D", (0, (2, 1.5))), "recompute_full": ("black", "^", (0, (6, 2, 1, 2))),
          "precopy_replay": (BLUE, "o", "-")}
 WL = ("dog", "bfly")
-TTFO_LABEL = "Time to first local output (s)"   # user 2026-11-03; 4.4 in at 28 pt: longer than the axes,
-TTFO_LABEL_Y = (0.5 - AXES_POS[1]) / AXES_POS[3]   # so centred on the figure instead (axes coordinates), never a smaller font
-
-
-def ttfo_label(ax):
-    finish_axes(ax, TTFO_LABEL)
-    ax.yaxis.set_label_coords(YLABEL_X, TTFO_LABEL_Y)
 
 
 def save(fig, out: Path):
@@ -73,8 +66,6 @@ def lines(cells, w, key, ylabel, out):
                     mfc="white" if m != "precopy_replay" else col, mec=col, mew=1.6, capsize=3, zorder=4 if m == "precopy_replay" else 3)
     xaxis(ax)
     finish_axes(ax, ylabel)
-    if ylabel == TTFO_LABEL:
-        ax.yaxis.set_label_coords(YLABEL_X, TTFO_LABEL_Y)
     hs = [Line2D([], [], color=STYLE[m][0], ls=STYLE[m][2], marker=STYLE[m][1], ms=9, mfc="white" if m != "precopy_replay" else STYLE[m][0],
                  mec=STYLE[m][0], lw=2, label=NAME[m]) for m in METHODS]
     ax.legend(handles=hs, loc="upper right", frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.3, labelspacing=0.15,
@@ -100,7 +91,7 @@ def ready(cells, w, out):
     ax.set_xticks(xs); ax.set_xticklabels(XT)
     ax.set_xlim(-0.6, len(BWS) - 0.4)
     ax.set_xlabel("Bandwidth (Gbps)", fontsize=28, labelpad=2)
-    ttfo_label(ax)
+    finish_axes(ax, "Time (s)")
     ax.set_ylim(0, max(bottom + [1]) * 1.45)
     ax.legend(handles=[Patch(facecolor=BLUE, edgecolor="black", label="Sink transfer"), Patch(facecolor="#9DB3F0", edgecolor="black", hatch="//", label="Catch-up"),
                        Patch(facecolor=DARK_GRAY, edgecolor="black", label="Switch")], loc="upper right", frameon=False, fontsize=LEGEND,
@@ -129,7 +120,7 @@ def ready_cmp(cells, b, out):
     ax.set_xticks(range(len(WL))); ax.set_xticklabels(["Low-refresh", "High-refresh"])
     ax.set_xlim(-0.45, len(WL) - 0.55)   # the two 28 pt tick labels need the room
     ax.set_xlabel(f"Input at {X[b]:g} Gbps", fontsize=28, labelpad=2)
-    ttfo_label(ax)
+    finish_axes(ax, "Time (s)")
     ax.tick_params(axis="x", length=0)
     ax.set_ylim(0, top)
     ax.legend(handles=[Patch(facecolor=BLUE, edgecolor="black", label="Sink transfer"), Patch(facecolor="#9DB3F0", edgecolor="black", hatch="//", label="Catch-up"),
@@ -150,7 +141,7 @@ def main():
         if not any(cells[f"{w}|{b}|{m}"]["n_valid"] for b in BWS for m in METHODS):
             continue
         lines(cells, w, "delivery_gap_s", "Max. output gap (s)", out / f"fig12a_gap_{w}")
-        lines(cells, w, "ttfo_local_s", TTFO_LABEL, out / f"fig12a_ttfo_{w}")
+        lines(cells, w, "ttfo_local_s", "TTFO-local (s)", out / f"fig12a_ttfo_{w}")
         ready(cells, w, out / f"fig12a_ready_{w}")
     if all(cells[f"{w}|250|precopy_replay"]["n_valid"] for w in WL):
         ready_cmp(cells, 250, out / "fig12a_ready_cmp_bw250")
