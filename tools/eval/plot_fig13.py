@@ -25,10 +25,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 
-from plot_fig7_migration import BLUE, DARK_GRAY, DIM_GRAY, LEGEND, ROOT, configure, finish_axes
+from plot_fig7_migration import AXES_POS as AXES_POS_78, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE as FIG_SIZE_78, LEGEND, ROOT, configure, finish_axes
 
 FIG_SIZE = (5.83, 4.78)
-AXES_POS = [0.18, 0.22, 0.79, 0.75]
+AXES_POS = [0.18, 0.22, 0.79, 0.75]   # 13b, 13c; 13a uses the Fig. 7 / 8 canvas (user 2026-11-03: same size as fig8a)
 LIGHT_BLUE = "#9DB3F0"
 REFRESH = {"dog": 3.6, "bird": 3.6, "boxing": 8.2, "basketball": 9.1, "hockey": 16.4, "swimmer": 22.7, "train": 34.5, "audi": 53.6,
            "circus": 89.1, "bfly": 128.2}
@@ -57,7 +57,7 @@ def pct(xs, q):
 def panel_a(runs, out):
     """User decision 2026-11-02 (main text): OTTER's median over all its conditions (150, diverged or not) with the
     P10-P90 band, and P-sink's median (S = 74) dashed; windows marked. Per-input detail is a table in the text."""
-    fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
+    fig = plt.figure(figsize=FIG_SIZE_78); ax = fig.add_axes(AXES_POS_78)
     ks = list(range(1, 101))
     ot = [series(r) for r in runs if r["method"] == "otter" and r["rep"] == 1 and r["valid"]]
     if ot:
