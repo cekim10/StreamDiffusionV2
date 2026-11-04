@@ -1,4 +1,4 @@
-# Formal concurrency experiment: design (DRAFT 2 + user decisions D1-D4, 2026-11-04; not frozen, nothing run)
+# Formal concurrency experiment: design (DRAFT 3 = DRAFT 2 + user decisions D1-D4 + reprioritization P1-P5, 2026-11-04; not frozen, nothing run)
 
 Basis:
 - Pilot stages 1-2 (`pilot_protocol.md` sections 10-15).
@@ -44,6 +44,17 @@ On DRAFT 2 (2026-11-04):
 | D2 | X2s overlap = contention evidence, not validity: approved |
 | D3 | S2-alone at +45 s and +90 s: approved |
 | D4 | freeze only after `test_xb` (elves-01) and `wc_live` pass and are reviewed |
+
+Reprioritization (2026-11-04, after the remaining-work estimate; the paper's main evaluation stays at 5-6 figures,
+and the remaining experiments strengthen claims already supported, they do not complete them):
+
+| item | decision |
+|---|---|
+| P1 | X2 reduced to **3 repetitions per cell: 8 cells x 3 = 24 runs** (DRAFT 2: 5 reps, 40 runs). The cells, measures, validity rules and hypotheses are unchanged |
+| P2 | with 3 reps the text reports the **observed trade-off** (M3's gain to S1 and its cost to S2, by contention phase), not a strong generalization; every run is shown next to the medians |
+| P3 | **X1 ON HOLD** (run only if time remains after the items below). Without X1 the paper does not claim that continuity under multi-session contention is verified; Fig. 12 (bandwidth sensitivity) is not a substitute for it |
+| P4 | order: `test_xb` + `wc_live` -> freeze -> X2 (24 runs) -> Fig. 10 long-age (exploratory) -> E9 finalization -> [A11] sensitivity -> X1 if time remains -> Fig. 13 strips (optional) |
+| P5 | X2 results go into a small figure or a table, not a main figure |
 
 ## 1. Questions and the three results the experiment is for
 
@@ -134,7 +145,9 @@ share while it sends slowly. Example: the M3-arm C -> D sent 12 MB in 1.45 s. Th
 | repeat of `dry_wc` with sampling: run 1 one interval 89 vs 100 Mbps allocated (-11 %, FAIL at the 10 % rule; the Mac running four dry processes), run 2 ALL PASS (95-202 vs 100-200) | Mac dry runs are a plumbing check; the rule is applied on the testbed |
 | **`run_conc.sh wc_live` on the testbed (C3b placement, OTTER / OTTER, dog, T 100, S2 at +8 s; about 20 min)**: S2 expected 500 -> 900 -> 1,000 Mbps achieved within 10 %, host NIC burst <= 1.15 x and 10 s <= 1.05 x; tail record per D1 (bytes, reservation, seconds at >= 95 % of it, the other flow's throughput meanwhile) | needs a run by the user |
 
-## 3. Experiment X1: continuity under a shared link (extends C3b)
+## 3. Experiment X1: continuity under a shared link (extends C3b) - ON HOLD (P3)
+
+Kept as designed so it can run later without a new draft; nothing below is run before the user lifts the hold.
 
 Placement: S1 elves-01:0 -> elves-03:0 and S2 elves-01:1 -> elves-03:1 (C3b), on one shared 1 Gbps egress at
 elves-01 and ingress at elves-03 through the tail-aware coordinator. Fig. 7 single-migration configuration;
@@ -187,7 +200,7 @@ Common:
 | m-M3 | M3 | yes | +90 s = start of S1's C -> D move | X2m |
 | m-noM3 | no M3 | yes | +90 s | X2m |
 
-- 8 cells x 5 reps = 40 runs, about 11 h.
+- 8 cells x 3 reps = 24 runs, about 5-7 h (P1; DRAFT 2 had 5 reps, 40 runs).
 - The two S2-alone cells differ only in the offset; with no S1, they should agree. Their agreement is reported
   (descriptive). Each concurrent cell is compared with the S2-alone cell of its own offset.
 
@@ -273,7 +286,7 @@ Each scenario is reported on its own:
   2. `wc_live` on the testbed, reviewed;
   3. freeze;
   4. X2 (rep blocks; cells within a block in a seeded random order, seed fixed at freeze);
-  5. X1, likewise.
+  5. X1, likewise, only if the hold (P3) is lifted.
 - **Invalid runs.** An invalid run is rerun once, and both records are kept (harness-bug precedent). Two invalid
   runs in one cell stop the experiment for a review.
 - **GPU guard.** Each cell runs behind the guard with a 5-minute wait loop. The state of any GPU not used is
@@ -287,8 +300,10 @@ Each scenario is reported on its own:
   - Concurrent migrations on shared hosts run without OOM or substantial throughput loss.
   - In one pilot run, M3 kept S1's gain under contention, while S2's readiness rose by 70 % and both gaps stayed
     short.
-- **After X1:** continuity under a shared link, if X1-H1 holds.
-- **After X2:**
+- **After X1 (on hold):** continuity under a shared link, if X1-H1 holds. While X1 is on hold, no claim that
+  continuity under multi-session contention is verified; the C3b pilot (one run per method, earlier harness) is
+  cited only as a pilot observation.
+- **After X2 (3 reps, P2):** stated as the observed trade-off, every run shown:
   - M3's gain, and its cost to other sessions, by the phase in which they contend.
   - OTTER's goal is service continuity, not jointly optimal readiness for every session. X2 shows the two
     separately.
