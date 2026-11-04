@@ -876,6 +876,17 @@ GRIDS = {
     # preregistered primary sweep (DRAFT; D-list): load, link, memory budget, mobility
     "primary": {"E": [16], "G": [8], "N": [32, 64, 96, 120], "C_gbps": [1.0, 10.0, 25.0], "M_gb": [0.0, 8.0, 32.0, 128.0],
                 "dwell_s": [60.0, 180.0, 600.0], "seeds": [0, 1, 2], "T_end": 9000.0, "T_warm": 1800.0},
+    # scalability extension (osdi/fig_cluster/scaling_protocol.md, DRAFT; not frozen). Same model, calibration and
+    # horizon as "primary"; only the swept dimensions differ. Points shared with "primary" must reproduce it exactly.
+    # L: load scaling, 128 GPUs (E 16 x G 8), N 16-120 (0.125-0.94 sessions per GPU), at the primary point and at 1 Gbps
+    "load": {"E": [16], "G": [8], "N": [16, 32, 48, 64, 80, 96, 112, 120], "C_gbps": [10.0, 1.0], "M_gb": [32.0], "dwell_s": [180.0],
+             "seeds": [0, 1, 2, 3, 4], "T_end": 9000.0, "T_warm": 1800.0},
+    # S: cluster-size scaling, 16-128 GPUs (256 for the simulator's wall time only), sessions per GPU fixed at 0.5 / 0.94;
+    # "points" = (E, G, N) triples instead of a product. scale = sites of 8 GPUs (E 2-32); scale_g4 = sites of 4 GPUs (E 4-64)
+    "scale": {"points": [(E, 8, int(r * E * 8)) for E in (2, 4, 8, 16, 32) for r in (0.5, 0.94)],
+              "C_gbps": [10.0], "M_gb": [32.0], "dwell_s": [180.0], "seeds": [0, 1, 2, 3, 4], "T_end": 9000.0, "T_warm": 1800.0},
+    "scale_g4": {"points": [(E, 4, int(r * E * 4)) for E in (4, 8, 16, 32, 64) for r in (0.5, 0.94)],
+                 "C_gbps": [10.0], "M_gb": [32.0], "dwell_s": [180.0], "seeds": [0, 1, 2, 3, 4], "T_end": 9000.0, "T_warm": 1800.0},
 }
 BASE_CFG = {"life_s": 1200.0, "drain_per_site_h": 0.1, "drain_s": 600.0, "k_stage": 4}
 
@@ -886,7 +897,11 @@ def sweep(grid: str, methods=METHODS, out: Path | None = None) -> list[dict]:
     keys = ("E", "G", "N", "C_gbps", "M_gb", "dwell_s")
     res = []
     t_wall = time.time()
-    for combo in itertools.product(*(g[k] for k in keys)):
+    if "points" in g:   # (E, G, N) triples x the product of the other dimensions
+        combos = [pt + rest for pt in g["points"] for rest in itertools.product(*(g[k] for k in keys[3:]))]
+    else:
+        combos = list(itertools.product(*(g[k] for k in keys)))
+    for combo in combos:
         cfg = dict(BASE_CFG, **dict(zip(keys, combo)), T_end=g["T_end"], T_warm=g["T_warm"])
         for seed in g["seeds"]:
             for meth in methods:
