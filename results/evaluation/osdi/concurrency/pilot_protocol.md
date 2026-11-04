@@ -360,3 +360,46 @@ Reading (one run per cell; pilot):
 coordinator, which returns 143, so `run_conc.sh c4 ...` exited non-zero after every cell even when the cell succeeded.
 The suggested loop (`... || break`) therefore stopped after the first cell both times: no GPU or run failure.
 `coord_down` now returns 0. No run, method or result is affected (C3b ran in one invocation; its cells all completed).
+
+## 15. C4 complete: 2 x 2 (2026-11-04; runs 0931eebb, 7fc5a30d, b7bdc0cf; report regenerated on the Mac)
+
+All four cells valid (`valid` and `condition_valid`). All allocations <= cap; every flow registered and closed.
+One run per cell (pilot): observations, not effect sizes.
+
+**Where contention happened (coordinator logs, allocation level).**
+
+| cell | shared-link s = s below alone rate | flows that shared | why |
+|---|---|---|---|
+| C4_m3_alone | 0.0 | - | one session |
+| C4_m3_conc | 27.9 | S1 M3 forward A -> D + S2 pre-copy, elves-04 ingress (500 / 500 Mbps) | staging sends to D during S2's migration |
+| C4_nom3_alone | 0.0 | - | one session |
+| C4_nom3_conc | **0.0** | none | S1's B -> C pre-copy (elves-02 -> 03) overlaps S2 (elves-03 -> 04) in time, 45-67.5 s, but on different NIC directions (elves-03 rx vs tx); S1's C -> D starts at 90 s, after S2 ended at 68.1 s |
+
+So in this scenario **contention exists only because of M3**: without staging, S1 and S2 never share a link.
+`C4_nom3_conc` is therefore not "S1 and S2 contend without M3"; it is the no-contention control for S2.
+
+**Results.**
+
+| cell | S1 N (s) | S1 R_D (s) | S1 last hop (s) | S1 gap (s) | S1 bytes (GB) | S2 TTFO-local (s) | S2 gap (s) | S2 bytes (GB) |
+|---|---|---|---|---|---|---|---|---|
+| C4_m3_alone | 57.6 | 9.96 | 10.0 | 1.43 | 5.283 | - | - | - |
+| C4_m3_conc | 57.1 | 10.11 | 10.1 | 1.44 | 5.282 | 39.42 | 1.66 | 1.793 |
+| C4_nom3_alone | 70.3 | 23.11 | 23.1 | 1.70 | 5.261 | - | - | - |
+| C4_nom3_conc | 70.6 | 23.26 | 23.3 | 1.60 | 5.261 | 23.13 | 1.70 | 1.763 |
+
+Reading:
+- **S1's M3 gain is unchanged by the second session:** R_D -13.15 s alone (23.11 -> 9.96) and -13.15 s concurrent
+  (23.26 -> 10.11); N -12.7 / -13.5 s. Its forward, slowed to 500 Mbps, still landed at 73 s, before the move at 90 s.
+- **M3 moves cost onto S2:** S2's time to first local output is 23.13 s next to S1 without staging and 39.42 s next
+  to S1 with staging (+16.3 s, +70 %). The 27.9 s at 500 Mbps on elves-04's ingress accounts for it. S2's gap is
+  unchanged (1.70 vs 1.66 s); S2 sends 30 MB more (one more pre-copy round, longer transfer).
+- Net in this scenario: S1 saves 13.2 s of readiness on its last hop; S2 loses 16.3 s of readiness. Neither session's
+  continuity (gap) changes. The M3-v2 planner (frozen e39609a) does not see other sessions' flows, so it cannot
+  weigh this trade.
+- S2 without contention (23.13 s) matches C1, one OTTER migration alone (23.71 s, other hosts): the earlier +15.7 s
+  against C1 (section 14) is now +16.3 s against the proper control.
+- **Design limit, stated, not repaired:** the 2 x 2 does not measure "contention without M3", because in this
+  timing S1's own moves never share a NIC direction with S2. Measuring that needs a different offset (for example
+  S2 starting at 90 s, with S1's C -> D) and is a new cell: not run, needs user approval.
+
+Stage 2 is complete and goes to user review. The formal concurrency experiment is not frozen.
