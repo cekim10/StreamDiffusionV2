@@ -35,11 +35,12 @@ FILL = {k: (DIM_GRAY, DARK_GRAY) for k in STEPS}
 FILL["otter"] = (BLUE, "#9DB3F0")
 LINE_A = {"pfull": ("#3A3A3A", "-", "o", "P-full"), "psink": (DARK_GRAY, (0, (5, 2)), "s", "P-sink")}
 THRESHOLD_MB = 256 * 2**20 / 1e6
-XTICK_ROT = 30   # narrow canvas: rotate the step names (never a smaller font)
+XTICK_ROT = 15   # fig12a canvas (user 2026-11-04): 30 clipped 'w/o sync' at the bottom edge, 0 lets 'P-sink' touch 'w/o sync' (never a smaller font)
 # canvas and axes box of Fig. 6a (make_background_figures.F4_SIZE / F4_ADJUST: left 0.18, right 0.97, bottom 0.22, top 0.97),
 # saved without a tight bbox so the page size matches
-FIG_SIZE = (5.83, 4.78)
-AXES_POS = [0.18, 0.22, 0.79, 0.75]
+# user 2026-11-04: fig12a's canvas and plot box (plot_fig7_migration.FIG_SIZE / AXES_POS, 7.70 x 4.80 in), placed in one
+# figure with fig13a; fonts unchanged. Before: 5.83 x 4.78 in, [0.18, 0.22, 0.79, 0.75] (that size is FIG_SIZE_F9 now).
+from plot_fig7_migration import AXES_POS, FIG_SIZE  # noqa: E402
 AXES_POS_BARS = AXES_POS   # (b), (c): the same plot box as Fig. 6a
 
 
