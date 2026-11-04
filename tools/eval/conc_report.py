@@ -73,7 +73,7 @@ def record(d: Path, dry: bool):
             # condition-aware validity inputs (user 2026-11-03; judged in condition_validity)
             "validity_non_nic": [w for w in (r["validity_why"] or []) if not str(w).startswith("NIC ")],
             "bw_mbps": configured_mbps(d),
-            "sends": sends(d), "nic_series": None if dry else nic_series(d)}
+            "sends": sends(d), "nic_series": None if dry else nic_series(d), "session_id": f"{d.parent.name}/{d.name}"}
 
 
 def collect(prefix, dry):
@@ -146,7 +146,13 @@ def sends(d: Path):
             out.append({"kind": "m3_forward", "src": host(lb), "dst": host(x.get("to")), "bytes": x.get("bytes"), "s": x.get("s"),
                         "completed": x.get("error") is None and not x.get("cancelled"), "cancelled": bool(x.get("cancelled"))})
     n_start = sum(e["event"] == "xb_task_start" for e in ev); n_done = sum(e["event"] == "xb_task_done" for e in ev)
-    return {"list": out, "xb_tasks_started": n_start, "xb_tasks_done": n_done}
+    # coordinator registration (C3b / C4): every transfer must be opened with the coordinator and closed by the run's end
+    expected = {det(e).get("id") for e in ev if e["event"] == "xb_task_start"} | set(starts) | \
+        {det(e).get("flow") for e in ev if e["event"].endswith(":m3_forward_done")}
+    opened = {det(e).get("flow") for e in ev if e["event"] == "coord_open"}
+    closed = {det(e).get("flow") for e in ev if e["event"] == "coord_close"}
+    return {"list": out, "xb_tasks_started": n_start, "xb_tasks_done": n_done, "expected_flows": sorted(x for x in expected if x),
+            "coord_opened": sorted(x for x in opened if x), "coord_closed": sorted(x for x in closed if x)}
 
 
 def nic_series(d: Path):
@@ -187,7 +193,7 @@ def shared_cap(cond):
     return cond in ("C3b", "drycoord") or cond.startswith("C4")
 
 
-def condition_validity(cond, ss):
+def condition_validity(cond, ss, coord_ids=None):
     """condition_valid (user 2026-11-03): the original `valid` is kept unchanged; this replaces only its host-NIC rule,
     which assumes one session per host NIC, by the condition's own host cap, and adds per-session checks.
     Host cap per NIC direction: C1 / C2 / C3a (each session shaped to its own 1 Gbps) = cap x the number of the
@@ -207,8 +213,20 @@ def condition_validity(cond, ss):
             why.append("run failed")
         if r["bw_mbps"] != CAP_MBPS:
             why.append(f"configured rate {r['bw_mbps']} Mbps != {CAP_MBPS:g}")
-        if shared_cap(cond) and not r.get("coord"):
-            why.append("shared-cap condition without the coordinator")
+        if shared_cap(cond):
+            if not r.get("coord"):
+                why.append("shared-cap condition without the coordinator")
+            sd0 = r["sends"]
+            miss = [x for x in sd0["expected_flows"] if x not in sd0["coord_opened"]]
+            unclosed = [x for x in sd0["coord_opened"] if x not in sd0["coord_closed"]]
+            if miss:
+                why.append(f"transfers not registered with the coordinator: {miss}")
+            if unclosed:
+                why.append(f"coordinator flows never closed: {unclosed}")
+            if coord_ids is not None:
+                absent = [x for x in sd0["coord_opened"] if f"{r['session_id']}/{x}" not in coord_ids]
+                if absent:
+                    why.append(f"flows missing from the coordinator log: {absent}")
         sd = r["sends"]
         if not sd["list"]:
             why.append("no transfer recorded")
@@ -284,9 +302,11 @@ def main():
     ap.add_argument("--coord_log", action="append", default=[], help="coordinator logs to analyze (default: osdi/concurrency/coord_*.jsonl)")
     a = ap.parse_args()
     C = collect(a.prefix, a.dry)
+    logs = [Path(x) for x in a.coord_log] or sorted(OUT.glob("coord_*.jsonl"))
+    coord_ids = {g for p in logs for x in open(p) if x.strip() for g in json.loads(x)["flows"]} if logs else None
     for (cond, _), ss in C.items():
         if not a.dry:
-            condition_validity(cond, ss)
+            condition_validity(cond, ss, coord_ids)
     L = ["# Concurrency pilot (measured; pilot, not a hypothesis test)", "", "Protocol: `pilot_protocol.md`. One run per session; "
          "C1 = S1 alone. Window = trigger -> first local output. NIC = the destination host's peak 10 s receive rate.", "",
          "| cond | method | session | valid | TTFO-local (s) | gap (s) | bytes (GB) | served calls/s in window | dest. NIC peak (Mbps) | GPU reserved / RSS peak A, B (GB) | vs C1: TTFO / gap (s) |",
@@ -336,7 +356,6 @@ def main():
             if c in ("C3b",) or c.startswith("C4"):
                 L.append(f"| {c} | {LABEL.get(m, m)} | S{s} | {k} | {v['peak_1s_x_cap']:.2f} | {v['peak_10s_x_cap']:.2f} | "
                          f"{v['peak_1s_x_cap'] <= 1.15 and v['peak_10s_x_cap'] <= 1.05} |")
-    logs = [Path(x) for x in a.coord_log] or sorted(OUT.glob("coord_*.jsonl"))
     coords = {str(p.name): coord_analysis(p) for p in logs}
     if coords:
         L += ["", "Coordinator logs (verification 1 at the allocation level; flow overlap between sessions):", "",
