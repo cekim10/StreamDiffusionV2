@@ -38,10 +38,11 @@ Additions to the user's draft are marked [added]; drop them if not wanted.
     The bandwidth axis is logarithmic; Native (unshaped) is drawn at
     the measured 9.4\,Gbps NIC capacity.                                % [added]
     (c) At 0.25\,Gbps, the high-refresh workload increases OTTER's
-    time to first local output from 76\,s to 155\,s.
-    While Sink transfer times are comparable (59 vs.\ 70\,s),
-    catch-up time increases from 15 to 83\,s, alongside an increase
-    in transferred data from 1.82 to 4.67\,GB.
+    time to first local output from 76\,s to 155\,s, while its
+    maximum output gap stays at 1.6\,s (1.64 vs.\ 1.66\,s).
+    Sink transfer times are comparable (59 vs.\ 70\,s); catch-up
+    time increases from 15 to 83\,s (5.6$\times$), alongside an
+    increase in transferred data from 1.82 to 4.67\,GB.
     Results show medians across three repetitions per condition.
   }
   \label{fig:fig12a}
@@ -61,5 +62,7 @@ Text (user): "At native bandwidth, full-state transfer achieves faster local rea
 provide a substantially smaller output gap." "At 0.25 Gbps, high-refresh input increases catch-up time by 5.6x,
 while OTTER's maximum output gap remains nearly unchanged."
 
-Figure changes (2026-11-03): x label of (a), (b) "Bandwidth (Gbps; Native = unshaped)"; (c) "Catch-up 5.6x longer"
-inside High-refresh's catch-up segment. Fonts unchanged.
+Figure changes (2026-11-03): x label of (a), (b) "Bandwidth (Gbps; Native = unshaped)". (c): each bar labelled with
+time to first local output, OTTER bytes and max. output gap (1.64 / 1.66 s, Fig. 12 medians), "Gap unchanged" between
+the bars; the 5.6x catch-up ratio moved from the figure to the caption and text (user: the figure should show that
+the gap stays while readiness grows). Bars 0.42 wide for the middle label. Fonts unchanged.

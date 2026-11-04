@@ -108,19 +108,17 @@ def ready_cmp(cells, b, out):
         bd = cells[f"{w}|{b}|precopy_replay"]["breakdown"]
         s, c, f = (bd[k]["median"] for k in ("sink_s", "caught_s", "first_s"))
         parts.append((s, max(0, c - s), max(0, f - c)))
-        tops.append((f, cells[f"{w}|{b}|precopy_replay"]["tx_gb"]["median"]))
+        tops.append((f, cells[f"{w}|{b}|precopy_replay"]["tx_gb"]["median"], cells[f"{w}|{b}|precopy_replay"]["delivery_gap_s"]["median"]))
     bottom = [0.0] * len(WL)
     for i, (col, hatch) in enumerate(((BLUE, ""), ("#9DB3F0", "//"), (DARK_GRAY, ""))):
         vals = [p[i] for p in parts]
-        ax.bar(range(len(WL)), vals, 0.5, bottom=bottom, color=col, edgecolor="black", lw=1.2, hatch=hatch, zorder=3)
+        ax.bar(range(len(WL)), vals, 0.42, bottom=bottom, color=col, edgecolor="black", lw=1.2, hatch=hatch, zorder=3)   # room for the middle label
         bottom = [a + v for a, v in zip(bottom, vals)]
-    top = max(bottom) * 1.45
-    for x, (f, gb) in enumerate(tops):
-        annotate(ax, x, f + top * 0.02, f"{f:.0f} s\n{gb:.2f} GB")
-    # user 2026-11-03: the catch-up ratio between the two inputs, between the bars
-    cu = [p[1] for p in parts]
-    annotate(ax, 1, parts[1][0] + cu[1] / 2, f"Catch-up\n{cu[1] / cu[0]:.1f}\u00d7 longer", va="center", zorder=5,
-             bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none"))   # inside High-refresh's catch-up
+    top = max(bottom) * 1.62
+    # user 2026-11-03: show that the output gap stays the same while readiness grows (the catch-up ratio is in the caption)
+    for x, (f, gb, gap) in enumerate(tops):
+        annotate(ax, x, f + top * 0.02, f"{f:.0f} s\n{gb:.2f} GB\ngap {gap:.2f} s")
+    annotate(ax, 0.5, max(t[0] for t in tops) * 0.62, "Gap\nunchanged", va="center")
     ax.set_xticks(range(len(WL))); ax.set_xticklabels(["Low-refresh", "High-refresh"])
     ax.set_xlim(-0.45, len(WL) - 0.55)   # the two 28 pt tick labels need the room
     ax.set_xlabel(f"Input at {X[b]:g} Gbps", fontsize=28, labelpad=2)
