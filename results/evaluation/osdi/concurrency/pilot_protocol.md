@@ -235,3 +235,47 @@ bytes / TTFO match C1 (Full 6.463 GB in 54.5 s vs 54.2 s). The flags are kept in
 `gpu1_state_C1_*.txt`); C1 shared the hosts (not the GPU) with it. C2 (19:48) found GPU 1 idle; C3a's guard required
 A:1 and C:1 idle. C1 OTTER vs C2 S1 OTTER: TTFO 23.71 vs 23.67 s, gap 1.61 vs 1.62 s, calls/s 1.43 vs 1.44: no visible
 effect, but C1 Full / R-full have no neighbour-free repeat.
+
+### 10b. Condition-aware validity (user decision 2026-11-03, applied after stage 1; report change only, no rerun)
+
+The original `valid` is kept unchanged. The new `condition_valid` (`conc_report.condition_validity`) replaces only the
+inherited host-NIC rule, which assumes one session per host NIC, and adds per-session checks. The rule was written after
+seeing stage 1; it is stated here before any stage-2 run and applies unchanged to C3b / C4.
+
+- Host cap per NIC direction:
+  - C1, C2, C3a: 1 Gbps x the number of the condition's sessions whose transfers use that host direction (each session
+    is shaped to its own emulated 1 Gbps link). C2 is judged per host (one session each); a C3a source / destination
+    carries two.
+  - C3b, C4: one shared 1 Gbps (the coordinator's cap).
+- Burst: the largest NIC sample of <= 1.5 s <= 1.15 x the host cap. Sustained: the largest time-weighted mean over
+  consecutive samples spanning >= 10 s <= 1.05 x. Both after the header factor (1.0477), as in verification 1.
+- Per session: configured rate = 1 Gbps (C3b / C4: and `--coord` used); every transfer completed (Full: every byte of
+  the state; pre-copy / R-full: every task done; M3 forward: no error); every transfer's mean payload rate <= 1.05 x cap
+  (1.15 x if shorter than 1 s); every other original validity condition holds.
+- **Sampling check.** The NIC sampler logs byte-counter deltas over the actual interval (`common.ResourceSampler`):
+  2,692 intervals, median 1.033 s, P1 1.025 s, P99 1.057 s. Each run has 0-4 longer intervals (max 4.4 s); none
+  falls inside a transfer (all carry < 50 Mbps), so the 1 s burst and 10 s sustained rules are evaluable over every
+  transfer. Bursts shorter than about 1 s cannot be resolved by this log.
+
+Result: **all 11 stage-1 sessions `condition_valid` True.** C3a host NIC burst / sustained 0.988-0.993 / 0.986-0.987 x
+2 cap; C1 0.990-0.996 / 0.985-0.988 x 1 cap. Per-transfer payload rates: Full 983-985 Mbps, OTTER pre-copy 820-832,
+R-full input parts 363-450.
+
+**Wording.** C3a is two independent emulated 1 Gbps links on one physical NIC. It is not a shared-link or
+contention experiment, and the 2 Gbps host NIC is never described as link sharing.
+
+## 11. Stage 1 decision (user, 2026-11-03)
+
+| item | decision |
+|---|---|
+| stage 1 | feasibility PASS |
+| C3a validity | condition-aware `condition_valid` added (section 10b); original `valid` kept |
+| C1 Full / R-full rerun | not for the pilot; the GPU-1 neighbour is recorded as an environmental limitation |
+| single-run differences vs C1 | feasibility observations, not effect estimates |
+| stage 2, C3b | approved; verify the coordinator's allocation-level cap AND the measured host NIC (10b); stop and investigate any sustained cap violation or missing flow registration |
+| stage 2, C4 | only after C3b passes; requires actual shared-link contention (overlap seconds AND seconds a flow was allocated less than it would get alone), not mere simultaneous activity; 2 x 2 kept; S1 and S2 both reported (readiness, max. output gap, completion, shared-link utilization) |
+| formal concurrency experiment | not frozen until the stage-2 pilot is reviewed |
+
+Claim scope after stage 1 (user): "OTTER supports concurrent migrations of independently provisioned streaming sessions
+on shared hosts without observed OOM or substantial throughput degradation in the pilot." Not yet: continuity under
+network contention (C3b). C4 must show whether M3's gain for S1 is paid by S2 (S2's readiness and gap).

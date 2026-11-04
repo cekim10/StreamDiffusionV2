@@ -68,7 +68,11 @@ def record(d: Path, dry: bool):
             "trigger_wall": t_trig, "window_wall": None if (win is None or t_trig is None) else (t_trig + win[0], t_trig + win[1]),
             "calls_per_s_window": rate(*win) if win else None,
             "peak_rx_mbps_B": None if dry else peak_rx_mbps(d, "B"), "mem": mem_peaks(d), "barrier": s.get("barrier"),
-            "nic": None if dry else nic_check(d), "coord": s.get("coord")}
+            "nic": None if dry else nic_check(d), "coord": s.get("coord"),
+            # condition-aware validity inputs (user 2026-11-03; judged in condition_validity)
+            "validity_non_nic": [w for w in (r["validity_why"] or []) if not str(w).startswith("NIC ")],
+            "bw_mbps": configured_mbps(d),
+            "sends": sends(d), "nic_series": None if dry else nic_series(d)}
 
 
 def collect(prefix, dry):
@@ -97,6 +101,134 @@ def nic_check(d: Path):
             m10 = max((sum(v[i:i + 10]) / 10 for i in range(max(1, len(v) - 9))), default=0.0) if len(v) >= 10 else (max(v) if v else 0.0)
             out[f"{host}:{k[4:6]}"] = {"peak_1s_x_cap": max(v, default=0.0) / lim, "peak_10s_x_cap": m10 / lim}
     return out
+
+
+SAMPLE_OK_S = 1.5   # a NIC sample longer than this cannot resolve a 1 s burst (reported as coarse)
+BURST_X, SUSTAINED_X, WINDOW_S = 1.15, 1.05, 10.0   # the stage-2 verification-1 rule, applied to each condition's host cap
+
+
+def short(h):
+    return str(h).split(".")[0]
+
+
+def configured_mbps(d: Path):
+    """The session's emulated link rate: config.json bw_mbps (Full) or the orchestrator's --bw (args.bw, XB policies)."""
+    c = json.load(open(d / "config.json")) if (d / "config.json").exists() else {}
+    v = c.get("bw_mbps", (c.get("args") or {}).get("bw"))
+    return None if v is None else float(v)
+
+
+def sends(d: Path):
+    """Every payload transfer of the session from its events: Full state sends, pre-copy rounds, R-full input parts, M3
+    forwards (bytes, seconds, completion, source and destination hosts)."""
+    nodes = json.load(open(d / "config.json")).get("nodes") or {}
+    host = lambda lb: short((nodes.get(lb) or {}).get("host", lb))  # noqa: E731
+    ev = list(csv.DictReader(open(d / "events.csv", newline="")))
+    det = lambda e: json.loads(e["detail"]) if e.get("detail", "").startswith("{") else {}  # noqa: E731
+    task_dst = {det(e).get("id"): det(e).get("dst") for e in ev if e["event"] == "xb_task_start"}
+    starts = {det(e).get("xfer"): det(e) for e in ev if e["event"].endswith(":full_send_start")}
+    out = []
+    for e in ev:
+        lb, _, name = e["event"].partition(":")
+        x = det(e)
+        if name == "full_send_end":
+            st0 = starts.get(x.get("xfer"), {})
+            out.append({"kind": "full", "src": host(lb), "dst": host(x.get("to")), "bytes": x.get("bytes"), "s": float(e["t_wall"]) - x["t_start"],
+                        "completed": bool(x.get("completed")) and not x.get("cancelled") and x.get("error") is None and x.get("bytes") == st0.get("state_bytes"),
+                        "rate_set_bps": st0.get("rate_bps")})
+        elif name == "xb_precopy_round":
+            out.append({"kind": "precopy", "src": host(lb), "dst": host(task_dst.get(x.get("task"))), "bytes": x.get("dirty_bytes"), "s": x.get("send_s"), "completed": True})
+        elif name == "xb_inputs_sent":
+            dst = next((det(t).get("dst") for t in ev if t["event"] == "xb_task_start" and det(t).get("id") == x.get("task")), None)
+            out.append({"kind": "inputs", "src": host(lb), "dst": host(dst), "bytes": x.get("bytes"), "s": x.get("send_s"), "completed": True})
+        elif name == "m3_forward_done":
+            out.append({"kind": "m3_forward", "src": host(lb), "dst": host(x.get("to")), "bytes": x.get("bytes"), "s": x.get("s"),
+                        "completed": x.get("error") is None and not x.get("cancelled"), "cancelled": bool(x.get("cancelled"))})
+    n_start = sum(e["event"] == "xb_task_start" for e in ev); n_done = sum(e["event"] == "xb_task_done" for e in ev)
+    return {"list": out, "xb_tasks_started": n_start, "xb_tasks_done": n_done}
+
+
+def nic_series(d: Path):
+    """Per host NIC direction: (t_end, interval s, Mbps) samples (ResourceSampler: byte-counter delta / actual interval)."""
+    out = {}
+    for p in sorted(d.glob("node_*/network.csv")):
+        rows = list(csv.DictReader(open(p, newline="")))
+        for k in ("net_tx_mbps", "net_rx_mbps"):
+            ser, prev = [], None
+            for r in rows:
+                t = float(r["t_wall"])
+                if prev is not None and r.get(k):
+                    ser.append((t, t - prev, float(r[k])))
+                prev = t
+            out[f"{short(rows[0]['host']) if rows else p.parent.name}:{k[4:6]}"] = ser
+    return out
+
+
+def link_check(ser, cap_mbps):
+    """Burst: the largest sample of <= SAMPLE_OK_S against BURST_X x cap; sustained: the largest time-weighted mean over
+    consecutive samples spanning >= WINDOW_S against SUSTAINED_X x cap (cap after the header factor)."""
+    lim = cap_mbps * HEADER_FACTOR
+    fine = [v for _, dt, v in ser if dt <= SAMPLE_OK_S]
+    coarse = [(dt, v) for _, dt, v in ser if dt > SAMPLE_OK_S]
+    best = 0.0
+    for i in range(len(ser)):
+        b = span = 0.0
+        for _, dt, v in ser[i:]:
+            b += v * dt; span += dt
+            if span >= WINDOW_S:
+                best = max(best, b / span); break
+    burst, sus = max(fine, default=0.0) / lim, best / lim
+    return {"cap_mbps": cap_mbps, "burst_x": burst, "sustained_x": sus, "n_samples": len(ser), "n_coarse": len(coarse),
+            "max_coarse_s": max((dt for dt, _ in coarse), default=0.0), "ok": burst <= BURST_X and sus <= SUSTAINED_X}
+
+
+def shared_cap(cond):
+    return cond in ("C3b", "drycoord") or cond.startswith("C4")
+
+
+def condition_validity(cond, ss):
+    """condition_valid (user 2026-11-03): the original `valid` is kept unchanged; this replaces only its host-NIC rule,
+    which assumes one session per host NIC, by the condition's own host cap, and adds per-session checks.
+    Host cap per NIC direction: C1 / C2 / C3a (each session shaped to its own 1 Gbps) = cap x the number of the
+    condition's sessions whose transfers use that direction (a C2 host carries one session, a C3a source / destination
+    two); C3b / C4 (one coordinated shared link) = cap. Per session: the configured rate is the cap (C3b / C4: and the
+    coordinator was used), every transfer completed (Full: all bytes of the state; pre-copy / R-full: every task done),
+    every transfer's mean payload rate <= SUSTAINED_X x cap (<= BURST_X x cap if shorter than 1 s), and every other
+    original validity condition holds."""
+    use = {}
+    for s, rs in ss.items():
+        for x in rs[-1]["sends"]["list"]:
+            use.setdefault(f"{x['src']}:tx", set()).add(s); use.setdefault(f"{x['dst']}:rx", set()).add(s)
+    for s, rs in ss.items():
+        r = rs[-1]
+        why, links = list(r["validity_non_nic"]), {}
+        if r["failed"]:
+            why.append("run failed")
+        if r["bw_mbps"] != CAP_MBPS:
+            why.append(f"configured rate {r['bw_mbps']} Mbps != {CAP_MBPS:g}")
+        if shared_cap(cond) and not r.get("coord"):
+            why.append("shared-cap condition without the coordinator")
+        sd = r["sends"]
+        if not sd["list"]:
+            why.append("no transfer recorded")
+        if sd["xb_tasks_started"] != sd["xb_tasks_done"]:
+            why.append(f"xb tasks done {sd['xb_tasks_done']} / started {sd['xb_tasks_started']}")
+        for x in sd["list"]:
+            if not x["completed"] and not x.get("cancelled"):
+                why.append(f"{x['kind']} {x['src']}->{x['dst']} not completed")
+            if x.get("s") and x["s"] > 0 and x.get("bytes"):
+                mbps = x["bytes"] * 8 / x["s"] / 1e6
+                x["rate_mbps"] = mbps
+                if mbps > (SUSTAINED_X if x["s"] >= 1 else BURST_X) * CAP_MBPS:
+                    why.append(f"{x['kind']} {x['src']}->{x['dst']} {mbps:.0f} Mbps > cap")
+        for k, ser in (r["nic_series"] or {}).items():
+            n = 1 if shared_cap(cond) else max(1, len(use.get(k, ())))
+            c = link_check(ser, n * CAP_MBPS)
+            c["sessions_on_link"] = len(use.get(k, ()))
+            links[k] = c
+            if not c["ok"]:
+                why.append(f"NIC {k} burst {c['burst_x']:.2f} / sustained {c['sustained_x']:.2f} x {n} cap")
+        r["condition_valid"], r["condition_why"], r["condition_links"] = not why, why, links
 
 
 def coord_analysis(log: Path):
@@ -141,6 +273,9 @@ def main():
     ap.add_argument("--coord_log", action="append", default=[], help="coordinator logs to analyze (default: osdi/concurrency/coord_*.jsonl)")
     a = ap.parse_args()
     C = collect(a.prefix, a.dry)
+    for (cond, _), ss in C.items():
+        if not a.dry:
+            condition_validity(cond, ss)
     L = ["# Concurrency pilot (measured; pilot, not a hypothesis test)", "", "Protocol: `pilot_protocol.md`. One run per session; "
          "C1 = S1 alone. Window = trigger -> first local output. NIC = the destination host's peak 10 s receive rate.", "",
          "| cond | method | session | valid | TTFO-local (s) | gap (s) | bytes (GB) | served calls/s in window | dest. NIC peak (Mbps) | GPU reserved / RSS peak A, B (GB) | vs C1: TTFO / gap (s) |",
@@ -167,6 +302,21 @@ def main():
     for p in pairs:
         L.append(f"| {p['cond']} | {LABEL.get(p['method'], p['method'])} | {f(p['trigger_offset_s'], 3)} | {f(p['window_overlap_s'])} | {f(p['overlap_share_of_shorter'])} | "
                  f"{p['both_completed']} | {p['both_valid']} |")
+    if not a.dry:
+        L += ["", "Condition-aware validity (`condition_valid`; the original `valid` above is unchanged). Host cap: C1 / C2 / C3a = 1 Gbps x the "
+              "sessions on that NIC direction, each shaped to its own emulated 1 Gbps link (C3a: two independent links on one physical NIC, not a "
+              "shared link); C3b / C4 = one shared 1 Gbps. Burst = largest sample of <= 1.5 s (1.03 s typical) <= 1.15 x; sustained = largest "
+              "time-weighted mean over >= 10 s <= 1.05 x (after the header factor). Per session: configured rate, completion, per-transfer rate.", "",
+              "| cond | method | session | condition_valid | NIC links used (host:dir, sessions, burst / sustained x host cap) | transfers (Mbps payload) | coarse samples (max s) | reasons |",
+              "|---|---|---|---|---|---|---|---|"]
+        for (c, m), ss in sorted(C.items()):
+            for s, rs in sorted(ss.items()):
+                r = rs[-1]
+                lk = r.get("condition_links") or {}
+                used = ", ".join(f"{k} {v['sessions_on_link']}: {v['burst_x']:.3f} / {v['sustained_x']:.3f} x {v['cap_mbps'] / 1000:g}" for k, v in sorted(lk.items()) if v["sessions_on_link"])
+                tr = ", ".join(f"{x['kind']} {x.get('rate_mbps', 0):.0f}" for x in r["sends"]["list"])
+                co = f"{sum(v['n_coarse'] for v in lk.values())} ({max((v['max_coarse_s'] for v in lk.values()), default=0):.1f})"
+                L.append(f"| {c} | {LABEL.get(m, m)} | S{s} | {r.get('condition_valid')} | {used} | {tr} | {co} | {'; '.join(r.get('condition_why') or []) or '-'} |")
     nic = [(c, m, s, k, v) for (c, m), ss in sorted(C.items()) for s, rs in ss.items() for k, v in ((rs[-1].get("nic") or {}).items())]
     if nic:
         L += ["", "Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1.15, sustained 10 s <= 1.05):", "",
