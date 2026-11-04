@@ -24,13 +24,13 @@ import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-from plot_fig7_migration import (AXES_POS, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE, LEGEND, METHODS, ROOT, TICK_LABEL, WL_LABEL,
+from plot_fig7_migration import (AXES_POS, AXES_POS_F9, FIG_SIZE_F9, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE, LEGEND, METHODS, ROOT, TICK_LABEL, WL_LABEL,
                                  WORKLOADS, annotate, configure, finish_axes)
 
 RESULTS = ROOT / "results/evaluation/osdi/fig8/fig8_results.json"
 LINE = {"full": (DIM_GRAY, "-"), "precopy_full": (DARK_GRAY, (0, (5, 2))), "recompute_full": ("#3A3A3A", (0, (1.5, 1.5))),
         "precopy_replay": (BLUE, "-")}
-LIM_A = ((0, 310), (0, 85))   # plotted ranges (readability only; every curve ends inside)
+LIM_A = ((0, 310), (0, 100))   # 85 -> 100 on fig9b_gap's narrower canvas: the 61.8 label clears the legend   # plotted ranges (readability only; every curve ends inside)
 LIM_B = (0, 10.5)
 
 
@@ -48,8 +48,8 @@ def save(fig, out: Path):
 
 
 def panel_a(res, w, out: Path):
-    fig = plt.figure(figsize=FIG_SIZE)
-    ax = fig.add_axes(AXES_POS)
+    fig = plt.figure(figsize=FIG_SIZE_F9)   # user 2026-11-04: fig9b_gap's canvas and plot box
+    ax = fig.add_axes(AXES_POS_F9)
     (x0, x1), (y0, y1) = LIM_A
     rec = {}
     for m in METHODS:

@@ -38,6 +38,11 @@ RESULTS = ROOT / "results/evaluation/osdi/fig7/fig7_results.json"
 # EC-LLM figure "e3" geometry and fonts
 FIG_SIZE = (7.7, 4.8)
 AXES_POS = [0.19, 0.20, 0.78, 0.73]
+# Fig. 7a-c and 8a (user 2026-11-04): the canvas and plot box of fig9b_gap (plot_fig9.FIG_SIZE / AXES_POS); fonts
+# unchanged. FIG_SIZE / AXES_POS above stay as they are for the other modules that import them.
+FIG_SIZE_F9 = (5.83, 4.78)
+AXES_POS_F9 = [0.18, 0.22, 0.79, 0.75]
+XTICK_ROT = 30   # narrow canvas: method names rotated as in fig9b_gap (never a smaller font)
 YLABEL_X = -0.14
 LABEL, TICK, ANNOT, LEGEND = 28, 28, 19, 25
 ANNOT_FONT = "DejaVu Sans"
@@ -57,7 +62,7 @@ PANELS = {   # key in fig7_results cells, y label, value format
     "gap": ("delivery_gap_s", "Max. output gap (s)", lambda v: f"{v:.2f}" if v < 10 else f"{v:.1f}"),
     "bytes": ("tx_gb", "Transferred data (GB)", lambda v: f"{v:.3f}" if v < 1 else f"{v:.2f}" if v < 10 else f"{v:.1f}"),
 }
-LIM = {("ttfo", "linear"): (0, 290), ("ttfo", "log"): (5, 900), ("gap", "linear"): (0, 72), ("gap", "log"): (0.5, 400),
+LIM = {("ttfo", "linear"): (0, 400), ("ttfo", "log"): (5, 900), ("gap", "linear"): (0, 72), ("gap", "log"): (0.5, 400),
        ("bytes", "linear"): (0, 33), ("bytes", "log"): (0.02, 250)}   # plotted ranges (readability only; data never clipped)
 
 
@@ -98,8 +103,8 @@ def scale_rule(cells, key):
 def panel(cells, name, scale, out: Path):
     key, ylabel, fmt = PANELS[name]
     lo, top = LIM[name, scale]
-    fig = plt.figure(figsize=FIG_SIZE)
-    ax = fig.add_axes(AXES_POS)
+    fig = plt.figure(figsize=FIG_SIZE_F9)
+    ax = fig.add_axes(AXES_POS_F9)
     ax.set_yscale(scale)
     hi_all = []
     for i, m in enumerate(METHODS):
@@ -116,7 +121,7 @@ def panel(cells, name, scale, out: Path):
             ax.scatter(x + np.linspace(-0.1, 0.1, len(vals)), vals, s=16, color="black", edgecolor="white", lw=0.5, zorder=5)
             hi = max(max(vals), s["q3"])
             hi_all.append(hi)
-            annotate(ax, x + (2 * j - 1) * NUDGE, hi * 1.12 if scale == "log" else hi + top * 0.04, fmt(s["median"]))
+            annotate(ax, x, hi * 1.12 if scale == "log" else hi + top * 0.02, fmt(s["median"]), rotation=90)   # vertical as in fig9b_gap: no pair collisions
     assert lo < min(cells[w][m][key]["q1"] for w in WORKLOADS for m in METHODS if cells[w][m][key]["n"]) and max(hi_all) < top, (name, scale)
     ax.set_ylim(lo, top)
     ax.set_xlim(-0.55, len(METHODS) - 0.45)
@@ -124,6 +129,7 @@ def panel(cells, name, scale, out: Path):
     ax.set_xticklabels([TICK_LABEL[m] for m in METHODS])
     finish_axes(ax, ylabel)
     ax.tick_params(axis="x", length=0)
+    plt.setp(ax.get_xticklabels(), rotation=XTICK_ROT, ha="right", rotation_mode="anchor")
     if scale == "log":
         ax.yaxis.set_major_locator(LogLocator(base=10))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
