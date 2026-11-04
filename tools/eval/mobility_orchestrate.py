@@ -975,6 +975,7 @@ class Run:
             assert self.caps, "--coord needs a shaped link (--bw > 0)"
             self.coord_client = CoordClient(self.a.coord, f"{self.a.experiment}/{self.run_id}", float(self.bw) * 1e6)
             self.coord_flows, self.coord_version, self.coord_t = {}, -1, 0.0
+            self.coord_ev_seen, self.coord_prev = len(self.node_events), {}
             self.coord_site = dict(x.split("=") for x in self.a.coord_sites.split(",") if x) if self.a.coord_sites else {}
         return self.coord_client
 
@@ -1003,6 +1004,7 @@ class Run:
         if not force and now - self.coord_t < self.a.coord_poll_s:
             return
         self.coord_t = now
+        self._coord_phase()
         tasks = self._coord_sweep()
         ver, rates = self.coord_client.rates()
         if ver == self.coord_version:
@@ -1020,6 +1022,46 @@ class Run:
                 if f["kind"] == "inputs" and fid in tasks:
                     tasks[fid]["rate"] = r   # later input parts of this task start at the current rate
             self.ev.log("coord_rate", flow=fid, kind=f["kind"], rate_bps=r, version=ver)
+
+    def _cdemand(self, fid, bps):
+        """Work-conserving registration: `bps` = the flow's bulk is sent, it only reserves this tail demand; None = bulk."""
+        f = self.coord_flows[fid]
+        r = self.coord_client.demand(fid, bps)
+        f["tail"] = bps is not None
+        self.ev.log("coord_demand", flow=fid, kind=f["kind"], demand_bps=bps, rate_bps=r)
+        if f["kind"] != "m3":   # applied now (not at the next poll); the node records its pacer's bytes at this instant
+            f["rate"] = r
+            self.node(f["src"]).cast("COORD_SET_RATE", flow_kind=f["kind"], id=fid, rate_bps=r)
+        return r
+
+    def _coord_phase(self):
+        """--coord_tail_mbps > 0 (formal concurrency design F1): a registered transfer whose bulk has been sent stops
+        holding a max-min share. A pre-copy task enters its tail when its last round's send ends (the node's own switch
+        rule: dirty bytes <= threshold, round limit, or no shrink); a recompute input stream when no input part is in
+        flight. The tail reserves --coord_tail_mbps (its replay log, refresh patches) and is paced at the residual
+        capacity of its path; a new input part puts the stream back to bulk (`_xb_step`). Off (0): pilot behaviour."""
+        if self.a.coord_tail_mbps <= 0:
+            return
+        if self.coord_ev_seen > len(self.node_events):   # the event list was reset (next run)
+            self.coord_ev_seen = 0
+        evs = self.node_events[self.coord_ev_seen:]
+        self.coord_ev_seen = len(self.node_events)
+        for e in evs:
+            fid = e.get("task")
+            f = self.coord_flows.get(fid)
+            if f is None or f.get("tail"):
+                continue
+            if e["event"] == "xb_precopy_round" and f["kind"] == "precopy":
+                sent = e.get("dirty_bytes") or 0
+                prev = self.coord_prev.get(fid); self.coord_prev[fid] = sent
+                last = (sent <= int(self.a.xb_threshold_mib * MB) or (e.get("round") or 0) >= self.a.xb_round_limit
+                        or (prev is not None and prev > 0 and sent > (1 - self.a.xb_min_shrink) * prev))
+                if last:
+                    self._cdemand(fid, self.a.coord_tail_mbps * 1e6)
+            elif e["event"] == "xb_inputs_sent" and f["kind"] == "inputs":
+                f["parts"] = max(0, f.get("parts", 1) - 1)
+                if f["parts"] == 0:
+                    self._cdemand(fid, self.a.coord_tail_mbps * 1e6)
 
     def _coord_sweep(self):
         """Close the transfers that have ended: XB task with t_end (switched or cancelled), Full transfer with
@@ -1236,6 +1278,7 @@ class Run:
         rate = self._xb_rate(src, target)
         if self._coord():
             rate = self._copen(task["id"], src, target, "precopy" if self.policy.startswith("precopy") else "inputs")
+            self.coord_flows[task["id"]]["parts"] = 1   # input part 1 (recompute); unused for pre-copy
         if self.policy.startswith("precopy"):
             ti = len(self.xb_tasks)   # index of this task (0 = first migration)
             prev_src = any(t_["src"] == target for t_ in self.xb_tasks)
@@ -1318,6 +1361,11 @@ class Run:
                     # input history generated while the source kept serving
                     lo, hi = FIRST_FRAMES + CHUNK_FRAMES * t["target"], FIRST_FRAMES + CHUNK_FRAMES * c
                     nd = self.o.node_spec[t["dst"]]
+                    cf = getattr(self, "coord_flows", {}).get(t["id"])
+                    if cf is not None and self.a.coord_tail_mbps > 0:   # a new input part: the stream is bulk again
+                        cf["parts"] = cf.get("parts", 0) + 1
+                        if cf.get("tail"):
+                            t["rate"] = cf["rate"] = self._cdemand(t["id"], None)
                     self.node(t["src"]).cast("XB_SEND_INPUTS", task=t["id"], to_host=nd["host"], to_port=nd["data"], f_lo=lo, f_hi=hi, codec=t["codec"], rate_bps=t["rate"],
                                              part=len(t["frame_ranges"]) + 1)
                     t["frame_ranges"].append([lo, hi]); t["sent_hi"] = hi; t["target"] = c
@@ -2366,6 +2414,7 @@ def main():
     ap.add_argument("--coord", type=str, default="", help="concurrency pilot stage 2: HOST:PORT of tools/eval/rate_coord.py; every transfer's rate comes from its max-min over all sessions")
     ap.add_argument("--coord_sites", type=str, default="", help="with --coord: label=site overrides (default: the node's host); used by the local dry test")
     ap.add_argument("--coord_poll_s", type=float, default=0.25)
+    ap.add_argument("--coord_tail_mbps", type=float, default=0.0, help="with --coord (formal design F1): work-conserving registration; a transfer whose bulk is sent reserves only this much (0 = off, pilot behaviour)")
     ap.add_argument("--barrier_offset_s", type=float, default=0.0, help="with --barrier: start this session's migration this many seconds after the common start (C4: S2 at +45 s)")
     ap.add_argument("--py", type=str, default="auto")
     ap.add_argument("--node_extra", type=str, default="")

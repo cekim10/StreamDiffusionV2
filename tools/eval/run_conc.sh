@@ -94,6 +94,20 @@ case "${1:-}" in
     for arm in m3 nom3; do for conc in 0 1; do c4cell $arm $conc; done; done ;;
   c3b) guard A:0,A:1,C:0,C:1; for m in ${2:-$METHODS}; do coord_up "C3b_$m"; pair C3b "$m" "$S2_C3A" "--coord 127.0.0.1:$CPORT"; coord_down; done ;;
   c4)  guard A:0,B:0,C:0,C:1,D:0,D:1; c4cell "${2:?m3|nom3}" "${3:?0|1}" ;;
+  wc_live)   # formal design F1, verification on real transfers (harness check, not an experiment cell): C3b placement,
+             # OTTER / OTTER, dog, one shared 1 Gbps link, --coord_tail_mbps 100; S2 starts 8 s after S1, so S1's bulk ends
+             # while S2 sends (S2 expected 500 -> 900 -> 1,000 Mbps); check_wc.py + conc_report NIC checks. About 20 min.
+    guard A:0,A:1,C:0,C:1
+    coord_up WC_live
+    bar="results/evaluation/_barrier/WC_live_$(date +%Y%m%d-%H%M%S)"
+    CW="--coord 127.0.0.1:$CPORT --coord_tail_mbps ${2:-100}"
+    sess expCONC_WC_live_precopy_replay_s1 precopy_replay "$S1" "$bar" "$COMMON" "$CW" > /tmp/conc_wc_s1.log 2>&1 & p1=$!
+    sess expCONC_WC_live_precopy_replay_s2 precopy_replay "$S2_C3A" "$bar" "$COMMON" "$CW --barrier_offset_s 8" > /tmp/conc_wc_s2.log 2>&1 & p2=$!
+    wait $p1 $p2; tail -n 2 /tmp/conc_wc_s1.log; tail -n 2 /tmp/conc_wc_s2.log
+    coord_down
+    $PY tools/eval/check_wc.py --coord_log "$(ls -t results/evaluation/osdi/concurrency/coord_WC_live_*.jsonl | head -1)" \
+      results/evaluation/expCONC_WC_live_precopy_replay_s1 results/evaluation/expCONC_WC_live_precopy_replay_s2 \
+      --nic_cap_mbps 1000 | tee results/evaluation/osdi/concurrency/wc_live_check.txt ;;
   dry_coord)   # two dry sessions whose nodes sit on the same two sites (--coord_sites), through the coordinator
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     rm -rf results/evaluation/_dryrun_expCONC_drycoord_* results/evaluation/_barrier/drycoord_*
@@ -117,7 +131,35 @@ case "${1:-}" in
     wait $pids; sleep 1
     grep -h "barrier round\|done:" /tmp/conc_dryc_orch_1.log /tmp/conc_dryc_orch_2.log
     $PY tools/eval/conc_report.py --prefix _dryrun_ --dry --coord_log "$log" ;;
-  dry_coord1)   # verification 2, live: one session (Fig. 11 Chain dry, M3 and every method) through the coordinator
+  dry_wc)   # formal design F1, work-conserving registration (--coord_tail_mbps): two dry sessions on shared sites, 200 Mbps
+            # (the Mac dry sender is not pacer-bound near 1 Gbps; on the testbed use wc_live); S2 starts
+            # 1 s after S1 (S1 64 MB, S2 1,536 MB), so S1's bulk ends and S1 then closes while S2 still sends: 100 -> 180 -> 200 Mbps; check_wc.py compares each pacer's achieved rate with its allocation
+    trap 'kill $(jobs -p) 2>/dev/null' EXIT
+    TAIL=${2:-20}   # 10 % of the 200 Mbps dry cap (testbed: 100 of 1,000 Mbps)
+    rm -rf results/evaluation/_dryrun_expCONC_drywc_* results/evaluation/_barrier/drywc_*
+    for p in 29911 29921 29931 29941; do
+      lb=$( [ $p = 29911 ] || [ $p = 29931 ] && echo A || echo B )
+      mb=$( [ $p -lt 29930 ] && echo 64 || echo 1536 )   # S1 small, S2 large: S1's bulk ends, then S1 closes, while S2 still sends
+      $PY tools/eval/mobility_node.py --label $lb --bind 127.0.0.1 --ctl_port $p --data_port $((p + 1)) --mss 0 --dry_run --dry_sink_mb $mb \
+        --dry_service_s 0.05 --migration_chunk 30 --post_chunks 3000 > "/tmp/conc_drywc_node_$p.log" 2>&1 &
+    done
+    log="results/evaluation/_dryrun_coordwc_$(date +%s).jsonl"
+    $PY tools/eval/rate_coord.py serve --port 29963 --cap_mbps 200 --log "$log" > /tmp/conc_drywc_coord.log 2>&1 &
+    sleep 3
+    bar="results/evaluation/_barrier/drywc_$(date +%s)"; pids=""
+    for i in 1 2; do
+      n1=$((29891 + 20 * i)); n2=$((n1 + 10)); off=$([ $i = 2 ] && echo 1 || echo 0)
+      $PY tools/eval/mobility_orchestrate.py --experiment "expCONC_drywc_precopy_replay_s$i" --dry_run --mss 0 --dyn_probe 1 \
+        --nodes A=127.0.0.1:$n1:$((n1 + 1)),B=127.0.0.1:$n2:$((n2 + 1)) --hops 1 --tm 1e9 --bw 200 --migration_chunk 30 --post_chunks 3000 \
+        --max_run_s 600 --xb_horizon 20 --horizon_calls 40 --xb_policy_settings "$SETV" $OTTER --policies precopy_replay --rep_start 1 --reps 1 \
+        --barrier "$bar:2" --barrier_offset_s $off --coord 127.0.0.1:29963 --coord_sites A=siteA,B=siteB --coord_tail_mbps $TAIL \
+        > "/tmp/conc_drywc_orch_$i.log" 2>&1 &
+      pids="$pids $!"
+    done
+    wait $pids; sleep 1
+    grep -h "done:" /tmp/conc_drywc_orch_1.log /tmp/conc_drywc_orch_2.log
+    $PY tools/eval/check_wc.py --coord_log "$log" results/evaluation/_dryrun_expCONC_drywc_precopy_replay_s1 results/evaluation/_dryrun_expCONC_drywc_precopy_replay_s2 ;;
+  dry_coord1)   # [tail_mbps] verification 2, live: one session (Fig. 11 Chain dry, M3 and every method) through the coordinator
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     log="results/evaluation/_dryrun_coord1_$(date +%s).jsonl"
     $PY tools/eval/rate_coord.py serve --port 29962 --cap_mbps 1000 --log "$log" > /tmp/conc_dryc1_coord.log 2>&1 & CP=$!
@@ -132,7 +174,7 @@ case "${1:-}" in
       if [ $x = ext ]; then P="full,recompute_full,precopy_replay"; XF=""; else P=precopy_replay; XF="$M3"; fi
       $PY tools/eval/mobility_orchestrate.py --experiment "expCONC_drychain_$x" --dry_run --mss 0 --dyn_probe 1 \
         --nodes A=127.0.0.1:29911:29912,B=127.0.0.1:29921:29922,C=127.0.0.1:29931:29932,D=127.0.0.1:29941:29942 \
-        --coord_sites A=sA,B=sB,C=sC,D=sD --coord 127.0.0.1:29962 \
+        --coord_sites A=sA,B=sB,C=sC,D=sD --coord 127.0.0.1:29962 ${2:+--coord_tail_mbps $2} \
         --hops 3 --tm 1e9 --bw 1000 --migration_chunk 30 --post_chunks 800 --max_run_s 900 --xb_horizon 20 --horizon_calls 60 --move_times 12,24 \
         --xb_policy_settings "$SETV" $OTTER $XF --policies "$P" --rep_start 1 --reps 1 || echo "[CONC] dry chain $x: exit $?"
       kill $NP 2>/dev/null; wait $NP 2>/dev/null; NP=""
@@ -162,5 +204,5 @@ case "${1:-}" in
     wait $pids; sleep 1
     grep -h "barrier round\|done:" /tmp/conc_dry_orch_1.log /tmp/conc_dry_orch_2.log
     $PY tools/eval/conc_report.py --prefix _dryrun_ --dry ;;
-  *) echo "usage: $0 preflight|stage1|c1 [methods]|c2 [method]|c3a [methods]|stage2|c3b [methods]|c4 m3|nom3 0|1|dry|dry_coord|dry_coord1"; exit 2 ;;
+  *) echo "usage: $0 preflight|stage1|c1 [methods]|c2 [method]|c3a [methods]|stage2|c3b [methods]|c4 m3|nom3 0|1|dry|dry_coord|dry_coord1|dry_wc [tail_mbps]|wc_live [tail_mbps]"; exit 2 ;;
 esac

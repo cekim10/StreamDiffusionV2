@@ -1926,18 +1926,19 @@ class Node(M3NodeMixin):
         precopy = the current XB pre-copy task's pacer (Sink rounds, log, patches share it), inputs = the recompute task's
         input-stream pacers, full = the Full state transfer's pacer. Only the rate changes; nothing is resent."""
         r, bps, n = self.run, float(h["rate_bps"]), 0
+        sent = 0   # record only: bytes the re-rated pacers had released before this re-rate (achieved-rate check)
         if h["flow_kind"] == "precopy":
             t = r.get("xb")
             if t is not None and t.get("id") == h["id"] and t.get("throttle") is not None:
-                t["throttle"].rate = bps / 8.0; n = 1
+                sent = getattr(t["throttle"], "sent", 0); t["throttle"].rate = bps / 8.0; n = 1
         elif h["flow_kind"] == "inputs":
             for thr in (r.get("coord_thr") or {}).get(h["id"], []):
-                thr.rate = bps / 8.0; n += 1
+                sent += getattr(thr, "sent", 0); thr.rate = bps / 8.0; n += 1
         elif h["flow_kind"] == "full":
             st = r.get("full_xfer")
             if st is not None and st.get("xfer") == h["id"] and st["pacer"].rate > 0:
-                st["pacer"].rate = bps / 8.0; n = 1
-        self.event("coord_rate_applied", flow_kind=h["flow_kind"], id=h["id"], rate_bps=bps, updated=n)
+                sent = getattr(st["pacer"], "sent", 0); st["pacer"].rate = bps / 8.0; n = 1
+        self.event("coord_rate_applied", flow_kind=h["flow_kind"], id=h["id"], rate_bps=bps, updated=n, pacer_sent_bytes=sent)
         return {"updated": n}
 
     def cmd_flow_cancel(self, h):

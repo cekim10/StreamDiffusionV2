@@ -31,11 +31,53 @@ sys.path.insert(0, str(ROOT / "tools/eval"))
 from restore_planner import maxmin  # noqa: E402
 
 
+def maxmin_demand(flows, caps, demand):
+    """Max-min with per-flow demand ceilings (water-filling). A flow in `demand` stops at its demand; the others share
+    what is left. With no demands this is `restore_planner.maxmin` itself (same code path, same rates)."""
+    if not any(f in demand for f, _, _ in flows):
+        return maxmin(flows, caps)
+    rate = {f: 0.0 for f, _, _ in flows}
+    resid = dict(caps)
+    frozen = set()
+    while len(frozen) < len(flows):
+        act = [(f, s, d) for f, s, d in flows if f not in frozen]
+        load = {}
+        for _, s, d in act:
+            load[("out", s)] = load.get(("out", s), 0) + 1; load[("in", d)] = load.get(("in", d), 0) + 1
+        inc = min(resid[k] / n for k, n in load.items())
+        dm = [demand[f] - rate[f] for f, _, _ in act if f in demand]
+        if dm:
+            inc = min(inc, min(dm))
+        for f, _, _ in act:
+            rate[f] += inc
+        for k, n in load.items():
+            resid[k] -= inc * n
+        for f, s, d in act:
+            if resid[("out", s)] <= 1e-3 or resid[("in", d)] <= 1e-3 or (f in demand and rate[f] >= demand[f] - 1e-3):
+                frozen.add(f)
+    return rate
+
+
+def pacer_rates(flows, caps, acc, demand):
+    """Sender pacer rates. A flow without a demand is paced at its accounted max-min rate. A flow with a demand (a
+    transfer whose bulk is sent and that only streams its small tail: replay log, refresh patches, between input parts)
+    is accounted at its demand but paced at the residual capacity of its path (cap minus the other flows' accounted
+    rates), so a lone tail flow keeps the whole cap exactly as today, and a tail never holds capacity it does not use."""
+    out = dict(acc)
+    for f, s, d in flows:
+        if f in demand:
+            o = sum(acc[g] for g, s2, _ in flows if g != f and s2 == s)
+            i = sum(acc[g] for g, _, d2 in flows if g != f and d2 == d)
+            out[f] = max(acc[f], min(caps[("out", s)] - o, caps[("in", d)] - i))
+    return out
+
+
 class Coordinator:
     def __init__(self, cap_bps: float, log: Path | None = None):
         self.cap = float(cap_bps)
         self.flows: dict[str, dict] = {}     # global id "session/flow" -> {session, id, src, dst, kind, t_open}
-        self.rates: dict[str, float] = {}
+        self.rates: dict[str, float] = {}   # pacer rates (what senders use)
+        self.acc: dict[str, float] = {}     # accounted rates (what the cap check sums); = rates for flows without a demand
         self.version = 0
         self.lock = threading.Lock()
         self.logf = open(log, "a") if log else None
@@ -46,17 +88,21 @@ class Coordinator:
         return {(d, s): self.cap for s in sites for d in ("out", "in")}
 
     def _alloc(self, op: str, gid: str):
-        self.rates = maxmin([(g, f["src"], f["dst"]) for g, f in self.flows.items()], self._caps()) if self.flows else {}
+        fl = [(g, f["src"], f["dst"]) for g, f in self.flows.items()]
+        dem = {g: f["demand_bps"] for g, f in self.flows.items() if f.get("demand_bps") is not None}
+        caps = self._caps()
+        self.acc = maxmin_demand(fl, caps, dem) if self.flows else {}
+        self.rates = pacer_rates(fl, caps, self.acc, dem) if self.flows else {}
         self.version += 1
         load = {}
         for g, f in self.flows.items():
             for k in (("out", f["src"]), ("in", f["dst"])):
-                load[k] = load.get(k, 0.0) + self.rates[g]
+                load[k] = load.get(k, 0.0) + self.acc[g]
         ok = all(v <= self.cap * (1 + 1e-9) + 1.0 for v in load.values())
         self.n_violations += not ok
         if self.logf:
             self.logf.write(json.dumps({"t": time.time(), "op": op, "flow": gid, "version": self.version, "cap_bps": self.cap, "cap_ok": ok,
-                                        "flows": {g: {**self.flows[g], "rate_bps": self.rates[g]} for g in self.flows},
+                                        "flows": {g: {**self.flows[g], "rate_bps": self.rates[g], "acc_bps": self.acc[g]} for g in self.flows},
                                         "site_load_bps": {f"{d}:{s}": v for (d, s), v in load.items()}}) + "\n")
             self.logf.flush()
 
@@ -70,8 +116,16 @@ class Coordinator:
             if op == "open":
                 gid = f"{req['session']}/{req['id']}"
                 self.flows[gid] = {"session": req["session"], "id": req["id"], "src": req["src"], "dst": req["dst"], "kind": req.get("kind"),
-                                   "t_open": time.time()}
+                                   "t_open": time.time(), "demand_bps": None}
                 self._alloc("open", gid)
+                return {"ok": True, "rate_bps": self.rates[gid], "version": self.version}
+            if op == "demand":   # work-conserving registration: a demand (bps) = bulk sent, tail only; None = bulk again
+                gid = f"{req['session']}/{req['id']}"
+                if gid not in self.flows:
+                    return {"ok": False, "error": f"unknown flow {gid}"}
+                d = req.get("demand_bps")
+                self.flows[gid]["demand_bps"] = None if d is None else float(d)
+                self._alloc("tail" if d is not None else "bulk", gid)
                 return {"ok": True, "rate_bps": self.rates[gid], "version": self.version}
             if op == "close":
                 gid = f"{req['session']}/{req['id']}"
@@ -134,6 +188,9 @@ class CoordClient:
     def close(self, fid):
         self.req(op="close", id=fid)
 
+    def demand(self, fid, demand_bps) -> float:
+        return float(self.req(op="demand", id=fid, demand_bps=demand_bps)["rate_bps"])
+
     def rates(self) -> tuple[int, dict]:
         r = self.req(op="rates")
         return r["version"], r["rates"]
@@ -163,6 +220,27 @@ def selftest():
     r = co.handle({"op": "rates", "session": "s1"})["rates"]["x1"]
     good = abs(r - cap) < 1
     ok &= good; print(f"  {'ok' if good else 'FAIL'} after the others close, the remaining flow gets the cap back ({r / 1e6:.0f} Mbps)")
+    # work-conserving registration (formal design F1): a flow whose bulk is sent only reserves its tail demand
+    co = Coordinator(cap)
+    for sess in ("s1", "s2"):
+        co.handle({"op": "open", "session": sess, "id": "x1", "src": "h1", "dst": "h3", "kind": "precopy"})
+    r2 = co.handle({"op": "demand", "session": "s1", "id": "x1", "demand_bps": 100e6})["rate_bps"]
+    r_s2 = co.handle({"op": "rates", "session": "s2"})["rates"]["x1"]
+    good = abs(r_s2 - 900e6) < 1 and abs(r2 - 100e6) < 1 and co.n_violations == 0
+    ok &= good; print(f"  {'ok' if good else 'FAIL'} s1 in its tail (demand 100 Mbps): s2 {r_s2 / 1e6:.0f} Mbps, s1 paced {r2 / 1e6:.0f} Mbps, accounted sum <= cap")
+    co.handle({"op": "close", "session": "s2", "id": "x1"})
+    r1 = co.handle({"op": "rates", "session": "s1"})["rates"]["x1"]
+    good = abs(r1 - cap) < 1
+    ok &= good; print(f"  {'ok' if good else 'FAIL'} a lone tail flow is paced at the whole cap, as today ({r1 / 1e6:.0f} Mbps)")
+    co.handle({"op": "open", "session": "s2", "id": "x2", "src": "h1", "dst": "h3", "kind": "precopy"})
+    r_b = co.handle({"op": "demand", "session": "s1", "id": "x1", "demand_bps": None})["rate_bps"]
+    r_s2 = co.handle({"op": "rates", "session": "s2"})["rates"]["x2"]
+    good = abs(r_b - cap / 2) < 1 and abs(r_s2 - cap / 2) < 1
+    ok &= good; print(f"  {'ok' if good else 'FAIL'} back to bulk (new round / input part): {r_b / 1e6:.0f} / {r_s2 / 1e6:.0f} Mbps")
+    fl = [("a", "h1", "h3"), ("b", "h1", "h4"), ("c", "h2", "h3")]
+    caps = {(d, h): cap for h in ("h1", "h2", "h3", "h4") for d in ("out", "in")}
+    good = maxmin_demand(fl, caps, {}) == maxmin(fl, caps)
+    ok &= good; print(f"  {'ok' if good else 'FAIL'} without demands the allocation is restore_planner.maxmin exactly")
     print("ALL PASS" if ok else "FAILED")
     return ok
 

@@ -156,8 +156,10 @@ class Throttle:
         self.burst = burst_bytes
         self.tokens = float(burst_bytes)
         self.t = time.perf_counter()
+        self.sent = 0   # record only: bytes released so far (achieved-rate check of coordinator re-rates)
 
     def take(self, n: int):
+        self.sent += n
         if self.rate <= 0:
             return
         while True:
