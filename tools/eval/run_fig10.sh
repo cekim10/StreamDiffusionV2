@@ -11,6 +11,8 @@
 #   local:     bash tools/eval/run_fig10.sh dry
 # Long ages (osdi/fig10/longage_protocol.md; E9 D5, exploratory calibration, no hypothesis): ages 1,000 / 3,000, 2 reps,
 # experiments expF10L_<w>_a<age>, node --mem_log; dog on P1 = elves-01 / 02, butterfly on P2 = elves-03 / 04 at once.
+# User 2026-11-04 (main Fig. F needs the calibration): Versioned arm only -> LONG_ARMS=ver (default 'full ver' = original scope).
+#   elves-01:  bash tools/eval/run_fig10.sh long_pre       # free host memory and disk on A-D (protocol section 1)
 #   elves-01:  bash tools/eval/run_fig10.sh long_first     # dog a1000 Versioned rep 1 (P1) and bfly a1000 Versioned rep 1 (P2)
 #   elves-01:  python tools/eval/fig10_report.py --long --sanity
 #   elves-01:  bash tools/eval/run_fig10.sh long1          # P1 (terminal 1)
@@ -37,7 +39,7 @@ long_one() {   # pair, workload, age, arm (full|ver), rep: the Fig. 10 protocol 
     --replay_switch_calls "$S1,$S2" --move_calls "$M" --rep_start "$5" --reps 1 --node_extra="$X --mem_log" || echo "[F10L] $1 $2 a$3 $4 rep $5: exit $?"
 }
 long_rest() {   # pair, workload: reps outermost, ages, arms interleaved; rep 1 a1000 ver is long_first
-  for rep in 1 2; do for age in $LONG_AGES; do for arm in full ver; do
+  for rep in 1 2; do for age in $LONG_AGES; do for arm in ${LONG_ARMS:-full ver}; do
     [ $rep = 1 ] && [ $age = 1000 ] && [ $arm = ver ] && continue
     long_one "$1" "$2" $age $arm $rep
   done; done; done
@@ -71,15 +73,17 @@ case "${1:-}" in
   extra)   # preregistered extra-rep rule (section 6): reps 4 and 5 of both arms of one (workload, age) cell
     guard
     for rep in 4 5; do for arm in full ver; do one "${2:?workload}" "${3:?age}" $arm $rep; done; done ;;
+  long_pre)
+    $PY tools/eval/d0_remote.py probe f10l_pre "free -g | head -2; df -h . | tail -1; git rev-parse --short HEAD" ;;
   long_first)
     guard A,B,C,D
     long_one P1 dog 1000 ver 1 > /tmp/f10l_first_P1.log 2>&1 &
     long_one P2 bfly 1000 ver 1 > /tmp/f10l_first_P2.log 2>&1 &
     wait; tail -n 3 /tmp/f10l_first_P1.log; tail -n 3 /tmp/f10l_first_P2.log ;;
   long1)
-    guard A,B; long_rest P1 dog ;;
+    guard A,B; echo "[F10L] arms: ${LONG_ARMS:-full ver}"; long_rest P1 dog ;;
   long2)
-    guard C,D; long_rest P2 bfly ;;
+    guard C,D; echo "[F10L] arms: ${LONG_ARMS:-full ver}"; long_rest P2 bfly ;;
   dry_long)
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     for arm in full ver; do
@@ -122,5 +126,5 @@ case "${1:-}" in
       done
     done
     $PY tools/eval/fig10_report.py --prefix _dryrun_ --dry --sanity ;;
-  *) echo "usage: $0 preflight|first|rest|extra <w> <age>|dry|long_first|long1|long2|dry_long"; exit 2 ;;
+  *) echo "usage: $0 preflight|first|rest|extra <w> <age>|dry|long_pre|long_first|long1|long2|dry_long  (LONG_ARMS=ver for Versioned only)"; exit 2 ;;
 esac

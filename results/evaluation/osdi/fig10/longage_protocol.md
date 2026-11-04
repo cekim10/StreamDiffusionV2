@@ -4,6 +4,17 @@ Not a preregistration: no hypothesis is tested and nothing here changes Fig. 10'
 (E9 D5): the simulator extrapolates Versioned delta bytes past the measured 240 calls with the 150-240 slope, capped
 at the Sink (`cluster_sim.Cal.delta_bytes`, [A5]); these runs measure ages 1,000 and 3,000.
 
+## 0. Scope change (user, 2026-11-04, before any long-age run)
+
+The cluster simulation (E9) goes into the main evaluation, so these runs are needed to check its delta extrapolation.
+To keep them short, **only the Versioned arm runs: 2 workloads x 2 ages x 2 reps = 8 runs** (`LONG_ARMS=ver`), about
+3 h with both pairs at once. Consequences, stated before the runs:
+- Full's base is the whole Sink by construction (1,728 MB), so the calibration does not need the Full arm.
+- The per-rep equivalence of B's outputs between the arms (section 2) is not available. Exactness rests on the second
+  cutover's SINKOK and DELTAOK (block digests of the rebuilt Sink equal the source's) and the mismatched-block count.
+- No Versioned-vs-Full readiness comparison is made at long ages.
+The original 16-run scope stays in the tools (`LONG_ARMS` default) and is not run.
+
 ## 1. Runs
 
 The Fig. 10 protocol unchanged except the age and the run length: path A -> B -> A, 1 Gbps, seed 0, first trigger at
