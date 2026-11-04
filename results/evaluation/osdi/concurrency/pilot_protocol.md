@@ -279,3 +279,37 @@ contention experiment, and the 2 Gbps host NIC is never described as link sharin
 Claim scope after stage 1 (user): "OTTER supports concurrent migrations of independently provisioned streaming sessions
 on shared hosts without observed OOM or substantial throughput degradation in the pilot." Not yet: continuity under
 network contention (C3b). C4 must show whether M3's gain for S1 is paid by S2 (S2's readiness and gap).
+
+## 12. Stage 2, C3b outcome (2026-11-03, measured; runs 216e7695, report regenerated on the Mac)
+
+C3b = C3a's placement (S1 01:0 -> 03:0, S2 01:1 -> 03:1) with both sessions on ONE shared 1 Gbps egress (elves-01)
+and ingress (elves-03) through the rate coordinator. 6 sessions, one run each. (The report committed from elves-01
+had no C3b rows; rerunning `conc_report.py` on the pushed data adds them, no data changed.)
+
+**Coordinator and cap checks (the gate for C4): PASS.**
+- Allocation level: 3 logs, 4 allocations each (open, open, close, close); every site sum <= cap; max site load
+  1.000 x cap.
+- Registration: every transfer of all 6 sessions opened with the coordinator, closed, and present in its log.
+- Measured host NIC vs the shared 1 Gbps (after the header factor): burst 1.000-1.022 x, sustained 10 s
+  0.993-0.996 x (Full, OTTER); R-full 0.49-0.65 / 0.067 x. No sustained excess. `condition_valid` True for all 6.
+- Contention: both sessions' flows shared both host links and were allocated below their alone rate for
+  Full 105.4 s, OTTER 40.1 s, R-full 36.7 s (allocation level; R-full's input flows were registered for the task but
+  carried little data: sustained 0.067 x cap).
+
+| method | session | TTFO-local (s) | max. gap (s) | bytes (GB) | vs C1: TTFO / gap (s) | per-transfer payload (Mbps) |
+|---|---|---|---|---|---|---|
+| Full | S1 / S2 | 106.53 / 106.30 | 106.53 / 106.30 | 6.463 | +52.4 / +52.1 (gap = TTFO) | 495 / 496 |
+| OTTER | S1 / S2 | 40.81 / 41.55 | 1.64 / 1.67 | 1.793 / 1.794 | +17.1 / +17.8 TTFO; +0.03 / +0.05 gap | 451 / 441 |
+| R-full | S1 / S2 | 37.37 / 38.59 | 18.86 / 19.65 | 0.084 / 0.085 | -0.9 / +0.4 TTFO; -0.4 / +0.4 gap | 255-322 |
+
+Against the predictions of section 4 (not used by any rule):
+- OTTER gap about 1.6 s: held (1.64-1.67 s vs 1.61 alone).
+- OTTER readiness between its 1 Gbps (23 s) and 0.5 Gbps (41 s) values: 40.8 s within, 41.6 s just above.
+- Full gap up to about 2x: 2.0x (54.2 -> 106.3-106.5 s).
+- R-full about unchanged: held.
+- OTTER bytes +30 MB (1.763 -> 1.793 GB): the longer pre-copy carries more log. Served calls/s in the window
+  1.49-1.52 vs 1.43: the window is longer, so the same source-serving interval is a larger share; not a throughput gain.
+
+Reading (scope as in section 11): with two sessions on one shared 1 Gbps link, OTTER's maximum output gap stayed at
+1.6-1.7 s while its time to first local output grew from 24 to 41 s; Full's gap doubled. One run per session, one
+workload (dog / dog), equal max-min sharing: a pilot observation, not an effect estimate. C4 may proceed (section 11).
