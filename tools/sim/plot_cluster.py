@@ -8,6 +8,10 @@ figc_b_link       time without local service per move (s, mean incl. truncated m
 figc_c_budget     the same vs the per-site memory budget for retained / staged state (GB): Unstaged, OTTER, Replicate
 figc_stalled      stalled seconds per session-hour vs user moves per hour (log y), same knobs as figc_a (added
                   2026-11-04 by the user's decision: plot only, from the frozen sweep; the paired view of figc_a)
+figc_m_stalled    MAIN-TEXT version (user 2026-11-04): stalled s per session-h vs moves per hour, the four end-to-end
+                  methods only (Full, Llumnix, SLLM, OTTER), legend inside; Unstaged / Replicate are in the text (Unstaged
+                  overlaps OTTER: staging brings no gain here, CL-H3). Plot only, frozen primary sweep.
+figc_m_local      the same for local service (%)
 figc_legend       the method legend as its own file (six entries do not fit a 28-pt plot box)
 Canvas and axes box of Fig. 6a, fonts never reduced (28 / 19 / 25 pt), no internal mechanism names.
 
@@ -100,6 +104,32 @@ def panel(runs, xkey, metric, ylabel, xlabel, out, methods, xfmt=lambda x: x, lo
     return fx
 
 
+def main_panel(runs, metric, ylabel, out, logy):
+    """figc_m_*: four methods, legend inside (upper left), x = moves per hour at the primary knobs; fonts unchanged."""
+    ser, _ = series(runs, "dwell_s", metric, [m for m in ("full", "pfull", "rfull", "otter")])
+    fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
+    hs = []
+    for m, s in ser.items():
+        c, mk, ls = STYLE[m]
+        kw = dict(color=c, marker=mk, ls=ls, lw=2.4, ms=10, mfc="white" if m != "otter" else c, mew=2)
+        ax.plot([3600 / d for d, _ in s], [y for _, y in s], zorder=4 if m == "otter" else 3, **kw)
+        hs.append(Line2D([], [], label=LABEL[m], **kw))
+    ax.set_xscale("log"); ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.set_xticks([6, 20, 60]); ax.set_xticklabels(["6", "20", "60"])
+    if logy:   # top 5000 leaves the legend's two rows above every point; 1000 written "1k" (a 4-digit label met the y label)
+        ax.set_yscale("log"); ax.set_ylim(5, 5000); ax.yaxis.set_minor_formatter(NullFormatter())
+        ax.yaxis.set_major_locator(FixedLocator([10, 100, 1000]))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v / 1000:g}k" if v >= 1000 else f"{v:g}"))
+    else:
+        ax.set_ylim(0, 130); ax.set_yticks([0, 25, 50, 75, 100])
+    finish_axes(ax, ylabel)
+    ax.set_xlabel("Moves per hour", fontsize=28, labelpad=2)
+    ax.margins(x=0.06)
+    ax.legend(handles=hs, loc="upper left", ncol=2, frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.4,
+              columnspacing=0.8, labelspacing=0.2, borderaxespad=0.3)
+    save(fig, out)
+
+
 def legend(methods, out):
     fig = plt.figure(figsize=(11.0, 1.7))
     hs = [Line2D([], [], color=STYLE[m][0], marker=STYLE[m][1], ls=STYLE[m][2], lw=2.4, ms=10, mfc="white" if m != "otter" else STYLE[m][0], mew=2, label=LABEL[m]) for m in methods]
@@ -122,6 +152,8 @@ def main():
     fb = panel(runs, "C_gbps", delay, "Delay per move (s)", "Link capacity (Gbps)", fd / "figc_b_link", methods, logx=True, logy=True)
     stalled = lambda r: r.get("stalled_s_per_session_h", r["stall_frac"] * 3600)  # noqa: E731
     fs = panel(runs, "dwell_s", stalled, "Stalled s per session-h", "Moves per hour", fd / "figc_stalled", methods, xfmt=lambda d: round(3600 / d), logx=True, logy=True)
+    main_panel(runs, stalled, "Stalled s per session-h", fd / "figc_m_stalled", True)
+    main_panel(runs, local, "Local service (%)", fd / "figc_m_local", False)
     fc = panel(runs, "M_gb", delay, "Delay per move (s)", "Memory budget (GB)", fd / "figc_c_budget", [m for m in ("base", "otter", "naive") if m in methods])
     legend(methods, fd / "figc_legend")
     print(f"  fixed knobs: a {fa}; stalled {fs}; b {fb}; c {fc}")
