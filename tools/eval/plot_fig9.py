@@ -24,10 +24,10 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
 
-from plot_fig7_migration import (BLUE, DARK_GRAY, DIM_GRAY, HATCH, LEGEND, OFF, ROOT, WL_LABEL, WORKLOADS, annotate, configure,
+from plot_fig7_migration import (BLUE, DARK_GRAY, DIM_GRAY, HATCH, LEGEND, ROOT, WL_LABEL, WORKLOADS, annotate, configure,
                                  finish_axes)
 
-W = 0.42   # Fig. 9 keeps the original bar width (Fig. 7 narrowed to 0.34 on 2026-11-03)
+W, OFF = 0.42, 0.23   # Fig. 9 keeps its original bars (Fig. 7 changed to 0.34 / 0.18 on 2026-11-03)
 
 STEPS = ("wait", "psink", "nosync", "otter")
 TICK = {"wait": "Wait", "psink": "P-sink", "nosync": "w/o sync", "otter": "OTTER"}   # short names: Fig. 6a plot box at 28 pt (caption spells them out)

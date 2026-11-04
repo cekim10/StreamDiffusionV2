@@ -50,8 +50,8 @@ WL_LABEL = {"dog": "Low-refresh", "bfly": "High-refresh"}
 FILL = {m: (DIM_GRAY, DARK_GRAY) for m in METHODS[:3]}   # baselines: (dog, butterfly) grays
 FILL["precopy_replay"] = (BLUE, "#9DB3F0")               # OTTER: accent
 HATCH = {"dog": "", "bfly": "//"}
-W, OFF = 0.34, 0.23   # bar width reduced from 0.42 (user 2026-11-03); pair centres unchanged
-NUDGE = 0.04   # pair value labels pushed apart (x units) so 5-character labels of equal-height bars do not touch
+W, OFF = 0.34, 0.18   # user 2026-11-03: narrower bars (0.42 -> 0.34), the two bars of a method nearly touching (gap 0.02)
+NUDGE = 0.09   # pair value labels pushed apart (x units) so 5-character labels of equal-height bars do not touch
 PANELS = {   # key in fig7_results cells, y label, value format
     "ttfo": ("ttfo_local_s", "TTFO-local (s)", lambda v: f"{v:.0f}" if v >= 100 else f"{v:.1f}"),
     "gap": ("delivery_gap_s", "Max. output gap (s)", lambda v: f"{v:.2f}" if v < 10 else f"{v:.1f}"),
