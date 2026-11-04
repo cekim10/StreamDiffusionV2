@@ -1,0 +1,18 @@
+  ok NIC elves-01:rx: burst 0.001 x, 10 s 0.001 x cap (0 coarse samples)
+  ok NIC elves-01:tx: burst 1.001 x, 10 s 0.994 x cap (0 coarse samples)
+  ok NIC elves-03:rx: burst 1.004 x, 10 s 0.994 x cap (0 coarse samples)
+  ok NIC elves-03:tx: burst 0.002 x, 10 s 0.001 x cap (0 coarse samples)
+  ok coordinator: 6 allocations, accounted sum > cap in 0
+     C_live_precopy_replay_s1/x1: 1000 (bulk, 0.0 s) -> 500 (bulk, 7.99 s) -> 100 (tail, 26.26 s)
+     C_live_precopy_replay_s2/x1: 500 (bulk, 7.99 s) -> 900 (bulk, 26.26 s) -> 1000 (bulk, 33.82 s)
+  ok expCONC_WC_live_precopy_replay_s1 x1: tail registered 0.08 s after the round's send ended
+  FAIL expCONC_WC_live_precopy_replay_s1 x1:  0.00- 7.44 s allocated 1000 Mbps, achieved 713 Mbps; host elves-01:tx 761 Mbps measured
+  ok expCONC_WC_live_precopy_replay_s1 x1:  7.44-25.58 s allocated 500 Mbps, achieved 485 Mbps; host elves-01:tx 958 Mbps measured
+  ok expCONC_WC_live_precopy_replay_s2 x1: tail registered 0.16 s after the round's send ended
+  FAIL expCONC_WC_live_precopy_replay_s2 x1:  0.00-17.76 s allocated 500 Mbps, achieved 434 Mbps; host elves-01:tx 984 Mbps measured
+  ok expCONC_WC_live_precopy_replay_s2 x1: 17.76-25.31 s allocated 900 Mbps, achieved 845 Mbps; host elves-01:tx 956 Mbps measured
+     expCONC_WC_live_precopy_replay_s2 x1: 25.31-25.56 s at 1000 Mbps: 0.25 s, not checked (< 1.0 s)
+  tail record (record only):
+     expCONC_WC_live_precopy_replay_s1 x1: tail 6.6 s, 16.5 MB, mean 20.1 Mbps, max 99.0 Mbps over >= 0.3 s, reservation 100 Mbps, at >= 95 % of it 0.5 s; meanwhile bulk lay_s2/x1 874 Mbps over 6.5 s
+     expCONC_WC_live_precopy_replay_s2 x1: tail 6.8 s, 17.6 MB, mean 20.7 Mbps, max 158.5 Mbps over >= 0.3 s, reservation 100 Mbps, at >= 95 % of it 0.5 s
+FAILED
