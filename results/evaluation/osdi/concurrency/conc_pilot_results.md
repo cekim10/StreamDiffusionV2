@@ -22,6 +22,8 @@ Protocol: `pilot_protocol.md`. One run per session; C1 = S1 alone. Window = trig
 | C3b | R-full | S1 | True  | 37.37 | 18.86 | 0.084 | 0.80 | 70 | 26.0 / 28.2, 29.2 / 27.6 | -0.87 / -0.36 |
 | C3b | R-full | S2 | True  | 38.59 | 19.65 | 0.085 | 0.80 | 70 | 26.0 / 29.9, 29.2 / 27.3 | +0.35 / +0.43 |
 | C4_m3_alone | OTTER | S1 | True  | 9.96 | 1.43 | 3.539 | 1.51 | 912 | 29.0 / 20.2, 36.8 / 19.9 | -13.75 / -0.19 |
+| C4_m3_conc | OTTER | S1 | True  | 10.11 | 1.44 | 3.538 | 1.48 | 951 | 29.0 / 20.0, 36.9 / 19.9 | -13.60 / -0.17 |
+| C4_m3_conc | OTTER | S2 | True  | 39.42 | 1.66 | 1.793 | 1.52 | 1039 | 29.2 / 31.7, 30.8 / 28.3 | +15.71 / +0.04 |
 
 | cond | method | trigger offset S2 - S1 (s) | window overlap (s) | overlap / shorter window | both completed | both valid |
 |---|---|---|---|---|---|---|
@@ -32,6 +34,7 @@ Protocol: `pilot_protocol.md`. One run per session; C1 = S1 alone. Window = trig
 | C3b | Full | -0.000 | 106.30 | 1.00 | True | True |
 | C3b | OTTER | -0.000 | 40.81 | 1.00 | True | True |
 | C3b | R-full | -0.000 | 37.37 | 1.00 | True | True |
+| C4_m3_conc | OTTER | 45.000 | 0.00 | 0.00 | True | True |
 
 Condition-aware validity (`condition_valid`; the original `valid` above is unchanged). Host cap: C1 / C2 / C3a = 1 Gbps x the sessions on that NIC direction, each shaped to its own emulated 1 Gbps link (C3a: two independent links on one physical NIC, not a shared link); C3b / C4 = one shared 1 Gbps. Burst = largest sample of <= 1.5 s (1.03 s typical) <= 1.15 x; sustained = largest time-weighted mean over >= 10 s <= 1.05 x (after the header factor). Per session: configured rate, completion, per-transfer rate.
 
@@ -55,12 +58,15 @@ Condition-aware validity (`condition_valid`; the original `valid` above is uncha
 | C3b | R-full | S1 | True | elves-01:tx 2: 0.647 / 0.067 x 1, elves-03:rx 2: 0.651 / 0.067 x 1 | inputs 279, inputs 255 | 0 (0.0) | - |
 | C3b | R-full | S2 | True | elves-01:tx 2: 0.491 / 0.067 x 1, elves-03:rx 2: 0.511 / 0.067 x 1 | inputs 322, inputs 264 | 2 (2.3) | - |
 | C4_m3_alone | OTTER | S1 | True | elves-01:rx 1: 0.150 / 0.016 x 1, elves-01:tx 1: 0.992 / 0.974 x 1, elves-02:rx 1: 0.925 / 0.871 x 1, elves-02:tx 1: 0.923 / 0.883 x 1, elves-03:rx 1: 0.939 / 0.884 x 1, elves-03:tx 1: 0.294 / 0.030 x 1, elves-04:rx 1: 1.008 / 0.989 x 1 | precopy 796, m3_forward 815, m3_forward 504, m3_forward 977, precopy 802, precopy 65 | 0 (0.0) | - |
+| C4_m3_conc | OTTER | S1 | True | elves-01:rx 1: 0.108 / 0.015 x 1, elves-01:tx 1: 0.990 / 0.907 x 1, elves-02:rx 1: 0.970 / 0.908 x 1, elves-02:tx 1: 0.911 / 0.879 x 1, elves-03:rx 1: 0.919 / 0.880 x 1, elves-03:tx 2: 0.841 / 0.563 x 1, elves-04:rx 2: 1.045 / 0.993 x 1 | precopy 824, m3_forward 356, m3_forward 346, precopy 801, m3_forward 491, precopy 66 | 4 (3.1) | - |
+| C4_m3_conc | OTTER | S2 | True | elves-03:rx 1: 0.925 / 0.879 x 1, elves-03:tx 2: 0.911 / 0.553 x 1, elves-04:rx 2: 1.012 / 0.992 x 1 | precopy 471 | 4 (2.1) | - |
 
 C4, S1 (Fig. 11 Chain metrics, `fig11_report.run_record`; S2 is in the first table):
 
 | cell | status | N (s) | N_post (s) | R_D (s) | max. gap (s) | total stall (s) | bytes incl. M3 forwards (GB) | M3 forwards (GB) | per move: edge without local (s) |
 |---|---|---|---|---|---|---|---|---|---|
 | C4_m3_alone | valid | 57.6 | 33.1 | 9.96 | 1.43 | 2.42 | 5.283 | 1.744 | B 24.5, C 23.1, D 10.0 |
+| C4_m3_conc | valid | 57.1 | 33.5 | 10.11 | 1.44 | 2.43 | 5.282 | 1.744 | B 23.6, C 23.4, D 10.1 |
 
 Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1.15, sustained 10 s <= 1.05):
 
@@ -98,6 +104,18 @@ Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1
 | C4_m3_alone | OTTER | S1 | elves-03:rx | 0.94 | 0.88 | True |
 | C4_m3_alone | OTTER | S1 | elves-04:tx | 0.00 | 0.00 | True |
 | C4_m3_alone | OTTER | S1 | elves-04:rx | 1.01 | 0.99 | True |
+| C4_m3_conc | OTTER | S1 | elves-01:tx | 0.99 | 0.91 | True |
+| C4_m3_conc | OTTER | S1 | elves-01:rx | 0.11 | 0.02 | True |
+| C4_m3_conc | OTTER | S1 | elves-02:tx | 0.91 | 0.88 | True |
+| C4_m3_conc | OTTER | S1 | elves-02:rx | 0.97 | 0.91 | True |
+| C4_m3_conc | OTTER | S1 | elves-03:tx | 0.84 | 0.56 | True |
+| C4_m3_conc | OTTER | S1 | elves-03:rx | 0.92 | 0.88 | True |
+| C4_m3_conc | OTTER | S1 | elves-04:tx | 0.02 | 0.00 | True |
+| C4_m3_conc | OTTER | S1 | elves-04:rx | 1.05 | 0.99 | True |
+| C4_m3_conc | OTTER | S2 | elves-03:tx | 0.91 | 0.55 | True |
+| C4_m3_conc | OTTER | S2 | elves-03:rx | 0.93 | 0.88 | True |
+| C4_m3_conc | OTTER | S2 | elves-04:tx | 0.00 | 0.00 | True |
+| C4_m3_conc | OTTER | S2 | elves-04:rx | 1.01 | 0.99 | True |
 
 Coordinator logs (verification 1 at the allocation level; flow overlap between sessions):
 
@@ -107,3 +125,4 @@ Coordinator logs (verification 1 at the allocation level; flow overlap between s
 | coord_C3b_precopy_replay_20261103-220055.jsonl | 4 | True | 1.000 | 40.1 | 40.1 | 40.1 | s1:precopy + s2:precopy 40.1 |
 | coord_C3b_recompute_full_20261103-214237.jsonl | 4 | True | 1.000 | 36.7 | 36.7 | 36.7 | s1:inputs + s2:inputs 36.7 |
 | coord_C4_m3_alone_20261103-222247.jsonl | 12 | True | 1.000 | 0.0 | 0.0 | 0.0 | - |
+| coord_C4_m3_conc_20261103-223946.jsonl | 14 | True | 1.000 | 27.9 | 27.9 | 27.9 | s1:m3 + s2:precopy 27.9 |

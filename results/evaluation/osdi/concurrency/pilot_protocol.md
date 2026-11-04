@@ -328,3 +328,30 @@ be read from the elves-01 terminal; the loop stops at the first failing cell, e.
 The coordinated single-session Chain reproduces Fig. 11 within its run-to-run range (live single-session equivalence,
 section 2's verification 2). Coordinator: 12 allocations, all sums <= cap; NIC sustained <= 0.989 x cap.
 Wall time: about 11 min per cell (launch + reference regeneration about 9 min), not the 35-45 min estimated.
+
+## 14. C4, second cell `C4_m3_conc` (2026-11-03; run 7fc5a30d)
+
+Pushed: `C4_m3_conc` only. `C4_nom3_alone` and `C4_nom3_conc` are again missing (no run directory: the cell stopped
+before the orchestrator started, cause to be read from the elves-01 terminal).
+
+**Contention happened (coordinator log, allocation level).** S2's migration (elves-03:1 -> elves-04:1, from 45 s) and
+S1's M3 forward A -> D (elves-01 -> elves-04, 45.1-73.0 s) shared elves-04's ingress: 500 / 500 Mbps for 27.9 s
+(333 Mbps each for 0.6 s while two more forwards were open). Shared-link seconds = seconds below the alone rate =
+27.9 s, all of kind S1 staging + S2 pre-copy. All 14 allocations <= cap. Every flow registered.
+
+| | S1 N (s) | S1 N_post (s) | S1 R_D (s) | S1 gap (s) | S2 TTFO-local (s) | S2 gap (s) |
+|---|---|---|---|---|---|---|
+| C4_m3_alone | 57.6 | 33.1 | 9.96 | 1.43 | - | - |
+| C4_m3_conc | 57.1 | 33.5 | 10.11 | 1.44 | 39.42 | 1.66 |
+| reference: C1 OTTER, one migration alone (elves-01 -> 03, GPU 0) | | | | | 23.71 | 1.61 |
+
+Reading (one run per cell; pilot):
+- S1 kept its M3 gain under contention (N 57.6 -> 57.1, R_D 9.96 -> 10.11): its forward A -> D, slowed to 500 Mbps,
+  still landed at 73 s, before the move to D at 90 s.
+- **The cost moved to S2:** S2's time to first local output was 39.4 s against 23.7 s for one OTTER migration alone
+  (C1; different hosts and GPU, so an approximate reference). The coordinator log accounts for it: S2 ran at
+  500 Mbps for 27.9 s while S1's forward shared elves-04's ingress. S2's gap stayed 1.66 s.
+- This is the trade-off the user asked C4 to expose (section 11): M3 improved S1 at S2's expense. Its size needs
+  `C4_nom3_conc` (S2 next to S1 without staging), the 2 x 2's missing cells; until then the +15.7 s is against C1.
+- The pair table's "window overlap 0" for C4 is not meaningful: S1's Fig. 7 window covers only its first move,
+  which ends before S2 starts (offset 45 s by design). Overlap evidence for C4 is the coordinator log above.
