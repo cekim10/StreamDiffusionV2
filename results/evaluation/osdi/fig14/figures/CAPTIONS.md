@@ -10,15 +10,29 @@ serving path is 5.3-5.6 % slower than native inference, while the harness withou
 These measurements suggest that most of the integrated slowdown is associated with the serving harness rather than
 OTTER's metadata tracking; the two were measured on different hosts, so the split is not exact.
 
-**Fig. 14(b1) fig14b1_gpu.** Peak allocated GPU memory of the source and the destination of a single migration
-(median of 3 runs). Dashed: the source while serving without migration state (19.7 GiB). The rest is the prototype
-holding whole-session GPU copies: the transfer / receive snapshot (6.2 GiB) and, at the destination, a replay clone
-(1.6 GiB).
+**Fig. 14(b1) fig14b1_gpu.** Bars: peak allocated GPU memory of the source and the destination of a single migration
+(median of 3 runs, GiB). Dashed: the steady-state serving allocation without migration state (19.7 GiB). The source
+peak includes a full-state GPU snapshot (6.2 GiB, held during the first transfer round); the destination peak
+includes the receive buffer (6.2 GiB) and the replay clone (1.6 GiB), which the prototype holds until the session
+ends.
 
-**Fig. 14(b2) fig14b2_host.** Increase in process RSS over the run (peak minus first sample, GiB). It is the whole
-process's increase, not an OTTER-specific overhead. The retained Sink (1.6 GiB, measured bytes) is part of the
-source's increase and drawn inside its bar, not added to it.
+**Fig. 14(b2) fig14b2_host.** Process RSS increase relative to the first sample (peak minus first sample, GiB). It is
+the whole process's increase, not an OTTER-specific overhead. The retained Sink (1.6 GiB, measured bytes) is part of
+the source's increase and drawn inside its bar, not added to it; the rest of the source's increase (about 3.4 GiB) is
+not attributed.
 
 **Fig. 14(c) fig14c_cluster.** Four-node chain with staging (A -> B -> C -> D): retained and staged Sink bytes held per
 node at the run end (measured). Each former owner retains both a local Sink copy and a staged entry, resulting in
 seven Sink-sized copies (11.2 GiB) across the four-node chain. D, the final owner, keeps a staged copy while serving.
+
+## Text that must appear in the paper (user 2026-11-03)
+
+- Intermediate owners reach 33.6-35.8 GiB of GPU allocation when initiating another migration, primarily due to
+  overlapping receive and outbound state snapshots (measured; L40S 45 GiB).
+- In the four-node chain, the prototype holds seven Sink-sized copies (11.2 GiB) at the end: each former owner keeps
+  its retained copy and a staged entry of the same version, and the final owner keeps a staged copy.
+- These costs come from buffer lifetimes in the prototype (whole-session snapshots, a replay clone, duplicated
+  retained / staged copies) and are reported as measured; no reduced number is claimed for an optimized
+  implementation.
+- The cluster simulation's memory results assume one copy per site and session with owner cleanup and LRU eviction
+  ([A11]); the A11 sensitivity (osdi/fig_cluster/a11_sensitivity_protocol.md) reports the implementation-like case.

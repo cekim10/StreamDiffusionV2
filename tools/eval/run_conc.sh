@@ -37,6 +37,11 @@ S1_CHAIN="--nodes A=$H1:29811:29812,B=$H2:29811:29812,C=$H3:29811:29812,D=$H4:29
 S2_C4="--nodes A=$H3:29841:29842,B=$H4:29841:29842 --agent_hosts A=$H3,B=$H4 --gpus A=1,B=1"
 CPORT=29960
 guard() { $PY tools/eval/d0_remote.py gpu_idle --hosts "$1" || { echo "[CONC] GPUs busy or hosts on different commits ($1)"; exit 1; }; }
+note_gpu1() {   # record only (never stops the run): who holds GPU 1 on elves-01 / 03 / 04 while C1 / C2 run on GPU 0
+  local f="results/evaluation/osdi/concurrency/gpu1_state_$1_$(date +%Y%m%d-%H%M%S).txt"
+  mkdir -p "$(dirname "$f")"; { date -Is; $PY tools/eval/d0_remote.py gpu_idle --hosts A:1,C:1,D:1; } > "$f" 2>&1
+  echo "[CONC] GPU 1 state ($1): $(tail -n 1 "$f") -> $f"
+}
 sess() {   # experiment, method, node placement, barrier ("" = none), [run flags (default the single-migration COMMON)], [extra flags]
   local B=""; [ -n "$4" ] && B="--barrier $4:2"
   $PY tools/eval/mobility_orchestrate.py --experiment "$1" ${5:-$COMMON} $3 --xb_policy_settings "$SETV" $OTTER ${6:-} --policies "$2" \
@@ -80,8 +85,8 @@ case "${1:-}" in
     for m in $METHODS; do echo "[CONC] === C1 $m (S1 alone)"; sess "expCONC_C1_${m}_s1" "$m" "$S1" ""; done
     pair C2 precopy_replay "$S2_C2"
     for m in $METHODS; do pair C3a "$m" "$S2_C3A"; done ;;
-  c1)  guard A:0,C:0; for m in ${2:-$METHODS}; do sess "expCONC_C1_${m}_s1" "$m" "$S1" ""; done ;;
-  c2)  guard A:0,B:0,C:0,D:0; pair C2 "${2:-precopy_replay}" "$S2_C2" ;;
+  c1)  guard A:0,C:0; note_gpu1 C1; for m in ${2:-$METHODS}; do sess "expCONC_C1_${m}_s1" "$m" "$S1" ""; done ;;
+  c2)  guard A:0,B:0,C:0,D:0; note_gpu1 C2; pair C2 "${2:-precopy_replay}" "$S2_C2" ;;
   c3a) guard A:0,A:1,C:0,C:1; for m in ${2:-$METHODS}; do pair C3a "$m" "$S2_C3A"; done ;;
   stage2)
     guard A:0,A:1,B:0,C:0,C:1,D:0,D:1

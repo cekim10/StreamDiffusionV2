@@ -245,3 +245,15 @@ completed migration 1.00 for OTTER, 1.05-1.37 for the baselines (not discriminat
 reformulated CL-H1 holds; the confirmatory test is the primary sweep at the primary point (G 8, 3 seeds, longer
 horizon), which the smoke does not cover. Replicate's lower stalled time than OTTER's is reported (CL-H2 compares
 delay per move and bytes, not stalls).
+
+## 13. [A11] disclosed after the freeze (2026-11-03; nothing re-run, no verdict changed)
+
+- **[A11] Memory store.** `Store` holds one Sink version per (site, session), the retained or the staged one (a put
+  replaces it); the new owner drops its copy; LRU eviction under the per-site budget M. The testbed implements none of
+  the three (Fig. 14 memory audit, `../fig14/preregistration.md` section 11): each former owner holds the M2 retained
+  copy and an M3 entry-store copy of the same version, the owner keeps its staged copy, and there is no budget or
+  eviction. For the Fig. 11 four-node chain the testbed held 7 x Sink, this model 3 x.
+- Consequence: the memory metrics (section 6 item 5), the budget sweep M and CL-H2 describe this idealized store.
+  CL-H2's confirmatory verdict (SUPPORTED) stands as judged and is not changed retroactively; it is stated as
+  depending on [A11].
+- The implementation-like case is an exploratory sensitivity with its own protocol (`a11_sensitivity_protocol.md`).
