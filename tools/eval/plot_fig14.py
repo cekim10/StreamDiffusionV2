@@ -4,9 +4,12 @@
 fig14a_overhead   per-call time increase (%) over the same loop's steady state: OTTER tracking inside the native loop
                   (track / native), the source during a transfer (Fig. 7 runs), the owner during staging (Fig. 11 runs);
                   two bars per group (Low-refresh solid, High-refresh hatched), median printed
-fig14b_memory     single migration: Source and Destination, GPU allocated peak and host memory (process RSS peak), GB,
-                  Low-refresh solid / High-refresh hatched; the retained Sink marked inside the host bar
-fig14b_cluster    Chain (staging on): per node retained + staged Sink at the run end (GB, stacked), cluster total printed
+fig14b1_gpu       single migration: Source and Destination, peak allocated GPU memory (GB); dashed = the source serving
+                  without migration state. Low-refresh solid / High-refresh hatched
+fig14b2_host      single migration: increase in process RSS (peak - first sample, GB); the retained Sink is drawn inside
+                  the bar (part of the increase, not added). User 2026-11-03: RSS increase, not RSS peak (the peak
+                  includes the harness's reference frames), and GPU / host in separate panels
+fig14c_cluster    Chain (staging on): per node retained + staged Sink at the run end (GB, stacked), cluster total printed
 Canvas and axes box of Fig. 6a, style font sizes (never reduced).
 
 Usage: python tools/eval/plot_fig14.py [--prefix _dryrun_]
@@ -75,31 +78,49 @@ def overhead(res, out):
     save(fig, out)
 
 
-def memory_single(res, out):
-    """Two groups (Source A, Destination B); in each, GPU then host bars, Low-refresh solid / High-refresh hatched."""
+def _single_bars(res, ax, value, extra=None):
+    """Source (A) and Destination (B) of the single migrations, Low-refresh solid / High-refresh hatched (median of 3 reps)."""
     runs = {w: res["memory"].get(f"single|{w}") or [] for w in WL}
-    fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
     top = 0.0
     for gi, lb in enumerate(("A", "B")):
-        for ki, kind in enumerate(("GPU", "Host")):
-            for wi, w in enumerate(WL):
-                ns = [r["nodes"].get(lb) for r in runs[w] if r["nodes"].get(lb)]
-                v = med([n["gpu_alloc_peak_mb"] if kind == "GPU" else n["rss_peak_mb"] for n in ns]) if ns else None
-                if v is None:
-                    continue
-                x = gi + (ki - 0.5) * 0.44 + (wi - 0.5) * 0.21
-                col = (BLUE if wi == 0 else LIGHT_BLUE) if kind == "GPU" else (DIM_GRAY if wi == 0 else DARK_GRAY)
-                ax.bar(x, v / 1024, 0.2, color=col, edgecolor="black", lw=1.2, hatch="" if wi == 0 else "//", zorder=3)
-                ret = med([n["retained_peak_mb"] for n in ns]) if kind == "Host" else 0
-                if ret:
-                    ax.bar(x, ret / 1024, 0.2, color="white", edgecolor="black", lw=1.2, hatch="xx", zorder=4)
-                top = max(top, v / 1024)
+        for wi, w in enumerate(WL):
+            ns = [r["nodes"].get(lb) for r in runs[w] if r["nodes"].get(lb)]
+            v = med([value(n) for n in ns]) if ns else None
+            if v is None:
+                continue
+            x = gi + (-0.2 if wi == 0 else 0.2)
+            ax.bar(x, v / 1024, 0.38, color=BLUE if wi == 0 else LIGHT_BLUE, edgecolor="black", lw=1.2, hatch="" if wi == 0 else "//", zorder=3)
+            if extra:
+                e = med([extra(n) for n in ns])
+                if e:
+                    ax.bar(x, e / 1024, 0.38, color="white", edgecolor="black", lw=1.2, hatch="xx", zorder=4)
+            top = max(top, v / 1024)
     ax.set_xticks([0, 1]); ax.set_xticklabels(["Source", "Destination"])
     ax.set_xlim(-0.6, 1.6)
-    finish_axes(ax, "Memory (GB)")
-    ax.set_ylim(0, max(top, 1) * 1.9)
-    ax.legend(handles=[Patch(facecolor=BLUE, edgecolor="black", label="GPU"), Patch(facecolor=DIM_GRAY, edgecolor="black", label="Host"),
-                       Patch(facecolor="white", edgecolor="black", hatch="xx", label="Retained Sink")], loc="upper left", frameon=False, fontsize=LEGEND,
+    return top
+
+
+def memory_gpu(res, out):
+    """(b1) peak allocated GPU memory; dashed: the source's allocation while serving without migration state."""
+    fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
+    top = _single_bars(res, ax, lambda n: n["gpu_alloc_peak_mb"])
+    serving = med([r.get("src_serving_alloc_mb") for w in WL for r in res["memory"].get(f"single|{w}") or []])
+    if serving:
+        ax.axhline(serving / 1024, color="black", lw=2.0, ls="--", zorder=5)
+    finish_axes(ax, "GPU peak (GB)")
+    ax.set_ylim(0, max(top, 1) * 1.6)
+    wl_legend(ax)
+    save(fig, out)
+
+
+def memory_host(res, out):
+    """(b2) increase in process RSS over the run (peak - first sample); the retained Sink is part of it (not added)."""
+    fig = plt.figure(figsize=FIG_SIZE); ax = fig.add_axes(AXES_POS)
+    top = _single_bars(res, ax, lambda n: n["rss_increase_mb"], extra=lambda n: n["retained_peak_mb"])
+    finish_axes(ax, "RSS increase (GB)")
+    ax.set_ylim(0, max(top, 1) * 1.75)
+    ax.legend(handles=[Patch(facecolor=BLUE, edgecolor="black", label="Low-refresh"), Patch(facecolor=LIGHT_BLUE, edgecolor="black", hatch="//", label="High-refresh"),
+                       Patch(facecolor="white", edgecolor="black", hatch="xx", label="Retained Sink")], loc="upper right", frameon=False, fontsize=LEGEND,
               handlelength=1.2, handletextpad=0.3, labelspacing=0.15, borderaxespad=0.2)
     save(fig, out)
 
@@ -139,8 +160,9 @@ def main():
     out = Path(a.out) if a.out else ROOT / f"results/evaluation/osdi/fig14/{a.prefix}figures"
     res = json.load(open(ROOT / f"results/evaluation/osdi/fig14/{a.prefix}fig14_results.json"))
     overhead(res, out / "fig14a_overhead")
-    memory_single(res, out / "fig14b_memory")
-    cluster(res, out / "fig14b_cluster")
+    memory_gpu(res, out / "fig14b1_gpu")
+    memory_host(res, out / "fig14b2_host")
+    cluster(res, out / "fig14c_cluster")
 
 
 if __name__ == "__main__":

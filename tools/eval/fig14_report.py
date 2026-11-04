@@ -171,8 +171,14 @@ def memory_run(d: Path) -> dict:
                      "node_end_peak": (s.get("node_end") or {}).get(lb, {}).get("peak_allocated_mb") if isinstance(s.get("node_end"), dict) else None}
         nodes[lb]["rss_increase_mb"] = (nodes[lb]["rss_peak_mb"] - nodes[lb]["rss_first_mb"]) if rss else None
     sink = next((e.get("sink_nbytes") for n, _, e in ev if n.endswith(":source_prepared")), None)
+    # the source's GPU allocation while it serves without any migration state (samples before source_prepared;
+    # memory audit 2026-11-03: the transfer snapshot adds a full serialized state on top of this)
+    t_prep = next((t for n, t, _ in ev if n.endswith(":source_prepared")), None)
+    src_rows = list(csv.DictReader(open(d / "node_A/memory.csv", newline=""))) if (d / "node_A/memory.csv").exists() else []
+    serving = [fnum(r["gpu_alloc_mb"]) for r in src_rows if t_prep is not None and float(r["t_wall"]) < t_prep - 1.0]
+    serving = [x for x in serving if x is not None][1:]   # the first sample precedes the session's allocation
     sw = [e for n, _, e in ev if n.endswith(":xb_precopy_switch")]
-    return {"run": d.name, "rep": s.get("rep"), "path": s.get("path"), "sink_mb": (sink or 0) / 2 ** 20, "nodes": nodes,
+    return {"run": d.name, "rep": s.get("rep"), "path": s.get("path"), "sink_mb": (sink or 0) / 2 ** 20, "nodes": nodes, "src_serving_alloc_mb": med(serving),
             "log_mb": sum(int(e.get("log_bytes") or 0) for e in sw) / 2 ** 20, "switch_mb": sum(int(e.get("final_bytes") or 0) for e in sw) / 2 ** 20,
             "cluster_held_end_mb": sum(n["retained_end_mb"] + n["staged_end_mb"] for n in nodes.values()),
             "cluster_held_peak_mb": sum(n["retained_peak_mb"] + n["staged_peak_mb"] for n in nodes.values())}

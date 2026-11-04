@@ -209,3 +209,73 @@ bar of fig14b_memory is the RSS peak as specified, which includes the harness re
 below.
 
 **Open (user decision):** fig14b_memory host bar as RSS peak (spec) or RSS increase (comparable across scenarios).
+
+## 11. Memory audit (2026-11-03; code and existing logs only, no new runs, no change to M1 / M2 / M3)
+
+Requested by the user before Fig. 14 is final. Units: MiB as logged (`memory.csv`, torch allocated / 2^20), GiB =
+MiB / 1024.
+
+**Erratum to section 10.** Section 10 calls 26.49 GB "the source's steady serving allocation". That is wrong: 26,489 MiB
+is the source while it holds its transfer snapshot (below). The source serving without migration state allocates
+20,164 MiB (median of its samples before `source_prepared`; 20,163-20,165 in all 10 runs, now in
+`fig14_results.json` as `src_serving_alloc_mb`). Section 10's GPU figures are also MiB / 1000 labelled GB (e.g.
+"34.46-36.61 GB" = 34,455-36,608 MiB = 33.6-35.8 GiB). The numbers below replace them.
+
+**A1. GPU allocation, decomposed (verified: code path + allocation steps in every run).**
+
+| component | MiB | where it comes from | lifetime in these runs |
+|---|---|---|---|
+| model + live session | 20,164 | serving | whole run |
+| full-state snapshot | 6,311-6,334 | `state_ablation.serialize_state`: a GPU deep copy of every component (KV Sink + recent, VAE feature caches, cross-attention, latents) | source: from the round-1 snapshot until the round-1 send ends (A about 17 s; a re-migrating owner about 18 s) and about 1 s at the switch. Destination: `provision()` at launch (the receive snapshot), held until RUN_END |
+| replay clone (`replay_switch` `self._replayed`) | 1,645 clone, net +1,572 after the switch | the destination's recent-slot clones, written back at the switch | until RUN_END: released only in `replay_verify`, which these runs do not enable (`--replay_verify` off) |
+| Sink clone (`replay_switch` `sk`) | 1,645 | the destination's Sink clone during the switch | deleted at the switch (the 29,698 MiB single-run destination peak = 28,053 + 1,645) |
+
+Every plateau matches the sum:
+- source serving 20,164; source during round 1: 20,164 + 6,334 = 26,498 (measured 26,479-26,516);
+- warm destination before the switch: 20,164 + 6,311 = 26,481 (measured 26,481 on every warm node);
+- destination after the switch: 26,481 + 1,572 = 28,053 (measured 28,053-28,062, to the run end);
+- re-migrating owner (chain B, C) during its round-1 send: 28,053 + 6,334 = 34,387 (measured plateau 34,397-34,493).
+- Unexplained: a transient up to +2.2 GiB for under 1 s at the end of chain dog rep 1's base send on B (36,608 MiB);
+  the other 7 re-migrating owners peak at 34,455-34,747. Not identified.
+
+Reading: the extra GPU memory is the harness / frozen implementation holding whole-session deep copies, not state
+that M1-M3 need. M1's round 1 sends only the Sink and metadata (1,645 MiB of the 6,334 MiB snapshot); the receive
+snapshot is allocated for every policy (Full needs all components, OTTER does not); the replay clone is a dead
+reference after the write-back. A minimal implementation's footprint is NOT measured; any number for it is an
+estimate.
+
+Prediction "destination GPU peak within 10 % of the source's steady allocation", three readings (reported, not
+tested; no verdict changes):
+- vs the source serving without migration state (20,164 MiB): destination peaks 28,173-29,698 = 1.40-1.47 x, 0 of 6.
+- vs the source during its transfer (26,489, section 10's reading): 1.064-1.121, 4 of 6.
+- vs the source's peak (the prereg's [V] evidence compared peaks, 28.7 vs 30.3 GB): 1.030-1.115, 5 of 6.
+
+**A2. Re-migrating owner (+6.3 GiB).** Fully explained by A1: the owner still holds its receive snapshot and replay
+clone from the inbound migration and adds the outbound transfer snapshot. Its round-1 send is longer than the first
+source's (the M3 base is sent entry by entry, 180 entries, 17.7 s), so the plateau lasts about 18 s per hop. Reserved
+peak 37,826 MiB (36.9 GiB) of the L40S's 46,068 MiB.
+
+**A3. Retained / staged Sink on the testbed (verified in code).**
+- M2 retained copy: `retain_sink(snap)` -> host buffer `r["retained"]["buf"]` at the switch; released only at
+  RUN_END (`r.pop("retained")`).
+- M3 entry store: `_m3_handover_build` reads that retained buffer and puts every entry into `EntryStore` as a new
+  `bytes(bk) + bytes(bv)` payload (role "retained"). So each former owner holds the same version twice (buffer +
+  entry store). Staged entries from forwards go to the same store.
+- `EntryStore` keeps one version per entry (newer replaces older) with no budget, no eviction and no drop when the
+  node becomes the owner; D keeps its staged copy while it serves the live Sink.
+- Hence 7 x Sink at the chain's end: A, B, C (retained + entry store) and D (entry store).
+
+**A4. E9 memory accounting vs the testbed.** `cluster_sim.Store`: one entry per (site, session), the retained or the
+staged version (a put replaces it), the new owner drops its entry (`store[owner].drop`), LRU under the per-site
+budget M. For this chain it would hold 3 x Sink (A, B, C), the testbed 7 x. E9 models host memory only (GPU snapshots
+are outside its model; one session per GPU). So E9's memory results and its budget sweep (M = 0 / 8 / 32 / 128 GB,
+CL-H2, panel (c)) describe a deduplicated, budgeted store that the testbed does not implement. This is an unstated
+modelling assumption of E9, now labelled [A11] here; nothing in E9 is re-run or re-judged by this audit.
+
+Options (user decision; none started):
+1. State [A11] in E9 and report the testbed's 7 / 3 factor next to E9's memory numbers.
+2. E9 sensitivity: count 2 x Sink at each former owner and no drop at the new owner (the testbed's accounting); a
+   new simulation, needs approval.
+3. A separate optimization on the testbed (share the retained buffer with the entry store; drop staged entries when
+   the node becomes the owner; release the receive snapshot / replay clone; snapshot only Sink + metadata for
+   round 1), with regression and a short new measurement. It does not change any frozen result.
