@@ -39,7 +39,7 @@ seven Sink-sized copies (11.2 GiB) across the four-node chain. D, the final owne
 
 ## DRAFT 2 (user 2026-11-03: two panels; `figures/v2/`, `tools/eval/plot_fig14_v2.py`; existing data only)
 
-**Fig. 14(a) fig14a_dots.** Per-call slowdown (%) of OTTER's operations; Low-refresh filled, High-refresh open; each
+**Fig. 14(a) fig14a_dots.** Per-call slowdown (%) of OTTER's operations (vertical dot plot on the Fig. 11 canvas); Low-refresh filled, High-refresh open; each
 row has its own baseline. Tracking: metadata tracking inside upstream's native loop vs the same loop without it
 (same host, 5 reps). Transfer: the source while a migration transfers state vs its own uninterrupted reference
 (10 runs). Staging: the owner while a staging flow is active vs outside those intervals (6 runs). Medians.
