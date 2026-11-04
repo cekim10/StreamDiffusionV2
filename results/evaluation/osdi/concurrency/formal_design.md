@@ -1,4 +1,4 @@
-# Formal concurrency experiment: design (DRAFT 2, 2026-11-04; not frozen, nothing run)
+# Formal concurrency experiment: design (DRAFT 2 + user decisions D1-D4, 2026-11-04; not frozen, nothing run)
 
 Basis:
 - Pilot stages 1-2 (`pilot_protocol.md` sections 10-15).
@@ -24,7 +24,7 @@ On DRAFT 1 (2026-11-04):
 
 | item | decision |
 |---|---|
-| F1 work-conserving coordinator | approved: implement and regress first. Three requirements:<br>(1) a flow whose transfer has ended leaves the allocation at once;<br>(2) a new round re-registers it and re-rates the others;<br>(3) the survivor's return to the full rate is shown on real transfers, not only in the allocation |
+| F1 work-conserving coordinator (renamed tail-aware rate allocation, D1) | approved: implement and regress first. Three requirements:<br>(1) a flow whose transfer has ended leaves the allocation at once;<br>(2) a new round re-registers it and re-rates the others;<br>(3) the survivor's return to the full rate is shown on real transfers, not only in the allocation |
 | F1 records | pilot results kept as they are; the new coordinator's verification recorded separately; never compared as one harness |
 | F2 | dog only |
 | F3 | X1 60 runs (5 reps for 1 and 2 sessions) |
@@ -34,6 +34,16 @@ On DRAFT 1 (2026-11-04):
 | added | X2m records whether D held the staged Sink when S2 started |
 | added | X2s cost and X2m gain are never added or netted |
 | freeze | after DRAFT 2 review |
+
+On DRAFT 2 (2026-11-04):
+
+| item | decision |
+|---|---|
+| D1 tail reservation 100 Mbps | conditionally approved as the initial setting; final after `wc_live`. The mechanism is called **"tail-aware rate allocation with a 100 Mbps reservation"**, never fully work-conserving (a tail that uses 10 Mbps still holds 100, so a bulk flow next to it gets 900, not 990). 84 Mbps (largest pilot tail sample) supports 100 Mbps for these runs, not for every workload |
+| D1 extra records in `wc_live` | each tail's bytes, its reservation, the seconds its traffic reached the reservation, and the other session's throughput during the tail; a tail that reaches its reservation persistently may delay replay or patch delivery |
+| D2 | X2s overlap = contention evidence, not validity: approved |
+| D3 | S2-alone at +45 s and +90 s: approved |
+| D4 | freeze only after `test_xb` (elves-01) and `wc_live` pass and are reviewed |
 
 ## 1. Questions and the three results the experiment is for
 
@@ -67,7 +77,7 @@ session depends on when that session migrates.
 | source egress in that tail: mean 8-30 Mbps, largest 1 s sample 84 Mbps (replay log, refresh patches) | `node_*/network.csv`, C1 and C4 runs |
 | one single-migration cell (incl. reference regeneration) about 18 min; one Chain cell about 13-17 min | run directory timestamps |
 
-## 2b. F1: work-conserving coordinator (implemented 2026-11-04; harness only)
+## 2b. F1: tail-aware rate allocation with a 100 Mbps reservation (implemented 2026-11-04; harness only)
 
 **Mechanism.** Opt-in flag `--coord_tail_mbps T`. With 0, the default, nothing changes and the pilot behaviour is
 reproduced.
@@ -95,6 +105,9 @@ reproduced.
 - A tail that needed more than T would be slowed. The run's tail rate is in the NIC log, and the report flags any
   tail interval whose source NIC reached T.
 
+**Not fully work-conserving (stated).** A tail that sends less than T still holds T in the accounting: next to a
+bulk flow on a 1 Gbps link, the bulk flow gets 900 Mbps, whatever the tail actually sends.
+
 **Known residual (stated, not repaired).** A bulk round that is sender-bound rather than link-bound keeps its full
 share while it sends slowly. Example: the M3-arm C -> D sent 12 MB in 1.45 s. This lasts at most the round, about
 1.5-1.9 s in the pilot.
@@ -117,12 +130,14 @@ share while it sends slowly. Example: the M3-arm C -> D sent 12 MB in 1.45 s. Th
 | `dry_coord` (two sessions, flag off) | unchanged: 4 allocations, 500 / 500, sums <= cap |
 | `conc_report.py` (pilot) after the change | output byte-identical |
 | `test_xb` on the Mac | **not conclusive**: this Mac's Python has no PyAV, so the codec checks fail and the test stops at recompute_full; identical failures on the unchanged HEAD (baseline run), so not caused by F1. To be run on elves-01 (`.venv`, PyAV present) before `wc_live` |
-| **`run_conc.sh wc_live` on the testbed (C3b placement, OTTER / OTTER, dog, T 100, S2 at +8 s; about 20 min)**: S2 expected 500 -> 900 -> 1,000 Mbps achieved within 10 %, host NIC burst <= 1.15 x and 10 s <= 1.05 x | needs a run by the user |
+| dry tail record (pacer samples every 0.5 s): the dry nodes' tail is synthetic and heavy (about 760-790 MB at 60-180 Mbps over 35-100 s, at its reservation most of the time), unlike the testbed's measured tails (mean 8-30 Mbps); dry tails say nothing about T | record only |
+| repeat of `dry_wc` with sampling: run 1 one interval 89 vs 100 Mbps allocated (-11 %, FAIL at the 10 % rule; the Mac running four dry processes), run 2 ALL PASS (95-202 vs 100-200) | Mac dry runs are a plumbing check; the rule is applied on the testbed |
+| **`run_conc.sh wc_live` on the testbed (C3b placement, OTTER / OTTER, dog, T 100, S2 at +8 s; about 20 min)**: S2 expected 500 -> 900 -> 1,000 Mbps achieved within 10 %, host NIC burst <= 1.15 x and 10 s <= 1.05 x; tail record per D1 (bytes, reservation, seconds at >= 95 % of it, the other flow's throughput meanwhile) | needs a run by the user |
 
 ## 3. Experiment X1: continuity under a shared link (extends C3b)
 
 Placement: S1 elves-01:0 -> elves-03:0 and S2 elves-01:1 -> elves-03:1 (C3b), on one shared 1 Gbps egress at
-elves-01 and ingress at elves-03 through the work-conserving coordinator. Fig. 7 single-migration configuration;
+elves-01 and ingress at elves-03 through the tail-aware coordinator. Fig. 7 single-migration configuration;
 triggers aligned (`--barrier`, offset 0).
 
 | factor | levels |
@@ -159,7 +174,7 @@ Hypotheses:
 Common:
 - S1 = Fig. 11 Chain A -> B -> C -> D (GPU 0 of elves-01..04, moves at 45 / 90 s, dog).
 - S2 = one OTTER migration elves-03:1 -> elves-04:1 (dog).
-- Every cell runs through the work-conserving coordinator. S2 starts by barrier offset.
+- Every cell runs through the tail-aware coordinator. S2 starts by barrier offset.
 
 | cell | S1 arm | S2 | S2 start | serves |
 |---|---|---|---|---|
@@ -286,7 +301,7 @@ Each scenario is reported on its own:
 
 | # | question | proposal |
 |---|---|---|
-| D1 | tail reservation T | 100 Mbps (above the largest 1 s tail sample, 84 Mbps) |
+| D1 | tail reservation T | 100 Mbps initial (user: conditional); confirmed or changed from the `wc_live` tail record |
 | D2 | X2s overlap as evidence, not validity (extends the user's X2m rule to X2s) | approve |
 | D3 | two S2-alone cells (+5 runs, about 1.5 h) | run both; their agreement is reported |
 | D4 | `wc_live` outcome | user reviews it before the freeze |

@@ -1005,6 +1005,11 @@ class Run:
             return
         self.coord_t = now
         self._coord_phase()
+        if self.a.coord_tail_mbps > 0 and self.a.coord_sample_s > 0 and now - getattr(self, "coord_sample_t", 0.0) >= self.a.coord_sample_s:
+            self.coord_sample_t = now   # record only: tail traffic and achieved rates per flow (check_wc.py)
+            for fid, f in self.coord_flows.items():
+                if f["kind"] != "m3":
+                    self.node(f["src"]).cast("PACER_SAMPLE", flow_kind=f["kind"], id=fid)
         tasks = self._coord_sweep()
         ver, rates = self.coord_client.rates()
         if ver == self.coord_version:
@@ -1024,7 +1029,7 @@ class Run:
             self.ev.log("coord_rate", flow=fid, kind=f["kind"], rate_bps=r, version=ver)
 
     def _cdemand(self, fid, bps):
-        """Work-conserving registration: `bps` = the flow's bulk is sent, it only reserves this tail demand; None = bulk."""
+        """Tail-aware rate allocation (not fully work-conserving: a tail keeps a reservation): `bps` = the flow's bulk is sent, it only reserves this tail demand; None = bulk."""
         f = self.coord_flows[fid]
         r = self.coord_client.demand(fid, bps)
         f["tail"] = bps is not None
@@ -2414,7 +2419,8 @@ def main():
     ap.add_argument("--coord", type=str, default="", help="concurrency pilot stage 2: HOST:PORT of tools/eval/rate_coord.py; every transfer's rate comes from its max-min over all sessions")
     ap.add_argument("--coord_sites", type=str, default="", help="with --coord: label=site overrides (default: the node's host); used by the local dry test")
     ap.add_argument("--coord_poll_s", type=float, default=0.25)
-    ap.add_argument("--coord_tail_mbps", type=float, default=0.0, help="with --coord (formal design F1): work-conserving registration; a transfer whose bulk is sent reserves only this much (0 = off, pilot behaviour)")
+    ap.add_argument("--coord_tail_mbps", type=float, default=0.0, help="with --coord (formal design F1): tail-aware rate allocation; a transfer whose bulk is sent reserves only this much (0 = off, pilot behaviour)")
+    ap.add_argument("--coord_sample_s", type=float, default=0.5, help="with --coord_tail_mbps > 0: record each coordinated sender pacer's released bytes this often (node event pacer_sample; record only)")
     ap.add_argument("--barrier_offset_s", type=float, default=0.0, help="with --barrier: start this session's migration this many seconds after the common start (C4: S2 at +45 s)")
     ap.add_argument("--py", type=str, default="auto")
     ap.add_argument("--node_extra", type=str, default="")

@@ -119,7 +119,7 @@ class Coordinator:
                                    "t_open": time.time(), "demand_bps": None}
                 self._alloc("open", gid)
                 return {"ok": True, "rate_bps": self.rates[gid], "version": self.version}
-            if op == "demand":   # work-conserving registration: a demand (bps) = bulk sent, tail only; None = bulk again
+            if op == "demand":   # tail-aware rate allocation: a demand (bps) = bulk sent, tail only; None = bulk again
                 gid = f"{req['session']}/{req['id']}"
                 if gid not in self.flows:
                     return {"ok": False, "error": f"unknown flow {gid}"}
@@ -220,7 +220,7 @@ def selftest():
     r = co.handle({"op": "rates", "session": "s1"})["rates"]["x1"]
     good = abs(r - cap) < 1
     ok &= good; print(f"  {'ok' if good else 'FAIL'} after the others close, the remaining flow gets the cap back ({r / 1e6:.0f} Mbps)")
-    # work-conserving registration (formal design F1): a flow whose bulk is sent only reserves its tail demand
+    # tail-aware rate allocation (formal design F1): a flow whose bulk is sent only reserves its tail demand
     co = Coordinator(cap)
     for sess in ("s1", "s2"):
         co.handle({"op": "open", "session": sess, "id": "x1", "src": "h1", "dst": "h3", "kind": "precopy"})

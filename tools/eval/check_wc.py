@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Work-conserving coordinator check (osdi/concurrency/formal_design.md F1; user requirements 1-3, 2026-11-04).
+"""Tail-aware rate allocation check (osdi/concurrency/formal_design.md F1; user requirements 1-3, 2026-11-04).
 
 For each session (run directory) and each pre-copy flow:
   1. tail entry: the flow leaves the max-min share (coord_demand) within 0.5 s after its last round's send ended;
@@ -102,6 +102,45 @@ def main():
                         v = [m for t, dtt, m in nic[src[0]] if ta + 1 <= t <= tb]
                         host_tx = f"; host {src[0]} {sum(v) / len(v):.0f} Mbps measured" if v else ""
                 print(f"  {'ok' if good else 'FAIL'} {name} {fid}: {ta - t_start:5.2f}-{tb - t_start:5.2f} s allocated {ra / 1e6:.0f} Mbps, achieved {ach / 1e6:.0f} Mbps{host_tx}")
+    # tail record (user, 2026-11-04; record only, no pass / fail): what each tail sent, how close it came to its
+    # reservation, and what the other sessions' bulk flows achieved meanwhile (pacer_sample every --coord_sample_s)
+    flows = {}
+    for run in a.runs:
+        E = evs(run)
+        name = Path(run).name
+        for t, e, d in E:
+            if e.endswith("pacer_sample") or e.endswith("coord_rate_applied"):
+                if "pacer_sent_bytes" in d:
+                    flows.setdefault((name, d.get("id")), {"s": []})["s"].append((t, d["pacer_sent_bytes"]))
+            elif e == "coord_demand" and d.get("demand_bps") is not None:
+                flows.setdefault((name, d.get("flow")), {"s": []}).setdefault("tail", (t, d["demand_bps"]))
+            elif e == "coord_close":
+                flows.setdefault((name, d.get("flow")), {"s": []})["close"] = t
+    print("  tail record (record only):")
+    for (name, fid), f in flows.items():
+        if "tail" not in f:
+            continue
+        t0, T = f["tail"]
+        t1 = f.get("close", float("inf"))
+        s = sorted(x for x in f["s"] if t0 - 0.3 <= x[0] <= t1)
+        if len(s) < 2:
+            print(f"     {name} {fid}: tail {t0:.1f}-{t1:.1f}: fewer than 2 pacer samples")
+            continue
+        iv = [((tb - ta), (sb - sa) * 8 / (tb - ta)) for (ta, sa), (tb, sb) in zip(s, s[1:]) if tb - ta >= 0.3]
+        at_T = sum(dt for dt, r in iv if r >= 0.95 * T)
+        tb = s[-1][1] - s[0][1]
+        others = []
+        for (n2, f2), g in flows.items():
+            if (n2, f2) == (name, fid):
+                continue
+            ts = g.get("tail", (float("inf"),))[0]
+            w0, w1 = max(t0, s[0][0]), min(t1, ts, s[-1][0])   # the other flow's bulk part inside this tail
+            ss = sorted(x for x in g["s"] if w0 - 0.3 <= x[0] <= w1 + 0.3)
+            if len(ss) >= 2 and ss[-1][0] - ss[0][0] >= 1.0:
+                others.append(f"{n2[-6:]}/{f2} {(ss[-1][1] - ss[0][1]) * 8 / (ss[-1][0] - ss[0][0]) / 1e6:.0f} Mbps over {ss[-1][0] - ss[0][0]:.1f} s")
+        print(f"     {name} {fid}: tail {s[-1][0] - s[0][0]:.1f} s, {tb / 1e6:.1f} MB, mean {tb * 8 / max(s[-1][0] - s[0][0], 1e-9) / 1e6:.1f} Mbps, "
+              f"max {max((r for _, r in iv), default=0) / 1e6:.1f} Mbps over >= 0.3 s, reservation {T / 1e6:.0f} Mbps, at >= 95 % of it {at_T:.1f} s"
+              + (f"; meanwhile bulk {', '.join(others)}" if others else ""))
     print("ALL PASS" if ok else "FAILED")
     sys.exit(0 if ok else 1)
 

@@ -131,7 +131,7 @@ case "${1:-}" in
     wait $pids; sleep 1
     grep -h "barrier round\|done:" /tmp/conc_dryc_orch_1.log /tmp/conc_dryc_orch_2.log
     $PY tools/eval/conc_report.py --prefix _dryrun_ --dry --coord_log "$log" ;;
-  dry_wc)   # formal design F1, work-conserving registration (--coord_tail_mbps): two dry sessions on shared sites, 200 Mbps
+  dry_wc)   # formal design F1, tail-aware rate allocation (--coord_tail_mbps): two dry sessions on shared sites, 200 Mbps
             # (the Mac dry sender is not pacer-bound near 1 Gbps; on the testbed use wc_live); S2 starts
             # 1 s after S1 (S1 64 MB, S2 1,536 MB), so S1's bulk ends and S1 then closes while S2 still sends: 100 -> 180 -> 200 Mbps; check_wc.py compares each pacer's achieved rate with its allocation
     trap 'kill $(jobs -p) 2>/dev/null' EXIT

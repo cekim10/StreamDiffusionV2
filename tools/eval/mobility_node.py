@@ -1921,6 +1921,24 @@ class Node(M3NodeMixin):
                 fl["throttle"].rate = rate / 8.0
         return {}
 
+    def cmd_pacer_sample(self, h):
+        """Record only (formal design F1): bytes released so far by the pacer(s) of one coordinated transfer."""
+        r, sent, n = self.run, 0, 0
+        if h["flow_kind"] == "precopy":
+            t = r.get("xb")
+            if t is not None and t.get("id") == h["id"] and t.get("throttle") is not None:
+                sent, n = getattr(t["throttle"], "sent", 0), 1
+        elif h["flow_kind"] == "inputs":
+            for thr in (r.get("coord_thr") or {}).get(h["id"], []):
+                sent += getattr(thr, "sent", 0); n += 1
+        elif h["flow_kind"] == "full":
+            st = r.get("full_xfer")
+            if st is not None and st.get("xfer") == h["id"]:
+                sent, n = getattr(st["pacer"], "sent", 0), 1
+        if n:
+            self.event("pacer_sample", flow_kind=h["flow_kind"], id=h["id"], pacer_sent_bytes=sent)
+        return {}
+
     def cmd_coord_set_rate(self, h):
         """Rate coordinator (osdi/concurrency/pilot_protocol.md stage 2): re-rate a running transfer of this node. kind
         precopy = the current XB pre-copy task's pacer (Sink rounds, log, patches share it), inputs = the recompute task's

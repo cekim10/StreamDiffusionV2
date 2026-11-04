@@ -302,7 +302,7 @@ def main():
     ap.add_argument("--coord_log", action="append", default=[], help="coordinator logs to analyze (default: osdi/concurrency/coord_*.jsonl)")
     a = ap.parse_args()
     C = collect(a.prefix, a.dry)
-    # the pilot's logs only: coord_WC_* (work-conserving coordinator, formal design F1) is a different harness, checked by check_wc.py
+    # the pilot's logs only: coord_WC_* (tail-aware rate allocation, formal design F1) is a different harness, checked by check_wc.py
     logs = [Path(x) for x in a.coord_log] or sorted(p for p in OUT.glob("coord_*.jsonl") if not p.name.startswith("coord_WC"))
     coord_ids = {g for p in logs for x in open(p) if x.strip() for g in json.loads(x)["flows"]} if logs else None
     for (cond, _), ss in C.items():
