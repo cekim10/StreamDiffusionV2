@@ -111,7 +111,8 @@ def main_panel(runs, metric, ylabel, out, logy):
     hs = []
     for m, s in ser.items():
         c, mk, ls = STYLE[m]
-        kw = dict(color=c, marker=mk, ls=ls, lw=2.4, ms=10, mfc="white" if m != "otter" else c, mew=2)
+        # line widths and marker size of fig12a (plot_fig12: OTTER 3.4, baselines 2.5, ms 9, mew 1.6), user 2026-11-04
+        kw = dict(color=c, marker=mk, ls=ls, lw=3.4 if m == "otter" else 2.5, ms=9, mfc="white" if m != "otter" else c, mec=c, mew=1.6)
         ax.plot([3600 / d for d, _ in s], [y for _, y in s], zorder=4 if m == "otter" else 3, **kw)
         hs.append(Line2D([], [], label=LABEL[m], **kw))
     ax.set_xscale("log"); ax.xaxis.set_minor_formatter(NullFormatter())
