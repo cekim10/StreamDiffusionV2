@@ -313,3 +313,18 @@ Against the predictions of section 4 (not used by any rule):
 Reading (scope as in section 11): with two sessions on one shared 1 Gbps link, OTTER's maximum output gap stayed at
 1.6-1.7 s while its time to first local output grew from 24 to 41 s; Full's gap doubled. One run per session, one
 workload (dog / dog), equal max-min sharing: a pilot observation, not an effect estimate. C4 may proceed (section 11).
+
+## 13. C4, first cell (2026-11-03; run 0931eebb)
+
+Only `C4_m3_alone` was pushed; the other three cells (m3 + S2, nom3 alone, nom3 + S2) are not in the push (cause to
+be read from the elves-01 terminal; the loop stops at the first failing cell, e.g. a busy GPU in the guard).
+`conc_report.py` now adds Fig. 11's metrics for C4's S1 (`fig11_report.run_record`, unchanged definitions).
+
+| | N (s) | N_post (s) | R_D (s) | max. gap (s) | total stall (s) | bytes (GB) |
+|---|---|---|---|---|---|---|
+| C4_m3_alone (through the coordinator) | 57.6 | 33.1 | 9.96 | 1.43 | 2.42 | 5.283 |
+| Fig. 11 Chain, OTTER, dog (median [range], 3 runs, no coordinator) | 57.6 [57.6-57.9] | 33.4 [33.1-33.5] | 10.2 [9.7-10.3] | 1.44 [1.42-1.47] | 2.45 [2.41-2.47] | 5.28 |
+
+The coordinated single-session Chain reproduces Fig. 11 within its run-to-run range (live single-session equivalence,
+section 2's verification 2). Coordinator: 12 allocations, all sums <= cap; NIC sustained <= 0.989 x cap.
+Wall time: about 11 min per cell (launch + reference regeneration about 9 min), not the 35-45 min estimated.

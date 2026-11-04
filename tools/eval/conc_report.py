@@ -348,6 +348,18 @@ def main():
                 tr = ", ".join(f"{x['kind']} {x.get('rate_mbps', 0):.0f}" for x in r["sends"]["list"])
                 co = f"{sum(v['n_coarse'] for v in lk.values())} ({max((v['max_coarse_s'] for v in lk.values()), default=0):.1f})"
                 L.append(f"| {c} | {LABEL.get(m, m)} | S{s} | {r.get('condition_valid')} | {used} | {tr} | {co} | {'; '.join(r.get('condition_why') or []) or '-'} |")
+    c4 = [(c, rs[-1]) for (c, m), ss in sorted(C.items()) if c.startswith("C4") for s, rs in ss.items() if s == 1]
+    if c4 and not a.dry:
+        import fig11_report as f11   # S1 = Fig. 11 Chain: its metrics (N, N_post, R_D) by Fig. 11's own definitions
+        L += ["", "C4, S1 (Fig. 11 Chain metrics, `fig11_report.run_record`; S2 is in the first table):", "",
+              "| cell | status | N (s) | N_post (s) | R_D (s) | max. gap (s) | total stall (s) | bytes incl. M3 forwards (GB) | M3 forwards (GB) | per move: edge without local (s) |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+        for c, r in c4:
+            x = f11.run_record(EVAL / r["session_id"], False)
+            r["fig11"] = {k: x[k] for k in ("status", "validity_why", "N_s", "N_post_s", "R_D_s", "gap_s", "total_stall_s", "tx_bytes", "m3_forward_bytes", "per_move")}
+            pm = ", ".join(f"{q['edge']} {q['without_local_s']:.1f}" for q in x["per_move"])
+            L.append(f"| {c} | {x['status']} | {f(x['N_s'], 1)} | {f(x['N_post_s'], 1)} | {f(x['R_D_s'])} | {f(x['gap_s'])} | {f(x['total_stall_s'])} | "
+                     f"{x['tx_bytes'] / 1e9:.3f} | {x['m3_forward_bytes'] / 1e9:.3f} | {pm} |")
     nic = [(c, m, s, k, v) for (c, m), ss in sorted(C.items()) for s, rs in ss.items() for k, v in ((rs[-1].get("nic") or {}).items())]
     if nic:
         L += ["", "Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1.15, sustained 10 s <= 1.05):", "",

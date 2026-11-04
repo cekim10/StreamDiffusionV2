@@ -56,6 +56,12 @@ Condition-aware validity (`condition_valid`; the original `valid` above is uncha
 | C3b | R-full | S2 | True | elves-01:tx 2: 0.491 / 0.067 x 1, elves-03:rx 2: 0.511 / 0.067 x 1 | inputs 322, inputs 264 | 2 (2.3) | - |
 | C4_m3_alone | OTTER | S1 | True | elves-01:rx 1: 0.150 / 0.016 x 1, elves-01:tx 1: 0.992 / 0.974 x 1, elves-02:rx 1: 0.925 / 0.871 x 1, elves-02:tx 1: 0.923 / 0.883 x 1, elves-03:rx 1: 0.939 / 0.884 x 1, elves-03:tx 1: 0.294 / 0.030 x 1, elves-04:rx 1: 1.008 / 0.989 x 1 | precopy 796, m3_forward 815, m3_forward 504, m3_forward 977, precopy 802, precopy 65 | 0 (0.0) | - |
 
+C4, S1 (Fig. 11 Chain metrics, `fig11_report.run_record`; S2 is in the first table):
+
+| cell | status | N (s) | N_post (s) | R_D (s) | max. gap (s) | total stall (s) | bytes incl. M3 forwards (GB) | M3 forwards (GB) | per move: edge without local (s) |
+|---|---|---|---|---|---|---|---|---|---|
+| C4_m3_alone | valid | 57.6 | 33.1 | 9.96 | 1.43 | 2.42 | 5.283 | 1.744 | B 24.5, C 23.1, D 10.0 |
+
 Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1.15, sustained 10 s <= 1.05):
 
 | cond | method | session | host:dir | peak 1 s | peak 10 s mean | ok |
