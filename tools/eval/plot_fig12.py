@@ -62,12 +62,12 @@ def lines(cells, w, key, ylabel, out):
         xs = [p[0] for p in pts]; md = [p[1]["median"] for p in pts]
         lo = [p[1]["median"] - (p[1]["q1"] if p[1]["q1"] is not None else p[1]["median"]) for p in pts]
         hi = [(p[1]["q3"] if p[1]["q3"] is not None else p[1]["median"]) - p[1]["median"] for p in pts]
-        ax.errorbar(xs, md, yerr=[lo, hi], color=col, ls=ls, lw=2.4 if m == "precopy_replay" else 1.8, marker=mk, ms=9,
+        ax.errorbar(xs, md, yerr=[lo, hi], color=col, ls=ls, lw=3.4 if m == "precopy_replay" else 2.5, marker=mk, ms=9,
                     mfc="white" if m != "precopy_replay" else col, mec=col, mew=1.6, capsize=3, zorder=4 if m == "precopy_replay" else 3)
     xaxis(ax)
     finish_axes(ax, ylabel)
     hs = [Line2D([], [], color=STYLE[m][0], ls=STYLE[m][2], marker=STYLE[m][1], ms=9, mfc="white" if m != "precopy_replay" else STYLE[m][0],
-                 mec=STYLE[m][0], lw=2, label=NAME[m]) for m in METHODS]
+                 mec=STYLE[m][0], lw=3.4 if m == "precopy_replay" else 2.5, label=NAME[m]) for m in METHODS]
     ax.legend(handles=hs, loc="upper right", frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.3, labelspacing=0.15,
               borderaxespad=0.2, ncol=2, columnspacing=0.6)
     lo_, hi_ = ax.get_ylim()
