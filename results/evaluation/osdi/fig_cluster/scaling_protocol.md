@@ -1,9 +1,23 @@
-# E9 load scaling and cluster-size scaling: protocol (DRAFT 1, 2026-11-04; not frozen; SIMULATED when run)
+# E9 load scaling and cluster-size scaling: protocol (DRAFT 1 + user decisions G1-G7, 2026-11-04; PRELIMINARY run approved; SIMULATED)
 
 Extends the frozen E9 (`preregistration.md`, 37aca4b7; results cf6b1658) without changing it. CL-H1 / CL-H2 / CL-H3,
 the model, the calibration and the validation gate (76 / 76) stay as they are. This draft replaces S-A of
 `scalability_draft.md` (DRAFT 1, e83a267a); S-B (staging fanout) and S-A' (core oversubscription) stay in that draft.
-Nothing is frozen or run before the user reviews it.
+**User decisions (2026-11-04), recorded before the preliminary run:**
+
+| # | decision |
+|---|---|
+| G1 | load grid approved (128 GPUs, N 16-120, C 10 / 1 Gbps, 5 seeds, 480 runs) |
+| G2 | `scale` (8 GPUs per site) primary, `scale_g4` robustness. The 16-GPU primary point has no staging candidate: OTTER = Unstaged there is structural, not a scaling failure. G8 vs G4 changes sites and GPUs per site together, so it is not a causal decomposition |
+| G3 | **descriptive only.** L-H1 / S-H1 are not confirmatory (single runs were seen before this draft, section 0; and the results depend on model structure: non-blocking core, equal max-min site links, idealized store, remote serving when sites are full). Frozen CL-H1 / H2 / H3 unchanged |
+| G4 | preliminary run now. Every output is labelled "Preliminary simulation - Sink delta beyond 240 calls extrapolated". After Fig. 10 long-age: (1) does the extrapolation match, (2) does the calibration change, (3) if so re-run the 76 / 76 gate, (4) re-run the scaling sweeps. Not final paper numbers |
+| G5 | 256 GPUs: wall time only |
+| G6 | two figures: A load (x = sessions per GPU; panels stalled s / session-h and local share), B cluster size (x = GPUs; same panels; 0.5 and 0.94 separated; G8 in the figure, G4 in a small table or text). Title "Sensitivity to cluster size and load", never an end-to-end scalability proof |
+| G7 | core oversubscription stays optional |
+
+Questions, as the user framed them: load scaling = what happens as the cluster approaches saturation (how OTTER trades
+continuity against migration completion and locality); cluster-size scaling = does the behaviour change with more
+sites and GPUs, within a model whose core never congests.
 
 Tools (implemented 2026-11-04, harness only):
 - `tools/sim/cluster_sim.py`: new grids `load`, `scale`, `scale_g4`; `sweep()` accepts (E, G, N) `points`. The model is
@@ -94,12 +108,13 @@ Choice of grid (decision G2):
 - Blocked starts.
 - Simulator wall time per run.
 
-## 5. Proposed criteria (for review; fixed at freeze)
+## 5. Criteria (G3: descriptive only)
 
-Descriptive by default, as `scalability_draft.md`. Two optional confirmatory checks extend CL-H1's stall part
-(decision G3):
-- **L-H1.** At every N and both C, OTTER's median stalled s / session-h < each of Full, Llumnix and SLLM.
-- **S-H1.** At every size and both loads, the same.
+No confirmatory hypothesis. The two checks below are reported as descriptive counts (cells where they hold / all
+cells), never as supported / not supported:
+- **L-D1.** At each N and C: OTTER's median stalled s / session-h vs each of Full, Llumnix and SLLM, next to the
+  local shares.
+- **S-D1.** At each size and load: the same.
 
 CL-H1's local-share part failed in the frozen sweep (a tie with Full). It is reported here, not tested again.
 
