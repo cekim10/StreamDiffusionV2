@@ -48,7 +48,7 @@ def xaxis(ax):
     ax.set_xlim(0.19, 13)
     ax.set_xticks([X[b] for b in BWS]); ax.set_xticklabels(XT)
     ax.minorticks_off()
-    ax.set_xlabel("Bandwidth (Gbps)", fontsize=28, labelpad=2)
+    ax.set_xlabel("Bandwidth (Gbps; Native = unshaped)", fontsize=28, labelpad=2)   # user 2026-11-03
 
 
 def lines(cells, w, key, ylabel, out):
@@ -117,6 +117,10 @@ def ready_cmp(cells, b, out):
     top = max(bottom) * 1.45
     for x, (f, gb) in enumerate(tops):
         annotate(ax, x, f + top * 0.02, f"{f:.0f} s\n{gb:.2f} GB")
+    # user 2026-11-03: the catch-up ratio between the two inputs, between the bars
+    cu = [p[1] for p in parts]
+    annotate(ax, 1, parts[1][0] + cu[1] / 2, f"Catch-up\n{cu[1] / cu[0]:.1f}\u00d7 longer", va="center", zorder=5,
+             bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none"))   # inside High-refresh's catch-up
     ax.set_xticks(range(len(WL))); ax.set_xticklabels(["Low-refresh", "High-refresh"])
     ax.set_xlim(-0.45, len(WL) - 0.55)   # the two 28 pt tick labels need the room
     ax.set_xlabel(f"Input at {X[b]:g} Gbps", fontsize=28, labelpad=2)
