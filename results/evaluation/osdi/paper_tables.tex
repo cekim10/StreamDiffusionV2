@@ -1,0 +1,62 @@
+% Paper tables (2026-11-04). Every number is from a frozen report:
+%   correctness: fig7/fig7_report.md, fig10/fig10_report.md, fig11/fig11_report.md, fig13/fig13_results.md,
+%                longlive/m1_results.md
+%   fidelity:    fig13/fig13_table.tex (tools/eval/fig13_report.py), unchanged
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{table}[t]
+  \centering
+  \small
+  \caption{\textbf{Correctness checks.} Applied in every run; state checks compare block digests of the
+    destination's state with the source's at cutover.}
+  \label{tab:correctness}
+  \begin{tabular}{@{}p{0.22\columnwidth}p{0.12\columnwidth}p{0.58\columnwidth}@{}}
+    \toprule
+    Experiment & Valid runs & Verified \\
+    \midrule
+    Single migration & 40/40 &
+      Baselines: whole state exact (30/30), output bit-exact.
+      \sys: Sink exact at cutover (10/10, 0/360 blocks differ); recent state is rebuilt by replay, so output is
+      not bit-exact (Table~\ref{tab:fidelity}). \\
+    Version age & 48/48 &
+      Every Versioned delta verified (24/24, 0/360 blocks differ, 0 fallbacks); destination output identical to a
+      full Sink transfer (24/24). \\
+    Repeated mobility & 60/60 &
+      \sys: Sink exact or verified fallback at every cutover (0/360 blocks differ); no lost or duplicated calls. \\
+    Fidelity sweep & 190/190 &
+      Full control bit-exact (20/20); repeated \sys runs identical (10/10). \\
+    LongLive & 8/8 &
+      Sink and window fingerprints equal; output bit-exact on 100/100 calls. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{table}[t]
+  \centering
+  \small
+  \caption{\textbf{Output fidelity per input} (\sys; 15 cutover calls per input, PSNR against the uninterrupted
+    output). Diverged: Sink refresh schedule departs from the uninterrupted run. W3: calls 25--100 after cutover.
+    40\,dB is an operational threshold.}
+  \label{tab:fidelity}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    Input & Refresh & Diverged (\%) & First (dB) & W3 (dB) & W3 $\geq$ 40 dB (\%) & W3 tPSNR (dB) \\
+    \midrule
+    Bird & 3.6 & 53 & 29.9 & 39.8 & 47 & 39.2 \\
+    Dog & 3.6 & 40 & 28.7 & 48.0 & 100 & 47.2 \\
+    Boxing & 8.2 & 40 & 35.3 & 46.9 & 80 & 44.4 \\
+    Basketball & 9.1 & 87 & 30.6 & 44.2 & 60 & 43.7 \\
+    Hockey & 16.4 & 47 & 31.3 & 43.9 & 87 & 42.6 \\
+    Swimmer & 22.7 & 67 & 27.5 & 39.3 & 0 & 37.9 \\
+    Train & 34.5 & 67 & 33.5 & 46.0 & 93 & 46.3 \\
+    Audi & 53.6 & 100 & 27.1 & 33.8 & 13 & 34.1 \\
+    Circus & 89.1 & 100 & 33.6 & 41.6 & 53 & 41.6 \\
+    Butterfly & 128.2 & 87 & 33.2 & 43.8 & 87 & 43.3 \\
+    \midrule
+    All & & 69 & 30.8 & 43.2 & 62 & 42.6 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
