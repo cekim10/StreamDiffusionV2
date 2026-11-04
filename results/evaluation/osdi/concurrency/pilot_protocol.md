@@ -207,3 +207,31 @@ assumption on two sessions only, and the paper says so.
 | P3 | pilot workloads | dog / dog |
 | P4 | how long GPU 1 stays available | needed to plan the formal runs; GPU availability is recorded with every run |
 | P5 | order vs Fig. 10 long-age | step 1 of the pilot first (no coordinator needed), long-age next, coordinator built meanwhile |
+
+## 10. Stage 1 outcome (2026-11-03, measured; runs 5aa95705, report `conc_pilot_results.md`)
+
+Seven conditions-methods ran (C1 x 3, C2 OTTER, C3a x 3), 11 sessions. In C3a, S2's nodes ran on GPU 1 (`host_info.json`
+gpu_id 1, ports 29841/29842), S1's on GPU 0.
+
+| criterion | result |
+|---|---|
+| 1. both sessions run on their own GPUs | met: C2 and C3a, every pair completed; barrier trigger offset 0.000 s, windows overlap 100 % |
+| 2. no OOM, no abnormal throughput loss | met: no OOM in any record; GPU reserved per node identical to C1 (Full 26.0 / 29.4, OTTER 29.2 / 30.7, R-full 26.0 / 29.2 GB); served calls/s in the window OTTER 1.42-1.44 (C1 1.43), R-full 0.81 (0.81), Full 0 (stop-and-copy, as in C1) |
+| 5. both migrations complete | met: every session, bytes as C1 (Full 6.463, OTTER 1.763, R-full 0.084-0.085 GB) |
+| 3, 4, 6 | stage 2 (coordinator) |
+
+Values vs C1 (absolute differences): OTTER gap +0.00 to +0.08 s (1.61 -> 1.62-1.69 s), TTFO -0.68 to +0.25 s;
+Full TTFO / gap +0.32 to +0.36 s; R-full TTFO -1.06 to +0.15 s, gap -0.51 to +0.37 s. Prediction C3a "close to C1"
+held. One run per session: these are not effect estimates.
+
+**Validity flag in C3a (report issue, not a run failure).** The four C3a Full / OTTER sessions carry `valid False`
+from the inherited single-session rule (`xb_validity` / `expD_validity`: host NIC peak or 10 s mean > 1.15 x cap).
+The rule reads the host NIC, which in C3a carries both sessions, each shaped to its own 1 Gbps by design (section 2).
+Host NIC 10 s mean = 1.972-1.975 x cap, i.e. 0.986-0.987 x (2 x cap); C1 single sessions 0.985-0.988 x cap. Per-session
+bytes / TTFO match C1 (Full 6.463 GB in 54.5 s vs 54.2 s). The flags are kept in the record; a C3a-aware check
+(host NIC vs n_sessions x cap) is proposed, not applied, pending the user's decision.
+
+**GPU-1 neighbour.** During C1 (18:53) GPU 1 of elves-01 / 03 / 04 ran another user's process (44 GB each,
+`gpu1_state_C1_*.txt`); C1 shared the hosts (not the GPU) with it. C2 (19:48) found GPU 1 idle; C3a's guard required
+A:1 and C:1 idle. C1 OTTER vs C2 S1 OTTER: TTFO 23.71 vs 23.67 s, gap 1.61 vs 1.62 s, calls/s 1.43 vs 1.44: no visible
+effect, but C1 Full / R-full have no neighbour-free repeat.
