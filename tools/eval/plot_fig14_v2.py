@@ -23,13 +23,14 @@ from matplotlib.lines import Line2D
 from matplotlib.transforms import ScaledTranslation
 
 from plot_fig11 import XTICK_ROT
-from plot_fig7_migration import (ANNOT, ANNOT_FONT, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE as FIG_SIZE_78, LABEL, LEGEND, ROOT, TICK,
+from plot_fig7_migration import (ANNOT, ANNOT_FONT, BLUE, DARK_GRAY, DIM_GRAY, AXES_POS as AXES_POS_78, FIG_SIZE as FIG_SIZE_78, LABEL, LEGEND, ROOT, TICK,
                                  configure, finish_axes)
 
 OUT = ROOT / "results/evaluation/osdi/fig14/figures/v2"
 RES = ROOT / "results/evaluation/osdi/fig14/fig14_results.json"
 FIG_SIZE_6A = (5.83, 4.78)          # Fig. 11 canvas and plot box (user 2026-11-03: both panels the same size as Fig. 11)
 AXES_POS_11 = [0.18, 0.22, 0.79, 0.75]
+DOTS_ROT = 0   # fig14a x labels on the fig12a canvas
 WL = ("dog", "bfly")
 
 
@@ -53,7 +54,9 @@ def dots(res, out):
     rows = [("Tracking", [nat["ratios"][w]["track/native"] for w in WL]),
             ("Transfer", [med([x["src_ratio"] for x in ph["transfer"] if x["workload"] == w]) for w in WL]),
             ("Staging", [med([x["ratio"] for x in ph["staging"] if x["workload"] == w]) for w in WL])]
-    fig = plt.figure(figsize=FIG_SIZE_6A); ax = fig.add_axes(AXES_POS_11)
+    # user 2026-11-04: fig12a's canvas and plot box (7.70 x 4.80 in) to sit in one row with fig12a; fonts unchanged.
+    # The wider canvas fits the three names unrotated (DOTS_ROT); before: FIG_SIZE_6A / AXES_POS_11, rotated XTICK_ROT.
+    fig = plt.figure(figsize=FIG_SIZE_78); ax = fig.add_axes(AXES_POS_78)
     for x, (name, vals) in enumerate(rows):
         for wi, v in enumerate(vals):
             pct = 100 * (v - 1)
@@ -65,7 +68,7 @@ def dots(res, out):
     ax.set_xticks(range(len(rows))); ax.set_xticklabels([r[0] for r in rows])
     ax.set_xlim(-0.6, len(rows) - 0.4)
     finish_axes(ax, "Per-call slowdown (%)")
-    plt.setp(ax.get_xticklabels(), rotation=XTICK_ROT, ha="right", rotation_mode="anchor")   # as Fig. 11 (user 2026-11-03)
+    plt.setp(ax.get_xticklabels(), rotation=DOTS_ROT, ha="right" if DOTS_ROT else "center", rotation_mode="anchor")
     # centre each rotated label under its tick (user 2026-11-03): move its bounding-box centre onto the tick
     fig.canvas.draw()
     for i, lab in enumerate(ax.get_xticklabels()):
