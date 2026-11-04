@@ -62,7 +62,7 @@ def panel_a(res, w, out: Path):
             t, s = np.array(r["curve"]).T
             assert t[-1] < x1 and s[-1] < y1, (w, m, t[-1], s[-1])
             main = r is best
-            ax.step(t, s, where="post", color=col, ls=ls, lw=3.0 if main else 1.0, alpha=1 if main else 0.35, zorder=4 if main else 2)
+            ax.step(t, s, where="post", color=col, ls=ls, lw=4.2 if main else 1.5, alpha=1 if main else 0.35, zorder=4 if main else 2)
             ax.plot(t[-1], s[-1], "o", ms=9 if main else 4, color=col, mec="black" if main else col, mew=1.0, alpha=1 if main else 0.35,
                     zorder=5 if main else 2)
         t_end, s_end = best["curve"][-1]
@@ -80,7 +80,7 @@ def panel_a(res, w, out: Path):
     ax.grid(axis="x", alpha=0.18, linewidth=0.7)
     ax.set_xticks([0, 100, 200, 300])
     ax.set_xticklabels(["", "100", "200", "300"])   # the y axis' 0 marks the corner
-    hs = [Line2D([], [], color=LINE[m][0], ls=LINE[m][1], lw=3.0, label=TICK_LABEL[m]) for m in METHODS]
+    hs = [Line2D([], [], color=LINE[m][0], ls=LINE[m][1], lw=4.2, label=TICK_LABEL[m]) for m in METHODS]
     ax.legend(handles=hs, loc="upper left", ncol=2, frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.4,
               columnspacing=0.8, labelspacing=0.2, borderaxespad=0.3)
     save(fig, out)
@@ -90,7 +90,7 @@ def panel_a(res, w, out: Path):
 def panel_b(b, out: Path):
     fig = plt.figure(figsize=FIG_SIZE)
     ax = fig.add_axes(AXES_POS)
-    W, OFF = 0.36, 0.20
+    W, OFF = 0.30, 0.20   # user 2026-11-03: narrower bars (0.36 before)
     rec = {}
     for i, w in enumerate(WORKLOADS):
         for j, (key, col, name) in enumerate((("native_B", DIM_GRAY, "Native"), ("otter_per_call", BLUE, "OTTER"))):
