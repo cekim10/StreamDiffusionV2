@@ -76,7 +76,7 @@ def panel_a(runs, out):
     from matplotlib.patches import Patch
     hs = [Line2D([], [], color=BLUE, lw=3.4, label="OTTER"), Patch(color=BLUE, alpha=0.18, lw=0, label="P10-P90"),
           Line2D([], [], color=DIM_GRAY, ls=(0, (5, 2)), lw=3.4, label="No replay")]
-    legend(ax, hs, "upper right")
+    legend(ax, hs, "lower right")   # user 2026-11-03
     save(fig, out)
 
 
