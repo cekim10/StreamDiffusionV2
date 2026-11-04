@@ -21,6 +21,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
+from plot_fig11 import XTICK_ROT
 from plot_fig7_migration import (ANNOT, ANNOT_FONT, BLUE, DARK_GRAY, DIM_GRAY, FIG_SIZE as FIG_SIZE_78, LABEL, LEGEND, ROOT, TICK,
                                  configure, finish_axes)
 
@@ -63,6 +64,7 @@ def dots(res, out):
     ax.set_xticks(range(len(rows))); ax.set_xticklabels([r[0] for r in rows])
     ax.set_xlim(-0.6, len(rows) - 0.4)
     finish_axes(ax, "Per-call slowdown (%)")
+    plt.setp(ax.get_xticklabels(), rotation=XTICK_ROT, ha="right", rotation_mode="anchor")   # as Fig. 11 (user 2026-11-03)
     ax.yaxis.set_label_coords(-0.145, 0.5)
     ax.grid(axis="x", visible=False)
     ax.set_ylim(-0.2, 4.0)
