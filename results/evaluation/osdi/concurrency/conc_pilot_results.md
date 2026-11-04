@@ -21,6 +21,7 @@ Protocol: `pilot_protocol.md`. One run per session; C1 = S1 alone. Window = trig
 | C3b | OTTER | S2 | True  | 41.55 | 1.67 | 1.794 | 1.52 | 1041 | 29.2 / 31.7, 30.6 / 28.3 | +17.84 / +0.05 |
 | C3b | R-full | S1 | True  | 37.37 | 18.86 | 0.084 | 0.80 | 70 | 26.0 / 28.2, 29.2 / 27.6 | -0.87 / -0.36 |
 | C3b | R-full | S2 | True  | 38.59 | 19.65 | 0.085 | 0.80 | 70 | 26.0 / 29.9, 29.2 / 27.3 | +0.35 / +0.43 |
+| C4_m3_alone | OTTER | S1 | True  | 9.96 | 1.43 | 3.539 | 1.51 | 912 | 29.0 / 20.2, 36.8 / 19.9 | -13.75 / -0.19 |
 
 | cond | method | trigger offset S2 - S1 (s) | window overlap (s) | overlap / shorter window | both completed | both valid |
 |---|---|---|---|---|---|---|
@@ -53,6 +54,7 @@ Condition-aware validity (`condition_valid`; the original `valid` above is uncha
 | C3b | OTTER | S2 | True | elves-01:tx 2: 1.002 / 0.994 x 1, elves-03:rx 2: 1.005 / 0.993 x 1 | precopy 441 | 4 (2.3) | - |
 | C3b | R-full | S1 | True | elves-01:tx 2: 0.647 / 0.067 x 1, elves-03:rx 2: 0.651 / 0.067 x 1 | inputs 279, inputs 255 | 0 (0.0) | - |
 | C3b | R-full | S2 | True | elves-01:tx 2: 0.491 / 0.067 x 1, elves-03:rx 2: 0.511 / 0.067 x 1 | inputs 322, inputs 264 | 2 (2.3) | - |
+| C4_m3_alone | OTTER | S1 | True | elves-01:rx 1: 0.150 / 0.016 x 1, elves-01:tx 1: 0.992 / 0.974 x 1, elves-02:rx 1: 0.925 / 0.871 x 1, elves-02:tx 1: 0.923 / 0.883 x 1, elves-03:rx 1: 0.939 / 0.884 x 1, elves-03:tx 1: 0.294 / 0.030 x 1, elves-04:rx 1: 1.008 / 0.989 x 1 | precopy 796, m3_forward 815, m3_forward 504, m3_forward 977, precopy 802, precopy 65 | 0 (0.0) | - |
 
 Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1.15, sustained 10 s <= 1.05):
 
@@ -82,6 +84,14 @@ Verification 1, measured (host NIC / cap after the header factor; burst 1 s <= 1
 | C3b | R-full | S2 | elves-01:rx | 0.00 | 0.00 | True |
 | C3b | R-full | S2 | elves-03:tx | 0.00 | 0.00 | True |
 | C3b | R-full | S2 | elves-03:rx | 0.51 | 0.07 | True |
+| C4_m3_alone | OTTER | S1 | elves-01:tx | 0.99 | 0.97 | True |
+| C4_m3_alone | OTTER | S1 | elves-01:rx | 0.15 | 0.02 | True |
+| C4_m3_alone | OTTER | S1 | elves-02:tx | 0.92 | 0.88 | True |
+| C4_m3_alone | OTTER | S1 | elves-02:rx | 0.93 | 0.87 | True |
+| C4_m3_alone | OTTER | S1 | elves-03:tx | 0.29 | 0.03 | True |
+| C4_m3_alone | OTTER | S1 | elves-03:rx | 0.94 | 0.88 | True |
+| C4_m3_alone | OTTER | S1 | elves-04:tx | 0.00 | 0.00 | True |
+| C4_m3_alone | OTTER | S1 | elves-04:rx | 1.01 | 0.99 | True |
 
 Coordinator logs (verification 1 at the allocation level; flow overlap between sessions):
 
@@ -90,3 +100,4 @@ Coordinator logs (verification 1 at the allocation level; flow overlap between s
 | coord_C3b_full_20261103-212256.jsonl | 4 | True | 1.000 | 105.4 | 105.4 | 105.4 | s1:full + s2:full 105.4 |
 | coord_C3b_precopy_replay_20261103-220055.jsonl | 4 | True | 1.000 | 40.1 | 40.1 | 40.1 | s1:precopy + s2:precopy 40.1 |
 | coord_C3b_recompute_full_20261103-214237.jsonl | 4 | True | 1.000 | 36.7 | 36.7 | 36.7 | s1:inputs + s2:inputs 36.7 |
+| coord_C4_m3_alone_20261103-222247.jsonl | 12 | True | 1.000 | 0.0 | 0.0 | 0.0 | - |
