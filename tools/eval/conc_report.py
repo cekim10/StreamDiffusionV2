@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/eval"))
 import fig7_report as f7  # noqa: E402
 from fig12_report import peak_rx_mbps  # noqa: E402
+from restore_planner import maxmin  # noqa: E402
 
 EVAL = ROOT / "results/evaluation"
 OUT = EVAL / "osdi/concurrency"
@@ -237,7 +238,7 @@ def coord_analysis(log: Path):
     ents = [json.loads(x) for x in open(log) if x.strip()]
     if not ents:
         return None
-    shared, held, pairs = 0.0, 0.0, {}
+    shared, held, below_alone, pairs = 0.0, 0.0, 0.0, {}
     for a, b in zip(ents, ents[1:]):
         dt = b["t"] - a["t"]
         links = {}
@@ -249,11 +250,21 @@ def coord_analysis(log: Path):
             shared += dt
             if any(f["rate_bps"] < a["cap_bps"] - 1 for fl in sh for f in fl):
                 held += dt
+            # contention proper (user 2026-11-03): a flow on a shared link got less than the same session's flows alone
+            # would get (max-min over that session's own flows under the same caps; within-session sharing excluded)
+            alone = {}
+            for sess in {f["session"] for f in a["flows"].values()}:
+                own = {g: f for g, f in a["flows"].items() if f["session"] == sess}
+                sites = {f["src"] for f in own.values()} | {f["dst"] for f in own.values()}
+                alone.update(maxmin([(g, f["src"], f["dst"]) for g, f in own.items()], {(d, x): a["cap_bps"] for x in sites for d in ("out", "in")}))
+            ids = {id(f) for fl in sh for f in fl}
+            if any(f["rate_bps"] < alone[g] - 1 for g, f in a["flows"].items() if id(f) in ids):
+                below_alone += dt
             for kinds in {" + ".join(sorted({f"{f['session'].split('/')[0][-2:]}:{f['kind']}" for f in fl})) for fl in sh}:
                 pairs[kinds] = pairs.get(kinds, 0.0) + dt   # once per interval and kind combination (not per link)
     loads = [v for e in ents for v in e["site_load_bps"].values()]
     return {"entries": len(ents), "cap_ok_all": all(e["cap_ok"] for e in ents), "max_site_load_x_cap": max(loads, default=0.0) / ents[0]["cap_bps"],
-            "shared_link_s": shared, "shared_and_held_below_cap_s": held, "shared_by_kinds_s": pairs,
+            "shared_link_s": shared, "shared_and_held_below_cap_s": held, "shared_and_below_alone_s": below_alone, "shared_by_kinds_s": pairs,
             "flows": sorted({(g, f["kind"]) for e in ents for g, f in e["flows"].items()})}
 
 
@@ -329,10 +340,10 @@ def main():
     coords = {str(p.name): coord_analysis(p) for p in logs}
     if coords:
         L += ["", "Coordinator logs (verification 1 at the allocation level; flow overlap between sessions):", "",
-              "| log | allocations | all sums <= cap | max site load / cap | shared-link s | shared and held below cap s | shared by kinds (s) |", "|---|---|---|---|---|---|---|"]
+              "| log | allocations | all sums <= cap | max site load / cap | shared-link s | shared and held below cap s | shared and below its alone rate s | shared by kinds (s) |", "|---|---|---|---|---|---|---|---|"]
         for n, c in coords.items():
             if c:
-                L.append(f"| {n} | {c['entries']} | {c['cap_ok_all']} | {c['max_site_load_x_cap']:.3f} | {c['shared_link_s']:.1f} | {c['shared_and_held_below_cap_s']:.1f} | "
+                L.append(f"| {n} | {c['entries']} | {c['cap_ok_all']} | {c['max_site_load_x_cap']:.3f} | {c['shared_link_s']:.1f} | {c['shared_and_held_below_cap_s']:.1f} | {c['shared_and_below_alone_s']:.1f} | "
                          f"{', '.join(f'{k} {v:.1f}' for k, v in c['shared_by_kinds_s'].items()) or '-'} |")
     OUT.mkdir(parents=True, exist_ok=True)
     stem = f"{a.prefix}conc_pilot_results"
