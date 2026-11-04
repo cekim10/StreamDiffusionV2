@@ -6,6 +6,8 @@ figc_a_mobility   time with local service (%) vs user moves per hour, one line p
                   primary point)
 figc_b_link       time without local service per move (s, mean incl. truncated moves) vs site link capacity (Gbps)
 figc_c_budget     the same vs the per-site memory budget for retained / staged state (GB): Unstaged, OTTER, Replicate
+figc_stalled      stalled seconds per session-hour vs user moves per hour (log y), same knobs as figc_a (added
+                  2026-11-04 by the user's decision: plot only, from the frozen sweep; the paired view of figc_a)
 figc_legend       the method legend as its own file (six entries do not fit a 28-pt plot box)
 Canvas and axes box of Fig. 6a, fonts never reduced (28 / 19 / 25 pt), no internal mechanism names.
 
@@ -118,9 +120,11 @@ def main():
     delay = lambda r: r["no_local_after_move_s"].get("mean", float("nan"))  # noqa: E731
     fa = panel(runs, "dwell_s", local, "Local service (%)", "Moves per hour", fd / "figc_a_mobility", methods, xfmt=lambda d: round(3600 / d), logx=True)
     fb = panel(runs, "C_gbps", delay, "Delay per move (s)", "Link capacity (Gbps)", fd / "figc_b_link", methods, logx=True, logy=True)
+    stalled = lambda r: r.get("stalled_s_per_session_h", r["stall_frac"] * 3600)  # noqa: E731
+    fs = panel(runs, "dwell_s", stalled, "Stalled s per session-h", "Moves per hour", fd / "figc_stalled", methods, xfmt=lambda d: round(3600 / d), logx=True, logy=True)
     fc = panel(runs, "M_gb", delay, "Delay per move (s)", "Memory budget (GB)", fd / "figc_c_budget", [m for m in ("base", "otter", "naive") if m in methods])
     legend(methods, fd / "figc_legend")
-    print(f"  fixed knobs: a {fa}; b {fb}; c {fc}")
+    print(f"  fixed knobs: a {fa}; stalled {fs}; b {fb}; c {fc}")
 
 
 if __name__ == "__main__":
