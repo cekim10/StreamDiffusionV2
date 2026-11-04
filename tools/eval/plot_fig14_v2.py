@@ -20,9 +20,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.transforms import ScaledTranslation
 
-from plot_fig11 import XTICK_ROT
 from plot_fig7_migration import (ANNOT, ANNOT_FONT, BLUE, DARK_GRAY, DIM_GRAY, AXES_POS as AXES_POS_78, FIG_SIZE as FIG_SIZE_78, LABEL, LEGEND, ROOT, TICK,
                                  configure, finish_axes)
 
@@ -30,7 +28,6 @@ OUT = ROOT / "results/evaluation/osdi/fig14/figures/v2"
 RES = ROOT / "results/evaluation/osdi/fig14/fig14_results.json"
 FIG_SIZE_6A = (5.83, 4.78)          # Fig. 11 canvas and plot box (user 2026-11-03: both panels the same size as Fig. 11)
 AXES_POS_11 = [0.18, 0.22, 0.79, 0.75]
-DOTS_ROT = 0   # fig14a x labels on the fig12a canvas
 WL = ("dog", "bfly")
 
 
@@ -48,36 +45,46 @@ def med(xs):
 
 
 def dots(res, out):
-    """Vertical dot plot on the Fig. 11 canvas: rotated 28 pt category labels do not fit a Fig. 11 row (fonts are never
-    reduced), so the operations are on x and the slowdown on y (rotated y label)."""
+    """Lollipop per operation and workload (user 2026-11-04): stem from 0 to the median, the median as the large marker
+    (Low-refresh filled, High-refresh open), each run as a small black dot beside it (Tracking 5, Transfer 5, Staging 3
+    per workload). Gray band behind the Tracking column only: run-to-run variation (min-max around the median) of the
+    native SDV2 runs, the same baseline Tracking is measured against. Transfer and Staging use their own in-run baselines
+    (calls outside the transfer / staging window), so the band is not drawn behind them."""
     nat, ph = res["native"], res["phases"]
-    rows = [("Tracking", [nat["ratios"][w]["track/native"] for w in WL]),
-            ("Transfer", [med([x["src_ratio"] for x in ph["transfer"] if x["workload"] == w]) for w in WL]),
-            ("Staging", [med([x["ratio"] for x in ph["staging"] if x["workload"] == w]) for w in WL])]
+    C = nat["cells"]
+
+    def runs(name, w):
+        if name == "Tracking":
+            ref = C[f"{w}|native"]["median_chunk_s"]
+            return [100 * (v / ref - 1) for v in C[f"{w}|track"]["values"]]
+        if name == "Transfer":
+            return [100 * (x["src_ratio"] - 1) for x in ph["transfer"] if x["workload"] == w]
+        return [100 * (x["ratio"] - 1) for x in ph["staging"] if x["workload"] == w]
+
+    rows = [("Tracking", [100 * (nat["ratios"][w]["track/native"] - 1) for w in WL]),
+            ("Transfer", [100 * (med([x["src_ratio"] for x in ph["transfer"] if x["workload"] == w]) - 1) for w in WL]),
+            ("Staging", [100 * (med([x["ratio"] for x in ph["staging"] if x["workload"] == w]) - 1) for w in WL])]
+    noise = [100 * (v / C[f"{w}|native"]["median_chunk_s"] - 1) for w in WL for v in C[f"{w}|native"]["values"]]
     # user 2026-11-04: fig12a's canvas and plot box (7.70 x 4.80 in) to sit in one row with fig12a; fonts unchanged.
-    # The wider canvas fits the three names unrotated (DOTS_ROT); before: FIG_SIZE_6A / AXES_POS_11, rotated XTICK_ROT.
     fig = plt.figure(figsize=FIG_SIZE_78); ax = fig.add_axes(AXES_POS_78)
+    ax.fill_between([-0.45, 0.45], min(noise), max(noise), color="#BBBBBB", alpha=0.35, lw=0, zorder=0)
+    ax.axhline(0, color="black", lw=1.2, zorder=1)
     for x, (name, vals) in enumerate(rows):
-        for wi, v in enumerate(vals):
-            pct = 100 * (v - 1)
-            dx = -0.17 if wi == 0 else 0.17
-            ax.scatter(x + dx, pct, s=320, marker="o", facecolor=BLUE if wi == 0 else "white", edgecolor=BLUE, linewidth=2.5, zorder=4)
-            ax.text(x + dx, pct + 0.16, f"{pct:.2f}" if pct < 0.5 else f"{pct:.1f}", ha="center", va="bottom", fontsize=ANNOT,
+        for wi, (w, pct) in enumerate(zip(WL, vals)):
+            xx = x + (-0.17 if wi == 0 else 0.17)
+            ax.plot([xx, xx], [0, pct], color=BLUE, lw=4, solid_capstyle="butt", alpha=1 if wi == 0 else 0.55, zorder=2)
+            rv = runs(name, w)
+            ax.scatter([xx + 0.07] * len(rv), rv, s=30, color="black", lw=0, zorder=3)
+            ax.scatter(xx, pct, s=320, marker="o", facecolor=BLUE if wi == 0 else "white", edgecolor=BLUE, linewidth=2.5, zorder=4)
+            ax.text(xx - 0.06, max([pct] + rv) + 0.12, f"{pct:.2f}" if pct < 0.5 else f"{pct:.1f}", ha="center", va="bottom", fontsize=ANNOT,
                     fontfamily=ANNOT_FONT, style="italic", rotation=90)
-        ax.axvline(x, color="#DDDDDD", lw=1.0, zorder=1)
     ax.set_xticks(range(len(rows))); ax.set_xticklabels([r[0] for r in rows])
     ax.set_xlim(-0.6, len(rows) - 0.4)
     finish_axes(ax, "Per-call slowdown (%)")
-    plt.setp(ax.get_xticklabels(), rotation=DOTS_ROT, ha="right" if DOTS_ROT else "center", rotation_mode="anchor")
-    # centre each rotated label under its tick (user 2026-11-03): move its bounding-box centre onto the tick
-    fig.canvas.draw()
-    for i, lab in enumerate(ax.get_xticklabels()):
-        bb = lab.get_window_extent()
-        dx = (ax.transData.transform((i, 0))[0] - (bb.x0 + bb.x1) / 2) / fig.dpi
-        lab.set_transform(lab.get_transform() + ScaledTranslation(dx, 0, fig.dpi_scale_trans))
+    ax.tick_params(axis="x", length=0)
     ax.yaxis.set_label_coords(-0.145, 0.5)
     ax.grid(axis="x", visible=False)
-    ax.set_ylim(-0.2, 4.0)
+    ax.set_ylim(-0.4, 4.0)
     ax.legend(handles=[Line2D([], [], ls="", marker="o", ms=15, mfc=BLUE, mec=BLUE, mew=2.5, label="Low-refresh"),
                        Line2D([], [], ls="", marker="o", ms=15, mfc="white", mec=BLUE, mew=2.5, label="High-refresh")],
               loc="upper left", frameon=False, fontsize=LEGEND, handletextpad=0.2, labelspacing=0.15, borderaxespad=0.2)
