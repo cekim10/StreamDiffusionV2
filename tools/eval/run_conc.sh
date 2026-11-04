@@ -59,7 +59,7 @@ coord_up() {   # condition tag: start the coordinator (127.0.0.1:CPORT, cap 1 Gb
   $PY tools/eval/rate_coord.py serve --port $CPORT --cap_mbps 1000 --log "$log" > "/tmp/conc_coord_$1.log" 2>&1 & CPID=$!
   sleep 1; echo "[CONC] coordinator pid $CPID, log $log"
 }
-coord_down() { kill $CPID 2>/dev/null; wait $CPID 2>/dev/null; }
+coord_down() { kill $CPID 2>/dev/null; wait $CPID 2>/dev/null; return 0; }   # wait returns 143 for the killed coordinator: not a failure
 c4cell() {   # arm (m3 | nom3), with S2 (0 | 1)
   local X=""; [ "$1" = m3 ] && X="$M3"
   local tag="C4_$1_$([ "$2" = 1 ] && echo conc || echo alone)"

@@ -355,3 +355,8 @@ Reading (one run per cell; pilot):
   `C4_nom3_conc` (S2 next to S1 without staging), the 2 x 2's missing cells; until then the +15.7 s is against C1.
 - The pair table's "window overlap 0" for C4 is not meaningful: S1's Fig. 7 window covers only its first move,
   which ends before S2 starts (offset 45 s by design). Overlap evidence for C4 is the coordinator log above.
+
+**Cause of the missing cells (found 2026-11-03, runner only).** `coord_down` ended with `wait $CPID` on the killed
+coordinator, which returns 143, so `run_conc.sh c4 ...` exited non-zero after every cell even when the cell succeeded.
+The suggested loop (`... || break`) therefore stopped after the first cell both times: no GPU or run failure.
+`coord_down` now returns 0. No run, method or result is affected (C3b ran in one invocation; its cells all completed).
