@@ -69,10 +69,10 @@ def panel_a(C, w, out: Path):
             x = np.arange(1, len(rd) + 1)
             big = r is main
             kw = dict(color=col, alpha=1 if big else 0.35, zorder=4 if big else 2)
-            ax.plot(x, rd, ls=ls, lw=3.0 if big else 1.0, marker=mk, ms=9 if big else 4, mec="black" if big else col, **kw)
+            ax.plot(x, rd, ls=ls, lw=4.2 if big else 1.5, marker=mk, ms=9 if big else 4, mec="black" if big else col, **kw)
             stop = r["rounds"]["stop_and_copy_bytes"] / 1e6
             ys += list(rd) + [stop]
-            ax.plot([x[-1], x[-1] + 1], [rd[-1], stop], ls=":", lw=2.0 if big else 0.8, **kw)
+            ax.plot([x[-1], x[-1] + 1], [rd[-1], stop], ls=":", lw=2.8 if big else 1.1, **kw)
             ax.plot(x[-1] + 1, stop, marker=mk, ms=11 if big else 5, mfc="white", mec=col, mew=2.0 if big else 1.0, ls="none", **kw)
             xmax = max(xmax, len(rd) + 1)
         rec[k] = {"median_rep": main["rep"], "rounds": len(main["rounds"]["dirty_bytes"]), "reason": main["rounds"]["switch_reason"]}
@@ -88,7 +88,7 @@ def panel_a(C, w, out: Path):
     finish_axes(ax, "Dirty state (MB)")
     ax.yaxis.set_label_coords(-0.14, 0.5)
     ax.set_xlabel("Pre-copy round", fontsize=28, labelpad=2)
-    hs = [Line2D([], [], color=LINE_A[k][0], ls=LINE_A[k][1], marker=LINE_A[k][2], lw=3.0, ms=9, mec="black", label=LINE_A[k][3]) for k in ("pfull", "psink")]
+    hs = [Line2D([], [], color=LINE_A[k][0], ls=LINE_A[k][1], marker=LINE_A[k][2], lw=4.2, ms=9, mec="black", label=LINE_A[k][3]) for k in ("pfull", "psink")]
     hs.append(Line2D([], [], color="black", marker="o", mfc="white", ls="none", ms=10, label="Stop-and-copy"))
     ax.legend(handles=hs, loc="upper right", ncol=1, frameon=False, fontsize=LEGEND, handlelength=1.8, handletextpad=0.4, labelspacing=0.2,
               borderaxespad=0.3)

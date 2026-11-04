@@ -63,10 +63,10 @@ def panel_a(runs, out):
     if ot:
         col = {k: [s[k] for s in ot if k in s] for k in ks}
         ax.fill_between(ks, [pct(col[k], 10) for k in ks], [pct(col[k], 90) for k in ks], color=BLUE, alpha=0.18, lw=0, zorder=1)
-        ax.plot(ks, [pct(col[k], 50) for k in ks], color=BLUE, lw=2.4, zorder=4)
+        ax.plot(ks, [pct(col[k], 50) for k in ks], color=BLUE, lw=3.4, zorder=4)
     ps = [series(r) for r in runs if r["method"] == "psink" and r["valid"]]
     if ps:
-        ax.plot(ks, [pct([s[k] for s in ps if k in s], 50) for k in ks], color=DIM_GRAY, ls=(0, (5, 2)), lw=2.4, zorder=3)
+        ax.plot(ks, [pct([s[k] for s in ps if k in s], 50) for k in ks], color=DIM_GRAY, ls=(0, (5, 2)), lw=3.4, zorder=3)
     for xb in (8.5, 24.5):
         ax.axvline(xb, color="black", lw=0.8, alpha=0.35, zorder=0)
     ax.set_xlim(-1, 105); ax.set_xticks([1, 25, 50, 75, 100])   # window edges (8 | 9, 24 | 25) are the vertical lines
@@ -74,8 +74,8 @@ def panel_a(runs, out):
     finish_axes(ax, "PSNR (dB)")
     ax.set_xlabel("Calls after the cutover", fontsize=28, labelpad=2)
     from matplotlib.patches import Patch
-    hs = [Line2D([], [], color=BLUE, lw=2.4, label="OTTER"), Patch(color=BLUE, alpha=0.18, lw=0, label="P10-P90"),
-          Line2D([], [], color=DIM_GRAY, ls=(0, (5, 2)), lw=2.4, label="No replay")]
+    hs = [Line2D([], [], color=BLUE, lw=3.4, label="OTTER"), Patch(color=BLUE, alpha=0.18, lw=0, label="P10-P90"),
+          Line2D([], [], color=DIM_GRAY, ls=(0, (5, 2)), lw=3.4, label="No replay")]
     legend(ax, hs, "upper right")
     save(fig, out)
 

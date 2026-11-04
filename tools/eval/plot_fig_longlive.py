@@ -71,17 +71,17 @@ def fig_fidelity(runs):
     for arm, color, ls in (("recache", DIM_GRAY, (0, (5, 2))), ("otter_w12", DARK_GRAY, "-")):
         c = col(arm)
         ax.fill_between(ks, [min(x) for x in c], [max(x) for x in c], color=color, alpha=0.18, lw=0, zorder=1)
-        ax.plot(ks, [st.median(x) for x in c], color=color, ls=ls, lw=2.4, zorder=3)
+        ax.plot(ks, [st.median(x) for x in c], color=color, ls=ls, lw=3.4, zorder=3)
     ot = col("otter_w96")
     assert all(v >= 99.0 for x in ot for v in x), "OTTER not bit-exact in every call: the 'Exact' line would be wrong"
-    ax.plot(ks, [99.0] * len(ks), color=BLUE, lw=2.4, zorder=4)
+    ax.plot(ks, [99.0] * len(ks), color=BLUE, lw=3.4, zorder=4)
     ax.set_xlim(-1, 105); ax.set_xticks([1, 25, 50, 75, 100])
     ax.set_ylim(10, 106)
     ax.set_yticks([20, 40, 60, 80, 99]); ax.set_yticklabels(["20", "40", "60", "80", "Exact"])
     finish_axes(ax, "PSNR (dB)")
     ax.set_xlabel("Calls after the cutover", fontsize=28, labelpad=2)
-    hs = [Line2D([], [], color=BLUE, lw=2.4, label="OTTER"), Line2D([], [], color=DARK_GRAY, lw=2.4, label="12-call replay"),
-          Line2D([], [], color=DIM_GRAY, ls=(0, (5, 2)), lw=2.4, label="Recache")]
+    hs = [Line2D([], [], color=BLUE, lw=3.4, label="OTTER"), Line2D([], [], color=DARK_GRAY, lw=3.4, label="12-call replay"),
+          Line2D([], [], color=DIM_GRAY, ls=(0, (5, 2)), lw=3.4, label="Recache")]
     ax.legend(handles=hs, loc="center right", bbox_to_anchor=(1.0, 0.66), frameon=False, fontsize=LEGEND, handlelength=1.6,
               handletextpad=0.3, labelspacing=0.15, borderaxespad=0.2)
     save(fig, "figll_b_fidelity")
