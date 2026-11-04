@@ -104,7 +104,7 @@ def main():
     r1_pairs = [(two[(r["seed"], r["cfg"]["N"], r["cfg"]["G"])], r) for r in runs if r["cfg"]["E"] == 2 and r["method"] == "base"
                 and (r["seed"], r["cfg"]["N"], r["cfg"]["G"]) in two]
     r1_bad = sum(1 for o, b in r1_pairs if not same({k: v for k, v in o.items() if k != "method"}, {k: v for k, v in b.items() if k != "method"}))
-    L = [f"# E9 scalability extension: grid `{a.grid}` (SIMULATED; DRAFT protocol, not frozen)", "",
+    L = [f"# E9 scalability extension: grid `{a.grid}` (PRELIMINARY SIMULATION - Sink delta beyond 240 calls extrapolated; descriptive only, G3)", "",
          f"Runs {len(runs)}; medians over seeds {sorted({r['seed'] for r in runs})}, [min-max] for stalled seconds and local share. "
          "Same model and calibration as the frozen primary sweep; delta bytes beyond 240 calls are extrapolated (D5) and the "
          "store is the idealized [A11] store unless stated otherwise.", "",
@@ -112,6 +112,20 @@ def main():
          f"{'PASS' if not r0 else 'FAIL'}" + ("" if shared else " (no shared points in this grid)"),
          f"- **R1** (2 sites: OTTER == Unstaged): {len(r1_pairs)} pairs, {r1_bad} different -> "
          f"{'PASS' if not r1_bad else 'FAIL'}" + ("" if r1_pairs else " (no 2-site points in this grid)")]
+    # L-D1 / S-D1 (descriptive counts, G3): cells where OTTER's median stalled s / session-h < each external baseline's,
+    # with the local shares next to it (a baseline served mostly remotely stalls little)
+    ckeys = ("C_gbps", "N") if a.grid == "load" else ("E", "G", "N")
+    rows, held = [], 0
+    for c, by in cells(runs, ckeys).items():
+        ms = {m: med([METRICS[0][2](r) for r in by[m]]) for m in by}
+        ls = {m: med([r["local_frac"] for r in by[m]]) for m in by}
+        lose = [LABEL[b] for b in ("full", "pfull", "rfull") if b in ms and not ms["otter"] < ms[b]]
+        held += not lose
+        rows.append(f"| {c} | {f(ms['otter'])} / {f(100 * ls['otter'])} % | " + " | ".join(f"{f(ms[b])} / {f(100 * ls[b])} %" for b in ("full", "pfull", "rfull"))
+                    + f" | {'yes' if not lose else 'no (' + ', '.join(lose) + ')'} |")
+    L += ["", f"**{'L' if a.grid == 'load' else 'S'}-D1 (descriptive, not a hypothesis):** OTTER's median stalled s / session-h below each of Full, "
+          f"Llumnix, SLLM in {held} / {len(rows)} cells.", "",
+          f"| cell {ckeys} | OTTER stalled / local | Full | Llumnix | SLLM | below all three |", "|---|---|---|---|---|---|"] + rows
     if a.grid == "load":
         L += ["", "## L: load scaling (128 GPUs = 16 sites x 8; N sessions; sessions per GPU = N / 128)"]
         L += table(runs, ("C_gbps", "N"), lambda c: f"C {c[0]:g} Gbps, N {c[1]} ({c[1] / 128:.3f} per GPU)")
