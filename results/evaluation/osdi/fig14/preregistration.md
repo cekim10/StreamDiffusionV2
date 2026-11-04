@@ -149,3 +149,63 @@ all of 14b. H1 tests tracking-only; it is never reported as OTTER's overall over
 | D4 | 14a phases from the existing Fig. 7 / 11 runs, descriptive |
 | D5 | 14b OTTER with --mem_log. The baselines' GPU peaks from Fig. 7 `node_end` are a reference row only: their workload length, instrumentation and sampling differ, so they are not a direct comparison and no claim compares them with OTTER's |
 | added | three configurations native / tracking-only / OTTER integrated, each against its own host's native |
+
+## 10. Outcome (2026-11-03; all runs on commit ccc6c06, analysed against sections 4-6 unchanged)
+
+**Runs and validity.** 14a native: A native / wrap / track 5 reps x dog / butterfly, B native_only 5 x 2; all with
+rc 0, 120 window chunks each, and every call tracked. Integrated: 10 of 10 valid. 14b memory: 10 of 10 valid under the
+Fig. 7 / Fig. 11 rules (switchovers verified, SINKOK, no fallback, M3 checks true in the chain runs), `memory.csv` on
+every node used. The `fig14_results.md` written on elves-01 lacked B's native files (pushed separately from
+elves-02); the report was rerun on the merged data (no code change).
+
+**F14-H1 SUPPORTED.** track / native = 1.0009 (dog), 1.0006 (butterfly) <= 1.01. wrap / native = 0.9998 / 0.9994,
+so the wrapper costs nothing measurable. Tracking 0.39 / 0.40 ms per call (prediction 0.57 ms, about 1.001).
+
+**Reported, not tested (14a).**
+
+| quantity | dog | butterfly |
+|---|---|---|
+| tracking-only A / native A | 1.0009 | 1.0006 |
+| OTTER integrated B / native B | 1.0555 | 1.0528 |
+| harness without OTTER A / native A | 1.0457 | 1.0472 |
+| integrated B per call: generation + tracking | 0.5561 s + 0.57 ms | 0.5552 s + 0.58 ms |
+| source during transfer / own reference (Fig. 7, n 5 each) | 1.016 (1.012-1.022) | 1.020 (1.017-1.024) |
+| owner during staging / outside (Fig. 11, n 3 each) | 1.017 (1.016-1.018) | 1.009 (1.008-1.009) |
+
+Analysis of integrated about 1.05 (section 3 asked for it): tracking is 0.1 %; the harness's uninterrupted session
+without any OTTER code is already 4.6-4.7 % slower than native on A. In absolute time the integrated generation on B
+(dog 0.5561 s) equals A's harness session without OTTER (0.5563 s); B's native is 0.9 % faster than A's. So most of
+the 5.4 % is the harness serving path, not OTTER. The remaining 0.6-0.8 points are a cross-host comparison and are not
+attributed.
+
+**14b memory (measured).** All MB are MiB (2^20 bytes).
+
+- Retained Sink: 1,645.3 MiB = 1.73 GB per former owner, on both workloads: prediction met. It is held in host memory
+  (RSS rises by the same amount at the switch; GPU allocation does not).
+- Source after its switch: GPU allocated drops to 20.15 GB (model only).
+- Destination GPU peak vs the source's steady serving allocation (26.49 GB, single runs): 1.064-1.121 (dog 1.121,
+  1.104, 1.081; butterfly 1.084, 1.087, 1.064). The prediction "within 10 %" holds in 4 of 6 runs; dog reps 1 and 2
+  exceed it (12.1 %, 10.4 %). After the switch the destination stays at 28.05 GB (+1.57 GB, 1.059 x the source) for
+  the rest of the run. Candidate cause (not verified): the destination keeps its replayed recent-slot clones
+  (`replay_switch` `self._replayed`) after writing them back.
+- Chain: the intermediate owners B and C peak at 34.46-36.61 GB allocated (1.30-1.38 x), each when it starts its own
+  outbound migration (B at about 49 s, C at about 94 s); reserved peak 37.8 GB of the L40S's 46 GB. The first source
+  (A) peaks at 27.0-28.0 GB and the last destination (D) at 28.1-29.4 GB. The prediction did not cover a re-migrating
+  owner; the extra 6.4 GB is measured, its cause is not analysed.
+- Chain cluster-wide held state: 11,517 MiB = 7 x Sink at the run end, and the same at the simultaneous peak
+  (retained on A, B, C + staged entries on A, B, C, D). The prediction "<= 3 x Sink" is NOT met. Each former owner
+  holds the same Sink version twice (retained buffer and staged entry store), and D holds a staged copy it never used
+  as an owner before the run end. Nothing is released before RUN_END in this configuration.
+- Process RSS includes the harness (the reference session's frames in RAM): first samples 25.6-27.3 GB in single runs
+  (1,530-call reference) vs 14.1-15.1 GB in chain runs (830-call reference). The RSS increase is the comparable
+  number: single source +5.1-5.3 GB, chain A/B/C +5.2-5.8 GB, chain D +1.8-2.1 GB.
+
+**Wall time.** The estimate [H] "about 1 h" for 14b was wrong: each run regenerates the uninterrupted reference on
+every warm node before the run (single about 31 min, chain about 19 min per run); the 9 remaining memory runs took
+about 4 h. No criterion depends on it.
+
+**Figures** (`figures/`, section 8 spec, fonts unchanged): fig14a_overhead, fig14b_memory, fig14b_cluster. The host
+bar of fig14b_memory is the RSS peak as specified, which includes the harness reference frames; see the open question
+below.
+
+**Open (user decision):** fig14b_memory host bar as RSS peak (spec) or RSS increase (comparable across scenarios).
