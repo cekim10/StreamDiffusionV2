@@ -52,7 +52,7 @@ def series(C, w, arm, key, scale=1.0):
     return xs, med, pts
 
 
-def draw(ax, xs, med, pts, col, ls, mk, filled, lw=2.4, z=4):
+def draw(ax, xs, med, pts, col, ls, mk, filled, lw=3.4, z=4):   # user 2026-11-03: 2.4 -> 3.4
     ax.plot(xs, med, color=col, ls=ls, lw=lw, zorder=z)
     ax.scatter([p[0] for p in pts], [p[1] for p in pts], marker=mk, s=60, facecolor=col if filled else "white", edgecolor=col, lw=1.6, zorder=z + 1)
 
@@ -69,9 +69,9 @@ def common(ax, ylabel):
 def legend(ax, loc, methods=(), workloads=False, times=False):
     """Style-size legend (never smaller): 10a lists the methods (colors), 10b the workload markers and the two times
     (line style: readiness solid, base ready dashed)."""
-    hs = [Line2D([], [], color=METHOD[k][0], ls=METHOD[k][1], lw=2.4, label=METHOD[k][2]) for k in methods]
+    hs = [Line2D([], [], color=METHOD[k][0], ls=METHOD[k][1], lw=3.4, label=METHOD[k][2]) for k in methods]
     if times:
-        hs += [Line2D([], [], color="black", ls=l, lw=2.4, label=t) for l, t in (("-", "Readiness"), (BASE_LS, "Base ready"))]
+        hs += [Line2D([], [], color="black", ls=l, lw=3.4, label=t) for l, t in (("-", "Readiness"), (BASE_LS, "Base ready"))]
     if workloads:
         hs += [Line2D([], [], color="black", marker=WL[w][0], mfc="black" if WL[w][1] else "white", ls="none", ms=10, label=WL[w][2]) for w in WL]
     ax.legend(handles=hs, loc=loc, frameon=False, fontsize=LEGEND, handlelength=1.6, handletextpad=0.3, labelspacing=0.15, ncol=1, borderaxespad=0.2)
