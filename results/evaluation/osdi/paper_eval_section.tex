@@ -5,17 +5,33 @@
 % PENDING: the cluster numbers are final only after the Fig. 10 long-age check (E9 D5); citation keys are placeholders.
 
 \section{Evaluation}
+\label{sec:eval}
 
-This section presents experimental results for \sys.
-We find that: (i) in a single migration over a 1~Gbps link, \sys keeps the maximum output gap at 1.6\,s,
-11.3--11.5$\times$ shorter than the best baseline;
-(ii) this gap stays at 1.6--1.8\,s from 0.25\,Gbps to an unshaped link;
-(iii) under repeated mobility, Versioned Sink Reconstruction sends 0.7--25\% of the Sink when the session returns
-to a host, and Continuity Wavefront readies the final host 2.3--2.4$\times$ sooner;
-(iv) state tracking adds under 0.1\% per call, and transfer and staging at most 2\%;
-and (v) in a simulated 128-GPU cluster, \sys stalls 4.0--5.4$\times$ less than the best baseline.
-These gains cost more transferred data than recomputation and, below 1\,Gbps, a later first local output.
-We further break down \sys by technique to understand these benefits.
+We evaluate \sys on a four-host GPU testbed, where each host serves StreamDiffusionV2~\cite{sdv2} sessions on an
+NVIDIA L40S, on ten real-world video clips, and on LongLive~\cite{longlive} as a second streaming model;
+a calibrated simulator extends the evaluation to a 128-GPU edge cluster. We have the following key results.
+
+\begin{itemize}[leftmargin=*, topsep=0.5ex]
+
+\item \sys keeps streaming output continuous during migration: its maximum output gap is 1.6\,s, 11.3--11.5$\times$
+  shorter than state-of-the-art migration approaches, and stays at 1.6--1.8\,s from 0.25\,Gbps to an unshaped link
+  (\S\ref{subsec:eval_e2e}).
+
+\item Continuity Replay hides state transfer behind ongoing generation: pre-copying only the Sink and synchronizing
+  it at the switch shortens the gap from 15.0\,s to 1.6\,s (\S\ref{subsec:eval_replay}).
+
+\item Under repeated mobility, Versioned Sink Reconstruction sends 0.7--25\% of the Sink when a session returns to a
+  host (\S\ref{subsec:eval_versioned}), and Continuity Wavefront readies the final host 2.3--2.4$\times$ sooner
+  (\S\ref{subsec:eval_wavefront}).
+
+\item Continuity Replay carries over to LongLive with bit-exact output and a 15$\times$ shorter gap than full-state
+  transfer (\S\ref{subsec:eval_longlive}).
+
+\item \sys adds under 0.1\% per call for state tracking and at most 2\% while transferring or staging state; it trades
+  more transferred data than recomputation, and below 1\,Gbps a later first local output, for continuity
+  (\S\ref{subsec:eval_tradeoff}).
+
+\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{figure*}[t]
@@ -108,6 +124,7 @@ We additionally port Continuity Replay to LongLive~\cite{longlive} to evaluate g
 
 \vspace{-0.07in}
 \subsection{\sys Keeps Streaming Output Continuous During Migration}
+\label{subsec:eval_e2e}
 
 We first evaluate \sys in a single migration, across link bandwidths, and in a simulated cluster.
 
@@ -146,6 +163,7 @@ the destination regenerates state.
 dwell, and memory configurations it never reduces delay per move by 10\% or more.
 
 \subsection{Continuity Replay Hides State Transfer Behind Ongoing Generation}
+\label{subsec:eval_replay}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{figure*}[t]
@@ -190,6 +208,7 @@ destination's Sink matched the source's block digests (0 of 360 blocks
 differed) and no call was lost or duplicated.
 
 \subsection{Versioned Sink Reconstruction Cuts the Cost of Returning to a Host}
+\label{subsec:eval_versioned}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{figure*}[t]
@@ -225,6 +244,7 @@ Sink transfer (2.5--2.8$\times$), and that readiness does not grow with version 
 Its floor is the replay of recent calls, not the Sink transfer.
 
 \subsection{Continuity Wavefront Readies the Next Host Before the Session Arrives}
+\label{subsec:eval_wavefront}
 
 We evaluate a session that moves A$\rightarrow$B$\rightarrow$C$\rightarrow$D.
 
@@ -241,6 +261,7 @@ The gain comes from D: the session's earlier hosts forward their Sink versions t
 the last migration sends only a delta.
 
 \subsection{Continuity Replay Generalizes to Another Streaming Model}
+\label{subsec:eval_longlive}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{figure}[t]
@@ -266,6 +287,7 @@ The cost is readiness: replaying 96 calls makes the destination ready 11.2\,s la
 This port exercises Continuity Replay only.
 
 \subsection{\sys Trades Bandwidth for Continuity at Low Runtime Overhead}
+\label{subsec:eval_tradeoff}
 
 We evaluate \sys's costs in runtime, bandwidth, and remote serving.
 
