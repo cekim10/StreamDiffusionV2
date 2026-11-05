@@ -78,49 +78,58 @@ We have the following key results.
 \end{figure}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\noindentparagraph{\textbf{Testbed.}}
-We run experiments on four servers, each with one NVIDIA L40S GPU (48\,GB), connected by a LAN with a 0.26\,ms median
-round-trip time, and on a trace-driven cluster simulator.
-Each GPU serves one StreamDiffusionV2~\cite{sdv2} video-to-video session; one call produces four frames in about
-0.53\,s, and a session holds 6.02\,GiB of state, of which the Sink is 1.61\,GiB.
-On the testbed, we emulate the inter-host link with a sender-side pacer at 0.25--2.5\,Gbps and also run on the
-unshaped link; the default is 1\,Gbps.
-The simulator models 128 GPUs in 16 edge sites of 8 GPUs, with sessions that follow a random walk over the sites;
-it is calibrated with testbed measurements and reproduces our repeated-mobility runs (76 of 76 checks).
+\subsection{Methodology}
+\label{subsec:eval_method}
 
-\noindentparagraph{\textbf{Comparisons.}}
-We compare \sys with three migration approaches:
-(i) Full, which stops the session and copies its whole state;
-(ii) a Llumnix-style live migration (Llumnix)~\cite{llumnix}, which pre-copies the whole state while the source keeps
-serving and stops for the final dirty state; and
-(iii) a ServerlessLLM-style migration (SLLM)~\cite{serverlessllm}, which sends the session's input frames and
+\noindentparagraph{Experimental setup.}
+\sys is designed for edge deployments in which users move between sites and their generation sessions follow them.
+Such a deployment, with real users moving across many edge sites, is impractical in an academic environment.
+As such, we emulate edge sites with four GPU servers, each with one NVIDIA L40S (48\,GB) and serving one streaming
+session, connected by a LAN with a 0.26\,ms median round-trip time: (1) we treat each server as one edge site and move a
+session between sites by triggering a migration at a chosen generation call or wall-clock time; (2) we emulate the
+inter-site link with a sender-side pacer at 0.25--2.5\,Gbps (1\,Gbps by default) and also run on the unshaped link.
+To study \sys beyond four sites, we use a trace-driven simulator of 16 edge sites on a $4\times4$ grid with 8 GPUs
+each (128 GPUs), in which sessions follow a random walk with exponentially distributed dwell times. The simulator
+takes its migration costs from testbed measurements and reproduces our repeated-mobility runs (76 of 76 checks).
+
+\noindentparagraph{Models and workloads.}
+We use StreamDiffusionV2~\cite{sdv2} for video-to-video generation; one call produces four frames in about 0.53\,s,
+and a session holds 6.02\,GiB of state, of which the Sink is 1.61\,GiB.
+We use two inputs that span its Sink refresh rate, a low-refresh clip (3.6 refreshes per 100 calls) and a
+high-refresh clip (128.2), and ten clips from the StreamDiffusionV2 examples and LOVEU-TGVE~\cite{loveu} for output
+fidelity. To evaluate generality, we port Continuity Replay to LongLive~\cite{longlive}, whose session holds
+5.06\,GiB of state and serves one call in 2.11\,s.
+
+\noindentparagraph{Baselines.}
+Existing migration systems do not support streaming video diffusion sessions, so we implement their migration
+mechanisms in our serving harness and run them on the same testbed.
+\emph{Full} stops the session and copies its whole state.
+\emph{Llumnix}-style migration~\cite{llumnix} pre-copies the whole state in rounds while the source keeps serving,
+then stops and copies the remaining dirty state.
+\emph{ServerlessLLM}-style migration (SLLM)~\cite{serverlessllm} sends the session's input frames (lossless) and
 regenerates its state at the destination while the source keeps serving.
-To isolate \sys's techniques, we also evaluate ablations: Wait-for-Sink, Sink-only pre-copy (P-sink),
-\sys without Sink synchronization, \sys without replay, a changed-block Sink delta, and \sys without staging (Unstaged).
+We also evaluate ablations of \sys: Wait-for-Sink, Sink-only pre-copy (P-sink), \sys without Sink synchronization,
+\sys without replay, a changed-block Sink delta, and \sys without staging (Unstaged).
 
-\vspace{-0.05in}
-\noindentparagraph{\textbf{Workloads.}}
-We use two inputs that span the model's Sink refresh rate: a low-refresh clip (3.6 refreshes per 100 calls) and a
-high-refresh clip (128.2), unless stated otherwise.
-A migration is triggered at call 30.
-For repeated mobility, the session moves A$\rightarrow$B$\rightarrow$C$\rightarrow$D (moves at 45 and 90\,s) or
-returns A$\rightarrow$B$\rightarrow$A after 10--240 calls.
-For output fidelity, we use ten clips from the StreamDiffusionV2 examples and LOVEU-TGVE~\cite{loveu} with 15 cutover
-points each.
-We additionally port Continuity Replay to LongLive~\cite{longlive} to evaluate generality.
+\noindentparagraph{Parameters.}
+A migration is triggered at call 30. \sys pre-copies the Sink until its dirty part is below 16\,MiB, synchronizes the
+Sink at the switch, and replays the last 12 calls at the destination; on LongLive it replays 96 calls. Llumnix-style
+migration stops pre-copying below 256\,MiB of dirty state or after 10 rounds. For repeated mobility, the session moves
+A$\rightarrow$B$\rightarrow$C$\rightarrow$D at 45 and 90\,s, or returns A$\rightarrow$B$\rightarrow$A after 10--240
+calls. We repeat each single-migration configuration five times and each sensitivity and mobility configuration three
+times; output fidelity uses 15 cutover calls per clip. The simulator runs 64 sessions over 9,000\,s (the first
+1,800\,s discarded) with 10\,Gbps links and 6--60 moves per hour, three seeds per configuration.
 
-\vspace{-0.05in}
-\noindentparagraph{\textbf{Metrics.}} Our evaluation focuses on the following metrics:
-\begin{itemize}[leftmargin=*, itemsep=0.1ex, topsep=0.5ex]
-    \item \textit{Maximum output gap:} Longest interval without a delivered output after the migration trigger.
-    \item \textit{Cumulative stall:} Sum, over intervals longer than 1.5$\times$ the call interval, of their excess over one call interval.
-    \item \textit{Time to first local output (TTFO-local):} Time from the trigger until the user's current host delivers output.
-    \item \textit{Readiness:} Time until the destination holds a verified state and can serve.
-    \item \textit{Locality delay:} Time a session is served remotely or interrupted after its moves.
-    \item \textit{Transferred data:} State and input bytes sent between hosts.
-    \item \textit{Output fidelity:} PSNR of the output against the uninterrupted session's output.
-    \item \textit{Per-call slowdown:} Additional time per generation call caused by \sys.
-\end{itemize}
+\noindentparagraph{Metrics.}
+We focus on \sys's service continuity, migration cost, and overhead. To evaluate continuity, we measure the
+\emph{maximum output gap}, the longest interval without a delivered output after the migration trigger, and the
+\emph{cumulative stall}, the total excess over one call interval of every interval longer than 1.5 call intervals.
+To evaluate how soon the user is served locally, we measure the \emph{time to first local output} (TTFO-local), the
+destination's \emph{readiness}, and, under repeated mobility, the \emph{locality delay}, the time a session is served
+remotely or interrupted after its moves. To evaluate migration cost, we measure \emph{transferred data} between hosts.
+To evaluate output quality, we measure \emph{output fidelity} as PSNR against the uninterrupted session's output. We
+also measure \sys's \emph{per-call slowdown} and, in simulation, \emph{stalled seconds per session-hour} and the share
+of \emph{local service}.
 
 \vspace{-0.07in}
 \subsection{\sys Keeps Streaming Output Continuous During Migration}
