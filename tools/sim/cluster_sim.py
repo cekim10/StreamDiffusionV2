@@ -36,6 +36,7 @@ import argparse
 import heapq
 import itertools
 import json
+import os
 import math
 import random
 import statistics as st
@@ -44,7 +45,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "results/evaluation/osdi/fig_cluster"
-CAL = OUT / "calibration.json"
+# OTTER_CAL selects another calibration file (2026-11-04: long-age check, E9 D5 / user G4); default = the frozen one
+CAL = Path(os.environ.get("OTTER_CAL", str(OUT / "calibration.json")))
 METHODS = ("full", "pfull", "rfull", "base", "otter", "naive")
 STALL_X = (1.0, 2.0, 5.0, 10.0)
 
