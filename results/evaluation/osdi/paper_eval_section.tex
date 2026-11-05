@@ -123,7 +123,7 @@ To evaluate output quality, we measure \emph{output fidelity} as PSNR against th
 also measure \sys's \emph{per-call slowdown} and, in simulation, \emph{stalled seconds per session-hour} and the share
 of \emph{local service}.
 
-\subsection{End-to-end migration}
+\subsection{\sys Keeps Streaming Output Continuous During Migration}
 \label{subsec:eval_e2e}
 
 \noindent In this section, we evaluate a single migration from host A to host B at call 30 over a 1\,Gbps link, and
@@ -185,7 +185,7 @@ SLLM, which sends only input frames and recomputes the state.
 \end{figure*}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{Design breakdown of Continuity Replay}
+\subsection{Continuity Replay Hides State Transfer Behind Ongoing Generation}
 \label{subsec:eval_replay}
 
 \noindent In this section, we add Continuity Replay's parts one at a time, starting from waiting for the whole Sink,
@@ -232,7 +232,7 @@ destination's Sink matched the source's block digests (0 of 360 blocks differed)
 \end{figure*}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{Returning to a previous host}
+\subsection{Versioned Sink Reconstruction Cuts the Cost of Returning to a Host}
 \label{subsec:eval_versioned}
 
 \noindent In this section, we evaluate a session that moves A$\rightarrow$B$\rightarrow$A and returns to A 10--240
@@ -252,7 +252,7 @@ Figure~\ref{fig:fig10b_readiness} shows that the destination is ready in 8.8--9.
 full Sink transfer (2.5--2.8$\times$), at every version age.
 This is because readiness is then bound by replaying the recent calls, not by the Sink transfer.
 
-\subsection{Moving along a chain of hosts}
+\subsection{Continuity Wavefront Readies the Next Host Before the Session Arrives}
 \label{subsec:eval_wavefront}
 
 \noindent In this section, we evaluate a session that moves A$\rightarrow$B$\rightarrow$C$\rightarrow$D, with moves
@@ -282,7 +282,7 @@ Staging costs 1.4--3.3\,s on the first move, which the later moves repay.
 \end{figure}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{Generality}
+\subsection{Continuity Replay Generalizes to Another Streaming Model}
 \label{subsec:eval_longlive}
 
 \noindent In this section, we port Continuity Replay to LongLive~\cite{longlive}, whose session holds 5.06\,GiB of
@@ -312,7 +312,7 @@ This port exercises Continuity Replay only.
 \end{figure}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{Cluster-scale analysis}
+\subsection{\sys Reduces Stalls at Cluster Scale}
 \label{subsec:eval_cluster}
 
 % PENDING the Fig. 10 long-age check (E9 D5): numbers final only after it
@@ -335,7 +335,7 @@ stay remote while the destination regenerates their state.
 never reduces the delay per move by 10\% or more.
 Staging helps when the next host is among the few hosts that can be staged, as in the four-host chain above.
 
-\subsection{Overhead analysis}
+\subsection{\sys Adds Little Runtime Overhead and Trades Bandwidth for Continuity}
 \label{subsec:eval_overhead}
 
 \noindent In this section, we measure \sys's runtime overhead and the bandwidth and remote serving it uses.
