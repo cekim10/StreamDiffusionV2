@@ -3,34 +3,11 @@
 %                longlive/m1_results.md
 %   fidelity:    fig13/fig13_table.tex (tools/eval/fig13_report.py), unchanged
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{table}[t]
-  \centering
-  \small
-  \caption{\textbf{Correctness checks.} Applied in every run; state checks compare block digests of the
-    destination's state with the source's at cutover.}
-  \label{tab:correctness}
-  \begin{tabular}{@{}p{0.22\columnwidth}p{0.12\columnwidth}p{0.58\columnwidth}@{}}
-    \toprule
-    Experiment & Valid runs & Verified \\
-    \midrule
-    Single migration & 40/40 &
-      Baselines: whole state exact (30/30), output bit-exact.
-      \sys: Sink exact at cutover (10/10, 0/360 blocks differ); recent state is rebuilt by replay, so output is
-      not bit-exact (Table~\ref{tab:fidelity}). \\
-    Version age & 48/48 &
-      Every Versioned delta verified (24/24, 0/360 blocks differ, 0 fallbacks); destination output identical to a
-      full Sink transfer (24/24). \\
-    Repeated mobility & 60/60 &
-      \sys: Sink exact or verified fallback at every cutover (0/360 blocks differ); no lost or duplicated calls. \\
-    Fidelity sweep & 190/190 &
-      Full control bit-exact (20/20); repeated \sys runs identical (10/10). \\
-    LongLive & 8/8 &
-      Sink and window fingerprints equal; output bit-exact on 100/100 calls. \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Correctness table removed (user 2026-11-04); its content as text (OTTER runs only; every number from the reports above):
+% In every \sys run, the destination's Sink matched the source's block digests at cutover (0 of 360 blocks differed),
+% every Versioned delta verified with no fallback, and no call was lost or duplicated. On StreamDiffusionV2, \sys's
+% output is not bit-exact, because recent state is rebuilt by replay (Table~\ref{tab:fidelity}); on LongLive, it is
+% bit-exact on every call.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % one column wide (tabular* at \columnwidth, \extracolsep{\fill}); font \small, never reduced
