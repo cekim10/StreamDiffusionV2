@@ -215,6 +215,7 @@ def fig3(out: Path):
     fig, ax = canvas(WN, XM, 14.4, 68.4)
     REUSE, ROT, SENT, FULL = LGRAY, BLUE, OR, "#B3B3B3"   # = Fig. 5a: unchanged, shifted, refresh-required
     fl = FS_S + 1
+    FA = FS + 1          # in-figure annotations (v2, e5 ..., rotate locally), larger per user
     w, sp, h, x00 = 6.0, 7.2, 4.0, 13.0
     ex = [x00 + i * sp for i in range(6)]
     cxs = [x + w / 2 for x in ex]
@@ -262,14 +263,14 @@ def fig3(out: Path):
         arrow(ax, (cxs[i], y_a), (cxs[i], y_b), color=BLUE if rot else GRAY_D, lw=1.6 if rot else 1.1, ms=10)
         if rot:
             lb = r"$\delta_1\delta_2$" if e[1] == 2 else r"$\delta_1$"
-            ax.text(cxs[i] + 0.5, (y_a + y_b) / 2, lb, ha="left", va="center", fontsize=FS_S, color=BLUE, zorder=6)
-    ax.text(xr + 3.8, (y_a + y_b) / 2, "rotate locally", style="italic", color=MUTED, **{**tl, "fontsize": fl})
+            ax.text(cxs[i] + 0.5, (y_a + y_b) / 2, lb, ha="left", va="center", fontsize=FS, color=BLUE, zorder=6)
+    ax.text(xr + 3.8, (y_a + y_b) / 2, "rotate locally", style="italic", color=MUTED, **{**tl, "fontsize": FA})
 
     # messages: advertise v2 up, delta down
     arrow(ax, (cxs[0], y_reb + h + 0.2), (cxs[0], y_own - h - 0.4), color=INK, lw=1.3, ms=10)
-    ax.text(cxs[0] + 1.2, 53.6, "$v_2$", ha="left", va="center", fontsize=fl, style="italic", zorder=6)
+    ax.text(cxs[0] + 1.2, 53.6, "$v_2$", ha="left", va="center", fontsize=FA, style="italic", zorder=6)
     arrow(ax, (cxs[4], y_own - h - 0.4), (cxs[4], y_reb + h), color=OR, lw=2.0, ms=14, z=6)
-    ax.text(cxs[4] + 1.6, 53.6, r"$e_5$, $\delta$ list, digest", ha="left", va="center", fontsize=fl,
+    ax.text(cxs[4] + 1.6, 53.6, r"$e_5$, $\delta$ list, digest", ha="left", va="center", fontsize=FA,
             style="italic", color=OR_TX, zorder=6)
 
     # numbered steps
@@ -306,6 +307,7 @@ def fig4(out: Path):
     fig, ax = canvas(WT, 300, 0.0, 70.0)
     nw, nh = 28.0, 12.0
     fb, fsm = FS + 2, FS_S + 2
+    FA = FS + 3          # in-figure annotations (lineage, digest), larger per user
 
     def panel(px, title):
         x0, x1 = px + 1.2, px + 98.8
@@ -381,7 +383,7 @@ def fig4(out: Path):
     node(px, "E3", "", e3_t2)
     node(px, "E4", "canceled", e4_part)
     move(px, "E2", "E1", INK, lw=1.4, ls=(0, (1, 1.5)))
-    ax.text(px + 27.0, 49.6, "lineage", ha="right", va="center", fontsize=fsm, style="italic", zorder=6)
+    ax.text(px + 27.0, 49.6, "lineage", ha="right", va="center", fontsize=FA, style="italic", zorder=6)
     for a, b in (("E1", "E3"), ("E1", "E4"), ("E4", "E3")):
         move(px, a, b, GRAY_D, lw=1.5, ls=(0, (3, 2)))
 
@@ -395,8 +397,9 @@ def fig4(out: Path):
     move(px, "E4", "E3", GRAY_D)
     move(px, "E2", "E3", OR, lw=2.0)
     cx, cy = POS["E3"]
-    ax.text(px + cx - 11.6, cy - nh / 2 - 4.4, "✓", ha="center", va="center", fontsize=fsm + 1, zorder=7, **CHECK)
-    ax.text(px + cx - 9.2, cy - nh / 2 - 4.4, "digest $=$ E2", ha="left", va="center", fontsize=fsm, zorder=7)
+    # below the E4 -> E3 arrow, inside the panel edge (FS + 2: FA would run past the panel)
+    ax.text(px + cx - 14.0, cy - nh / 2 - 9.0, "✓", ha="center", va="center", fontsize=FS + 2, zorder=7, **CHECK)
+    ax.text(px + cx - 11.6, cy - nh / 2 - 9.0, "digest $=$ E2", ha="left", va="center", fontsize=FS + 2, zorder=7)
 
     # legend: one framed row (Espresso)
     items = [("cell", LGRAY, "$v_1$ (old owner)"), ("cell", GRAY, "$v_2$ (canceled target)"),
