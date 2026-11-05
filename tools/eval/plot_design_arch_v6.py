@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Design overview, architecture view (draft v6, 2026-11-05): v5 with a more polished look (per user: "more fancy").
 Same layout, content and font sizes as v5; added: per-mechanism color families (Replay orange, Versioned purple,
-Wavefront green), header bands with section pills, accented step cards, soft drop shadows, gradient fills, a device
-icon, stacked cards for the (plural) past-owner sites.
+Wavefront green), header bands with section pills, accented step cards, soft drop shadows, gradient fills, stacked cards for the (plural) past-owner sites.
 
 v5 notes follow.
 
@@ -15,7 +14,7 @@ Style follows the OSDI architecture figures the user supplied (M3U, RamRyder, Di
 Content (OTTER):
   Session layer   : the streaming session on its owner, with its state by temporal semantics
                     (Sink = durable, recent K/V + VAE cache = ephemeral, input = immediate); the user device.
-  OTTER runtime   : 4.2 Continuity Replay | 4.3 Versioned Sink Reconstruction | 4.4 Continuity Wavefront.
+  OTTER runtime   : 3.2 Continuity Replay | 3.3 Versioned Sink Reconstruction | 3.4 Continuity Wavefront.
   Edge sites      : source (owner) -> destination <- previous owner / staged site.
   Steps: 1 track, 2 retain / stage, 3 migration request, 4 transfer (Sink delta + log; retained Sink),
          5 final sync, verify, resume.
@@ -122,12 +121,6 @@ def card(ax, x0, y0, x1, y1, text, edge, dashed=False):
             zorder=6, linespacing=1.05, style="italic" if dashed else "normal", color=INK)
 
 
-def phone(ax, x, y, w=2.4, h=5.0):
-    rbox(ax, x, y, x + w, y + h, fc="#3B3B3B", ec=INK, lw=0.9, r=0.45, z=4)
-    rbox(ax, x + 0.3, y + 0.75, x + w - 0.3, y + h - 0.55, fc="#BFD7F2", ec="none", lw=0, r=0.15, z=4.5)
-    ax.add_patch(plt.Circle((x + w / 2, y + 0.38), 0.18, fc="white", ec="none", zorder=5))
-
-
 def fig(out: Path):
     f = plt.figure(figsize=(W_IN, W_IN * YM / XM))
     ax = f.add_axes([0, 0, 1, 1])
@@ -160,8 +153,7 @@ def fig(out: Path):
             color=MUTED, zorder=4)
     # user device
     gbox(ax, 56.0, 52.0, 68.4, 60.0, "#FFFFFF", "#F2F2F2", lw=1.1, r=0.7, z=2)
-    phone(ax, 57.2, 53.5)
-    ax.text(64.3, 56.0, "User\ndevice", ha="center", va="center", fontsize=FS, zorder=4, linespacing=1.05)
+    ax.text(62.2, 56.0, "User\ndevice", ha="center", va="center", fontsize=FS, zorder=4, linespacing=1.05)
     arrow(ax, (56.0, 57.6), (48.6, 57.6), color=DATA, lw=1.5, ms=9)
     arrow(ax, (48.6, 54.2), (56.0, 54.2), color=DATA, lw=1.5, ms=9)
     ax.text(52.3, 58.6, "input", ha="center", va="center", fontsize=FS_S, color=DATA)
@@ -170,11 +162,11 @@ def fig(out: Path):
     # ---------------- OTTER runtime ----------------
     gbox(ax, 5.5, 13.6, 69.5, 48.6, "#F4F4F4", "#E1E1E1", ec=RT_EC, lw=1.2, r=0.9, z=1)
     specs = (
-        ("§4.2", "Continuity\nReplay", "recent state", [RECENT, VAE],
+        ("§3.2", "Continuity\nReplay", "recent state", [RECENT, VAE],
          ["Sink pre-copy", "log inputs +\ncache events", "shadow replay\nat destination", "final sync +\nverify"]),
-        ("§4.3", "Versioned Sink\nReconstruction", "Sink on return", [SINK],
+        ("§3.3", "Versioned Sink\nReconstruction", "Sink on return", [SINK],
          ["find retained\nversion", "refreshed K/V\n+ RoPE shifts", "rebuild +\ndigest check", "full copy\non mismatch"]),
-        ("§4.4", "Continuity\nWavefront", "retained Sinks", [SINK, "white"],
+        ("§3.4", "Continuity\nWavefront", "retained Sinks", [SINK, "white"],
          ["owner lineage", "retain at past\nowners", "stage at\neligible sites", "supply at\nhandoff"]),
     )
     ys = (31.6, 26.0, 20.4, 14.8)   # step card bottoms
@@ -195,7 +187,7 @@ def fig(out: Path):
         xs = squares(ax, cx - 7.6, 37.7, sq, s=1.5)
         ax.text(xs + 0.6, 38.45, what, ha="left", va="center", fontsize=FS_S, style="italic", color=MUTED, zorder=6)
         for i, (y, t) in enumerate(zip(ys, steps)):
-            fallback = sec == "§4.3" and i == 3
+            fallback = sec == "§3.3" and i == 3
             card(ax, x0 + 1.2, y, x1 - 1.2, y + bh, t, c_edge, dashed=fallback)
             if i:
                 arrow(ax, (cx, ys[i - 1]), (cx, y + bh), color=c_edge, lw=1.4, ms=8,
