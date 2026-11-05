@@ -85,8 +85,8 @@ We have the following key results.
 \sys is designed for edge deployments in which users move between sites and their generation sessions follow them.
 Such a deployment, with real users moving across many edge sites, is impractical in an academic environment.
 As such, we emulate edge sites with four GPU servers, each with one NVIDIA L40S (48\,GB) and serving one streaming
-session, connected by a LAN with a 0.26\,ms median round-trip time: (1) we treat each server as one edge site and move a
-session between sites by triggering a migration at a chosen generation call or wall-clock time; (2) we emulate the
+session, connected by a LAN with a 0.26\,ms median round-trip time: (1) we treat each server as one edge site, and we move a
+session between sites at controlled points in its generation; (2) we emulate the
 inter-site link with a sender-side pacer at 0.25--2.5\,Gbps (1\,Gbps by default) and also run on the unshaped link.
 To study \sys beyond four sites, we use a trace-driven simulator of 16 edge sites on a $4\times4$ grid with 8 GPUs
 each (128 GPUs), in which sessions follow a random walk with exponentially distributed dwell times. The simulator
