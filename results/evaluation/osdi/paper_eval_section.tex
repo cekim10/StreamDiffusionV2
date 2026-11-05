@@ -2,7 +2,7 @@
 %   fig7/fig7_report.md, fig7/remote_serving_note.md, fig8/fig8_report.md, fig9/fig9_report.md, fig10/fig10_report.md,
 %   fig11/fig11_report.md, fig12/fig12_results.md, fig13/fig13_results.md + fig13_table.tex, fig14/fig14_results.json,
 %   longlive/m1_results.md, fig_cluster/cluster_results.md (+ figc_m_* plot of sweep_primary.json).
-% PENDING: the cluster numbers are final only after the Fig. 10 long-age check (E9 D5); citation keys are placeholders.
+% Cluster numbers: long-age check done (fig_cluster/longage_check.md): verdicts and main-figure numbers unchanged. Citation keys are placeholders.
 
 \section{Evaluation}
 \label{sec:eval}
@@ -31,7 +31,6 @@ We have the following key results.
   more transferred data than recomputation, and below 1\,Gbps a later first local output, for continuity
   (\S\ref{subsec:eval_overhead}).
 
-% PENDING the Fig. 10 long-age check: cluster numbers
 \item In a simulated 128-GPU edge cluster, \sys stalls 4.0--5.4$\times$ less than the best baseline while serving
   82--94\% of the time from the user's local site (\S\ref{subsec:eval_cluster}).
 
@@ -123,7 +122,7 @@ To evaluate output quality, we measure \emph{output fidelity} as PSNR against th
 also measure \sys's \emph{per-call slowdown} and, in simulation, \emph{stalled seconds per session-hour} and the share
 of \emph{local service}.
 
-\subsection{\sys Keeps Streaming Output Continuous During Migration}
+\subsection{Main Results: \sys Keeps Streaming Output Continuous During Migration}
 \label{subsec:eval_e2e}
 
 \noindent In this section, we evaluate a single migration from host A to host B at call 30 over a 1\,Gbps link, and
@@ -315,7 +314,6 @@ This port exercises Continuity Replay only.
 \subsection{\sys Reduces Stalls at Cluster Scale}
 \label{subsec:eval_cluster}
 
-% PENDING the Fig. 10 long-age check (E9 D5): numbers final only after it
 \noindent In this section, we simulate 64 sessions on 128 GPUs in 16 edge sites with 10\,Gbps links, with users moving
 6--60 times per hour.
 
@@ -334,6 +332,9 @@ stay remote while the destination regenerates their state.
 \sys without staging matches \sys in this simulation, and across 36 link, dwell, and memory configurations staging
 never reduces the delay per move by 10\% or more.
 Staging helps when the next host is among the few hosts that can be staged, as in the four-host chain above.
+The simulator's Sink delta model is checked against testbed migrations to hosts whose retained version is 1,000 and
+3,000 calls old: the measured deltas (117--127\,MB low-refresh, 558--597\,MB high-refresh) stop growing with age, and
+using them changes none of the results above.
 
 \subsection{\sys Adds Little Runtime Overhead and Trades Bandwidth for Continuity}
 \label{subsec:eval_overhead}
