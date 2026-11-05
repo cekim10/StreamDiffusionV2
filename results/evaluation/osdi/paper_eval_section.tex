@@ -1,0 +1,293 @@
+% OTTER evaluation section, DRAFT 1 (2026-11-04). Every number is from a frozen report:
+%   fig7/fig7_report.md, fig7/remote_serving_note.md, fig8/fig8_report.md, fig9/fig9_report.md, fig10/fig10_report.md,
+%   fig11/fig11_report.md, fig12/fig12_results.md, fig13/fig13_results.md + fig13_table.tex, fig14/fig14_results.json,
+%   longlive/m1_results.md, fig_cluster/cluster_results.md (+ figc_m_* plot of sweep_primary.json).
+% PENDING: the cluster numbers are final only after the Fig. 10 long-age check (E9 D5); citation keys are placeholders.
+
+\section{Evaluation}
+
+This section presents experimental results for \sys.
+We find that: (i) in a single migration over a 1~Gbps link, \sys keeps the maximum output gap at 1.6\,s,
+11.3--11.5$\times$ shorter than the best baseline;
+(ii) this gap stays at 1.6--1.8\,s from 0.25\,Gbps to an unshaped link;
+(iii) under repeated mobility, Versioned Sink Reconstruction sends 0.7--25\% of the Sink when the session returns
+to a host, and Continuity Wavefront readies the final host 2.3--2.4$\times$ sooner;
+(iv) state tracking adds under 0.1\% per call, and transfer and staging at most 2\%;
+and (v) in a simulated 128-GPU cluster, \sys stalls 4.0--5.4$\times$ less than the best baseline.
+These gains cost more transferred data than recomputation and, below 1\,Gbps, a later first local output.
+We further break down \sys by technique to understand these benefits.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[t]{0.245\textwidth}\includegraphics[width=\linewidth]{figures/eval/fig7b_gap.pdf}\caption{Maximum output interruption.}\label{fig:e2e-gap}\end{subfigure}\hfill
+  \begin{subfigure}[t]{0.245\textwidth}\includegraphics[width=\linewidth]{figures/eval/fig8a_dog.pdf}\caption{Cumulative stalls.}\label{fig:e2e-stall}\end{subfigure}\hfill
+  \begin{subfigure}[t]{0.245\textwidth}\includegraphics[width=\linewidth]{figures/eval/fig7a_ttfo.pdf}\caption{Time to first local output.}\label{fig:e2e-ttfo}\end{subfigure}\hfill
+  \begin{subfigure}[t]{0.245\textwidth}\includegraphics[width=\linewidth]{figures/eval/fig7c_bytes.pdf}\caption{Transferred data.}\label{fig:e2e-bytes}\end{subfigure}
+  \vspace{-0.1in}
+  \caption{\textbf{Single-migration performance over a 1~Gbps link.}
+    \sys cuts the maximum output gap by 11.3--11.5$\times$ (a) and cumulative stall by 9.0$\times$ (b) over the best baseline,
+    and reaches first local output 1.5--1.6$\times$ sooner (c), at the cost of 21--35$\times$ more data than SLLM (d).
+    Medians of five runs (IQR whiskers); solid/hatched = low-/high-refresh; (b) low-refresh.}
+  \label{fig:e2e}
+\end{figure*}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[b]{0.32\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig12a_gap_bfly.pdf}\caption{Maximum output gap.}\label{fig:fig12a_gap_bfly}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.32\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig12a_ttfo_bfly.pdf}\caption{Time to first local output.}\label{fig:fig12a_ttfo_bfly}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.32\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig14a_dots.pdf}\caption{Per-call slowdown.}\label{fig:fig14a_dots}\end{subfigure}
+  \vspace{-0.1in}
+  \caption{\textbf{Bandwidth sensitivity and runtime overhead.}
+    (a, b) High-refresh workload. \sys keeps its gap at 1.6--1.8\,s at every bandwidth, 4.5--12$\times$ smaller than the
+    best baseline; its time to first local output falls with bandwidth, and below 1\,Gbps SLLM reaches it sooner.
+    (c) State tracking adds under 0.1\% per call, within native run-to-run variation (gray band); transfer and staging
+    add at most 2\%. Each operation is measured against its own baseline; dots are individual runs (5, 5, 3).}
+  \label{fig:sensitivity}
+\end{figure*}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.48\columnwidth}\includegraphics[width=\textwidth]{figures/eval/figc_m_stalled.pdf}\caption{Stalled time.}\label{fig:figc_m_stalled}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.48\columnwidth}\includegraphics[width=\textwidth]{figures/eval/figc_m_local.pdf}\caption{Local service.}\label{fig:figc_m_local}\end{subfigure}
+  \vspace{-0.1in}
+  \caption{\textbf{Cluster-scale simulation} (64 sessions, 10\,Gbps; calibrated from testbed measurements).
+    \sys stalls 4.0--5.4$\times$ less than the best baseline while keeping 82--94\% local service;
+    SLLM stalls most and serves mostly remotely.}
+  \label{fig:cluster}
+\end{figure}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\noindentparagraph{\textbf{Testbed.}}
+We run experiments on four servers, each with one NVIDIA L40S GPU (48\,GB), connected by a LAN with a 0.26\,ms median
+round-trip time, and on a trace-driven cluster simulator.
+Each GPU serves one StreamDiffusionV2~\cite{sdv2} video-to-video session; one call produces four frames in about
+0.53\,s, and a session holds 6.02\,GiB of state, of which the Sink is 1.61\,GiB.
+On the testbed, we emulate the inter-host link with a sender-side pacer at 0.25--2.5\,Gbps and also run on the
+unshaped link; the default is 1\,Gbps.
+The simulator models 128 GPUs in 16 edge sites of 8 GPUs, with sessions that follow a random walk over the sites;
+it is calibrated with testbed measurements and reproduces our repeated-mobility runs (76 of 76 checks).
+
+\noindentparagraph{\textbf{Comparisons.}}
+We compare \sys with three migration approaches:
+(i) Full, which stops the session and copies its whole state;
+(ii) a Llumnix-style live migration (Llumnix)~\cite{llumnix}, which pre-copies the whole state while the source keeps
+serving and stops for the final dirty state; and
+(iii) a ServerlessLLM-style migration (SLLM)~\cite{serverlessllm}, which sends the session's input frames and
+regenerates its state at the destination while the source keeps serving.
+To isolate \sys's techniques, we also evaluate ablations: Wait-for-Sink, Sink-only pre-copy (P-sink),
+\sys without Sink synchronization, \sys without replay, a changed-block Sink delta, and \sys without staging (Unstaged).
+
+\vspace{-0.05in}
+\noindentparagraph{\textbf{Workloads.}}
+We use two inputs that span the model's Sink refresh rate: a low-refresh clip (3.6 refreshes per 100 calls) and a
+high-refresh clip (128.2), unless stated otherwise.
+A migration is triggered at call 30.
+For repeated mobility, the session moves A$\rightarrow$B$\rightarrow$C$\rightarrow$D (moves at 45 and 90\,s) or
+returns A$\rightarrow$B$\rightarrow$A after 10--240 calls.
+For output fidelity, we use ten clips from the StreamDiffusionV2 examples and LOVEU-TGVE~\cite{loveu} with 15 cutover
+points each.
+We additionally port Continuity Replay to LongLive~\cite{longlive} to evaluate generality.
+
+\vspace{-0.05in}
+\noindentparagraph{\textbf{Metrics.}} Our evaluation focuses on the following metrics:
+\begin{itemize}[leftmargin=*, itemsep=0.1ex, topsep=0.5ex]
+    \item \textit{Maximum output gap:} Longest interval without a delivered output after the migration trigger.
+    \item \textit{Cumulative stall:} Sum, over intervals longer than 1.5$\times$ the call interval, of their excess over one call interval.
+    \item \textit{Time to first local output (TTFO-local):} Time from the trigger until the user's current host delivers output.
+    \item \textit{Readiness:} Time until the destination holds a verified state and can serve.
+    \item \textit{Locality delay:} Time a session is served remotely or interrupted after its moves.
+    \item \textit{Transferred data:} State and input bytes sent between hosts.
+    \item \textit{Output fidelity:} PSNR of the output against the uninterrupted session's output.
+    \item \textit{Per-call slowdown:} Additional time per generation call caused by \sys.
+\end{itemize}
+
+\vspace{-0.07in}
+\subsection{\sys Keeps Streaming Output Continuous During Migration}
+
+We first evaluate \sys in a single migration, across link bandwidths, and in a simulated cluster.
+
+\vspace{-0.07in}
+\noindentparagraph{\textbf{Single Migration.}}
+Figure~\ref{fig:e2e-gap} shows that \sys's maximum output gap is 1.63\,s (low-refresh) and 1.59\,s (high-refresh),
+compared with 18.5 and 18.3\,s for SLLM, the best baseline: an 11.3--11.5$\times$ reduction.
+Full and Llumnix interrupt the stream for 51--54\,s while the state is copied.
+\sys's largest gap is either the source's first call after the trigger, which holds the Sink snapshot
+(1.56--1.65\,s), or the cutover itself (1.51--1.57\,s median); the two are within 0.2\,s.
+Over the whole run (Figure~\ref{fig:e2e-stall}), \sys stalls for 1.99\,s in total, against 17.9\,s for SLLM,
+53.6\,s for Full, and 61.8\,s over ten stalls for Llumnix.
+\sys also reaches first local output sooner (Figure~\ref{fig:e2e-ttfo}): 23.3--24.6\,s against 36.8--36.9\,s for SLLM.
+Until then the source keeps serving; it does so at 91\% of its normal rate while it sends state.
+The cost is data (Figure~\ref{fig:e2e-bytes}): \sys sends 1.76--2.24\,GB, 65--73\% less than Full but
+21--35$\times$ more than SLLM, which sends only input frames.
+
+\vspace{-0.07in}
+\noindentparagraph{\textbf{Bandwidth Sensitivity.}}
+Figure~\ref{fig:fig12a_gap_bfly} varies the link from 0.25\,Gbps to unshaped.
+Full's and Llumnix's gaps grow as bandwidth shrinks, to 192--210\,s at 0.25\,Gbps, while \sys's stays at
+1.63--1.79\,s, 4.5--11.8$\times$ below the best baseline at every bandwidth.
+Time to first local output (Figure~\ref{fig:fig12a_ttfo_bfly}) does depend on bandwidth: \sys reaches it in 11.6\,s on
+the unshaped link and 26.0\,s at 1\,Gbps, before SLLM (38\,s), but in 49.0\,s at 0.5\,Gbps and 154.9\,s at 0.25\,Gbps,
+after SLLM, whose input-only transfer is nearly bandwidth-independent.
+Low bandwidth thus delays when the destination takes over, not the continuity of the output.
+
+\vspace{-0.07in}
+\noindentparagraph{\textbf{Cluster Scale.}}
+Figure~\ref{fig:cluster} simulates 64 sessions on 128 GPUs with 10\,Gbps links and 6--60 moves per hour.
+\sys accumulates 8.7--71.8 stalled seconds per session-hour, 4.0--5.4$\times$ less than the best baseline (Llumnix,
+39.5--286.4\,s), while serving 82--94\% of the time from the user's local site.
+SLLM stalls the most (341--441\,s) and serves locally only 8--37\% of the time, because its sessions stay remote while
+the destination regenerates state.
+\sys without staging behaves the same as \sys here: with random moves, staging brings no gain, and across 36 link,
+dwell, and memory configurations it never reduces delay per move by 10\% or more.
+
+\subsection{Continuity Replay Hides State Transfer Behind Ongoing Generation}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[b]{0.32\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig9a_dog.pdf}\caption{Pre-copy convergence.}\label{fig:fig9a_dog}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.32\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig9b_gap.pdf}\caption{Maximum output gap.}\label{fig:fig9b_gap}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.32\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig13a_time.pdf}\caption{Output fidelity after cutover.}\label{fig:fig13a_time}\end{subfigure}
+  \vspace{-0.1in}
+  \caption{\textbf{Effectiveness of Continuity Replay.}
+  (a) Whole-state pre-copy does not converge, while Sink-only pre-copy falls below the threshold in three rounds.
+  (b) With live replay and Sink synchronization, \sys has the shortest output gap (1.6\,s).
+  (c) Replay keeps the first post-cutover output close to the uninterrupted stream (31 vs.\ 16\,dB without replay); both converge to about 42\,dB.}
+  \label{fig:fig9}
+\end{figure*}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+We isolate how Continuity Replay's parts contribute to the output gap and to output fidelity.
+
+\noindentparagraph{\textbf{Pre-Copy Convergence.}}
+Figure~\ref{fig:fig9a_dog} shows why \sys pre-copies only the Sink.
+Whole-state pre-copy stops shrinking after the second round at 85--88\% of the state and ends with a 4.5--5.7\,GB
+stop-and-copy.
+Sink-only pre-copy converges in three rounds (low-refresh) or four (high-refresh) to a 3--28\,MB final copy.
+
+\noindentparagraph{\textbf{Design Breakdown.}}
+Figure~\ref{fig:fig9b_gap} adds \sys's parts one at a time.
+Waiting for the whole Sink interrupts the stream for 15.0\,s.
+Sink-only pre-copy shortens the gap to 2.23--2.52\,s but starts the destination's recent state from zero.
+\sys without Sink synchronization must resend the dirty Sink at the switch (730--936\,MB), a 8.83--10.40\,s gap;
+with synchronization, the switch sends 3.2\,MB and the gap is 1.59--1.63\,s.
+Waiting for the Sink reaches first local output sooner (15.0\,s vs.\ 23.3--24.6\,s), at a 9$\times$ longer gap.
+
+\noindentparagraph{\textbf{Output Fidelity.}}
+Figure~\ref{fig:fig13a_time} compares the output after cutover with the uninterrupted session's.
+Replay raises the first post-cutover call from 16.0\,dB without replay to a median of 30.8\,dB.
+Over calls 25--100, \sys's median is 43.2\,dB, and 62\% of the 150 cutover conditions stay above 40\,dB
+(Table~\ref{tab:fidelity}).
+Fidelity depends on the input: no swimmer condition and 13\% of the car conditions reach 40\,dB.
+\sys's output is not bit-exact on StreamDiffusionV2, because recent state is rebuilt by replay, but the Sink is exact
+at every cutover: in every \sys run of the single-migration, version-age, and repeated-mobility experiments, the
+destination's Sink matched the source's block digests (0 of 360 blocks
+differed) and no call was lost or duplicated.
+
+\subsection{Versioned Sink Reconstruction Cuts the Cost of Returning to a Host}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[b]{0.24\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig10a_bytes.pdf}\caption{Sink transfer volume.}\label{fig:fig10a_bytes}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.24\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig10b_readiness.pdf}\caption{Destination readiness.}\label{fig:fig10b_readiness}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.24\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig11a_chain.pdf}\caption{Locality delay.}\label{fig:fig11a_chain}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.24\textwidth}\includegraphics[width=\textwidth]{figures/eval/fig11b_chain.pdf}\caption{Final-destination readiness.}\label{fig:fig11b_chain}\end{subfigure}
+  \vspace{-0.1in}
+  \caption{\textbf{Repeated mobility.}
+  (a, b) Return to a previous host after 10--240 calls: Versioned Sink reconstruction sends 0.7--25\% of the Sink and
+  readies the destination 2.5--2.8$\times$ sooner than a full transfer, flat in version age.
+  (c, d) Chain A$\rightarrow$B$\rightarrow$C$\rightarrow$D: \sys spends 0.40--0.46$\times$ the best baseline's time without
+  local service, and staging readies the final host 2.3--2.4$\times$ sooner than without it.}
+  \label{fig:mobility}
+\end{figure*}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+We evaluate a session that returns to a host it left 10--240 calls earlier, where that host still holds an older
+Sink version.
+
+\noindentparagraph{\textbf{Sink Transfer Volume.}}
+Figure~\ref{fig:fig10a_bytes} shows that rebuilding the Sink from the retained version sends 12--50\,MB for the
+low-refresh input and 98--434\,MB for the high-refresh input, 0.7--25\% of the 1,728\,MB Sink.
+At ages 60--240, a changed-block delta sends 8--17$\times$ more for the low-refresh input and 1.6--2.0$\times$ more for
+the high-refresh input, because the Sink's entries shift position between versions and \sys rebuilds shifted entries
+locally.
+Every delta verified against the source's digests, with no fallback to a full transfer.
+
+\noindentparagraph{\textbf{Destination Readiness.}}
+Figure~\ref{fig:fig10b_readiness} shows that the destination is ready in 8.8--9.3\,s, against 22.4--25.5\,s with a full
+Sink transfer (2.5--2.8$\times$), and that readiness does not grow with version age.
+Its floor is the replay of recent calls, not the Sink transfer.
+
+\subsection{Continuity Wavefront Readies the Next Host Before the Session Arrives}
+
+We evaluate a session that moves A$\rightarrow$B$\rightarrow$C$\rightarrow$D.
+
+\noindentparagraph{\textbf{Locality Delay.}}
+Figure~\ref{fig:fig11a_chain} shows that \sys's sessions spend 58--66\,s served remotely or interrupted over the three
+moves, against 143--144\,s for Full, the best baseline (0.40--0.46$\times$), and 286--310\,s for SLLM and Llumnix.
+Staging lowers it from 69--76\,s without staging.
+Staging costs time on the first move (1.4--3.3\,s), which the later moves repay.
+
+\noindentparagraph{\textbf{Final-Destination Readiness.}}
+Figure~\ref{fig:fig11b_chain} shows that the final host D is ready 10.2\,s after the last move, against
+23.1--24.6\,s without staging (2.3--2.4$\times$) and 53\,s or more for the baselines.
+The gain comes from D: the session's earlier hosts forward their Sink versions to D before the session arrives, so
+the last migration sends only a delta.
+
+\subsection{Continuity Replay Generalizes to Another Streaming Model}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.48\columnwidth}\includegraphics[width=\textwidth]{figures/eval/figll_a_gap.pdf}\caption{Maximum output gap.}\label{fig:figll_a_gap}\end{subfigure}\hfill
+  \begin{subfigure}[b]{0.48\columnwidth}\includegraphics[width=\textwidth]{figures/eval/figll_b_fidelity.pdf}\caption{Post-cutover fidelity.}\label{fig:figll_b_fidelity}\end{subfigure}
+  \vspace{-0.1in}
+  \caption{\textbf{Generality to LongLive.} Continuity Replay shortens LongLive~\cite{longlive}'s maximum output gap by
+    15$\times$ over full-state transfer while producing bit-exact output, which LongLive's own KV recache does not.}
+  \label{fig:longlive}
+\end{figure}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+We port Continuity Replay to LongLive, whose session holds 5.06\,GiB of state and serves one call in 2.11\,s.
+
+\noindentparagraph{\textbf{Continuity and Fidelity.}}
+Figure~\ref{fig:figll_a_gap} shows a 3.24\,s maximum gap, about 1.5 call intervals, against 49.7\,s for Full and
+4.05\,s for LongLive's own KV recache at the cutover.
+\sys sends 0.87\,GiB instead of 5.06\,GiB.
+Its output is bit-exact on every call of every run (Figure~\ref{fig:figll_b_fidelity}), whereas recache and a 12-call
+replay diverge (26.9 and 28.7\,dB over calls 25--100).
+The cost is readiness: replaying 96 calls makes the destination ready 11.2\,s later than Full (58.7 vs.\ 47.5\,s).
+This port exercises Continuity Replay only.
+
+\subsection{\sys Trades Bandwidth for Continuity at Low Runtime Overhead}
+
+We evaluate \sys's costs in runtime, bandwidth, and remote serving.
+
+\noindentparagraph{\textbf{Runtime Overhead.}}
+Figure~\ref{fig:fig14a_dots} measures the additional time per call.
+State tracking adds 0.06--0.09\%, within the native model's run-to-run variation ($-$0.23 to $+$0.30\%).
+Sending migration state slows the source by 1.6--2.0\% and staging by 0.9--1.7\%, only while they run.
+Our prototype's serving path runs at 94.8--94.9\% of native StreamDiffusionV2's throughput; the same path without
+any \sys code is already about 5\% slower, so we attribute this gap to the prototype rather than to \sys.
+
+\noindentparagraph{\textbf{Bandwidth.}}
+\sys sends 21--35$\times$ more data than SLLM in a single migration (Figure~\ref{fig:e2e-bytes}).
+At 0.25\,Gbps, the high-refresh input needs 4.67\,GB and 155\,s before the destination is ready, against 1.82\,GB and
+76\,s for the low-refresh input; its maximum gap is unchanged (1.66 vs.\ 1.64\,s).
+\sys spends bandwidth to keep the output continuous; when bandwidth is scarce, the session stays on the source longer.
+
+\noindentparagraph{\textbf{Remote Serving.}}
+Every live approach, including \sys, keeps serving from the source until the destination takes over; only Full avoids
+it, by stopping.
+\sys serves remotely for 21.6--23.1\,s, against 18.4\,s for SLLM and 163--167\,s for Llumnix, and the remotely served
+stream needs an estimated 0.5--0.6\,Mbps.
+Our testbed does not deliver output to a client over a wide-area link, so the added per-frame latency of remote
+serving, one inter-host round trip, is not measured.
+% TODO (memory): decide whether to add one sentence on GPU memory; hosts that served the session keep its Sink version
+% for later returns (by design), and the transient peaks during a hop come from prototype deep copies (fig14 audit).
