@@ -31,7 +31,7 @@ and their sessions follow them, which is impractical to deploy with real users i
 \noindentparagraph{\textbf{Comparisons.}} Since no existing migration system supports streaming video diffusion
 sessions, we implement the migration mechanisms of state-of-the-art LLM serving systems in our serving harness and run
 them on the same testbed. Specifically, we compare \sys to (i) \emph{Full}, which stops the session and copies its
-whole state; (ii) \emph{Llumnix}-style migration~\cite{llumnix}, which pre-copies the whole state in rounds while the
+whole state; (ii) \emph{Llumnix}-style migration (Llumnix)~\cite{llumnix}, which pre-copies the whole state in rounds while the
 source keeps serving, then stops and copies the remaining dirty state (below 256\,MiB or after 10 rounds); and
 (iii) \emph{ServerlessLLM}-style migration (SLLM)~\cite{serverlessllm}, which sends the session's input frames and
 regenerates its state at the destination while the source keeps serving. We also evaluate ablations of \sys:
@@ -141,22 +141,22 @@ with three seeds; output fidelity uses 15 cutover calls per clip.
 \label{subsec:eval_e2e}
 
 \noindent We migrate a session from host A to host B at call 30 over a 1\,Gbps link and compare \sys with Full,
-Llumnix-style, and SLLM migration (Figure~\ref{fig:e2e}).
+Llumnix, and SLLM (Figure~\ref{fig:e2e}).
 
 \noindentparagraph{\sys keeps output continuous.}
 Figure~\ref{fig:fig7b_gap_log} shows that \sys's maximum output gap is 1.59--1.63\,s, 11.3--11.5$\times$ shorter than
-that of SLLM, the best baseline (18.3--18.5\,s); Full and Llumnix-style migration interrupt the stream for 51--54\,s.
+that of SLLM, the best baseline (18.3--18.5\,s); Full and Llumnix interrupt the stream for 51--54\,s.
 This is because \sys never stops the session to copy state: the source keeps generating while the Sink is
 pre-copied, the switch sends only the last 3.2\,MB of the Sink, and the destination rebuilds its recent state by
 replaying the last 12 calls.
-Full and Llumnix-style migration, in contrast, stop the session for a 6.02\,GiB or 4.5--5.7\,GB copy, and SLLM stops the
+Full and Llumnix, in contrast, stop the session for a 6.02\,GiB or 4.5--5.7\,GB copy, and SLLM stops the
 source while the destination finishes regenerating the state.
 
 \noindentparagraph{\sys avoids repeated stalls.}
 Figure~\ref{fig:fig8a_dog} shows that \sys stalls for 1.99\,s in total, 9.0$\times$ less than SLLM (17.9\,s) and
-27--31$\times$ less than Full (53.6\,s) and Llumnix-style migration (61.8\,s).
+27--31$\times$ less than Full (53.6\,s) and Llumnix (61.8\,s).
 This is because only two calls of \sys's migration stall, the source's Sink snapshot and the cutover, whereas
-Llumnix-style migration pauses the source for a snapshot in each pre-copy round (1.6--2.5\,s each) and stalls ten times.
+Llumnix pauses the source for a snapshot in each pre-copy round (1.6--2.5\,s each) and stalls ten times.
 
 \noindentparagraph{\sys serves the user locally sooner.}
 Figure~\ref{fig:fig7a_ttfo} shows that the user's new host delivers its first output after 23.3--24.6\,s with \sys,
@@ -172,7 +172,7 @@ recent state, but 21--35$\times$ more than SLLM, which sends only input frames a
 \noindentparagraph{\sys's gap does not depend on bandwidth.}
 Figure~\ref{fig:fig12a_gap_bfly} varies the link from 0.25\,Gbps to unshaped for the high-refresh input.
 \sys's gap stays at 1.63--1.79\,s, 4.5--11.8$\times$ below the best baseline at every bandwidth, while Full's and
-Llumnix-style migration's grow to 192--210\,s at 0.25\,Gbps.
+Llumnix's grow to 192--210\,s at 0.25\,Gbps.
 This is because \sys's state transfer overlaps generation: a slower link makes the source serve longer, not the output
 stop longer.
 Time to first local output does depend on bandwidth (Figure~\ref{fig:fig12a_ttfo_bfly}): \sys reaches it before SLLM
@@ -338,7 +338,7 @@ not by the Sink transfer.
 
 \noindentparagraph{\sys reduces the time without local service.}
 Figure~\ref{fig:fig11a_chain} shows that \sys's session is served remotely or interrupted for 58--66\,s over the three
-moves, 0.40--0.46$\times$ that of Full, the best baseline (143--144\,s), and far below SLLM and Llumnix-style migration
+moves, 0.40--0.46$\times$ that of Full, the best baseline (143--144\,s), and far below SLLM and Llumnix
 (286--310\,s); without staging, \sys needs 69--76\,s.
 This is because each \sys move keeps the session generating, and staged hosts need only a delta when the session
 arrives.
@@ -421,7 +421,7 @@ hour (Figure~\ref{fig:cluster}).
 
 \noindentparagraph{\sys reduces stalls at cluster scale.}
 Figure~\ref{fig:figc_m_stalled} shows that \sys accumulates 8.7--71.8 stalled seconds per session-hour,
-4.0--5.4$\times$ less than the best baseline (Llumnix-style migration, 39.5--286.4\,s).
+4.0--5.4$\times$ less than the best baseline (Llumnix, 39.5--286.4\,s).
 This is because each \sys migration interrupts the session for about one and a half seconds, whereas the baselines
 stop it for the length of a copy or of a recomputation, and stalls add up as users move more often.
 
@@ -462,7 +462,7 @@ session stays on the source longer rather than stopping.
 \noindentparagraph{Remote serving.}
 Every live approach, including \sys, keeps serving from the source until the destination takes over; only Full avoids
 it, by stopping.
-\sys serves remotely for 21.6--23.1\,s, against 18.4\,s for SLLM and 163--167\,s for Llumnix-style migration, and the
+\sys serves remotely for 21.6--23.1\,s, against 18.4\,s for SLLM and 163--167\,s for Llumnix, and the
 remotely served stream needs an estimated 0.5--0.6\,Mbps.
 Our testbed does not deliver output to a client over a wide-area link, so the added per-frame latency of remote
 serving, one inter-host round trip, is not measured.
