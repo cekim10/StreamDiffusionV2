@@ -235,8 +235,13 @@ Waiting for the Sink does reach first local output sooner (15.0 vs.\ 23.3--24.6\
 Figure~\ref{fig:fig13a_time} shows that replay raises the first post-cutover call from 16.0\,dB without replay to a
 median of 30.8\,dB; both reach about 43\,dB over calls 25--100 (43.2 vs.\ 43.4\,dB).
 This is because replay rebuilds the recent state that the next calls attend to, instead of starting it from zero.
-Across ten inputs, 62\% of the 150 cutover conditions stay above 40\,dB over calls 25--100 (Table~\ref{tab:fidelity});
-fidelity depends on the input, from no swimmer condition to all dog conditions above 40\,dB.
+Table~\ref{tab:fidelity} extends this to ten inputs: four StreamDiffusionV2 example clips (bird, dog, boxing, train)
+and six LOVEU-TGVE~\cite{loveu} clips, including the low- (L) and high-refresh (H) inputs used elsewhere.
+For each input, it lists the Sink refreshes per 100 calls, the share of the 15 cutover points whose Sink refresh
+schedule diverges from the uninterrupted run, and the median PSNR at the first call and over calls 25--100 after
+cutover.
+Overall, 62\% of the 150 cutover conditions stay above 40\,dB over calls 25--100; fidelity depends on the input, from
+no swimmer condition to all dog conditions above 40\,dB.
 \sys's output is not bit-exact on StreamDiffusionV2, because recent state is rebuilt by replay, but the Sink is exact
 at every cutover: in every \sys run of the single-migration, version-age, and repeated-mobility experiments, the
 destination's Sink matched the source's block digests (0 of 360 blocks differed), and no call was lost or duplicated.
@@ -245,11 +250,7 @@ destination's Sink matched the source's block digests (0 of 360 blocks differed)
 \begin{table}[t]
   \centering
   \small
-  \caption{\textbf{Output fidelity per input video.} PSNR of \sys's output against the uninterrupted output,
-    medians over 15 cutover points per input. Refresh: Sink refreshes per 100 calls. Diverged: cutovers whose Sink
-    refresh schedule departs from the uninterrupted run. First, 25--100: the first call and calls 25--100 after
-    cutover. L / H: the low- and high-refresh inputs of the other figures.
-    $^\dagger$StreamDiffusionV2 example clips; $^\ddagger$LOVEU-TGVE~\cite{loveu}.}
+  \caption{\textbf{Output fidelity per input video.}}
   \label{tab:fidelity}
   \setlength{\tabcolsep}{3pt}
   \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrrr@{}}
@@ -257,16 +258,16 @@ destination's Sink matched the source's block digests (0 of 360 blocks differed)
     Input & Refresh & Diverged & First & 25--100 & $\geq$40\,dB \\
           & /100 calls & (\%) & (dB) & (dB) & (\%) \\
     \midrule
-    Bird$^\dagger$ & 3.6 & 53 & 29.9 & 39.8 & 47 \\
-    Dog$^\dagger$ (L) & 3.6 & 40 & 28.7 & 48.0 & 100 \\
-    Boxing$^\dagger$ & 8.2 & 40 & 35.3 & 46.9 & 80 \\
-    Basketball$^\ddagger$ & 9.1 & 87 & 30.6 & 44.2 & 60 \\
-    Ice hockey$^\ddagger$ & 16.4 & 47 & 31.3 & 43.9 & 87 \\
-    Swimmer$^\ddagger$ & 22.7 & 67 & 27.5 & 39.3 & 0 \\
-    Train$^\dagger$ & 34.5 & 67 & 33.5 & 46.0 & 93 \\
-    Audi snow trail$^\ddagger$ & 53.6 & 100 & 27.1 & 33.8 & 13 \\
-    Circus ball act$^\ddagger$ & 89.1 & 100 & 33.6 & 41.6 & 53 \\
-    Butterfly$^\ddagger$ (H) & 128.2 & 87 & 33.2 & 43.8 & 87 \\
+    Bird & 3.6 & 53 & 29.9 & 39.8 & 47 \\
+    Dog (L) & 3.6 & 40 & 28.7 & 48.0 & 100 \\
+    Boxing & 8.2 & 40 & 35.3 & 46.9 & 80 \\
+    Basketball & 9.1 & 87 & 30.6 & 44.2 & 60 \\
+    Ice hockey & 16.4 & 47 & 31.3 & 43.9 & 87 \\
+    Swimmer & 22.7 & 67 & 27.5 & 39.3 & 0 \\
+    Train & 34.5 & 67 & 33.5 & 46.0 & 93 \\
+    Audi snow trail & 53.6 & 100 & 27.1 & 33.8 & 13 \\
+    Circus ball act & 89.1 & 100 & 33.6 & 41.6 & 53 \\
+    Butterfly (H) & 128.2 & 87 & 33.2 & 43.8 & 87 \\
     \midrule
     All & & 69 & 30.8 & 43.2 & 62 \\
     \bottomrule
