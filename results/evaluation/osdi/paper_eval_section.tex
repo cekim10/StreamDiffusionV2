@@ -454,11 +454,10 @@ Our prototype's serving path runs at 94.8--94.9\% of native StreamDiffusionV2's 
 \sys code is already about 5\% slower, so we attribute this gap to the prototype rather than to \sys.
 
 \noindentparagraph{Bandwidth overhead.}
-\sys's extra data matters most on slow links.
+\sys sends 21--35$\times$ more data than SLLM in a single migration (Figure~\ref{fig:fig7c_bytes}).
 At 0.25\,Gbps, the high-refresh input needs 4.67\,GB and 155\,s before the destination is ready, against 1.82\,GB and
-76\,s for the low-refresh input, while its maximum gap is unchanged (1.66 vs.\ 1.64\,s).
-This is because a frequently refreshed Sink keeps changing during pre-copy, so more of it is resent; when bandwidth is
-scarce, the session stays on the source longer rather than stopping.
+76\,s for the low-refresh input, while its maximum gap is unchanged (1.66 vs.\ 1.64\,s): when bandwidth is scarce, the
+session stays on the source longer rather than stopping.
 
 \noindentparagraph{Remote serving.}
 Every live approach, including \sys, keeps serving from the source until the destination takes over; only Full avoids
