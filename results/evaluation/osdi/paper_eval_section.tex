@@ -7,21 +7,14 @@
 \section{Evaluation}
 \label{sec:eval}
 
-This section presents experimental results for \sys on a GPU testbed with two state-of-the-art streaming video
-diffusion models~\cite{sdv2,longlive} and real-world video clips, and in a cluster-scale simulation validated against
-the testbed.
+This section presents experimental results for \sys on a GPU testbed with two streaming video diffusion
+models~\cite{sdv2,longlive} and in a cluster-scale simulation validated against the testbed.
 We find that:
-(i) \sys keeps streaming output continuous during migration: its maximum output gap is 1.6\,s, 11.3--11.5$\times$
-shorter than state-of-the-art migration approaches, and stays at 1.6--1.8\,s from 0.25\,Gbps to an unshaped link.
-(ii) In a simulated 128-GPU edge cluster, \sys stalls 4.0--5.4$\times$ less than the best baseline while serving
-82--94\% of the time from the user's local site.
-(iii) \sys adds under 0.1\% per call for state tracking and at most 2\% while transferring or staging state;
-it trades more transferred data than recomputation, and below 1\,Gbps a later first local output, for continuity.
-We also break down \sys by mechanism to see where its benefits arise: Continuity Replay shortens the gap from
-15.0\,s to 1.6\,s, Versioned Sink Reconstruction sends only 0.7--25\% of the Sink when a session returns to a host,
-and Continuity Wavefront readies the final host 2.3--2.4$\times$ sooner.
-Finally, we show that \sys carries over to LongLive with bit-exact output and a 15$\times$ shorter gap than
-full-state transfer.
+(i) \sys keeps output continuous during migration, with a maximum output gap of 1.6\,s, 11.3--11.5$\times$ shorter
+than state-of-the-art migration approaches.
+(ii) In a simulated 128-GPU edge cluster, \sys stalls 4.0--5.4$\times$ less than the best baseline.
+(iii) \sys adds under 0.1\% per-call overhead for state tracking.
+We also break down \sys by mechanism to see where its benefits arise, and show that it carries over to LongLive.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{figure*}[t]
