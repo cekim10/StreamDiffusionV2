@@ -235,8 +235,10 @@ Waiting for the Sink does reach first local output sooner (15.0 vs.\ 23.3--24.6\
 Figure~\ref{fig:fig13a_time} shows that replay raises the first post-cutover call from 16.0\,dB without replay to a
 median of 30.8\,dB, because it rebuilds the recent state that the next calls attend to; both reach about 43\,dB over
 calls 25--100.
-Across ten inputs (Table~\ref{tab:fidelity}), 62\% of the 150 cutover conditions stay above 40\,dB, from none for
-swimmer to all for dog.
+Table~\ref{tab:fidelity} covers ten inputs, four StreamDiffusionV2 and six LOVEU-TGVE clips, with the median PSNR at
+the first call (First) and over calls 25--100 (25--100), and the share of cutovers whose Sink refresh schedule departs
+from the uninterrupted run (Diverged).
+Overall, 62\% of the 150 cutover conditions stay above 40\,dB, from none for swimmer to all for dog.
 The output is not bit-exact, since recent state is rebuilt, but the Sink is: every destination Sink matched the
 source's block digests, and no call was lost or duplicated.
 
