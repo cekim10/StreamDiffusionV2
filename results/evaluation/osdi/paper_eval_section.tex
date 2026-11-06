@@ -233,18 +233,12 @@ Waiting for the Sink does reach first local output sooner (15.0 vs.\ 23.3--24.6\
 
 \noindentparagraph{Replay restores output fidelity.}
 Figure~\ref{fig:fig13a_time} shows that replay raises the first post-cutover call from 16.0\,dB without replay to a
-median of 30.8\,dB; both reach about 43\,dB over calls 25--100 (43.2 vs.\ 43.4\,dB).
-This is because replay rebuilds the recent state that the next calls attend to, instead of starting it from zero.
-Table~\ref{tab:fidelity} extends this to ten inputs: four StreamDiffusionV2 example clips (bird, dog, boxing, train)
-and six LOVEU-TGVE~\cite{loveu} clips, including the low- (L) and high-refresh (H) inputs used elsewhere.
-For each input, it lists the Sink refreshes per 100 calls, the share of the 15 cutover points whose Sink refresh
-schedule diverges from the uninterrupted run, and the median PSNR at the first call and over calls 25--100 after
-cutover.
-Overall, 62\% of the 150 cutover conditions stay above 40\,dB over calls 25--100; fidelity depends on the input, from
-no swimmer condition to all dog conditions above 40\,dB.
-\sys's output is not bit-exact on StreamDiffusionV2, because recent state is rebuilt by replay, but the Sink is exact
-at every cutover: in every \sys run of the single-migration, version-age, and repeated-mobility experiments, the
-destination's Sink matched the source's block digests (0 of 360 blocks differed), and no call was lost or duplicated.
+median of 30.8\,dB, because it rebuilds the recent state that the next calls attend to; both reach about 43\,dB over
+calls 25--100.
+Across ten inputs (Table~\ref{tab:fidelity}), 62\% of the 150 cutover conditions stay above 40\,dB, from none for
+swimmer to all for dog.
+The output is not bit-exact, since recent state is rebuilt, but the Sink is: every destination Sink matched the
+source's block digests, and no call was lost or duplicated.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{table}[t]
